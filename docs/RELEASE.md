@@ -16,6 +16,8 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
 - every file step 2 lists mentions the version, and none still has the previous release's version where step 2
   bumps it (an image tag, the Maven coordinate or `<version>`, a chart's `version` or `appVersion`, a `git clone`'s
   `--branch`, or the backticked examples);
+- every demo's `NEEDS_RELEASE_AFTER` is below the version, so `make up` from the release's tag pulls the release's
+  images instead of building the proxy and agent from source (step 2);
 - the version isn't a pre-release, its tag (if one exists) points at this commit, and none of the agent, the Spring
   Boot starter, and the Ktor plugin is already on Maven Central at it, nor the images on Docker Hub;
 - the GPG setup and Maven Central credentials `publish-maven-central` needs are in place (step 6), and Docker is
@@ -60,6 +62,13 @@ is, unreleased pages included.
      `plain-kotlin-demo.md`, and `getting-started.md`.
    - `demos/spring-boot/app/pom.xml` — `prometheus-proxy.version`, the release of the Spring Boot starter the Spring
      Boot demo's roastery builds against with `make up`.
+   - Each demo's `NEEDS_RELEASE_AFTER`, in `demos/*/demo.sh`, which isn't a version literal to bump but moves twice.
+     A demo's `make up` pulls the release its docs name only when that release is after `NEEDS_RELEASE_AFTER`, and
+     otherwise builds the proxy and agent from the checkout. Raise it to the new version with the rest of this step,
+     so `make up` on `master` keeps building while the docs name a release that isn't published. Then lower it to
+     the outgoing release in the last change merged before `make release`, so `make up` from the release's tag pulls
+     the release's images: `make release-check` refuses a release while any demo's value isn't below the version.
+     Until `make release` publishes the images, `make up` on `master` then fails to pull them.
    - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.
 
    `RELEASE_VERSION_FILES` in the `Makefile` lists these files for `make release-check`; keep it in step with this

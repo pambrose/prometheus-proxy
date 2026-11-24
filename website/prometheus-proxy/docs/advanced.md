@@ -24,17 +24,35 @@ on both proxy and agent:
 In this mode the proxy also limits the agents connected as one auth identity, which is every agent when
 agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filter).
 
+!!! warning "Nginx's request body limit"
+
+    nginx counts everything an agent sends on a stream as one request body, and stops a body at
+    `client_max_body_size`, 1 MB by default. An agent's streams of scrape results stay open for as long as it's
+    connected, so behind nginx's default, every agent, of any version, is cut off each time its results add up to a
+    megabyte: every few hours for results of a few hundred bytes every few seconds, every few minutes for results of
+    tens of KB. It reconnects at once, and is briefly without its paths, which can fail a scrape. Turn the limit off in
+    the `server` or `location` block that passes to the proxy, as
+    [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf) does:
+
+    ```nginx
+    client_max_body_size 0;
+    ```
+
+    Without it, nginx's access log ends `writeResponsesToProxy` or `writeChunkedResponsesToProxy` with 413, its error
+    log says `client intended to send too large chunked body`, and the agent logs
+    `writeResponsesToProxy(): UNKNOWN HTTP status code 413`, then `Disconnected from proxy`.
+
 !!! warning "Nginx's stream timeouts"
 
     An agent's connection ends when any of its streams closes, and nginx closes a stream that's quiet for 60 seconds by
-    default. A stream can be quiet while the agent is scraped: the one it sends chunked results on carries nothing
-    while its results stay under `chunkContentSizeKbs` (32 KB) gzipped. A current agent and proxy keep each of their
-    streams open with a keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. The proxy sets
-    the interval for both directions, `proxy.internal.streamKeepAliveSecs`: keep it under the reverse proxy's idle
-    timeout, or set it to 0 to turn keepalives off. Each side sends keepalives only once the other says it takes them,
-    so with an agent or a proxy from 4.6.0 or earlier on either end, the agent is cut off every minute, scraped or not,
-    reconnects, and is briefly without its paths, which can fail a scrape. For such a pair, raise both timeouts, in the
-    `server` or `location` block that passes to the proxy:
+    default. A stream can be quiet while the agent is scraped: the one it sends chunked results on carries nothing while
+    its results stay under `chunkContentSizeKbs` (32 KB) gzipped. A current agent and proxy keep each of their streams
+    open with a keepalive after 30 seconds of quiet, so nginx's default timeouts are enough for them. The proxy sets the
+    interval for both directions, `proxy.internal.streamKeepAliveSecs`: keep it under the reverse proxy's idle timeout,
+    or set it to 0 to turn keepalives off. Each side sends keepalives only once the other says it takes them, so with an
+    agent or a proxy from 4.6.0 or earlier on either end, the agent is cut off every minute, scraped or not, reconnects,
+    and is briefly without its paths, which can fail a scrape. For such a pair, raise both timeouts, in the `server` or
+    `location` block that passes to the proxy:
 
     | Directive | Covers |
     |-----------|--------|
@@ -47,7 +65,8 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
     interval isn't enough, and even a day's cuts such an agent off once a day. Without them, nginx's access log ends
     the stream it closed with 408 (`client_body_timeout`) or 504 (`grpc_read_timeout`), and the agent's log shows
     `RST_STREAM closed stream` on `writeChunkedResponsesToProxy()` or `writeResponsesToProxy()`, or
-    `HTTP status code 504` on `readRequestsFromProxy()`, then `Disconnected from proxy`, a minute after it connected.
+    `HTTP status code 504` on `readRequestsFromProxy()` or `readPathNoticesFromProxy()`, then
+    `Disconnected from proxy`, a minute after it connected.
 
 !!! warning "Reloads and connected agents"
 

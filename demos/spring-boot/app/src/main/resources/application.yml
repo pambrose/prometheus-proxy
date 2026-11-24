@@ -32,7 +32,10 @@ prometheus-proxy:
   agent:
     proxy: ${PROMETHEUS_PROXY:}
     token: ${PROMETHEUS_AGENT_TOKEN:}
-    # The certificate the proxy's is signed with, as PEM or its base64, and the name it was issued to
+    # The certificate the proxy's is signed with, as PEM or its base64, and the name the proxy's certificate was issued
+    # to: without PROMETHEUS_PROXY_AUTHORITY, prometheus-proxy, as fromEnvironment() has it, the name the docs site's
+    # Cloud Platforms page issues it to. For a certificate issued to the host the agent connects to, as a public CA's
+    # is, set PROMETHEUS_PROXY_AUTHORITY to that host. The demo's compose file sets it to its test certificate's name.
     trust-certificate: ${PROMETHEUS_PROXY_CERT:}
     authority: ${PROMETHEUS_PROXY_AUTHORITY:prometheus-proxy}
 # --8<-- [end:agent-settings]

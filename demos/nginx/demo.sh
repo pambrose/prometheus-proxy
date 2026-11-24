@@ -554,8 +554,8 @@ check_tour_from() {
 # Each part's title, after about how many minutes it takes to show.
 TOUR_PARTS=(
   "4 Two agents reach the proxy through nginx, over TLS"
-  "4 nginx's stream timeouts cut off an agent from 4.6.0 every minute"
-  "7 A shorter stream timeout, and a reload that doesn't reach connected agents"
+  "5 nginx's stream timeouts cut off an agent from 4.6.0 every minute"
+  "8 A shorter stream timeout, and a reload that doesn't reach connected agents"
   "4 The dashboard behind nginx"
 )
 
@@ -602,6 +602,9 @@ cmd_tour() {
       "It climbs to about one a minute. A scrape that lands while agent-legacy reconnects finds its path gone, and" \
       "fails: up{job=\"warehouse\"} dips to 0 now and then, $UP_GRAPH_URL"
     step "Raise both of nginx's stream timeouts to a day, and reload nginx." -- nginx-long-timeouts
+    instruct "Watch the proxy dashboard's Activity view for a minute or two: $DASHBOARD_URL/activity" \
+      "agent-legacy is cut off once more, by the worker it's on, which keeps the old timeouts. It reconnects to a" \
+      "new worker, under the day-long timeouts, and then stays connected: no more disconnects from it."
   fi
 
   if part 3 "Some load balancers close a quiet connection sooner than nginx's 60 seconds. Here nginx's timeouts" \
@@ -613,8 +616,14 @@ cmd_tour() {
       -- nginx-shutdown-timeout
     instruct "Watch agent-current's Activity view for a minute: $AGENT_DASHBOARD_URL/activity" \
       "Now under the 20-second timeouts, agent-current disconnects about every 20 seconds, and connects again at" \
-      "once: its stream for results in chunks goes quiet for 20 seconds before its keepalive comes, at 30."
+      "once. Two of its streams go quiet for 20 seconds before their keepalives come, at 30: its stream for results" \
+      "in chunks, which nginx ends with 408, from client_body_timeout, and the proxy's stream of path notices to" \
+      "it, which nginx ends with 504, from grpc_read_timeout. Each disconnect's reason is the 504."
     step "Recreate the proxy with a keepalive interval of 10 seconds, under nginx's 20." -- keepalive 10
+    instruct "Watch agent-current's Activity view for a minute: $AGENT_DASHBOARD_URL/activity" \
+      "After its reconnect to the new proxy, agent-current stays connected: a keepalive every 10 seconds keeps each" \
+      "of its streams from going quiet for nginx's 20. agent-legacy, which sends none, is still cut off about every" \
+      "20 seconds, in the proxy's Activity view."
     step "Put nginx and the proxy back as the demo started them." -- reset
   fi
 
@@ -669,8 +678,11 @@ main() {
       "of this release, readPathNoticesFromProxy, stay open while it's connected, so a line for one appears only" \
       "when it ends: when its connection drops, or when nginx closes it."
     point "A stream nginx closed for its timeout ends with 408, from client_body_timeout, on a stream the agent" \
-      "sends results on, or 504, from grpc_read_timeout, on the one the proxy sends requests on. The agent's other" \
-      "streams then end too, and it connects again a few seconds later."
+      "sends results on, or 504, from grpc_read_timeout, on one the proxy sends on: scrape requests, or path" \
+      "notices. The agent's other streams then end too, and it connects again a few seconds later."
+    point "A stream that ends with 413 passed nginx's limit on a request body, client_max_body_size, 1 MB by" \
+      "default. nginx counts all an agent sends on a stream as one body, and a stream of results stays open while" \
+      "the agent is connected, so every entrance in nginx/ turns the limit off with client_max_body_size 0."
     point "An agent nobody scrapes sends sendHeartBeat every 5 seconds, a call of its own, so the proxy knows it's" \
       "alive. An agent that's scraped doesn't need to."
     follow_up "To see every request as it comes, run" "$0 logs nginx"
@@ -681,7 +693,7 @@ main() {
     shutdown_timeout_set && shutdown=1
     bold "nginx's agents' entrance has its default stream timeouts again, 60 seconds"
     how_it_works "$(copies_sentence agents stock)" \
-      "It sets neither grpc_read_timeout, for the stream the proxy sends scrape requests on, nor" \
+      "It sets neither grpc_read_timeout, for the streams the proxy sends on, scrape requests and path notices, nor" \
       "client_body_timeout, for the streams the agent sends results on, so both are nginx's default, 60 seconds."
     watch_for
     reload_point "$shutdown"
@@ -695,9 +707,9 @@ main() {
     shutdown_timeout_set && shutdown=1
     bold "nginx's agents' entrance now closes a stream only after a day without anything on it"
     how_it_works "$(copies_sentence agents long-timeouts)" \
-      "It raises grpc_read_timeout, for the stream the proxy sends scrape requests on, and client_body_timeout, for" \
-      "the streams the agent sends results on, to a day. For an agent or a proxy from 4.6.0 or earlier, it's the" \
-      "fix short of upgrading both: they send nothing on a stream between results."
+      "It raises grpc_read_timeout, for the streams the proxy sends on, scrape requests and path notices, and" \
+      "client_body_timeout, for the streams the agent sends results on, to a day. For an agent or a proxy from" \
+      "4.6.0 or earlier, it's the fix short of upgrading both: they send nothing on a stream between results."
     watch_for
     reload_point "$shutdown"
     if ((shutdown)); then
@@ -717,15 +729,15 @@ main() {
     shutdown_timeout_set && shutdown=1
     bold "nginx's agents' entrance now closes a stream after 20 seconds without anything on it"
     how_it_works "$(copies_sentence agents short-timeouts)" \
-      "It cuts grpc_read_timeout, for the stream the proxy sends scrape requests on, and client_body_timeout, for" \
-      "the streams the agent sends results on, to 20 seconds, under the $(keepalive_secs) seconds after which the" \
-      "proxy and agent-current send a keepalive."
+      "It cuts grpc_read_timeout, for the streams the proxy sends on, scrape requests and path notices, and" \
+      "client_body_timeout, for the streams the agent sends results on, to 20 seconds, under the" \
+      "$(keepalive_secs) seconds after which the proxy and agent-current send a keepalive."
     watch_for
     reload_point "$shutdown"
     if ((shutdown)); then
       point "Then both agents are cut off about every 20 seconds, agent-current included: its stream for results in" \
-        "chunks goes quiet for 20 seconds before its keepalive comes. Its own Activity view shows each" \
-        "disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
+        "chunks, and the proxy's stream of path notices to it, go quiet for 20 seconds before their keepalives" \
+        "come. Its own Activity view shows each disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
       point "A scrape that lands while an agent reconnects fails, so both paths dip in Prometheus: $UP_GRAPH_URL"
       follow_up "Next, run" "$0 keepalive 10"
     else

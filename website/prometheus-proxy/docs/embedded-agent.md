@@ -488,7 +488,8 @@ app.
 
 On SIGTERM, the JVM runs its shutdown hooks and exits without returning from `main()`. So a program that runs until
 it's stopped, as a queue consumer does, adds a hook of its own that ends its work and waits for `main()` to return, by
-which time `use` has stopped the agent, as the [Plain Kotlin Demo](plain-kotlin-demo.md)'s ovens do:
+which time `use` has stopped the agent, as the [Plain Kotlin Demo](plain-kotlin-demo.md)'s ovens do. The hook waits 25
+seconds at most, so the JVM still exits on its own within the 30 seconds Kubernetes gives a pod to stop:
 
 === "Kotlin"
 
@@ -502,7 +503,10 @@ which time `use` has stopped the agent, as the [Plain Kotlin Demo](plain-kotlin-
     --8<-- "EmbeddedAgentShutdownJavaExample.java:embedded-java-shutdown"
     ```
 
-Without the hook, the agent of a `use` block ends with the JVM, without draining the scrapes in flight.
+Without the hook, the agent of a `use` block ends with the JVM, without draining the scrapes in flight. Once the hook
+is added, don't call `exitProcess()` or `System.exit()` in `main()`, as on a fatal error: it waits for the shutdown
+hooks, and this one waits for `main()`, so the JVM hangs until the hook gives up. To end with an error, throw from
+`main()` instead: the JVM then exits with status 1.
 
 ### `Agent.startSyncAgent()`
 

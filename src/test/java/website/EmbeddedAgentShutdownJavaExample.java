@@ -28,11 +28,13 @@ public class EmbeddedAgentShutdownJavaExample {
 
     // On SIGTERM, the JVM runs its shutdown hooks, then exits without returning from main. This one has the worker
     // finish what it's doing, then waits for main to return, by which time try-with-resources has stopped the agent.
+    // It waits 25 seconds at most, short of the 30 Kubernetes gives a pod to stop. Once it's added, don't call
+    // System.exit() in main: System.exit() waits for the hooks, and this one would wait for main until its time is up.
     Thread mainThread = Thread.currentThread();
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       worker.stop();
       try {
-        mainThread.join();
+        mainThread.join(25000);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }

@@ -180,6 +180,10 @@ All notable changes to this project are documented in this file.
 - An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a
   `NullPointerException` in place of a startup failure, such as an admin or metrics port already in use, and left its
   gRPC channel and HTTP client cache open. It now throws the failure and releases them
+- The Spring Boot demo's roastery starts without Spring Boot's build info, as from an IDE's build, showing its version
+  as `unknown`; its status page labels its roasted stock `Roasted stock:`; and it roasts the origins in a fixed
+  rotation, so their graph lines no longer cross. `RoasteryAgentTest` stops the agent before the proxy, so a passing
+  run no longer logs a reconnect's stack trace
 
 ### Behavior Changes
 
@@ -214,6 +218,9 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- `make release-check` refuses a release while any demo's `NEEDS_RELEASE_AFTER` isn't below the version, which
+  would leave `make up` from the release's tag building the proxy and agent from source, and step 2 of
+  `docs/RELEASE.md` says when to raise and lower it
 - CodeScene no longer rates the Kotlin sources on Primitive Obsession, String Heavy Function Arguments, Excess Number of
   Function Arguments, or Global Conditionals, which flagged the code's intended shape and pushed changes into
   workarounds; its function-level rules (Complex Method, Bumpy Road Ahead, Complex Conditional, nesting, Large Method)
@@ -258,6 +265,11 @@ All notable changes to this project are documented in this file.
   60 seconds, so with its defaults an agent reconnected every minute and was briefly without its paths, even while it
   was scraped, since its stream for chunked results is quiet while its results are small. The example drops
   `client_header_timeout`, which doesn't apply to a quiet stream
+- The nginx example and the nginx demo's entrances set `client_max_body_size 0`, and the README and the Advanced
+  Topics, Troubleshooting, and Kubernetes pages say to: nginx counts all an agent sends on a stream as one request
+  body, so with its default limit, 1 MB, every agent is cut off with 413 each time its results add up to a megabyte.
+  The nginx demo also names the path notices among the streams `grpc_read_timeout` covers, which its 504s come from,
+  and its tour waits for the day-long timeouts and the shorter keepalive to take hold
 - The Advanced Topics page says that an `nginx -s reload` leaves a connected agent on an old worker, under the old
   config, for as long as its connection lasts, which with keepalives is indefinitely, and that
   `worker_shutdown_timeout` bounds it; that an agent dialing a TLS-terminating nginx needs a trust collection; and the
@@ -353,8 +365,13 @@ All notable changes to this project are documented in this file.
   says when the port is still worth turning on: for a scraper on the agent's own network, which can read an agent that
   can't reach the proxy
 - The Embedded Agent page shows, in Kotlin and Java, the shutdown hook a program that runs until it's stopped adds,
-  which ends its work on SIGTERM and waits for `main` to return, so `use` stops the agent after the work
-  (`EmbeddedAgentShutdownKotlinExample`, `EmbeddedAgentShutdownJavaExample`)
+  which ends its work on SIGTERM and waits up to 25 seconds for `main` to return, so `use` stops the agent after the
+  work, and says not to call `exitProcess()` or `System.exit()` from `main` once it's added, which would hang the JVM
+  until the hook gives up (`EmbeddedAgentShutdownKotlinExample`, `EmbeddedAgentShutdownJavaExample`). The plain Kotlin
+  demo's ovens add the same hook
+- The Spring Boot demo's `application.yml` says where the authority's default, `prometheus-proxy`, comes from and when
+  to set `PROMETHEUS_PROXY_AUTHORITY`, and the Plain Kotlin Demo page's Java tab names `startIfConfigured`'s
+  `logBanner` argument
 
 ### Dependencies
 

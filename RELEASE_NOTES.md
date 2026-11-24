@@ -73,7 +73,7 @@ _Released 2026-11-23_
   through the agent to the target, showing which Prometheus asked, how long the scrape waited for its agent, how long
   the target took and how often the agent retried it, and why a scrape failed. Set `sampleRate` under
   `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
-- **Nginx's defaults are enough.** A current agent and proxy keep their streams open with a keepalive every 30
+- **Nginx's default timeouts are enough.** A current agent and proxy keep their streams open with a keepalive every 30
   seconds, so nginx's default 60-second timeouts no longer cut off an agent every minute. For a reverse proxy with a
   shorter idle timeout, lower `proxy.internal.streamKeepAliveSecs`. Agents and proxies from 4.6.0 or earlier don't
   send them, so with one of those on either end, still raise nginx's timeouts.
@@ -145,6 +145,10 @@ _Released 2026-11-23_
 - **Nginx's stream timeouts.** With nginx's defaults, an agent behind it is cut off and reconnects every minute, even
   while it's scraped, and a scrape can fail while its paths are gone. The nginx example now raises
   `grpc_read_timeout` and `client_body_timeout`, and the Advanced Topics page explains why both are needed.
+- **Nginx's request body limit.** nginx counts all an agent sends on a stream as one request body, so behind its
+  default `client_max_body_size`, 1 MB, every agent, of any version, is cut off each time its results add up to a
+  megabyte. The nginx example and the nginx demo now set `client_max_body_size 0`, and the Advanced Topics,
+  Troubleshooting, and Kubernetes pages say to (on NGINX Ingress, `proxy-body-size`).
 - **Behind nginx: reloads, TLS, and the dashboard.** The Advanced Topics page explains why a reload of nginx doesn't
   reach a connected agent and how `worker_shutdown_timeout` fixes it, and what an agent needs to reach an nginx that
   ends its TLS; the Dashboard page, what nginx has to pass on for the dashboard's live updates.
@@ -155,7 +159,8 @@ _Released 2026-11-23_
   endpoints and `/debug` with `ADMIN_ENABLED` and `DEBUG_ENABLED`, says what each shows, and puts the agent's own
   metrics on the Agents dashboard with `agentMetricsAt`. The Ktor demo's tour walks through them.
 - **Stopping an embedded agent on SIGTERM.** The Embedded Agent page shows, in Kotlin and Java, the shutdown hook a
-  program that runs until it's stopped adds, so its work finishes first and `use` then stops the agent.
+  program that runs until it's stopped adds, so its work finishes first and `use` then stops the agent, with the hook
+  waiting 25 seconds at most. Once it's added, don't call `exitProcess()` or `System.exit()` from `main`.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
 - **The docs site.** It takes the dashboard's look, its warning and danger colors included, follows your light or

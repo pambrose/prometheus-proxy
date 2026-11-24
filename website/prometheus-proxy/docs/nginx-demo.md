@@ -134,12 +134,18 @@ An agent connects with three calls, `connectAgentWithTransportFilterDisabled`, `
 each path, and then keeps its streams open, four for an agent of this release and three for one of 4.6.0, which nginx
 logs only when they end.
 
+nginx counts all an agent sends on a stream as one request body, and stops a body at `client_max_body_size`, 1 MB by
+default. A stream of results stays open while the agent is connected, so behind nginx's default, every agent is cut off
+with 413 each time its results add up to a megabyte. Every entrance in the demo turns the limit off with
+`client_max_body_size 0`, as any nginx in front of the proxy needs; see
+[Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+
 ### nginx's stream timeouts cut off an agent from 4.6.0 every minute
 
-nginx closes a stream that carries nothing for 60 seconds: its `grpc_read_timeout` covers the stream the proxy sends
-scrape requests on, and `client_body_timeout` the streams the agent sends results on. An agent's stream for results
-sent in chunks carries something only when a result is over 32 KB gzipped, so it's quiet even while Prometheus scrapes
-the agent every 5 seconds.
+nginx closes a stream that carries nothing for 60 seconds: its `grpc_read_timeout` covers the streams the proxy sends
+on, scrape requests and path notices, and `client_body_timeout` the streams the agent sends results on. An agent's
+stream for results sent in chunks carries something only when a result is over 32 KB gzipped, so it's quiet even while
+Prometheus scrapes the agent every 5 seconds.
 
 <figure markdown="span">
   ![The proxy's Activity view, with agent-legacy disconnecting every minute](images/nginx-demo/legacy-cut.webp#only-dark){ loading=lazy }
@@ -184,8 +190,10 @@ reload reaches every agent within 10 seconds, at the cost of one reconnect each.
   <figcaption>Under 20-second timeouts, agent-current is cut off about every 20 seconds, before its keepalive comes</figcaption>
 </figure>
 
-Under the 20-second timeouts, agent-current is cut off about every 20 seconds: its stream for results in chunks goes
-quiet for 20 seconds before its keepalive comes, at 30.
+Under the 20-second timeouts, agent-current is cut off about every 20 seconds. Two of its streams go quiet for 20
+seconds before their keepalives come, at 30: its stream for results in chunks, which nginx ends with 408, from
+`client_body_timeout`, and the proxy's stream of path notices to it, which nginx ends with 504, from
+`grpc_read_timeout`, the reason its Activity view shows.
 
 ```bash
 ./demo.sh keepalive 10   # the proxy recreated with a keepalive interval of 10 seconds
