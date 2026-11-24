@@ -34,6 +34,14 @@ class WebsiteConfigKeysTest : StringSpec() {
   // The config key an inline code span or a table cell names, if it names one, alone or with a value assigned to it.
   private fun keyNamedIn(code: String): String? = CONFIG_KEY.matchEntire(code.trim())?.groupValues?.get(1)
 
+  // The key a table cell names: the whole cell a code span, or, as the configuration pages give a key over its option
+  // and variable, a code span linked to the key's row in the CLI Reference.
+  private fun keyOfCell(cell: String): String? =
+    when {
+      cell.length > 1 && cell.startsWith("`") && cell.endsWith("`") -> keyNamedIn(cell.trim('`'))
+      else -> LINKED_KEY.find(cell)?.let { keyNamedIn(it.groupValues[1]) }
+    }
+
   // Each key a table row names, with the row's cell under a Default column, for the tables that have one. A blank
   // or quoted default is given as the string it stands for.
   private fun documentedDefaults(prose: String): List<Pair<String, String>> {
@@ -53,10 +61,7 @@ class WebsiteConfigKeysTest : StringSpec() {
 
         else -> {
           val column = columns.indexOf("Default")
-          val key =
-            cells.firstNotNullOfOrNull { cell ->
-              if (cell.length > 1 && cell.startsWith("`") && cell.endsWith("`")) keyNamedIn(cell.trim('`')) else null
-            }
+          val key = cells.firstNotNullOfOrNull(::keyOfCell)
           if (key != null && column in cells.indices)
             defaults += key to cells[column].removeSurrounding("\"")
         }
@@ -110,6 +115,9 @@ class WebsiteConfigKeysTest : StringSpec() {
     // A dotted proxy. or agent. path, optionally followed by "= value".
     private val CONFIG_KEY = Regex("""((?:proxy|agent)(?:\.[A-Za-z][A-Za-z0-9]*)+)(?:\s*=.*)?""")
     private val TSCFG_SPEC = Regex("""\w+ \| .*""")
+
+    // A cell that starts with a linked code span, as [`agent.scrapeTimeoutSecs`](../cli-reference.md#…)<br>`--timeout`.
+    private val LINKED_KEY = Regex("""^\[`([^`]+)`]\(""")
 
     // Spans shaped like a key that aren't one, on any page: agent.conf is the file the pages have you write the agent's
     // config in.

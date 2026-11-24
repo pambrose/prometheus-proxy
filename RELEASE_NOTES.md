@@ -172,9 +172,9 @@ _Released 2026-11-23_
 - **The docs site.** It takes the dashboard's look, its warning and danger colors included, follows your light or
   dark setting, loads no web font, and has no chat widget. Its sidebar is regrouped into seven sections, with a Demos
   page listing every demo; each heading has a link of its own; and the reference tables no longer break a flag or key
-  in the middle. Its home page is short: what the project does, one Docker command to try it, and three ways on. The
-  CLI Reference gives each setting's option, variable, key, and default in one row, and a link can open a setting's
-  row by its key. The Security page walks through onboarding a team onto a shared proxy, start to finish.
+  in the middle. Its home page is short: what the project does, the Docker commands to try it, and three ways on. The
+  configuration pages give each setting's key, option, variable, and default in one row, as the CLI Reference does,
+  grouped by what it configures, and a link can open a setting's row by its key. The Security page walks through onboarding a team onto a shared proxy, start to finish.
 
 ## 4.6.0
 

@@ -56,24 +56,24 @@ agent {
 ; --8<-- [start:proxy-http-config]
 proxy {
   http {
-    port = 8080                       // Listen port for Prometheus scrapes
-    host = "0.0.0.0"                  // Listen address for Prometheus scrapes
-    idleTimeoutSecs = 45              // Seconds an idle connection stays open (-1 = 45)
-    requestLoggingEnabled = true      // Log every proxy metrics request
+    port = 8080
+    host = "0.0.0.0"
+    idleTimeoutSecs = 45
+    requestLoggingEnabled = true
   }
 }
 ; --8<-- [end:proxy-http-config]
 
 ; --8<-- [start:proxy-grpc-config]
 proxy {
-  agent.port = 50051                  // gRPC listen port for agent connections
+  agent.port = 50051
 
   grpc {
-    keepAliveTimeSecs = 7200          // Interval between PING frames
-    keepAliveTimeoutSecs = 20         // Timeout for PING acknowledgment
+    keepAliveTimeSecs = 7200
+    keepAliveTimeoutSecs = 20
     permitKeepAliveWithoutCalls = false
-    maxConnectionIdleSecs = -1        // -1 = unlimited
-    maxConnectionAgeSecs = -1         // -1 = unlimited
+    maxConnectionIdleSecs = -1
+    maxConnectionAgeSecs = -1
   }
 }
 ; --8<-- [end:proxy-grpc-config]
@@ -81,12 +81,12 @@ proxy {
 ; --8<-- [start:agent-http-config]
 agent {
   http {
-    maxConcurrentClients = 5          // Parallel scrape limit
-    clientTimeoutSecs = 30            // HTTP client timeout
-    maxContentLengthMBytes = 10       // Max response size in MB
+    maxConcurrentClients = 5
+    clientTimeoutSecs = 30
+    maxContentLengthMBytes = 10
     enableTrustAllX509Certificates = false
-    trustStorePath = ""               // JKS/PKCS12 trust store for HTTPS targets (custom CA); empty = JDK default
-    trustStorePassword = ""           // Password for trustStorePath
+    trustStorePath = ""
+    trustStorePassword = ""
   }
 }
 ; --8<-- [end:agent-http-config]
@@ -94,10 +94,10 @@ agent {
 ; --8<-- [start:agent-cache-config]
 agent {
   http.clientCache {
-    maxSize = 100                     // Maximum cached HTTP clients
-    maxAgeMins = 30                   // Maximum age of cached clients
-    maxIdleMins = 10                  // Idle time before eviction
-    cleanupIntervalMins = 5           // Cleanup run interval
+    maxSize = 100
+    maxAgeMins = 30
+    maxIdleMins = 10
+    cleanupIntervalMins = 5
   }
 }
 ; --8<-- [end:agent-cache-config]
@@ -135,7 +135,7 @@ Agent:
 ; --8<-- [start:config-from-url]
 # Load configuration from a URL:
 java -jar prometheus-agent.jar \
-  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf
 
 # Or from a local file:
 java -jar prometheus-agent.jar --config /etc/prometheus-proxy/agent.conf
@@ -143,10 +143,10 @@ java -jar prometheus-agent.jar --config /etc/prometheus-proxy/agent.conf
 
 ; --8<-- [start:agent-scrape-config]
 agent {
-  scrapeTimeoutSecs = 15              // Total scrape timeout including retries
-  scrapeMaxRetries = 0                // 0 disables retries
-  chunkContentSizeKbs = 32            // Chunking threshold in KB
-  minGzipSizeBytes = 512              // Minimum size for gzip compression
+  scrapeTimeoutSecs = 15
+  scrapeMaxRetries = 0
+  chunkContentSizeKbs = 32
+  minGzipSizeBytes = 512
 }
 ; --8<-- [end:agent-scrape-config]
 

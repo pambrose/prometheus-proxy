@@ -30,6 +30,7 @@ When bumping the version, update `version` in `gradle.properties` and every hard
 - `charts/prometheus-{proxy,agent}/Chart.yaml` — `version` and `appVersion` (the image tag the charts deploy)
 - `website/prometheus-proxy/docs/{getting-started,index,docker}.md` — Docker pull/run examples
 - `src/test/kotlin/website/{DockerExamples,EmbeddedAgentExamples,KubernetesExamples}.txt` — snippet sources the website's Docker, Embedded Agent, and Kubernetes pages include
+- `README.md`, `llms.txt`, `website/prometheus-proxy/docs/{index,grafana}.md`, and `src/test/kotlin/website/{DockerExamples,GettingStarted,ConfigExamples}.txt` — the release tag in the `raw.githubusercontent.com` config and dashboard links
 - `README.md`, `llms.txt`, `demos/{basics,network,nginx,kubernetes,ktor,spring-boot,plain-kotlin}/README.md`, and `website/prometheus-proxy/docs/{basics-demo,network-demo,nginx-demo,kubernetes-demo,ktor-demo,spring-boot-demo,plain-kotlin-demo,getting-started}.md` — the `git clone --branch` tag the demos and the Helm install check out
 - `demos/spring-boot/app/pom.xml` — `prometheus-proxy.version`, the release the Spring Boot demo builds against
 - `demos/*/demo.sh` — `NEEDS_RELEASE_AFTER`: raised to the new version with the bump, so `make up` builds from the checkout until the release is published, then lowered to the outgoing release in the last change before `make release`, which `make release-check` requires

@@ -29,8 +29,8 @@ import io.prometheus.common.agentOptions
 import io.prometheus.common.proxyOptions
 import java.io.File
 
-// What a new user runs first: the example configs, which the Docker quick start fetches from master, and the docker
-// run commands the docs give (November #27 and #28).
+// What a new user runs first: the example configs, which the Docker quick start fetches at the release's tag, and the
+// docker run commands the docs give (November #27 and #28).
 class DocsExamplesTest : StringSpec() {
   private val exampleConfigs by lazy {
     File(EXAMPLES_DIR).listFiles { file -> file.extension == "conf" }.orEmpty().sortedBy { it.name }

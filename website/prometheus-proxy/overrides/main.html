@@ -50,7 +50,8 @@
   <script src="{{ 'vendor/glightbox/glightbox.min.js' | url }}"></script>
   {{ super() }}
   {#- After the theme's bundle, whose document$ it runs on for every page: it gives the reference tables' keys and flags
-      a place to break after each dot, underscore, and slash, and nowhere inside a word. See the script's header. #}
+      a place to break after each dot, underscore, and slash, and nowhere inside a word, and marks the reference
+      tables by kind for stylesheets/extra.css's layout. See the script's header. #}
   <script src="{{ 'javascripts/tables.js' | url }}"></script>
   {#- After the theme's bundle as well: it takes the empty link on each line of a code block out of the Tab order. See
       the script's header. #}
