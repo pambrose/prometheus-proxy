@@ -158,12 +158,12 @@ _Released 2026-11-23_
   program that runs until it's stopped adds, so its work finishes first and `use` then stops the agent.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
-- **The docs site.** It takes the dashboard's look and follows your light or dark setting, loads no web font, and has
-  no chat widget. Its sidebar is regrouped into seven sections, with a Demos page listing every demo; each heading has
-  a link of its own; and the reference tables no longer break a flag or key in the middle. Its home page is short:
-  what the project does, one Docker command to try it, and three ways on. The CLI Reference gives each setting's
-  option, variable, key, and default in one row, and a link can open a setting's row by its key.
-  The Security page walks through onboarding a team onto a shared proxy, start to finish.
+- **The docs site.** It takes the dashboard's look, its warning and danger colors included, follows your light or
+  dark setting, loads no web font, and has no chat widget. Its sidebar is regrouped into seven sections, with a Demos
+  page listing every demo; each heading has a link of its own; and the reference tables no longer break a flag or key
+  in the middle. Its home page is short: what the project does, one Docker command to try it, and three ways on. The
+  CLI Reference gives each setting's option, variable, key, and default in one row, and a link can open a setting's
+  row by its key. The Security page walks through onboarding a team onto a shared proxy, start to finish.
 
 ## 4.6.0
 

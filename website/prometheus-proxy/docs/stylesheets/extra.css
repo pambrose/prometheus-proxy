@@ -14,15 +14,39 @@ body {
   --md-code-font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-/* Light: the dashboard's accent. A link's text is a step darker, 5.1:1 on white and 4.7:1 on the code background a
-   linked flag sits on, where the accent itself fell under 4.5:1; links darken further on hover and focus, 6.7:1. */
+/* Light: the dashboard's accent. A link's text is a step darker, 5.7:1 on white, 5.2:1 on the code background a linked
+   flag sits on, and at least 4.75:1 on a callout's, where the accent itself fell under 4.5:1; links darken further on
+   hover and focus, 6.7:1. */
 [data-md-color-primary="custom"] {
   --md-primary-fg-color: #c8461f;
   --md-primary-fg-color--light: #d9663f;
   --md-primary-fg-color--dark: #a3381a;
   --md-primary-bg-color: #fff;
   --md-primary-bg-color--light: #ffffffb3;
-  --md-typeset-a-color: #c1441e;
+  --md-typeset-a-color: #b53f1c;
+}
+
+/* The dashboard's grounds and its warn and crit pairs, for the code and the callouts. Light code sits on the
+   dashboard's cold paper, a cool gray as light as the theme's #f5f5f5, so the highlighter's colors keep their 4.5:1;
+   a callout's ground is a step darker than the code's, so code inside one still shows as code. */
+[data-md-color-scheme="default"] {
+  --md-code-bg-color: #f2f5f8;
+  --pp-callout-bg: #e9edf2;
+  --pp-callout-icon: #626b77;
+  --pp-warn: #8a5d08;
+  --pp-warn-soft: #f9f0da;
+  --pp-crit: #c02a20;
+  --pp-crit-soft: #fbe6e4;
+}
+
+/* Dark keeps the theme's code ground, and a callout's is a step lighter. */
+[data-md-color-scheme="slate"] {
+  --pp-callout-bg: #1c222b;
+  --pp-callout-icon: #858f9d;
+  --pp-warn: #d29922;
+  --pp-warn-soft: #2a2110;
+  --pp-crit: #f85149;
+  --pp-crit-soft: #2d1512;
 }
 
 [data-md-color-accent="custom"] {
@@ -107,6 +131,33 @@ body {
 .md-typeset .admonition,
 .md-typeset details {
   font-size: 0.72rem;
+}
+
+/* A callout's color says what it means, as the dashboard's do: amber for a caution, red for a danger. A note, a tip,
+   and an info are neutral, where the theme gave each a hue of its own (blue, teal, cyan) and a warning the orange that
+   means a link here. Each keeps its own icon and title, so the color is never the only sign. */
+.md-typeset :is(.admonition, details):is(.note, .tip, .info) {
+  background-color: var(--pp-callout-bg);
+}
+
+.md-typeset :is(.note, .tip, .info) > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-callout-icon);
+}
+
+.md-typeset :is(.admonition, details).warning {
+  background-color: var(--pp-warn-soft);
+}
+
+.md-typeset .warning > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-warn);
+}
+
+.md-typeset :is(.admonition, details).danger {
+  background-color: var(--pp-crit-soft);
+}
+
+.md-typeset .danger > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-crit);
 }
 
 /* A table's text a step up from the theme's 12.8px. */
