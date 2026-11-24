@@ -372,8 +372,8 @@ body {
     width: 40%;
   }
 
-  .md-typeset table[data-kind="settings"] td:first-child > :first-child wbr:not(:last-of-type),
-  .md-typeset table[data-kind="settings"] td:first-child > :not(:first-child) wbr {
+  .md-typeset table[data-kind="settings"] td:first-child > :not(:first-child) wbr,
+  .md-typeset table[data-kind="settings"] td:first-child > :first-child wbr:not(:last-of-type) {
     display: none;
   }
 }
