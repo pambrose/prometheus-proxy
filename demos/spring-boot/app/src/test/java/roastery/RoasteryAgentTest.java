@@ -3,6 +3,7 @@ package roastery;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.prometheus.Proxy;
+import io.prometheus.agent.spring.PrometheusProxyAgent;
 import io.prometheus.proxy.ProxyOptions;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -15,6 +16,8 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -31,6 +34,8 @@ import org.springframework.test.context.DynamicPropertySource;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     // The banner and the startup lines of the roastery, the proxy, and the agent only clutter the build's output
     properties = {"logging.level.root=WARN", "spring.main.banner-mode=off"})
+// One instance for the class's tests, so the non-static @AfterAll can reach the agent Spring injected
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RoasteryAgentTest {
   private static final HttpClient HTTP = HttpClient.newHttpClient();
   private static Proxy proxy;
@@ -40,6 +45,10 @@ class RoasteryAgentTest {
   // The roastery's own port, which Spring Boot picked
   @Value("${local.server.port}")
   private int appPort;
+
+  // The starter's agent, a SmartLifecycle bean
+  @Autowired
+  private PrometheusProxyAgent agent;
 
   // Before Spring Boot starts the roastery: a plaintext proxy, and the agent's settings pointing at it
   @DynamicPropertySource
@@ -57,8 +66,11 @@ class RoasteryAgentTest {
     registry.add("prometheus-proxy.agent.proxy", () -> "localhost:" + agentPort);
   }
 
+  // The agent first: Spring keeps the test's context, and the agent in it, until the JVM exits, and an agent left
+  // running after its proxy stops logs every attempt to reconnect, with a stack trace
   @AfterAll
-  static void stopProxy() {
+  void stopAgentThenProxy() {
+    agent.stop();
     proxy.stopAsync().awaitTerminated();
   }
 

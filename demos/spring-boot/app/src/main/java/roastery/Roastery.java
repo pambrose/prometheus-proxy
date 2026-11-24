@@ -31,12 +31,11 @@ public class Roastery {
     }
   }
 
-  // The origins in the proportions they're roasted, so the graph's four lines stay apart
+  // The origins in the order they're roasted, one batch after another: four Colombia, three Ethiopia, two Sumatra, and
+  // one Guatemala in every ten, spread out, so the graph's four lines, the batches roasted a minute, stay apart
   private static final Origin[] ROTATION = {
-    Origin.COLOMBIA, Origin.COLOMBIA, Origin.COLOMBIA, Origin.COLOMBIA,
-    Origin.ETHIOPIA, Origin.ETHIOPIA, Origin.ETHIOPIA,
-    Origin.SUMATRA, Origin.SUMATRA,
-    Origin.GUATEMALA,
+    Origin.COLOMBIA, Origin.ETHIOPIA, Origin.SUMATRA, Origin.COLOMBIA, Origin.ETHIOPIA,
+    Origin.GUATEMALA, Origin.COLOMBIA, Origin.ETHIOPIA, Origin.SUMATRA, Origin.COLOMBIA,
   };
   private static final int BATCH_KG = 15;
   // Beans lose about a fifth of their weight in the roaster
@@ -48,6 +47,8 @@ public class Roastery {
   private final Counter shipped;
   private final AtomicInteger greenKg = new AtomicInteger(RESTOCK_KG);
   private final AtomicInteger roastedKg = new AtomicInteger();
+  // The batches roasted so far, which picks the next one's origin from ROTATION
+  private final AtomicInteger roasts = new AtomicInteger();
 
   public Roastery(MeterRegistry registry) {
     for (Origin origin : Origin.values()) {
@@ -73,7 +74,7 @@ public class Roastery {
     if (greenKg.get() < BATCH_KG) {
       greenKg.addAndGet(RESTOCK_KG);
     }
-    Origin origin = ROTATION[ThreadLocalRandom.current().nextInt(ROTATION.length)];
+    Origin origin = ROTATION[roasts.getAndIncrement() % ROTATION.length];
     // A roast takes 10 to 14 minutes; the demo records it without waiting for it
     roastTime.record(Duration.ofSeconds(ThreadLocalRandom.current().nextLong(600, 840)));
     batches.get(origin).increment();
@@ -95,9 +96,9 @@ public class Roastery {
         batches.entrySet().stream()
             .map(entry -> entry.getKey().label() + " " + (long) entry.getValue().count())
             .collect(Collectors.joining(", "));
-    return "Roasted:      " + roasted
-        + "\nGreen stock:  " + greenKg.get() + " kg"
-        + "\nRoasted:      " + roastedKg.get() + " kg"
-        + "\nShipped:      " + (long) shipped.count() + " kg\n";
+    return "Roasted:       " + roasted
+        + "\nGreen stock:   " + greenKg.get() + " kg"
+        + "\nRoasted stock: " + roastedKg.get() + " kg"
+        + "\nShipped:       " + (long) shipped.count() + " kg\n";
   }
 }

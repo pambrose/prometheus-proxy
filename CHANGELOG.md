@@ -180,6 +180,10 @@ All notable changes to this project are documented in this file.
 - An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a
   `NullPointerException` in place of a startup failure, such as an admin or metrics port already in use, and left its
   gRPC channel and HTTP client cache open. It now throws the failure and releases them
+- The Spring Boot demo's roastery starts without Spring Boot's build info, as from an IDE's build, showing its version
+  as `unknown`; its status page labels its roasted stock `Roasted stock:`; and it roasts the origins in a fixed
+  rotation, so their graph lines no longer cross. `RoasteryAgentTest` stops the agent before the proxy, so a passing
+  run no longer logs a reconnect's stack trace
 
 ### Behavior Changes
 
@@ -327,8 +331,13 @@ All notable changes to this project are documented in this file.
   says when the port is still worth turning on: for a scraper on the agent's own network, which can read an agent that
   can't reach the proxy
 - The Embedded Agent page shows, in Kotlin and Java, the shutdown hook a program that runs until it's stopped adds,
-  which ends its work on SIGTERM and waits for `main` to return, so `use` stops the agent after the work
-  (`EmbeddedAgentShutdownKotlinExample`, `EmbeddedAgentShutdownJavaExample`)
+  which ends its work on SIGTERM and waits up to 25 seconds for `main` to return, so `use` stops the agent after the
+  work, and says not to call `exitProcess()` or `System.exit()` from `main` once it's added, which would hang the JVM
+  until the hook gives up (`EmbeddedAgentShutdownKotlinExample`, `EmbeddedAgentShutdownJavaExample`). The plain Kotlin
+  demo's ovens add the same hook
+- The Spring Boot demo's `application.yml` says where the authority's default, `prometheus-proxy`, comes from and when
+  to set `PROMETHEUS_PROXY_AUTHORITY`, and the Plain Kotlin Demo page's Java tab names `startIfConfigured`'s
+  `logBanner` argument
 
 ### Dependencies
 

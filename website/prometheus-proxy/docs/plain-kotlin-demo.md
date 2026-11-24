@@ -113,7 +113,7 @@ builds the oven, adds a shutdown hook, and runs the oven with the agent beside i
 === "Java"
 
     ```java
-    --8<-- "PlainKotlinDemoJavaExample.java:worker-java"
+    --8<-- "PlainKotlinDemoJavaExample.java:plain-kotlin-java"
     ```
 
 - **[`fromEnvironment()`](embedded-agent.md#settings-from-the-environment)** reads the proxy and the token from
@@ -131,7 +131,9 @@ builds the oven, adds a shutdown hook, and runs the oven with the agent beside i
 - **The shutdown hook** is there because on a SIGTERM the JVM runs its shutdown hooks and exits without returning from
   `main`. It tells the oven to stop, and waits for `main` to return: the oven finishes the order it's baking, takes no
   more, and returns, and then `use { }` stops the agent, which disconnects from the proxy. The agent registers no
-  shutdown hook of its own, so it stops after the oven, not alongside it.
+  shutdown hook of its own, so it stops after the oven, not alongside it. The hook waits 25 seconds at most, short of
+  the 30 Kubernetes gives a pod to stop. Once it's added, `main` mustn't call `exitProcess()` (`System.exit()` in
+  Java), which waits for the hooks while this one waits for `main`, so the JVM would hang until the hook gives up.
 
 The oven's build depends on `com.pambrose:prometheus-proxy`, which brings the registry's model, and the Prometheus Java
 client's `prometheus-metrics-core` for its metrics. On every pull request, the project builds it against the checkout
