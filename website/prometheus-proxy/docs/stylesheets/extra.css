@@ -81,7 +81,8 @@ body {
 .md-nav__item--section > .md-nav__link,
 .md-typeset h1,
 .md-typeset h2,
-.md-typeset h3 {
+.md-typeset h3,
+.md-typeset h4 {
   font-family: var(--md-code-font-family);
   letter-spacing: 0;
 }
@@ -97,6 +98,61 @@ body {
 
 .md-typeset h3 {
   font-weight: 600;
+}
+
+/* The headings' levels in size and space, since the monospace most readers get (Menlo, Consolas, Liberation Mono)
+   has only a regular and a bold, so the weights above differ only in Safari's SF Mono. Each level is 4/3 of the one
+   below, 32, 24, and 18px over the 16px text, where the theme's 30, 24, and 20 stepped by 1.25 and 1.2. A section's
+   h2 gets the most room above and a hairline in the dashboard's line color, which marks a section as its panels do;
+   the title sits close over its introduction, and a long heading breaks into even lines. */
+.md-typeset :is(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+.md-typeset h1 {
+  margin: 0 0 0.75em;
+  font-size: 2em;
+  line-height: 1.25;
+}
+
+.md-typeset h2 {
+  margin: 2em 0 0.5em;
+  padding-top: 0.5em;
+  border-top: 1px solid var(--pp-line);
+  font-size: 1.5em;
+  line-height: 1.3;
+}
+
+.md-typeset h1 + h2 {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.md-typeset h3 {
+  margin: 1.8em 0 0.5em;
+  font-size: 1.125em;
+  line-height: 1.35;
+}
+
+.md-typeset h2 + h3 {
+  margin-top: 0.9em;
+}
+
+.md-typeset h4 {
+  font-size: 1em;
+}
+
+/* A page's contents list breaks a long heading into even lines. */
+.md-nav--secondary .md-nav__link {
+  text-wrap: balance;
+}
+
+/* A screenshot's caption, as secondary text at the tables' size, where the theme set it in italics at the reading
+   size, which competed with the text around it. */
+.md-typeset figcaption {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+  font-style: normal;
 }
 
 /* Reading text at 16px, the theme's 15px a step up, so a long page's measure comes nearer the comfortable range. */
@@ -133,10 +189,11 @@ body {
   }
 }
 
-/* Callouts carry the cautions a reader most needs, which the theme set a step under the text around them, at 12.8px. */
+/* Callouts carry the cautions a reader most needs, which the theme set a step under the text around them, at 12.8px;
+   they take the tables' 14px, the site's one size under the reading text. */
 .md-typeset .admonition,
 .md-typeset details {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
 }
 
 /* A callout's color says what it means, as the dashboard's do: amber for a caution, red for a danger. A note, a tip,
@@ -383,7 +440,7 @@ body {
 .md-typeset .pp-ways > ul > li > p + p {
   margin-top: 0.25em;
   color: var(--md-default-fg-color--light);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   line-height: 1.6;
 }
 

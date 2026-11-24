@@ -147,7 +147,7 @@ lost proxy on it.
 `demo.sh`, in `demos/basics`, drives the scenarios below. Run it from that directory, where `make up` started
 the demo; each command prints what to watch, and a minute between them lets the graphs catch up.
 
-### One service fails, another hangs, and the rest keep working
+### An outage and a timeout { #one-service-fails-another-hangs-and-the-rest-keep-working }
 
 ```bash
 ./demo.sh outage      # payments answers 500
@@ -176,7 +176,7 @@ the **Alerts** stat counts them, and so does Prometheus's `/alerts` page.
 
 `./demo.sh recover` returns every service to normal, and the red rows turn green within a scrape or two.
 
-### A second agent keeps a path up when one stops
+### Two agents, one path { #a-second-agent-keeps-a-path-up-when-one-stops }
 
 ```bash
 ./demo.sh agent-stop      # stops agent-west-2
@@ -186,7 +186,7 @@ the **Alerts** stat counts them, and so does Prometheus's `/alerts` page.
 A stopped agent leaves the dashboard at once, and `/shipping_metrics` drops from `+1` to agent-west-1 alone. In
 Grafana, **Shipping by replica** keeps west-1 flowing, and shipping stays green on **Target health**.
 
-### New services appear without a restart
+### New services, no restart { #new-services-appear-without-a-restart }
 
 ```bash
 ./demo.sh discover
@@ -203,7 +203,7 @@ source `disc` ([discovered](configuration/agent.md#dynamic-target-discovery)), b
 Prometheus finds them through the proxy's [service discovery](service-discovery.md), with no restart and no change to
 its config, and Grafana's **Discovered services** panel fills. `./demo.sh undiscover` removes them just as quietly.
 
-### The proxy evicts an agent that goes silent
+### A silent agent is evicted { #the-proxy-evicts-an-agent-that-goes-silent }
 
 ```bash
 ./demo.sh agent-freeze    # agent-west-2: connected, but silent
@@ -230,7 +230,7 @@ bar counts it as departed, and agent-west-1 carries `/shipping_metrics` alone, w
 target. The Activity view lists the eviction as a problem, with how long the proxy waited and the paths the agent
 served. `./demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
 
-### Per-team tokens restrict which paths an agent can register
+### Per-team tokens { #per-team-tokens-restrict-which-paths-an-agent-can-register }
 
 The proxy has [per-agent identities](security/index.md#per-agent-identities-and-path-authorization): each data
 center's agents connect with their own token, and an identity may register only the paths its patterns allow.
@@ -258,7 +258,7 @@ WARN  [ProxyServiceImpl.kt:360] - Agent identity 'contractor' denied registratio
 Payments keeps coming from agent-east, untouched. With a shared token, the newer agent would have taken the path
 over. The next scenario reads the same refusal on the contractor's agent's own dashboard.
 
-### An agent's own dashboard shows a refused path and a lost proxy
+### A refused path, a lost proxy { #an-agents-own-dashboard-shows-a-refused-path-and-a-lost-proxy }
 
 The proxy's dashboard shows only what reaches the proxy. A path the proxy refused, or a proxy an agent can't reach,
 shows on the agent's side, on its [own dashboard](agent-dashboard.md). With the contractor's agent from the previous
@@ -290,7 +290,7 @@ and what's lost is the way to the proxy. Prometheus can't reach the proxy either
 Grafana. Once the proxy is back, agent-east connects and registers its paths again within a few seconds. A new proxy
 holds nothing from the old one, so the proxy's dashboard starts its histories over.
 
-### A duplicate agent takes over the paths, and the proxy logs the fix
+### A duplicate agent { #a-duplicate-agent-takes-over-the-paths-and-the-proxy-logs-the-fix }
 
 ```bash
 ./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode

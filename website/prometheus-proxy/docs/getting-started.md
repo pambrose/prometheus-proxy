@@ -188,7 +188,7 @@ Each entry in `pathConfigs` maps:
 - `path` — the URL path on the proxy that Prometheus will scrape
 - `url` — the actual metrics endpoint the agent will fetch from
 
-### Start the Agent
+### Start It
 
 === "JAR"
 

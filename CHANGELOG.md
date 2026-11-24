@@ -334,6 +334,10 @@ All notable changes to this project are documented in this file.
   the page opens at up to twice that size, to scroll through, where it opened smaller than on the page. The
   screenshots' lightbox marks the focused button in the site's orange, where GLightbox drew a navy ring the overlay all
   but hid, and Tab no longer stops on each line of a code block
+- The docs site's headings step by a third, 32, 24, and 18px, and each section's heading has a hairline above it, so
+  the levels tell apart in the monospace most browsers draw them in, which has no weight between regular and bold.
+  The basics demo's scenarios have short titles, on its page, in its tour, and in its README, so its page's contents
+  fit a line each, and their links still work. Callouts and screenshot captions take the tables' size
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering
