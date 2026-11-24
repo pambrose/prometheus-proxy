@@ -165,6 +165,9 @@ The proxy runs outside the firewall alongside your Prometheus server.
 The agent runs inside the firewall with your monitored services. It needs a configuration file
 that specifies which metrics endpoints to expose.
 
+From here on, `proxy-host.example.com` stands for the proxy's host, as the agent and Prometheus reach it. Put yours
+in its place in `agent.conf`, in the commands that name it, and in Prometheus's target, in the next step.
+
 ### Create an Agent Config
 
 Create a file called `agent.conf`:

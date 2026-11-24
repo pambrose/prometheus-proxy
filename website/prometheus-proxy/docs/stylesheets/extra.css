@@ -142,6 +142,12 @@ body {
   font-size: 1em;
 }
 
+/* A checklist's boxes are squares, as a checkbox's are, where the theme drew circles, which read as a choice of one,
+   as radio buttons do. */
+:root {
+  --md-tasklist-icon: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='3' y='3' width='18' height='18' rx='2' fill='none' stroke='black' stroke-width='2'/></svg>");
+}
+
 /* A page's contents list breaks a long heading into even lines. */
 .md-nav--secondary .md-nav__link {
   text-wrap: balance;

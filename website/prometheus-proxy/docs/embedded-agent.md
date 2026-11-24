@@ -44,28 +44,6 @@ the builder, and [Every Setting, Every Way](#every-setting-every-way) lists each
     --8<-- "EmbeddedAgentExamples.txt:maven-dependency"
     ```
 
-## Usage
-
-=== "Kotlin"
-
-    ```kotlin
-    --8<-- "EmbeddedAgentKotlinExample.kt:embedded-kotlin"
-    ```
-
-=== "Java"
-
-    ```java
-    --8<-- "EmbeddedAgentJavaExample.java:embedded-java"
-    ```
-
-## Agent Configuration
-
-The embedded agent uses the same HOCON configuration as the standalone agent:
-
-```hocon
---8<-- "EmbeddedAgentExamples.txt:embedded-agent-config"
-```
-
 ## Configuring in Code
 
 Since 4.6.0, an application that holds the agent's settings itself, such as a token, the proxy's certificate, or
@@ -276,6 +254,30 @@ Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, Di
 [Ktor Demo](ktor-demo.md) runs an embedded agent on one machine, in a Ktor app, with the
 [Ktor Plugin](ktor-plugin.md). The [Plain Kotlin Demo](plain-kotlin-demo.md) runs one in each of a plain Kotlin
 program's replicas, with no framework or HTTP server, scaled out and in.
+
+## Configuring with a File { #usage }
+
+An app that keeps the agent's settings in a file, as the standalone agent does, starts it with
+[`Agent.startAsyncAgent()`](#agentstartasyncagent), which reads the file or a URL:
+
+=== "Kotlin"
+
+    ```kotlin
+    --8<-- "EmbeddedAgentKotlinExample.kt:embedded-kotlin"
+    ```
+
+=== "Java"
+
+    ```java
+    --8<-- "EmbeddedAgentJavaExample.java:embedded-java"
+    ```
+
+The file holds the same HOCON settings as the standalone agent's (see
+[Agent Configuration](configuration/agent.md)):
+
+```hocon
+--8<-- "EmbeddedAgentExamples.txt:embedded-agent-config"
+```
 
 ## Every Setting, Every Way
 

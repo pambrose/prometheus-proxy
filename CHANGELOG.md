@@ -338,6 +338,9 @@ All notable changes to this project are documented in this file.
   the levels tell apart in the monospace most browsers draw them in, which has no weight between regular and bold.
   The basics demo's scenarios have short titles, on its page, in its tour, and in its README, so its page's contents
   fit a line each, and their links still work. Callouts and screenshot captions take the tables' size
+- The Embedded Agent page shows the builder first, and starting the agent from a config file after it, where the file
+  came first. The production checklist links each item to the section that covers it, and draws checkboxes, where it
+  drew circles, and the Quick Start says once which places its `proxy-host.example.com` stands for
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering
