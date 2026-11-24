@@ -6,6 +6,9 @@ icon: lucide/cable
 
 The agent runs inside the firewall and scrapes local metrics endpoints on behalf of the proxy.
 
+The settings below are keys in the agent's config file. Most also have a command-line option and an environment
+variable, which the [CLI Reference](../cli-reference.md#agent-options) gives in each key's row.
+
 ## Path Configs
 
 The `pathConfigs` array defines which metrics endpoints the agent exposes through the proxy. Two entries for the
@@ -241,12 +244,12 @@ loaded as the agent starts, so a missing file or a wrong password fails the agen
 --8<-- "ConfigExamples.txt:agent-scrape-config"
 ```
 
-| Setting               | Default | Description                                       |
-|:----------------------|:--------|:--------------------------------------------------|
-| `scrapeTimeoutSecs`   | 15      | Total time allowed for a scrape including retries; a shorter Prometheus scrape timeout wins, and the agent sends whichever applies to the target in `X-Prometheus-Scrape-Timeout-Seconds` |
-| `scrapeMaxRetries`    | 0       | Maximum retries; 0 disables retries               |
-| `chunkContentSizeKbs` | 32      | Gzipped result chunked at this size; at most 4032 |
-| `minGzipSizeBytes`    | 512     | Gzip-compressed above this; at most 4128768       |
+| Setting / CLI Option / Env Var                                                                                  | Default | Description                                                                                                                                                                               |
+|:----------------------------------------------------------------------------------------------------------------|:--------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`scrapeTimeoutSecs`](../cli-reference.md#agent.scrapeTimeoutSecs)<br>`--timeout`<br>`SCRAPE_TIMEOUT_SECS`      | 15      | Total time allowed for a scrape including retries; a shorter Prometheus scrape timeout wins, and the agent sends whichever applies to the target in `X-Prometheus-Scrape-Timeout-Seconds` |
+| [`scrapeMaxRetries`](../cli-reference.md#agent.scrapeMaxRetries)<br>`--max_retries`<br>`SCRAPE_MAX_RETRIES`     | 0       | Maximum retries; 0 disables retries                                                                                                                                                       |
+| [`chunkContentSizeKbs`](../cli-reference.md#agent.chunkContentSizeKbs)<br>`--chunk`<br>`CHUNK_CONTENT_SIZE_KBS` | 32      | Gzipped result chunked at this size; at most 4032                                                                                                                                         |
+| [`minGzipSizeBytes`](../cli-reference.md#agent.minGzipSizeBytes)<br>`--gzip`<br>`MIN_GZIP_SIZE_BYTES`           | 512     | Gzip-compressed above this; at most 4128768                                                                                                                                               |
 
 !!! note "Text exposition formats only"
 

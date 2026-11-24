@@ -230,8 +230,9 @@ stateful firewall or NAT that drops a connection does, and nothing tells either 
 Within about 10 seconds agent-branch's scrapes time out. Its heartbeat fails three times, with a 5-second deadline
 each, so at about 20 seconds the agent gives up on the connection and dials the head of its list again: the same dead
 link, where the connect waits out its 30-second deadline (`agent.grpc.unaryDeadlineSecs`). Meanwhile the primary,
-which has heard nothing, evicts the agent after 30 seconds of silence (`proxy.internal.maxAgentInactivitySecs`, which
-the demo sets to 30), and **NetworkAgentEvicted** fires. At about 50 seconds agent-branch connects through its link to
+which has heard nothing, evicts the agent after 30 seconds of silence
+([`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-settings), which the demo sets to 30), and
+**NetworkAgentEvicted** fires. At about 50 seconds agent-branch connects through its link to
 the standby, failed over, while the primary is still up, and Grafana's **Agents off their primary** shows it at 1.
 About 20 seconds later **NetworkAgentNotOnPrimary** fires for agent-branch alone, until `./demo.sh heal` brings it
 back. agent-hq is untouched throughout.

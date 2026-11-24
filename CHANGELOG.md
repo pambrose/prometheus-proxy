@@ -314,6 +314,11 @@ All notable changes to this project are documented in this file.
   one side of the firewall, the agent on the other), gives one Docker command to try it, and offers three ways on: a
   demo, the Quick Start, and onboarding a team. It dropped its list of eleven benefits, its use cases, and its six
   cards, and its JAR tab, which ran a jar it never downloaded
+- The docs site's CLI Reference stacks each setting's option over its environment variable, so its descriptions fit
+  a line, and gives each row an anchor named by its config key (`#agent.scrapeTimeoutSecs`), marked when a link lands
+  on it. The configuration pages point there for each setting's option and variable, the agent's scrape settings give
+  theirs, the proxy's internal settings say they have none, and the pages that name `maxAgentInactivitySecs` link to
+  it. The site's tables take the dashboard's padding
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

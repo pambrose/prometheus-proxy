@@ -127,6 +127,19 @@ body {
   white-space: nowrap;
 }
 
+/* A table's cells at the dashboard's padding, about 8px by 14px, where the theme's 13px by 17px gave the CLI Reference's
+   descriptions a column a few words wide. */
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  padding: 0.6em 1em;
+}
+
+/* The row a link lands on, such as a configuration page's link to a setting's row in the CLI Reference, marked as the
+   current place is. */
+.md-typeset table:not([class]) tr:has(:target) {
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
 /* The home page reads as three groups, each set close within: what the project does (the title, the lede, the flow
    line, and how it works), Try It, and Next Steps. The headings' space is the only wide one, so space means a new
    group. */

@@ -18,7 +18,8 @@ on both proxy and agent:
     With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request
     stream end. An agent that disconnects ends that stream, and is removed at once. One that dies before
     opening its stream, or whose connection stays half-open, is removed after the inactivity timeout
-    (default: 60 seconds, controlled by `proxy.internal.maxAgentInactivitySecs`).
+    (default: 60 seconds, controlled by
+    [`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-settings)).
 
 In this mode the proxy also limits the agents connected as one auth identity, which is every agent when
 agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filter).

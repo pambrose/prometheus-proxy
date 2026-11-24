@@ -161,7 +161,8 @@ _Released 2026-11-23_
 - **The docs site.** It takes the dashboard's look and follows your light or dark setting, loads no web font, and has
   no chat widget. Its sidebar is regrouped into seven sections, with a Demos page listing every demo; each heading has
   a link of its own; and the reference tables no longer break a flag or key in the middle. Its home page is short:
-  what the project does, one Docker command to try it, and three ways on.
+  what the project does, one Docker command to try it, and three ways on. The CLI Reference gives each setting's
+  option, variable, key, and default in one row, and a link can open a setting's row by its key.
 
 ## 4.6.0
 

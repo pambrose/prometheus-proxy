@@ -395,7 +395,7 @@ What the proxy did with its agents and their paths, newest first:
 |---|---|
 | `connected` | an agent registered, with the address it connected from and its host name |
 | `disconnected` | an agent's connection closed or its stream ended, with how many paths it served |
-| `evicted` | the proxy removed an agent it hadn't heard from within `proxy.internal.maxAgentInactivitySecs` |
+| `evicted` | the proxy removed an agent it hadn't heard from within [`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-settings) |
 | `registered` / `unregistered` | an agent added a path, or removed one; re-registering a path it already serves isn't news |
 | `taken over` | an agent took a path another agent of the same identity was serving, as a redeploy does |
 | `scraped now` | a browser scraped a path with [Scrape now](#scrape-now), with the result and the browser's address |
