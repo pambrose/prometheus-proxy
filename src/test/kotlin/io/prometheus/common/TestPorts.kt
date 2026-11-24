@@ -62,6 +62,15 @@ object TestPorts {
   // HarnessHelpersTest
   const val HARNESS_HELPERS_HTTP_PORT = 9757
 
+  // HarnessHelpersTest: the port awaitPortFree finds free. A port taken from ServerSocket(0) and closed is in the
+  // ephemeral range, where another process can bind it before the check does.
+  const val HARNESS_HELPERS_FREE_PORT = 9758
+
+  // AgentHttpServiceTest: a scrape target nothing listens on, so its scrapes are refused and counted as failures. A
+  // port taken from ServerSocket(0) and closed could be bound by another process first. A socket holding the port
+  // without listening can't stand in: macOS drops a connection to it, so the scrape times out instead.
+  const val AGENT_HTTP_REFUSED_PORT = 9759
+
   // The scrape target HarnessTests.timeoutTest serves, which every standard harness suite runs
   const val HARNESS_TIMEOUT_TARGET_PORT = 9528
 

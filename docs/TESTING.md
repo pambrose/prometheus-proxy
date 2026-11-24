@@ -1029,9 +1029,10 @@ mechanism that the standard suite cannot reach:
 - **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle; before each
   spec it clears the default registry and has `SystemMetrics` forget it, so each spec's proxy and agent register the
   JVM metric groups again
-- **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, `awaitPortReady()` fails on a port nothing
-  listens on, held for the test by a socket bound but not listening, so no other process can take it meanwhile, and
-  `HarnessConstants.localConfigFile()` fails for a missing test config rather than fetching one from GitHub
+- **HarnessHelpersTest** — `awaitPortFree()` returns on a port of the spec's own and fails when a port stays taken,
+  `awaitPortReady()` fails on a port nothing listens on, held for the test by a socket bound but not listening, so no
+  other process can take it meanwhile, and `HarnessConstants.localConfigFile()` fails for a missing test config rather
+  than fetching one from GitHub
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
 - **EmbeddedAgentScrape** — `withEmbeddedAgentScraped()`, which starts a proxy, a scrape target, which can demand
   Basic Auth, and an agent built with `embeddedAgent { }`, waits until the proxy serves the target's metrics, and tears

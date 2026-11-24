@@ -84,19 +84,22 @@ open class HarnessSetup {
  * Waits for [port] to be free, and fails if it is still taken after [maxAttempts] tries.
  *
  * A previous spec may not have released the port yet, so a short wait is normal. A port that stays taken means
- * something else holds it, and carrying on would only fail later, at bind time, with a less useful error.
+ * something else holds it, and carrying on would only fail later, at bind time, with a less useful error. The failure's
+ * cause is the last bind's exception, which shows why the port couldn't be bound.
  */
 internal fun awaitPortFree(
   port: Int,
   maxAttempts: Int = 50,
   delayMs: Long = 200,
 ) {
+  var lastFailure: Exception? = null
   repeat(maxAttempts) {
     try {
       ServerSocket(port).use { return }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+      lastFailure = e
       Thread.sleep(delayMs)
     }
   }
-  error("Port $port is still in use after ${maxAttempts * delayMs}ms")
+  throw IllegalStateException("Port $port is still in use after ${maxAttempts * delayMs}ms", lastFailure)
 }
