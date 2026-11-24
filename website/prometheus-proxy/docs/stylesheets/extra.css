@@ -296,14 +296,6 @@ body {
   color: var(--pp-crit);
 }
 
-/* A card's link, an arrow and the page it opens: the arrow and the name laid out apart, so the link's underline runs
-   under the name alone, where it ran under the space after the arrow too. */
-.md-typeset .grid.cards a:has(> .twemoji:first-child) {
-  display: inline-flex;
-  gap: 0.3em;
-  align-items: center;
-}
-
 /* The screenshots' lightbox caption, on the dashboard's dark surface in the site's reading face, under the dark
    overlay, where GLightbox set it black in Arial on a white bar. */
 .glightbox-clean .gslide-description {
@@ -526,4 +518,13 @@ body {
 .md-typeset .pp-ways > ul > li:has(a:focus-visible) {
   outline: 2px solid var(--md-accent-fg-color);
   outline-offset: -2px;
+}
+
+/* A card's link, an arrow and the page it opens: the arrow and the name laid out apart, so the link's underline runs
+   under the name alone, where it ran under the space after the arrow too. Last in the file, after the home page's
+   links, which are less specific. */
+.md-typeset .grid.cards a:has(> .twemoji:first-child) {
+  display: inline-flex;
+  gap: 0.3em;
+  align-items: center;
 }
