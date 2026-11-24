@@ -160,7 +160,8 @@ _Released 2026-11-23_
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
 - **The docs site.** It takes the dashboard's look and follows your light or dark setting, loads no web font, and has
   no chat widget. Its sidebar is regrouped into seven sections, with a Demos page listing every demo; each heading has
-  a link of its own; and the reference tables no longer break a flag or key in the middle.
+  a link of its own; and the reference tables no longer break a flag or key in the middle. Its home page is short:
+  what the project does, one Docker command to try it, and three ways on.
 
 ## 4.6.0
 

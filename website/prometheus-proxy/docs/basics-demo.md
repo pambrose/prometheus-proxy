@@ -15,7 +15,7 @@ graph TB
   G[Grafana :3000] --> P[Prometheus :9090]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8094]
   %% Each agent connects out to the proxy, so its arrow points back. The invisible links keep the agents
-  %% below the proxy, as on the home page.
+  %% below the proxy.
   Proxy ~~~ East
   Proxy ~~~ West1
   Proxy ~~~ West2

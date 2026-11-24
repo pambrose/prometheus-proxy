@@ -18,6 +18,15 @@
         ],
         "createdAt": "2026-11-24T03:41:18.268Z",
         "reason": "User confirmed: the social card is a 1200x630 preview image that feeds shrink to a thumbnail, so its text needs display sizes, not the dashboard's type ramp"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "website/prometheus-proxy/docs/stylesheets/extra.css"
+        ],
+        "createdAt": "2026-11-24T05:10:25.286Z",
+        "reason": "The home page's .pp-flow__wall is an empty divider drawn as the firewall between the flow line's two sides, not a card's side accent"
       }
     ]
   }

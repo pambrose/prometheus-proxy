@@ -310,6 +310,10 @@ All notable changes to this project are documented in this file.
   block's Copy and Select buttons show while the pointer is over it, on its own color, where the end of its first line
   showed through them, and the screenshots' lightbox is GLightbox 3.3.1 served from the site, where the theme fetched
   whichever 3.x was newest from unpkg
+- The docs site's home page says what the project does in one line, draws it in another (Prometheus and the proxy on
+  one side of the firewall, the agent on the other), gives one Docker command to try it, and offers three ways on: a
+  demo, the Quick Start, and onboarding a team. It dropped its list of eleven benefits, its use cases, and its six
+  cards, and its JAR tab, which ran a jar it never downloaded
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

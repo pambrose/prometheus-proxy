@@ -126,3 +126,171 @@ body {
 .md-typeset table:not([class]) code .md-table-key {
   white-space: nowrap;
 }
+
+/* The home page reads as three groups, each set close within: what the project does (the title, the lede, the flow
+   line, and how it works), Try It, and Next Steps. The headings' space is the only wide one, so space means a new
+   group. */
+
+/* The home page's lede, the social card's line, a step up from the reading text and close under the title it
+   finishes, where the title's own margin set it off like a section. */
+.md-typeset h1:has(+ .pp-lede) {
+  margin-bottom: 0.5em;
+}
+
+.md-typeset .pp-lede {
+  margin-top: 0;
+  color: var(--md-default-fg-color);
+  font-size: 1.2em;
+  line-height: 1.45;
+}
+
+/* What Try It's command prints, close under the command, as its result: the theme sets the block's margin on both
+   its wrapper and its pre. */
+.md-typeset .highlight:has(+ .pp-result),
+.md-typeset .highlight:has(+ .pp-result) > pre {
+  margin-bottom: 0.5em;
+}
+
+.md-typeset .pp-result {
+  margin-top: 0.5em;
+}
+
+/* The home page's flow line, the social card's: Prometheus and the proxy on one side of the firewall, the agent and
+   its endpoints on the other, and the firewall the accent's wall between them, a border so it holds in forced colors.
+   The diagram is one image to a screen reader, its aria-label the line in words. */
+.md-typeset .pp-flow {
+  container-type: inline-size;
+  margin: 1.5em 0;
+}
+
+.md-typeset .pp-flow__diagram {
+  display: flex;
+  color: var(--md-default-fg-color--light);
+  font-family: var(--md-code-font-family);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  white-space: pre;
+}
+
+.md-typeset .pp-flow__side {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The zones' names at the tables' size, which stays put when the line stacks and shrinks. */
+.md-typeset .pp-flow__zone {
+  padding: 0 1ch;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+
+/* Each zone's name sits against the wall, so the two read as the sides it divides. */
+.md-typeset .pp-flow__side:first-child .pp-flow__zone {
+  text-align: right;
+}
+
+.md-typeset .pp-flow__line b {
+  color: var(--md-default-fg-color);
+  font-weight: 600;
+}
+
+.md-typeset .pp-flow__wall {
+  flex: none;
+  border-left: 3px solid var(--md-primary-fg-color);
+}
+
+/* Where the line doesn't fit across, a phone's column, the zones stack, outside over inside, and the wall lies
+   between them. The longer half, 32 characters, shrinks with a column narrower than about 300px, so it never runs
+   past the edge. */
+@container (width < 33.5em) {
+  .md-typeset .pp-flow__diagram {
+    flex-direction: column;
+    font-size: min(0.75rem, 5cqi);
+  }
+
+  .md-typeset .pp-flow__zone {
+    padding: 0;
+  }
+
+  .md-typeset .pp-flow__side:first-child .pp-flow__zone {
+    text-align: left;
+  }
+
+  .md-typeset .pp-flow__wall {
+    margin: 0.5em 0;
+    border-top: 3px solid var(--md-primary-fg-color);
+    border-left: 0;
+  }
+}
+
+/* The home page's ways on: one list, a row each, the whole row its link, in the dashboard's rows rather than the
+   theme's cards. The link is the row's name; the text under it says where it goes. */
+.md-typeset .pp-ways > ul {
+  max-width: 27rem;
+  margin: 1em 0;
+  padding: 0;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  list-style: none;
+}
+
+.md-typeset .pp-ways > ul > li {
+  position: relative;
+  margin: 0;
+  padding: 0.625em 1em;
+}
+
+.md-typeset .pp-ways > ul > li + li {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .pp-ways > ul > li > p {
+  margin: 0;
+}
+
+/* A row's description at the callouts' size, under its name, as the dashboard sets a row's detail under its title. */
+.md-typeset .pp-ways > ul > li > p + p {
+  margin-top: 0.25em;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.md-typeset .pp-ways > ul > li code {
+  white-space: nowrap;
+}
+
+.md-typeset .pp-ways > ul > li > p:first-child a {
+  font-family: var(--md-code-font-family);
+  font-weight: 600;
+}
+
+/* The row's outline shows the focus, below, so the link draws none of its own inside it: only where the row can
+   show it, so a browser without :has keeps the link's. */
+@supports selector(:has(a)) {
+  .md-typeset .pp-ways > ul > li > p:first-child a:focus-visible {
+    outline: none;
+  }
+}
+
+/* The link covers its whole row, so the row is one target. */
+.md-typeset .pp-ways > ul > li > p:first-child a::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+/* The arrow is decoration, so its alternative text is empty. */
+.md-typeset .pp-ways > ul > li > p:first-child::after {
+  margin-left: 0.5ch;
+  color: var(--md-typeset-a-color);
+  content: "→" / "";
+}
+
+.md-typeset .pp-ways > ul > li:hover {
+  background-color: var(--md-code-bg-color);
+}
+
+.md-typeset .pp-ways > ul > li:has(a:focus-visible) {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: -2px;
+}
