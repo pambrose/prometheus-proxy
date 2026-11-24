@@ -97,8 +97,8 @@ body {
     transition: opacity 125ms;
   }
 
-  .md-typeset pre:hover > .md-code__nav,
-  .md-typeset .md-code__nav:focus-within {
+  .md-typeset .md-code__nav:focus-within,
+  .md-typeset pre:hover > .md-code__nav {
     opacity: 1;
   }
 }
