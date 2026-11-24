@@ -41,21 +41,24 @@ graph TB
   HQ -->|HTTP fetch| App[network-app: simulated services]
   Branch -->|HTTP fetch| App
 
-  subgraph Outside Firewall
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph Outside ["<br>Outside Firewall"]
     G
     P
     Proxy
     Standby
   end
 
-  subgraph Inside Firewall
+  subgraph Inside ["<br>Inside Firewall"]
     HQ
     Branch
     App
   end
 ```
 
-## What you need
+## What You Need
 
 The proxy and agent are the latest release's images, from Docker Hub, the same ones the Basics Demo runs, so there's
 nothing to build. On macOS or Linux, the demo needs only:
@@ -67,7 +70,7 @@ nothing to build. On macOS or Linux, the demo needs only:
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
-## Running it
+## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -103,7 +106,7 @@ to go back to the default. The proxy dashboard's links into Prometheus and Grafa
 Every port binds to `127.0.0.1` only. The dashboards run without their login, and Grafana uses its default admin
 password, so this setup is for a laptop, not for anything shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -125,7 +128,7 @@ they're given `agent-hq`, and `./demo.sh heal` ends each scenario: it removes ev
 every link and proxy, and returns any agent on the standby to the primary. The proxies' dashboards show each scenario
 as the proxies see it; agent-branch's own dashboard, at <http://localhost:8197/dashboard>, shows the agent's side.
 
-### A high-latency link slows scrapes, but nothing fails
+### A High-Latency Link Slows Scrapes, but Nothing Fails
 
 ```bash
 ./demo.sh far         # agent-branch's links add 250 ms, give or take 50 ms, each way
@@ -141,7 +144,7 @@ agent-branch's scrapes take about half a second, one round trip more, while agen
 second. Nothing fails: the agent's connection is already open, so a scrape needs no new handshake through the firewall,
 and costs the round trip and nothing more.
 
-### A low-bandwidth link fails scrapes; filtering at the agent fixes it
+### A Low-Bandwidth Link Fails Scrapes; Filtering at the Agent Fixes It
 
 ```bash
 ./demo.sh thin        # agent-branch's links carry 8 KB/s toward the proxies
@@ -186,7 +189,7 @@ after the filter. `./demo.sh heal` and then `./demo.sh unfilter` restore the lin
 without the filter, brings every path back within a second or two, since what the thin link had queued drains at full
 speed.
 
-### The primary proxy stops, and the agents fail over to the standby
+### The Primary Proxy Stops, and the Agents Fail Over to the Standby
 
 ```bash
 ./demo.sh proxy-down  # stops the primary proxy
@@ -222,7 +225,7 @@ closes each agent's connection through its standby link once, and they return to
 resolves the alert: agent-branch's Activity view adds **disconnected**, **back to primary**, and **connected**, and
 its Connection view drops the **failed over** tag.
 
-### A link goes silent; the agent detects it and fails over
+### A Link Goes Silent; the Agent Detects It and Fails Over
 
 ```bash
 ./demo.sh cut         # agent-branch's link to the primary goes silent, both ways
@@ -254,7 +257,7 @@ passes, and then that endpoint gets its error, `DEADLINE_EXCEEDED`, and the agen
 the whole sequence, **disconnected**, **connect failed**, **failed over**, **connected**, and **registered**, where the
 proxies saw only an eviction and a new connection.
 
-### A link that keeps dropping: the agent reconnects, traced in Zipkin
+### A Link That Keeps Dropping: The Agent Reconnects, Traced in Zipkin
 
 ```bash
 ./demo.sh flaky       # agent-branch's link to the primary drops its connection about every 15 seconds
@@ -289,7 +292,7 @@ agent-branch's `fetch` of the target, which joins the trace the proxy sent with 
 <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A failed scrape's
 spans are red: the one in flight as a connection drops ends its `forward` span as `agent_disconnected`.
 
-### The whole WAN goes down: an alert fires, and the agents reconnect
+### The Whole WAN Goes Down: An Alert Fires, and the Agents Reconnect
 
 ```bash
 ./demo.sh wan-down    # every link goes down
@@ -319,7 +322,7 @@ scraped. An agent that lands on the standby shows at 1 on **Agents off their pri
 loses its error; the other keeps its error until a connect through it succeeds. `./demo.sh heal` returns any agent on
 the standby to the primary.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -339,7 +342,7 @@ the standby to the primary.
 The optional `[agent]` is `agent-branch`, the default, or `agent-hq`. `heal` and `unfilter` undo every scenario. For a
 clean slate, `make down && make up`.
 
-## Going further
+## Going Further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/network) has these scenarios as
   a guided tour, explaining how each one works, and lists the files that set the demo up,

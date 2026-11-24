@@ -170,7 +170,7 @@ everything in the JVM's default registry, the app's metrics too when they're kep
 agent's `agent.metrics` settings turn on. Without such a scraper, the path is all the agent needs (see
 [Port or Proxy Path](monitoring.md#port-or-proxy-path)).
 
-### Settings From the Environment
+### Settings from the Environment
 
 Since 4.7.0, `fromEnvironment()` reads the proxy, and how to reach it, from the app's environment, under names apart from
 the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spring-boot-demo.md), and
@@ -317,7 +317,7 @@ Where one setting is given more than one way, the first of these that gives it w
 
 A config file or a `Config` takes the place of the second and third: its keys, then the defaults.
 
-### Settings Without a Builder Method
+### Settings without a Builder Method
 
 `setting(key, value)` sets any other setting by its key under `agent`, as the starter's and the plugin's
 `settings.<key>` do. These are the ones an embedded agent most often needs:

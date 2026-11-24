@@ -6,7 +6,7 @@ icon: lucide/lock
 
 ## Requirements
 
-### TLS Without Mutual Authentication
+### TLS without Mutual Authentication
 
 Server-side TLS authenticates the proxy to the agent:
 
@@ -15,7 +15,7 @@ Server-side TLS authenticates the proxy to the agent:
 | **Proxy** | `certChainFilePath` (server cert), `privateKeyFilePath` (server key) |
 | **Agent** | `trustCertCollectionFilePath` (CA cert)                              |
 
-### TLS With Mutual Authentication
+### TLS with Mutual Authentication
 
 Both sides authenticate each other:
 

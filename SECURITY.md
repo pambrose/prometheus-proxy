@@ -1,6 +1,6 @@
 # Security Policy
 
-## Reporting a vulnerability
+## Reporting a Vulnerability
 
 Please report security problems privately, not in a public issue, pull request, or discussion.
 
@@ -19,11 +19,11 @@ A useful report includes:
 
 Once a fix is ready it ships in a release, and the advisory is published with it, crediting you if you want.
 
-## Supported versions
+## Supported Versions
 
 Security fixes go into the latest release. Upgrade to it to receive them; older releases are not patched.
 
-## Before you report
+## Before You Report
 
 Some behavior is by design and documented, so check the
 [security guide](https://prometheus-proxy.com/security/) first:

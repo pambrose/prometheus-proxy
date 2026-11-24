@@ -1,4 +1,4 @@
-# Plain Kotlin demo
+# Plain Kotlin Demo
 
 A self-contained demo of Prometheus Proxy's agent embedded in a plain Kotlin program, with no framework and no HTTP
 server. A bakery's ovens are workers that take orders from a Redis queue, as a queue consumer, a scheduler, or a daemon
@@ -44,7 +44,7 @@ flowchart TB
   style workers stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-## What you need
+## What You Need
 
 On macOS or Linux, the demo needs:
 
@@ -59,7 +59,7 @@ On macOS or Linux, the demo needs:
 release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds
 from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
-## Quick start
+## Quick Start
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -92,7 +92,7 @@ to the default.
 Every port binds to `127.0.0.1` only, and the ovens and Redis publish none. The proxy's dashboard has no authentication,
 and Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -107,7 +107,7 @@ and Grafana uses its default admin password, so this setup is for a laptop, not 
 The agent's token, `demo-bakery-token`, is in `docker/compose.yml`, a public file, so this suits a laptop and nothing
 else; never reuse it.
 
-## The worker's code
+## The Worker's Code
 
 The oven's `main` (`app/src/main/kotlin/bakery/Main.kt`) builds the oven, adds a shutdown hook, and runs the oven with
 the agent beside it:
@@ -157,7 +157,7 @@ fun main() {
   Kubernetes gives a pod to stop. Once it's added, `main` mustn't call `exitProcess()`, which waits for the hooks while
   this one waits for `main`, so the JVM would hang until the hook gives up.
 
-## Guided tour
+## Guided Tour
 
 `make tour` walks through these parts one step at a time, about 12 minutes in all. To follow them here instead, run the
 scenario commands from `demos/plain-kotlin`; each prints what to watch. Leave about a minute between parts so the graphs
@@ -169,7 +169,7 @@ catch up.
 4. Scaling in stops ovens cleanly (2 min)
 5. No proxy, no outage (2 min)
 
-### 1. A worker with no port at all
+### 1. A Worker with No Port at All
 
 A worker often has no HTTP server at all, so there's nothing for Prometheus to scrape. Here the agent, inside the
 oven's JVM, reads the oven's metrics in-process and sends them out to the proxy.
@@ -185,7 +185,7 @@ under `oven-agent`. Its config names neither: its one job reads the proxy's serv
 agent registered, and the code above does the rest. Prometheus's targets page shows both:
 <http://localhost:9690/targets>
 
-### 2. The metrics in Grafana
+### 2. The Metrics in Grafana
 
 Grafana lands on the **Bakery** dashboard: ovens scraped, agents connected, waiting orders, orders baked a minute, and
 the bake time, then each oven's orders, the backlog against the number of ovens, bake times, and how much of its time
@@ -200,7 +200,7 @@ its `agent_` series and no `bakery_` series: the agent keeps its own metrics in 
 of the default registry leaves them out, so each series is served once. The **Prometheus Agents** link opens the
 project's agents dashboard, which shows the ovens' embedded agents, the `oven-agent` job, like any other.
 
-### 3. A rush, and two more ovens clear it
+### 3. A Rush, and Two More Ovens Clear It
 
 One oven bakes about two orders a second, which keeps up with the counter's one and a half.
 
@@ -215,7 +215,7 @@ two paths, the proxy's service discovery lists them at once, and Prometheus, whi
 each new oven as a target of its own, with no change to its config. **Orders baked / sec, by oven** gains a series for
 each, and the three clear the backlog in about two minutes.
 
-### 4. Scaling in stops ovens cleanly
+### 4. Scaling In Stops Ovens Cleanly
 
 ```bash
 ./demo.sh scale 1    # once the backlog has cleared
@@ -233,7 +233,7 @@ a terminating pod's can on Kubernetes: **Scrape up, by oven** shows it, and the 
 The proxy dashboard's Activity view lists each stopped oven's agent as disconnected, and its Paths view marks the
 stopped ovens' paths `gone` and keeps them for an hour, so it's clear what left: <http://localhost:8694/dashboard/paths>
 
-### 5. No proxy, no outage
+### 5. No Proxy, No Outage
 
 An oven's metrics aren't worth an outage. `startIfConfigured()` starts the agent only where a proxy is set, and logs a
 start that fails rather than throwing, so the oven bakes either way. Each of these starts an oven with the agent's
@@ -272,7 +272,7 @@ Each oven bakes all the same. That's the tour. The other demos, in the order the
 The demos use different ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one
 and frees its resources.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -286,7 +286,7 @@ and frees its resources.
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
 | `make open` | Opens the proxy's dashboard, Grafana, and Prometheus's targets in the browser |  |
 
-## How it's put together
+## How It's Put Together
 
 | File | What it sets up |
 |---|---|

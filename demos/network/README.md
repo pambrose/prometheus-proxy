@@ -1,4 +1,4 @@
-# Network demo
+# Network Demo
 
 A self-contained demo of what the network between the agents and the proxies does to Prometheus Proxy, and how the
 proxy and agents cope. It runs a proxy and its standby, each with its web dashboard, two agents behind a simulated
@@ -33,7 +33,7 @@ proxy, between the agents and the proxy; the [Kubernetes demo](../kubernetes) co
 The proxies see every agent at the WAN's address, as they would behind a NAT. Each agent's endpoints are its two
 links, so the dashboards' "via" line names the link it connected through.
 
-## What you need
+## What You Need
 
 The proxy and agent are the latest release's images, from Docker Hub, the same ones the basics demo runs, so there's
 nothing to build. On macOS or Linux, the demo needs only:
@@ -45,7 +45,7 @@ nothing to build. On macOS or Linux, the demo needs only:
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
-## Quick start
+## Quick Start
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -82,7 +82,7 @@ The proxy dashboard's links into Prometheus and Grafana keep the default ports (
 Every port binds to `127.0.0.1` only. The dashboards run without their login, and Grafana uses its default admin
 password, so this setup is for a laptop, not for anything shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -96,7 +96,7 @@ password, so this setup is for a laptop, not for anything shared.
 | `grafana` | Opens on the **Prometheus Proxy Network Demo** dashboard. |
 | `zipkin` | Every proxy and agent reports a span for each gRPC call between them but heartbeats and the stream of path notices, and each scrape's spans, under its own name. |
 
-## Guided tour
+## Guided Tour
 
 `make tour` walks through these parts one step at a time. It first puts the demo back as `make up` starts it, with
 `heal`, and `unfilter` if agent-branch has the filter, so `make tour PART=n` starts any part from where it expects. To
@@ -105,7 +105,7 @@ on, each part ends with `./demo.sh heal`, which removes every toxic, brings back
 agent on the standby to the primary; part 3 then runs `unfilter` too. Leave about a minute between parts so the graphs
 catch up.
 
-### 1. Two agents reach the proxy over a simulated WAN
+### 1. Two Agents Reach the Proxy over a Simulated WAN
 
 These are the basics demo's proxy and agents, now with a simulated WAN between them.
 
@@ -120,7 +120,7 @@ These are the basics demo's proxy and agents, now with a simulated WAN between t
 - Open Grafana. Every target is up on **Target health**, and **Scrape time through the WAN, by agent** shows the two
   agents side by side, each well under a tenth of a second.
 
-### 2. A high-latency link slows scrapes, but nothing fails
+### 2. A High-Latency Link Slows Scrapes, but Nothing Fails
 
 ```bash
 ./demo.sh far             # agent-branch's links add 250 ms, give or take 50 ms, each way
@@ -135,7 +135,7 @@ These are the basics demo's proxy and agents, now with a simulated WAN between t
 ./demo.sh heal
 ```
 
-### 3. A low-bandwidth link fails scrapes; filtering at the agent fixes it
+### 3. A Low-Bandwidth Link Fails Scrapes; Filtering at the Agent Fixes It
 
 ```bash
 ./demo.sh thin            # agent-branch's links carry 8 KB/s toward the proxies
@@ -175,7 +175,7 @@ These are the basics demo's proxy and agents, now with a simulated WAN between t
 `heal` alone, without the filter, brings every path back within a second or two: what the thin link had queued
 drains at full speed.
 
-### 4. The primary proxy stops, and the agents fail over to the standby
+### 4. The Primary Proxy Stops, and the Agents Fail Over to the Standby
 
 Open agent-branch's **Connection** view, <http://localhost:8197/dashboard/connection>, beside the standby's
 dashboard. The proxies can show an agent only once it has connected to them; this view shows the agent's side of the
@@ -215,7 +215,7 @@ once, and they return to the primary within seconds, which resolves the alert. a
 ./demo.sh heal
 ```
 
-### 5. A link goes silent; the agent detects it and fails over
+### 5. A Link Goes Silent; the Agent Detects It and Fails Over
 
 Contrast this with part 4, where the connection closed. Here agent-branch's link to the primary stops passing anything,
 the agent's goodbye included, and closes nothing: what a stateful firewall or NAT that drops a connection does. Nothing
@@ -252,7 +252,7 @@ what the agent tries.
 ./demo.sh heal
 ```
 
-### 6. A link that keeps dropping: the agent reconnects, traced in Zipkin
+### 6. A Link That Keeps Dropping: The Agent Reconnects, Traced in Zipkin
 
 ```bash
 ./demo.sh flaky           # agent-branch's link to the primary drops its connection about every 15 seconds
@@ -286,7 +286,7 @@ what the agent tries.
 ./demo.sh heal
 ```
 
-### 7. The whole WAN goes down: an alert fires, and the agents reconnect
+### 7. The Whole WAN Goes Down: An Alert Fires, and the Agents Reconnect
 
 ```bash
 ./demo.sh wan-down        # every link goes down
@@ -334,7 +334,7 @@ them:
 - [Plain Kotlin demo](../plain-kotlin): a bakery's ovens, workers with no framework or HTTP server, each reading its own
   metrics in-process
 
-## Scenario reference
+## Scenario Reference
 
 The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 
@@ -355,7 +355,7 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 
 `heal` and `unfilter` undo every scenario. For a clean slate, `make down && make up`.
 
-## How it's put together
+## How It's Put Together
 
 | File | What it sets up |
 |---|---|

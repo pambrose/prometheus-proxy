@@ -37,21 +37,24 @@ graph TB
   Current -->|HTTP fetch| App[nginx-app: simulated services]
   Legacy -->|HTTP fetch| App
 
-  subgraph Outside Firewall
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph Outside ["<br>Outside Firewall"]
     P
     Proxy
     Nginx
     Browser
   end
 
-  subgraph Inside Firewall
+  subgraph Inside ["<br>Inside Firewall"]
     Current
     Legacy
     App
   end
 ```
 
-## What you need
+## What You Need
 
 The proxy and agent are the latest release's images, from Docker Hub, the same ones the other demos run, so there's
 nothing to build, and agent-legacy is release 4.6.0's image. On macOS or Linux, the demo needs only:
@@ -63,7 +66,7 @@ nothing to build, and agent-legacy is release 4.6.0's image. On macOS or Linux, 
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
-## Running it
+## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -95,7 +98,7 @@ to go back to the default. The proxy dashboard's link into Prometheus keeps the 
 Every port binds to `127.0.0.1` only. The dashboards run without their login, so this setup is for a laptop, not for
 anything shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -111,7 +114,7 @@ anything shared.
 `demo.sh`, in `demos/nginx`, drives the scenarios below. Run it from that directory, where `make up` started the demo;
 each command prints what to watch. `./demo.sh reset` puts nginx and the proxy back as `make up` starts them.
 
-### Two agents reach the proxy through nginx, over TLS
+### Two Agents Reach the Proxy through nginx, over TLS
 
 Each agent dials nginx at `nginx.test.google.fr:443` over TLS, and checks nginx's certificate against that name: the
 certificate names `*.test.google.fr`, and the agent trusts the CA that signed it,
@@ -143,7 +146,7 @@ with 413 each time its results add up to a megabyte. Every entrance in the demo 
 `client_max_body_size 0`, as any nginx in front of the proxy needs; see
 [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
-### nginx's stream timeouts cut off an agent from 4.6.0 every minute
+### nginx's Stream Timeouts Cut Off an Agent from 4.6.0 Every Minute
 
 This part is for you if the proxy or any agent you run behind nginx, or another reverse proxy, is on 4.6.0 or earlier,
 as happens while you upgrade one before the other: keepalives flow only when both ends are newer, so such a pair goes
@@ -175,7 +178,7 @@ agent-legacy is cut off once more, by the worker it's on, which keeps the old ti
 under the day-long ones and stays connected. For an agent or a proxy from 4.6.0 or earlier, raising both timeouts is
 the fix short of upgrading both.
 
-### A shorter stream timeout, and a reload that doesn't reach connected agents
+### A Shorter Stream Timeout, and a Reload That Doesn't Reach Connected Agents
 
 Some load balancers close a quiet connection sooner than nginx's 60 seconds.
 
@@ -214,7 +217,7 @@ sends on, and gives it to each agent as it registers. At 10 seconds, agent-curre
 proxy nginx.test.google.fr after 10s without a result`, and stays connected. Keep the interval under the shortest idle
 timeout between the agents and the proxy.
 
-### The dashboard behind nginx
+### The Dashboard behind nginx
 
 The proxy's dashboard updates live over a WebSocket, which a reverse proxy has to pass on.
 
@@ -245,7 +248,7 @@ it to proxy.dashboard.allowedOrigins if expected`. Passing the browser's `Host` 
   <figcaption>With the WebSocket's headers and the browser's Host passed on, the dashboard updates through nginx</figcaption>
 </figure>
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -267,7 +270,7 @@ it to proxy.dashboard.allowedOrigins if expected`. Passing the browser's `Host` 
 
 `reset` undoes every scenario. For a clean slate, `make down && make up`.
 
-## Going further
+## Going Further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx) has these scenarios as
   a guided tour, explaining how each one works, and lists the files that set the demo up, nginx's configs among them.

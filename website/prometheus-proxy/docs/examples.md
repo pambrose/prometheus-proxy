@@ -15,7 +15,7 @@ shown below verbatim, except `examples/cloud-proxy`, which
     Config files rank below every other source but the built-in defaults: CLI args → env vars →
     `-D` properties → config file → built-in defaults. See the [CLI Reference](cli-reference.md).
 
-## Self-monitoring — `simple.conf`
+## Self-Monitoring — `simple.conf`
 
 Enables admin and metrics on both components and points the agent at the proxy's and agent's
 own `/metrics` endpoints, so the proxy and agent monitor themselves. A good first run on a
@@ -36,7 +36,7 @@ In Docker, the agent's `localhost` is its own container, so give it `PROXY_HOSTN
 port: the agent connects to the proxy there, and fetches the proxy's metrics from there too. The
 [Docker quick start](docker.md#basic-usage) runs it that way.
 
-## Debugging a local run — `prom-agent.conf`
+## Debugging a Local Run — `prom-agent.conf`
 
 The same self-monitoring setup as `simple.conf`, turned up for troubleshooting: the proxy's debug
 servlet is enabled on the admin port and the `labels` are dropped so the output stays readable. Two
@@ -49,7 +49,7 @@ an nginx reverse proxy, and `scrapeTimeoutSecs` for endpoints slower than the 15
 
 This is the config behind the bundled *Agent (no auth)* IntelliJ run configuration in `.run/`.
 
-## Multiple application endpoints — `myapps.conf`
+## Multiple Application Endpoints — `myapps.conf`
 
 Three application endpoints, each on its own proxy path and tagged with custom `labels`. This
 is the typical shape of a real agent config.
@@ -61,7 +61,7 @@ is the typical shape of a real agent config.
 Prometheus then scrapes `/app1_metrics`, `/app2_metrics`, and `/app3_metrics` from the proxy.
 See the [Quick Start](getting-started.md#multiple-endpoints).
 
-## Metric filtering — `agent-filters.conf`
+## Metric Filtering — `agent-filters.conf`
 
 Drops whole metric families at the agent, before the payload is gzipped, chunked, and sent across
 the WAN. Filters live in a top-level `agent.filters` list keyed by `path` rather than nested inside
@@ -76,7 +76,7 @@ Regexes are fully anchored, matching Prometheus `relabel_config` semantics: `go_
 while `go_.*` matches `go_gc_duration_seconds`. See
 [Metric Filtering](configuration/agent.md#metric-filtering).
 
-## Dynamic discovery targets — `discovery-targets.conf`
+## Dynamic Discovery Targets — `discovery-targets.conf`
 
 Unlike every other file on this page, this one is **not** passed to `--config`. It is the targets
 file an agent watches when
@@ -101,7 +101,7 @@ agent {
 }
 ```
 
-## Prometheus federation — `federate.conf`
+## Prometheus Federation — `federate.conf`
 
 Pulls metrics from an existing Prometheus server through its `/federate` endpoint, exposing
 them on a proxy path. See [Prometheus Federation](advanced.md#prometheus-federation).
@@ -110,7 +110,7 @@ them on a proxy path. See [Prometheus Federation](advanced.md#prometheus-federat
 --8<-- "examples/federate.conf"
 ```
 
-## Server-only TLS — `tls-no-mutual-auth.conf`
+## Server-Only TLS — `tls-no-mutual-auth.conf`
 
 Encrypts the gRPC channel with a server certificate; the agent verifies the proxy but does not
 present a client certificate. Note the non-default agent port `50440` and the

@@ -66,7 +66,7 @@ token or the password, and start it:
   [read it in-process](embedded-agent.md#metrics-served-in-process).
 - A failure to start is logged, and the app carries on without the agent: its metrics aren't worth an outage.
 
-### Starting and Stopping It With the App
+### Starting and Stopping It with the App
 
 Start the agent once the app serves `/metrics`, and stop it when the app stops. In a Ktor module:
 

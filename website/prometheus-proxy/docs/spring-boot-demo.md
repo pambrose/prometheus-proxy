@@ -32,23 +32,30 @@ graph TB
     metrics registry in-process and connects to the proxy over gRPC with TLS and a token.
   }
   P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
-  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app below.
-  Proxy ~~~ Agent
-  Agent[embedded agent, run by the Spring Boot starter, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
+  %% The agent connects out to the proxy, so its arrow points up, into the proxy. Mermaid has no reverse arrow, and an
+  %% Agent --> Proxy edge pinned under the proxy by an invisible link drew a second edge beside it, which bent this
+  %% one. A two-headed edge keeps the proxy above the agent on one straight line, and the linkStyle below (this is
+  %% edge 1, counting from 0) drops its arrowhead at the agent's end.
+  Proxy <-->|gRPC over TLS, with a token| Agent[embedded agent, run by the Spring Boot starter, dashboard :8495]
   Agent -->|reads its metrics registry in-process| App[roastery: Spring Boot, Micrometer]
 
-  subgraph host[Proxy host]
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph host ["<br>Proxy host"]
     P
     Proxy
   end
 
-  subgraph roastery[roastery: one container, one JVM]
+  subgraph roastery ["<br>roastery: one container, one JVM"]
     Agent
     App
   end
+
+  linkStyle 1 marker-end:none
 ```
 
-## What you need
+## What You Need
 
 On macOS or Linux, the demo needs:
 
@@ -63,7 +70,7 @@ On macOS or Linux, the demo needs:
 against the latest release's library, from Maven Central, so it needs no JDK or Maven. `make up-local` builds the
 library, the proxy, and the roastery from the checkout, which takes a JDK 17 or later and Maven 3.9 or later.
 
-## Running it
+## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -96,7 +103,7 @@ to go back to the default. The same file holds the demo's secrets, the repositor
 Every port binds to `127.0.0.1` only. The agent's dashboard has no password, so the agent warns at startup, in the
 roastery's log, that it listens on all interfaces without a login: the container's, which only `127.0.0.1` reaches.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -104,7 +111,7 @@ roastery's log, that it listens on all interfaces without a login: the container
 | `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with none of them in a file. Its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
-## Where the agent is configured
+## Where the Agent Is Configured
 
 The roastery has no code for its agent. Its pom depends on the [Spring Boot starter](spring-boot-starter.md),
 `com.pambrose:prometheus-proxy-spring-boot-starter`, which runs the agent with the app, and its
@@ -128,7 +135,7 @@ show each part:
 
 [In Spring Boot](embedded-agent.md#in-spring-boot) shows how to wire the agent into an app yourself instead.
 
-## Spring Boot's versions of the agent's libraries
+## Spring Boot's Versions of the Agent's Libraries
 
 Spring Boot's dependency management, which an app takes from `spring-boot-starter-parent`, sets the version of every
 library it knows, whatever version a dependency asks for. Some of the agent's libraries are among them, and the
@@ -145,7 +152,7 @@ it by, such as `grpc-java.version` or `netty.version`, which Spring Boot's
 library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
 `netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
-## The agent's dashboard
+## The Agent's Dashboard
 
 The agent serves a [dashboard](agent-dashboard.md) of its own, from inside the roastery:
 <http://localhost:8495/dashboard>
@@ -175,7 +182,7 @@ UNKNOWN. Scrape now still reads the roastery's metrics, since it doesn't need th
 brings the proxy back: the agent connects within a few seconds and registers its path again, and the Activity view
 adds connected and registered.
 
-## A graceful shutdown
+## A Graceful Shutdown
 
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. The agent, in the
 last lifecycle phase, stops first: it disconnects from the proxy, which drops the roastery's path and stops sending
@@ -194,7 +201,7 @@ The [Plain Kotlin Demo](plain-kotlin-demo.md)'s ovens stop the other way round: 
 then stops its agent. A worker with no web server has no requests to drain, and nothing a scrape could find half shut
 down, so its agent serves the oven's metrics until its work is done.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -209,7 +216,7 @@ down, so its agent serves the oven's metrics until its work is done.
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
 | `make open` | Opens the roastery, the proxy's and the agent's dashboards, and Prometheus's graph of the batches roasted in the browser |  |
 
-## Going further
+## Going Further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/spring-boot) has its guided tour
   and lists the files that set it up. The roastery's code is in `demos/spring-boot/app`.

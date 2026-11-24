@@ -107,7 +107,7 @@ the same cluster. Prometheus reaches the proxy at
 `prometheus-proxy.monitoring.svc.cluster.local:8080`, and same-cluster agents can use the same
 DNS name for the gRPC port.
 
-### Exposing gRPC to remote agents
+### Exposing gRPC to Remote Agents
 
 When agents run in **other** clusters, they need to reach the proxy's gRPC port from outside.
 Expose it with a `LoadBalancer` Service (or an Ingress controller):
@@ -144,7 +144,7 @@ Each entry in `pathConfigs` maps a proxy `path` (what Prometheus scrapes) to the
 `url` the agent fetches from. Point `url` at a Kubernetes Service DNS name such as
 `http://my-app.default.svc.cluster.local:8080/metrics`.
 
-### Updating targets without restarting the agent
+### Updating Targets without Restarting the Agent
 
 With `pathConfigs` alone, changing the target list means updating the `ConfigMap` **and restarting
 the agent pod** — which interrupts scraping for every path the agent serves, not just the one that

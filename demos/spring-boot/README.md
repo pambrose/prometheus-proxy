@@ -1,4 +1,4 @@
-# Spring Boot demo
+# Spring Boot Demo
 
 A self-contained demo of Prometheus Proxy's agent embedded in a Spring Boot app written in Java. The roastery, which
 roasts the coffee shop's beans, runs the agent inside its own JVM, started by the project's
@@ -40,7 +40,7 @@ graph LR
   end
 ```
 
-## What you need
+## What You Need
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
   Compose plugin.
@@ -48,7 +48,7 @@ graph LR
 - For `make up-local` only: a JDK 17 or later and [Maven](https://maven.apache.org/install.html) 3.9 or later, which
   build the library and the roastery from this checkout.
 
-## Quick start
+## Quick Start
 
 From a clone of the release, so the scripts match the images:
 
@@ -84,7 +84,7 @@ and nothing shared. `make up` writes them, with a random token, to `docker/.env`
 file as any ports it saved. Delete the file, and the next `make up` writes a new one, with a new token, and forgets
 the saved ports.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -92,12 +92,12 @@ the saved ports.
 | `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with none of them in a file. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
-## Guided tour
+## Guided Tour
 
 `make tour`, or `./demo.sh tour`, walks through five parts, pausing before each step. `make tour PART=3`, or
 `./demo.sh tour 3`, starts from part 3.
 
-### 1. A Spring Boot app with the agent embedded
+### 1. A Spring Boot App with the Agent Embedded
 
 Open the roastery's status page, then run `./demo.sh settings`. It shows the settings the starter bound, with the
 token and the certificate shown only as set, and the agent starting and registering
@@ -105,13 +105,13 @@ token and the certificate shown only as set, and the agent starting and register
 Spring Boot build info. `./demo.sh health` shows the agent in Actuator's `/actuator/health`: UP, with the proxy's
 address, while it's connected, and UNKNOWN, while the app's own health stays UP, when it isn't.
 
-### 2. The app's metrics, read in-process, through the proxy
+### 2. The App's Metrics, Read In-Process, through the Proxy
 
 `./demo.sh peek` tries `/actuator/prometheus`, which answers 404, since the roastery exposes only Actuator's health,
 then reads the roastery's metrics through the proxy. For each scrape, the agent reads the app's `PrometheusRegistry`
 bean, where Micrometer keeps the meters, so there's no metrics endpoint, password, or Spring Security to set up.
 
-### 3. What Spring Boot's dependency management picked
+### 3. What Spring Boot's Dependency Management Picked
 
 Spring Boot sets the version of every library it knows, some of the agent's among them, whatever version the agent
 asks for, so some run older than the agent's own. `./demo.sh versions` prints the versions the roastery runs beside
@@ -126,7 +126,7 @@ sets that library to the agent's version with the property Spring Boot names it 
 library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
 `netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
-### 4. The agent's own dashboard, with the proxy stopped and started
+### 4. The Agent's Own Dashboard, with the Proxy Stopped and Started
 
 The agent serves a dashboard of its own, from inside the roastery: <http://localhost:8495/dashboard>
 
@@ -144,7 +144,7 @@ UNKNOWN. Scrape now still reads the roastery's metrics, since it doesn't need th
 brings the proxy back: the agent connects within a few seconds and registers its path again, and the Activity view
 adds connected and registered.
 
-### 5. A graceful shutdown takes the agent down first
+### 5. A Graceful Shutdown Takes the Agent Down First
 
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. Spring Boot stops
 its lifecycle beans from the last phase down, so the agent stops first: it disconnects from the proxy, which drops
@@ -152,7 +152,7 @@ the roastery's path and stops sending scrapes before Spring Boot starts shutting
 roastery's log shows the order.
 `./demo.sh start-app` starts it again.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -181,7 +181,7 @@ roastery's log shows the order.
 | `demo.sh` | Starts and stops the demo, runs its scenarios, and the tour. |
 | `Makefile` | `make up`, `up-local`, `down`, `status`, `open`, `logs`, and `tour`, which run `demo.sh`. |
 
-## The other demos
+## The Other Demos
 
 - [Basics demo](../basics): the whole system on one machine, the proxy and its dashboard, three agents behind a
   simulated firewall, Prometheus, and Grafana

@@ -140,7 +140,7 @@ legacy token and a `proxy.auth` identity cannot take over each other's live path
     Kubernetes, set the variables from a Secret, or keep the whole config in one (the proxy chart's
     `existingSecret`); a ConfigMap can be read by anyone who can read ConfigMaps in its namespace.
 
-### Onboarding a team
+### Onboarding a Team
 
 When several teams share one proxy, each team, meaning a group that runs its own agents, gets an identity of its own:
 a name, a token, and the path patterns its agents may register. Adding a team takes a proxy restart, so plan it as a
@@ -184,7 +184,7 @@ change to shared infrastructure.
 To take a team's access away, remove its identity and restart the proxy: from then on, its agents are refused with
 `UNAUTHENTICATED`.
 
-### Migrating from a shared token
+### Migrating from a Shared Token
 
 Setting `proxy.auth` does **not** disable a legacy `proxy.agentToken`. When both are present, the
 shared token is honored as an additional **allow-all** identity (the proxy logs a warning that it is
@@ -211,7 +211,7 @@ it still has allow-all access — the per-agent entries constrain only the agent
     described above. Compare tokens' operational weight against [mutual TLS](tls.md) when choosing a
     posture; the two can be combined.
 
-## Isolation Between Agents
+## Isolation between Agents
 
 Authenticated agents share one proxy, so the proxy keeps each agent to its own traffic:
 

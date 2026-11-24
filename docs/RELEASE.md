@@ -49,11 +49,11 @@ is, unreleased pages included.
    - `examples/cloud-proxy/docker-compose.yml` — the proxy image tag.
    - `charts/prometheus-proxy/Chart.yaml` and `charts/prometheus-agent/Chart.yaml` — `version` and `appVersion`
      (the image tag the charts deploy by default).
-   - `website/prometheus-proxy/docs/getting-started.md`, `index.md`, and `docker.md` — the Docker pull
-     and run examples, plus the explicit-version-tag tip in `docker.md`.
+   - `website/prometheus-proxy/docs/getting-started.md` and `docker.md` — the Docker pull and run examples, plus
+     the explicit-version-tag tip in `docker.md`.
    - The release's tag in the `raw.githubusercontent.com` links, so a reader runs the released images and JARs with
-     the configs and dashboards released with them: `README.md`, `llms.txt`, the website's `index.md` (Try It) and
-     `grafana.md`, and the snippet sources `DockerExamples.txt`, `GettingStarted.txt`, and `ConfigExamples.txt`.
+     the configs and dashboards released with them: `README.md`, `llms.txt`, the website's `grafana.md`, and the
+     snippet sources `DockerExamples.txt`, `GettingStarted.txt`, and `ConfigExamples.txt`.
    - `src/test/kotlin/website/DockerExamples.txt`, `EmbeddedAgentExamples.txt` (Gradle and Maven), and
      `KubernetesExamples.txt` — snippet sources included by the website's Docker, Embedded Agent, and
      Kubernetes pages, so the published site shows whatever version is here.

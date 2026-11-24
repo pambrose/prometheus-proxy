@@ -21,26 +21,33 @@ graph TB
   }
   G[Grafana :3300] --> P[Prometheus :9390]
   P -->|scrapes /coffee_shop_metrics| Proxy[Proxy, dashboard :8394]
-  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app below.
-  Proxy ~~~ Agent
-  Agent[embedded agent, dashboard :8395] -->|gRPC over TLS, with a token| Proxy
+  %% The agent connects out to the proxy, so its arrow points up, into the proxy. Mermaid has no reverse arrow, and an
+  %% Agent --> Proxy edge pinned under the proxy by an invisible link drew a second edge beside it, which bent this
+  %% one. A two-headed edge keeps the proxy above the agent on one straight line, and the linkStyle below (this is
+  %% edge 2, counting from 0) drops its arrowhead at the agent's end.
+  Proxy <-->|gRPC over TLS, with a token| Agent[embedded agent, dashboard :8395]
   Agent -->|reads its registry| App[coffee shop: Ktor]
   LB[load balancer :8390] --> App
 
-  subgraph Proxy host
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph host ["<br>Proxy host"]
     G
     P
     Proxy
   end
 
-  subgraph The app's platform
+  subgraph platform ["<br>The app's platform"]
     LB
     Agent
     App
   end
+
+  linkStyle 2 marker-end:none
 ```
 
-## What you need
+## What You Need
 
 On macOS or Linux, the demo needs:
 
@@ -55,7 +62,7 @@ On macOS or Linux, the demo needs:
 latest release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it
 builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
-## Running it
+## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -91,7 +98,7 @@ Every port binds to `127.0.0.1` only. The dashboards and the agent's admin endpo
 shop's knobs need none, and Grafana uses its default admin password, so this setup is for a laptop, not for anything
 shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -106,7 +113,7 @@ The secrets are the repository's test certificates and a token, which `make up` 
 the first time it runs, beside any port you moved. The certificates are public, so this suits a laptop and nothing
 shared; [Cloud Platforms](cloud-platforms.md#securing-the-link) shows how to make your own.
 
-## The app and its agent
+## The App and Its Agent
 
 Select any screenshot on this page to see it full size.
 
@@ -140,7 +147,7 @@ The coffee shop's environment turns the agent's dashboard on, with nothing in th
 and a `DASHBOARD_PORT` for each version, 8395 for 1.0 and 8396 for 1.1, which the agent reads itself, over anything the
 app's code sets.
 
-## Where the agent is configured
+## Where the Agent Is Configured
 
 The coffee shop configures its agent in code, with no config file. `installPrometheusAgent`, in
 [`PrometheusAgent.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/ktor/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt),
@@ -176,7 +183,7 @@ loaded, and stops it as the server stops:
   `DEBUG_ENABLED`, and `DASHBOARD_ENABLED`, which the agent reads itself, and each version's service gives the
   dashboard its port, in `DASHBOARD_PORT`.
 
-## The coffee shop in Grafana
+## The Coffee Shop in Grafana
 
 <figure markdown="span">
   ![The Coffee Shop dashboard during a rush, with the espresso machine broken](images/ktor-demo/grafana.webp#only-dark){ loading=lazy }
@@ -197,7 +204,7 @@ the queue, and with the espresso machine broken, about three orders in four fail
 ./demo.sh fix-machine
 ```
 
-## A deploy
+## A Deploy
 
 <figure markdown="span">
   ![The proxy dashboard's Paths view after a deploy: coffee-shop-1.1 serves both paths](images/ktor-demo/deploy.webp#only-dark){ loading=lazy }
@@ -216,7 +223,7 @@ agent would have taken them back within seconds. `./demo.sh rollback` puts 1.0 b
 Each version's agent has its own dashboard, inside its own app, and 1.1's lists the two paths registered:
 <http://localhost:8396/dashboard>
 
-## Debugging the agent
+## Debugging the Agent
 
 When an embedded agent doesn't connect, or a path doesn't scrape, its admin endpoints show what it's doing. The coffee
 shop's environment turns them on with `ADMIN_ENABLED`, and its `/debug` page with `DEBUG_ENABLED`, with nothing in its
@@ -250,7 +257,7 @@ why the proxy refused a path, and its Activity view the order things happened in
 startup that the dashboard has no authentication and listens on all interfaces; inside the container it has to, for
 Docker to publish its port, which the demo binds to `127.0.0.1`.
 
-## The proxy goes away
+## The Proxy Goes Away
 
 `./demo.sh proxy-stop` stops the proxy. The coffee shop keeps serving, and an order still goes through
 (`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach
@@ -266,7 +273,7 @@ On the agent's dashboard, the Connection view reads `failing`, with the error th
 again. The dashboard's Activity view then tells the outage in order, newest first: the paths `registered`,
 `connected`, `connect failed`, and `disconnected`. Open it at <http://localhost:8395/dashboard/activity>
 
-## Secrets from the environment
+## Secrets from the Environment
 
 `./demo.sh secrets` lists the coffee shop's and the proxy's secrets by name, and shows that the app's container holds
 no config file. The app builds its agent's settings in code from its environment, with `fromEnvironment()`, and the
@@ -274,7 +281,7 @@ stock proxy image, which has
 no shell to write a variable to a file, takes its certificate and key as base64 PEM in `CERT_CHAIN_PEM` and
 `PRIVATE_KEY_PEM`, and logs only whether each is set. On a cloud platform, they're the service's variables.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -295,7 +302,7 @@ no shell to write a variable to a file, takes its certificate and key as base64 
 
 `calm`, `fix-machine`, `rollback`, and `proxy-start` undo every scenario. For a clean slate, `make down && make up`.
 
-## Going further
+## Going Further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/ktor) has these scenarios as a
   guided tour, explaining how each one works, and lists the files that set the demo up. The coffee shop's code is in

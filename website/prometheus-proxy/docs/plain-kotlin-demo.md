@@ -39,19 +39,22 @@ graph TB
   Oven -->|takes orders| Redis[Redis queue]
   Counter[counter] -->|pushes orders| Redis
 
-  subgraph Proxy host
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph host ["<br>Proxy host"]
     G
     P
     Proxy
   end
 
-  subgraph ovens[ovens, 1 to 5, one container and JVM each]
+  subgraph ovens ["<br>ovens, 1 to 5, one container and JVM each"]
     Agent
     Oven
   end
 ```
 
-## What you need
+## What You Need
 
 On macOS or Linux, the demo needs:
 
@@ -66,7 +69,7 @@ On macOS or Linux, the demo needs:
 release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds
 from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
-## Running it
+## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -97,7 +100,7 @@ there to go back to the default.
 Every port binds to `127.0.0.1` only, and the ovens and Redis publish none. The proxy's dashboard has no authentication,
 and Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -108,7 +111,7 @@ and Grafana uses its default admin password, so this setup is for a laptop, not 
 | `prometheus` | One job that reads the proxy's service discovery, so each oven is a target of its own, and the proxy's own metrics. |
 | `grafana` | Opens on the Bakery dashboard, which links to the two dashboards the project ships. |
 
-## The worker's code
+## The Worker's Code
 
 The oven's `main`, in
 [`Main.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/plain-kotlin/app/src/main/kotlin/bakery/Main.kt),
@@ -154,7 +157,7 @@ Logback configuration of its own: INFO to the console, with gRPC's internals and
 framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which
 would bury the lines `startIfConfigured()` logs. [Logging](embedded-agent.md#logging) covers the agent's loggers.
 
-## A worker with no port
+## A Worker with No Port
 
 `./demo.sh sockets` shows that compose publishes no port for the oven, and reads what the oven's JVM has open from
 `/proc` in its container, the JVM being its process 1:
@@ -174,7 +177,7 @@ with the proxy's address, and its config names no oven:
 --8<-- "demos/plain-kotlin/prometheus/prometheus.yml:discovery"
 ```
 
-## Its metrics, and its agent's
+## Its Metrics, and Its Agent's
 
 `./demo.sh metrics` reads both paths through the proxy. The oven's has its `bakery_` series and no `agent_` series, and
 the agent's has its `agent_` series and no `bakery_` series: the agent keeps its own metrics in the default registry
@@ -183,7 +186,7 @@ two jobs, `oven` and `oven-agent`. Grafana's Bakery dashboard reads the first: t
 against the number of ovens, bake times, and how much of its time each oven spends baking. The project's Prometheus
 Agents dashboard, linked from its top bar, reads the second.
 
-## Scaling out and in
+## Scaling Out and In
 
 One oven bakes about two orders a second, which keeps up with the counter's one and a half.
 
@@ -217,7 +220,7 @@ next discovery refresh, within 5 seconds. A scrape that comes between the agent'
 path and records `up` 0, as a terminating pod's can on Kubernetes; the Bakery dashboard's **Scrape up, by oven** shows
 it, and the command says whether one did.
 
-## No proxy, no outage
+## No Proxy, No Outage
 
 An oven's metrics aren't worth an outage. Three scenarios each start an oven with the agent's settings wrong, show its
 log, and stop it, and each oven bakes:
@@ -250,7 +253,7 @@ log, and stop it, and each oven bakes:
       token() sets, and fromEnvironment() reads from PROMETHEUS_AGENT_TOKEN. The agent keeps retrying
     ```
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -266,7 +269,7 @@ log, and stop it, and each oven bakes:
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
 | `make open` | Opens the proxy's dashboard, Grafana, and Prometheus's targets in the browser |  |
 
-## Going further
+## Going Further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/plain-kotlin) has its guided tour
   and lists the files that set it up. The oven's code is in `demos/plain-kotlin/app`.

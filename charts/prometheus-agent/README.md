@@ -1,4 +1,4 @@
-# prometheus-agent Helm chart
+# prometheus-agent Helm Chart
 
 Deploys a Prometheus Proxy agent: it runs inside a firewall next to the services it scrapes, opens an outbound gRPC
 connection to the proxy (see the [prometheus-proxy chart](../prometheus-proxy)), and answers the scrapes the proxy
@@ -20,7 +20,7 @@ helm install prometheus-agent ./charts/prometheus-agent --namespace monitoring -
 
 `proxy.hostname` is required. A comma-separated list of proxies is tried in order, for failover.
 
-## Changing targets without a restart
+## Changing Targets without a Restart
 
 Changing `config` restarts the agent, which interrupts every path it serves. With discovery, the targets live in their
 own ConfigMap, which the agent re-reads in place:
@@ -38,7 +38,7 @@ Edit the `prometheus-agent-discovery` ConfigMap (`<release>-prometheus-agent-dis
 contain `prometheus-agent`; the install's notes name it), or your own, with `discovery.existingConfigMap`, and the agent
 picks up the change within `discovery.reconcileIntervalSecs`, after the kubelet updates the mounted file.
 
-## More than one replica
+## More Than One Replica
 
 > [!WARNING]
 > Keep `replicaCount` at 1. Every replica runs the same `config`, so each one registers the same paths and scrapes the
@@ -52,7 +52,7 @@ One replica is enough for availability: the Deployment replaces a failed pod, an
 again once it starts and connects. Consolidated mode suits agents whose answers differ, such as separate releases that
 each scrape their own instance of a service whose series carry an instance label.
 
-## The agent's dashboard
+## The Agent's Dashboard
 
 The agent's dashboard (`dashboard.enabled`) shows what the proxy's can't: whether the agent is connected, and if not,
 the last error from each proxy endpoint; every path, with the proxy's reason for refusing one; each path's recent

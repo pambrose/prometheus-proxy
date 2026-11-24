@@ -34,12 +34,15 @@ graph TB
   Sync -->|writes| CM[agent-targets ConfigMap]
   CM -->|mounted| Agent
 
-  subgraph pp-monitoring [pp-monitoring: outside the firewall]
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph pp-monitoring ["<br>pp-monitoring: outside the firewall"]
     P
     Proxy
   end
 
-  subgraph pp-target [pp-target: behind the firewall, nothing exposed]
+  subgraph pp-target ["<br>pp-target: behind the firewall, nothing exposed"]
     Agent
     Sync
     CM
@@ -47,7 +50,7 @@ graph TB
   end
 ```
 
-## What you need
+## What You Need
 
 The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
 build. Unlike the other demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
@@ -66,7 +69,7 @@ needs:
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
-## Running it
+## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -104,7 +107,7 @@ The agent's dashboard is the exception, since the target cluster publishes no po
 it with `kubectl port-forward`, on `localhost` only, and holds its port only while it runs.
 `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` moves it without recreating a cluster.
 
-## What's running
+## What's Running
 
 | Cluster | Workload | Role |
 |---|---|---|
@@ -122,7 +125,7 @@ The charts get nothing but a values file each, a config file, and the proxy's ad
 demo; most commands print what to watch, and the ones that add, remove, or replace something, how long it took. The
 times on this page were measured on an Apple-silicon laptop.
 
-### The Helm charts on two clusters, with no inbound access
+### The Helm Charts on Two Clusters, with No Inbound Access
 
 ```bash
 ./demo.sh clusters    # pp-target's Services, each cluster's Helm release, and Prometheus's one job
@@ -160,7 +163,7 @@ discovery.
   <figcaption>Prometheus's targets: every one found through the proxy's /discovery, and scraped through the proxy</figcaption>
 </figure>
 
-### The agent's own dashboard, reached with kubectl port-forward
+### The Agent's Own Dashboard, Reached with kubectl port-forward
 
 ```bash
 ./demo.sh agent-dashboard   # in a second terminal: kubectl port-forward to the agent's dashboard, until Ctrl-C
@@ -184,7 +187,7 @@ The agent keeps that list in memory, so each pod starts its own, and a port-forw
 agent's pod is replaced, as in the scenarios below that delete the pod or change its config, it fails at the next
 request: run `./demo.sh agent-dashboard` again to reach the new one.
 
-### Annotate a Service, and Prometheus scrapes it
+### Annotate a Service, and Prometheus Scrapes It
 
 ```bash
 ./demo.sh add-service     # deploys search, then its Service, annotated prometheus-proxy/path: search_metrics
@@ -216,7 +219,7 @@ from the proxy, which logs `WARN Invalid path request /search_metrics`, and `up{
 The [Basics Demo](basics-demo.md) shows dynamic discovery itself, from a file; here Kubernetes drives it. targets-sync
 is the demo's: a discovery source in the agent that read Services itself would replace it.
 
-### Kubernetes replaces a deleted agent pod in about a second
+### Kubernetes Replaces a Deleted Agent Pod in About a Second
 
 ```bash
 ./demo.sh delete-agent-pod   # deletes the agent's pod; its Deployment starts another
@@ -244,7 +247,7 @@ The agent's own dashboard reached the old pod, since a port-forward reaches one 
 next request. Run `./demo.sh agent-dashboard` again, and the new pod's Activity view lists only its own start, where
 the proxy's, above, saw both pods.
 
-### A config change restarts the agent; a targets change doesn't
+### A Config Change Restarts the Agent; a Targets Change Doesn't
 
 ```bash
 ./demo.sh change-config      # helm upgrade with a change to the agent's main config
@@ -266,7 +269,7 @@ changed and nothing restarted. That's why the agent chart keeps the targets in a
 agent re-reads in place, apart from its main config, which only a restart applies. `./demo.sh restore-config` puts the
 original config back, with another replacement.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -282,7 +285,7 @@ original config back, with another replacement.
 
 `remove-service` and `restore-config` undo every scenario. For a clean slate, `make down && make up`.
 
-## Going further
+## Going Further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/kubernetes) has these scenarios
   as a guided tour, explaining how each one works, and lists the files that set the demo up,

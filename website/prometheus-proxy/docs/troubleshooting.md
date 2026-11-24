@@ -13,7 +13,7 @@ icon: lucide/life-buoy
 A symptom-driven guide to the failures Prometheus Proxy most commonly produces, with how to
 confirm each cause and how to fix it.
 
-## First steps
+## First Steps
 
 Before diving into a specific symptom, gather signal:
 
@@ -31,7 +31,7 @@ Before diving into a specific symptom, gather signal:
    mode; see [Monitoring](monitoring.md) for the full table.
 5. **Read the logs.** The proxy and agent log the reason for most rejections at WARN/INFO.
 
-## The proxy or agent exits at startup
+## The Proxy or Agent Exits at Startup
 
 ### `java.net.BindException: Address already in use`
 
@@ -67,9 +67,9 @@ Settings that fail startup since 4.5.0:
   ([Links](web-dashboard.md#links)).
 - A negative `proxy.internal.maxTargetUrlLength` or `proxy.internal.maxAgentsPerIdentity`.
 
-## Agent can't connect to the proxy
+## Agent Can't Connect to the Proxy
 
-### Connection refused / timeouts on the gRPC port
+### Connection Refused / Timeouts on the gRPC Port
 
 - Confirm the agent's `PROXY_HOSTNAME` (and port, if not the default `50051`) points at the
   proxy's reachable address. In Kubernetes this is usually a `LoadBalancer` host — see
@@ -97,7 +97,7 @@ The proxy has an agent token configured and the agent's token is missing or does
   one, takes precedence over it. An empty token on the proxy disables the check only when no `proxy.auth` identities
   are configured. See [Security](security/index.md#agent-authentication-pre-shared-token).
 
-## Prometheus scrape returns an error
+## Prometheus Scrape Returns an Error
 
 Scrape the path directly with `curl -i` and match the status. A non-2xx status the target answers with passes
 through to Prometheus. Its label in `proxy_scrape_requests_total` is `path_not_found` for a 404, `upstream_timed_out`
@@ -155,7 +155,7 @@ The scrape body exceeded a configured size limit.
 - The two limits are independent and both surface as HTTP 413 — the outcome label tells you which
   one rejected the scrape.
 
-### Scrape hangs, then times out
+### Scrape Hangs, Then Times Out
 
 Check which timeout fired: `upstream_timed_out` means the agent answered promptly to report that
 the *target* was slow, while `timed_out` means the agent never answered the proxy at all. Because
@@ -174,7 +174,7 @@ normally shows up as `upstream_timed_out`.
   scrapes run in parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
 - See [Performance Tuning](advanced.md#performance-tuning).
 
-## Registration is rejected
+## Registration Is Rejected
 
 The proxy logs the reason and returns `valid = false` to the agent:
 
@@ -202,7 +202,7 @@ A multi-segment path is logged at ERROR, and a path the agent's identity may not
 agent retries neither. To see every attempt, set `io.prometheus.proxy.ProxyPathManager` to DEBUG. The agent logs its
 own side of the same conflict, so its log shows whether it is still retrying.
 
-### An agent is connected but serves no paths
+### An Agent Is Connected but Serves No Paths
 
 Another agent registered the same paths without consolidated mode and took them over: the later registration
 serves a path, and the agent it displaced stays connected without it. The proxy logs it at INFO:
@@ -221,7 +221,7 @@ paths from the other's config, or stop it. Earlier versions disconnected the dis
 paths from each other in turn, each reconnecting every few seconds. Agents and proxies predating the notice show a
 taken-over path as registered on the displaced agent, which takes it back only when it reconnects.
 
-## TLS handshake failures
+## TLS Handshake Failures
 
 - **Untrusted certificate** — the side validating the cert needs the signing CA in its
   `trustCertCollectionFilePath`.
@@ -235,7 +235,7 @@ taken-over path as registered on the displaced agent, which takes it back only w
 
 See [TLS Setup](security/tls.md) and the [example configs](examples.md).
 
-## Metrics or admin endpoints don't answer
+## Metrics or Admin Endpoints Don't Answer
 
 The endpoints are **disabled by default**, so their ports refuse connections until you enable them with
 `--admin` / `--metrics` (or `ADMIN_ENABLED=true` / `METRICS_ENABLED=true`). A 404 means the port is up but serves
@@ -247,7 +247,7 @@ port: scrape them through the proxy, at `http://<proxy-host>:8080/<path>`, which
 connected and has registered the path. A 404 there means it hasn't; the agent's startup log names the path, and
 [Port or Proxy Path](monitoring.md#port-or-proxy-path) says when the port suits instead.
 
-## Disconnects aren't detected behind Nginx
+## Disconnects Aren't Detected behind nginx
 
 With `transportFilterDisabled` (required when fronting gRPC with Nginx), the proxy notices an
 agent leave when the agent's request stream ends, which a disconnect normally does at once. An
@@ -256,7 +256,7 @@ until [`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-
 This is expected; see
 [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
-### Agents reconnect every minute behind Nginx
+### Agents Reconnect Every Minute behind nginx
 
 The agent logs `RST_STREAM closed stream` on `writeChunkedResponsesToProxy()` or `writeResponsesToProxy()`, or
 `HTTP status code 504` on `readRequestsFromProxy()` or `readPathNoticesFromProxy()`, then `Disconnected from proxy`,
@@ -270,7 +270,7 @@ each time, so a scrape can fail.
 - **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` to a day or more; under a shorter idle
   timeout, lower `streamKeepAliveSecs` below it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
-### Agents reconnect with HTTP status 413 behind Nginx
+### Agents Reconnect with HTTP Status 413 behind nginx
 
 The agent logs `writeResponsesToProxy(): UNKNOWN HTTP status code 413`, then `Disconnected from proxy`, and reconnects
 at once, again and again at an even pace, hours apart for small results, minutes apart for large ones. Nginx's error log
@@ -282,7 +282,7 @@ says `client intended to send too large chunked body`.
 - **Fix:** set `client_max_body_size 0;` in the `server` or `location` block that passes to the proxy, which turns the
   limit off. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
-### A change to nginx doesn't reach connected agents
+### A Change to nginx Doesn't Reach Connected Agents
 
 After `nginx -s reload`, agents connected before it behave as before, and nginx's process list shows workers
 `shutting down` that never exit.
@@ -292,7 +292,7 @@ After `nginx -s reload`, agents connected before it behave as before, and nginx'
 - **Fix:** set `worker_shutdown_timeout` in nginx's main context and restart nginx once; from then on, each reload
   hands the agents to the new workers that long after it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
-### `RESOURCE_EXHAUSTED` when an agent connects behind Nginx
+### `RESOURCE_EXHAUSTED` When an Agent Connects behind nginx
 
 With `transportFilterDisabled`, the proxy refuses a connect once
 `proxy.internal.maxAgentsPerIdentity` (10,000) agents are connected with the same auth identity,
@@ -306,7 +306,7 @@ in once another agent leaves.
   agents from using up another's room. See
   [Transport Filter](configuration/proxy.md#transport-filter).
 
-## The dashboard behind a reverse proxy stays on reconnecting…
+## The Dashboard behind a Reverse Proxy Stays on `reconnecting…`
 
 The page loads, but its live indicator never turns green, and Scrape now may say `Origin not allowed`. With a login,
 the login form says it instead, and the page never loads.
@@ -316,7 +316,7 @@ the login form says it instead, and the page never loads.
 - **Fix:** pass both headers, over HTTP/1.1, and the browser's `Host`, or list the dashboard's public address in
   `proxy.dashboard.allowedOrigins`; see [Behind a reverse proxy](web-dashboard.md#behind-a-reverse-proxy).
 
-## Still stuck?
+## Still Stuck?
 
 - Cross-check metric meanings in [Monitoring](monitoring.md).
 - Confirm option names and resolution order in the [CLI Reference](cli-reference.md)

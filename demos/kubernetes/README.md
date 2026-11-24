@@ -1,4 +1,4 @@
-# Kubernetes demo
+# Kubernetes Demo
 
 A self-contained demo of Prometheus Proxy deployed the way a platform team would run it. It runs two
 [kind](https://kind.sigs.k8s.io/) clusters on one laptop: a monitoring cluster with the proxy, its web dashboard, and
@@ -30,7 +30,7 @@ the deployment itself.
                 Prometheus :9290 (5s scrapes, 4s timeout)        dashboard :8294        scrape port :8280
 ```
 
-## What you need
+## What You Need
 
 The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
 build. Unlike the other demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
@@ -49,7 +49,7 @@ needs:
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
-## Quick start
+## Quick Start
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -98,7 +98,7 @@ again. The agent's dashboard runs without its login too.
 kind adds a `kind-pp-monitoring` and a `kind-pp-target` context to your kubeconfig. `demo.sh` names the context on
 every command, and puts back the context that was current when it creates a cluster.
 
-## What's running
+## What's Running
 
 | Cluster / namespace | Workload | Role |
 |---|---|---|
@@ -109,13 +109,13 @@ every command, and puts back the context that was current when it creates a clus
 | `pp-target` / `monitoring` | `targets-sync` | Lists and watches the Services in `apps`, and writes each annotated `prometheus-proxy/path` into the agent's targets ConfigMap, `agent-targets` (`sync/targets_sync.py`). Part of the demo, not the product. |
 | `pp-target` / `apps` | `orders`, `payments`, `shipping` | The simulated services (`app/services_app.py`), one per pod, each behind a ClusterIP Service annotated `prometheus-proxy/path`. Traffic follows a 5-minute "day". |
 
-## Guided tour
+## Guided Tour
 
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
 from `demos/kubernetes`; most commands print what to watch, and the ones that add, remove, or replace something, how
 long it took. The times below were measured on an Apple-silicon laptop.
 
-### 1. The Helm charts on two clusters, with no inbound access
+### 1. The Helm Charts on Two Clusters, with No Inbound Access
 
 These are the earlier demos' proxy and agent, now deployed with their Helm charts.
 
@@ -132,7 +132,7 @@ These are the earlier demos' proxy and agent, now deployed with their Helm chart
   `kubectl` shows, with four paths: its own metrics (source **cfg**, from its config) and the three services (source
   **disc**, from discovery). Prometheus's targets page shows all four up.
 
-### 2. The agent's own dashboard, reached with kubectl port-forward
+### 2. The Agent's Own Dashboard, Reached with kubectl port-forward
 
 The proxy dashboard shows what the proxy sees. The agent's own dashboard shows its side of the firewall: its
 connection, each path's registration and recent scrapes, and its discovery. See
@@ -163,7 +163,7 @@ connection, each path's registration and recent scrapes, and its discovery. See
   and the port-forward fails at the next request after that: run `./demo.sh agent-dashboard` again to reach the new
   one, whose Activity view starts with only its own connect and registrations, since the agent keeps it in memory.
 
-### 3. Annotate a Service, and Prometheus scrapes it
+### 3. Annotate a Service, and Prometheus Scrapes It
 
 ```bash
 ./demo.sh add-service     # deploys search, then its Service, annotated prometheus-proxy/path: search_metrics
@@ -198,7 +198,7 @@ at 0. The proxy logs it as `WARN Invalid path request /search_metrics`, which `m
 
 The basics demo shows dynamic discovery itself, from a file; this part shows Kubernetes driving it.
 
-### 4. Kubernetes replaces a deleted agent pod in about a second
+### 4. Kubernetes Replaces a Deleted Agent Pod in About a Second
 
 ```bash
 ./demo.sh delete-agent-pod   # deletes the agent's pod; its Deployment starts another
@@ -215,7 +215,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
   request after the replacement. Run it again: the new pod's Activity view lists only its own start, its connect and
   registrations. The proxy saw both pods, but each agent sees only its own.
 
-### 5. A config change restarts the agent; a targets change doesn't
+### 5. A Config Change Restarts the Agent; a Targets Change Doesn't
 
 ```bash
 ./demo.sh change-config      # helm upgrade with config/agent-change.conf added to the agent's main config
@@ -237,7 +237,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 ./demo.sh restore-config     # back to config/agent.conf alone: another replacement
 ```
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -253,7 +253,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 
 `remove-service` and `restore-config` undo every scenario. For a clean slate, `make down && make up`.
 
-## How it's put together
+## How It's Put Together
 
 | File | What it sets up |
 |---|---|
@@ -309,7 +309,7 @@ it, and `CiHygieneTest` checks that every image in `k8s/` and `kind/` is pinned 
 release it was built for, by hand: take the image and digest that release's notes give, in both `kind/` files, and
 raise `MIN_KIND_VERSION` in `demo.sh` to match.
 
-## Two replicas of the agent
+## Two Replicas of the Agent
 
 The agent chart's `replicaCount` can run more than one agent pod, each registering the same paths, which the proxy
 accepts with `agent.consolidated = true`. The demo keeps one, because two give Prometheus every series twice. With two
@@ -340,7 +340,7 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
   on this machine, every published port binds to `127.0.0.1`, and the agent's dashboard is on no Service, so only
   `kubectl port-forward` reaches it.
 
-## The other demos
+## The Other Demos
 
 In the order the website's [Demos](https://prometheus-proxy.com/demos/) page gives them:
 
