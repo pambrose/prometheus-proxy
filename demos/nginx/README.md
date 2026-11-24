@@ -110,6 +110,10 @@ proxy's agent port, which only nginx can reach.
 - An agent connects with three calls: `connectAgentWithTransportFilterDisabled`, `registerAgent`, and `registerPath`
   for each path. Its streams, four for agent-current and three for agent-legacy, which has no stream of path notices,
   stay open while it's connected, so nginx logs one only when it ends.
+- nginx counts all an agent sends on a stream as one request body, and stops a body at `client_max_body_size`, 1 MB by
+  default, so a stream of results, open while the agent is connected, would end with 413 once its results added up to
+  a megabyte. Every entrance in `nginx/` turns the limit off with `client_max_body_size 0`, as any nginx in front of the
+  proxy needs.
 - Open agent-current's Connection view, <http://localhost:8595/dashboard/connection>: it's connected to
   nginx.test.google.fr:443, using TLS (no mutual auth). The agent checks nginx's certificate against the name it
   dials: the certificate names `*.test.google.fr`, and the agent trusts the CA that signed it
@@ -168,9 +172,11 @@ seconds, under the 30 seconds after which the keepalives start.
 - `worker_shutdown_timeout` has an old worker close the connections it still has after 10 seconds. A worker takes it
   from the config it started with, so it covers the reloads after it's in place; the restart brings it in. From now
   on, a reload reaches every agent within 10 seconds, at the cost of one reconnect each, which a scrape can land in.
-- Each agent reconnects once, now under the 20-second timeouts, and agent-current is cut off about every 20 seconds:
-  its stream for results in chunks goes quiet for 20 seconds before its keepalive comes, at 30. Its Activity view,
-  <http://localhost:8595/dashboard/activity>, shows each disconnect and its reason.
+- Each agent reconnects once, now under the 20-second timeouts, and agent-current is cut off about every 20 seconds.
+  Two of its streams go quiet for 20 seconds before their keepalives come, at 30: its stream for results in chunks,
+  which nginx ends with 408, from `client_body_timeout`, and the proxy's stream of path notices to it, which nginx ends
+  with 504, from `grpc_read_timeout`. Its Activity view shows each disconnect, with the 504 as its reason:
+  <http://localhost:8595/dashboard/activity>
 
 ```bash
 ./demo.sh keepalive 10   # recreates the proxy with a keepalive interval of 10 seconds
@@ -240,7 +246,7 @@ The proxy's dashboard updates live over a WebSocket, which a reverse proxy has t
 |---|---|
 | `docker/compose.yml` | The services, their ports, nginx's network alias, which its certificate covers, and their images, agent-legacy's pinned to release 4.6.0 |
 | `nginx/nginx.conf` | nginx's main config: the image's own, with an include of `main.d` and two workers, so `nginx-workers` stays short |
-| `nginx/agents-*.conf` | The agents' entrance: TLS on 443, `grpc_pass` to the proxy's agent port, and its stream timeouts |
+| `nginx/agents-*.conf` | The agents' entrance: TLS on 443, `grpc_pass` to the proxy's agent port, no limit on a request body (`client_max_body_size 0`), and its stream timeouts |
 | `nginx/dashboard-*.conf` | The dashboard's entrance: a `proxy_pass` to the proxy's dashboard, without and with what its WebSocket needs |
 | `nginx/main-shutdown-timeout.conf` | `worker_shutdown_timeout`, for `nginx-shutdown-timeout` |
 | `config/proxy.conf` | The transport filter off, the dashboard, service discovery, and an identity per agent |

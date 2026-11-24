@@ -272,8 +272,9 @@ until `proxy.internal.maxAgentInactivitySecs` (default 60s) evicts it. This is e
 ### Agents reconnect every minute behind Nginx
 
 The agent logs `RST_STREAM closed stream` on `writeChunkedResponsesToProxy()` or `writeResponsesToProxy()`, or
-`HTTP status code 504` on `readRequestsFromProxy()`, then `Disconnected from proxy`, about a minute after it connects,
-and again every minute, scraped or not. Its paths are gone from the proxy for a moment each time, so a scrape can fail.
+`HTTP status code 504` on `readRequestsFromProxy()` or `readPathNoticesFromProxy()`, then `Disconnected from proxy`,
+about a minute after it connects, and again every minute, scraped or not. Its paths are gone from the proxy for a moment
+each time, so a scrape can fail.
 
 - **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's stream for chunked results carries
   nothing while its results are small, and its other streams nothing between scrapes. A current agent and proxy keep
@@ -281,6 +282,18 @@ and again every minute, scraped or not. Its paths are gone from the proxy for a 
   from 4.6.0 or earlier, or when a reverse proxy's idle timeout is under `proxy.internal.streamKeepAliveSecs`.
 - **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` to a day or more; under a shorter idle
   timeout, lower `streamKeepAliveSecs` below it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+
+### Agents reconnect with HTTP status 413 behind Nginx
+
+The agent logs `writeResponsesToProxy(): UNKNOWN HTTP status code 413`, then `Disconnected from proxy`, and reconnects
+at once, again and again at an even pace, hours apart for small results, minutes apart for large ones. Nginx's error log
+says `client intended to send too large chunked body`.
+
+- **Cause:** Nginx counts all an agent sends on a stream as one request body, and an agent's streams of scrape results
+  stay open while it's connected, so Nginx ends one with 413 once its results pass `client_max_body_size`, 1 MB by
+  default. Every agent is affected, whatever its version.
+- **Fix:** set `client_max_body_size 0;` in the `server` or `location` block that passes to the proxy, which turns the
+  limit off. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### A change to nginx doesn't reach connected agents
 
