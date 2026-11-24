@@ -79,6 +79,8 @@ flaky_bytes() { if [[ "$1" == agent-branch ]]; then echo 170000; else echo 7500;
 # A byte count in KB, as the text gives it: 7.5, or 170.
 kb() { awk -v bytes="$1" 'BEGIN { printf "%g", bytes / 1000 }'; }
 
+# This demo's page on the docs site, which shows its layout and code
+PAGE_URL="https://prometheus-proxy.com/network-demo/"
 DASHBOARD_URL="http://localhost:${NETWORK_DEMO_DASHBOARD_PORT:-8194}/dashboard"
 STANDBY_DASHBOARD_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/dashboard"
 # Each agent's own dashboard, behind the firewall with it (agent.dashboard in config/agent-*.conf).
@@ -176,6 +178,8 @@ print_urls() {
   echo "  Prometheus:       $PROMETHEUS_URL"
   echo "  Zipkin:           $ZIPKIN_URL/zipkin/"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
+  echo
+  echo "This demo, explained on the website: $PAGE_URL"
   echo
   echo "Scenarios: $0 far | thin | filter | proxy-down | cut | flaky | wan-down | heal ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -660,6 +664,37 @@ step() {
   AFTER_PAUSE=0
 }
 
+# Puts back what the tour changed, once the presenter presses Enter, so what follows starts as the demo did. It shows
+# nothing new, so it has no number, and prints only each command's headlines, its bold lines, as they come; a command
+# that fails prints all it said, and ends the tour. put_back <what it puts back> <command>...
+put_back() {
+  local what="$1" cmd log
+  shift
+  blank_line
+  pause "Press Enter to $what: ./demo.sh $(join_commands "$@")"
+  log="$(mktemp)"
+  for cmd in "$@"; do
+    if ! (cd "$DEMO_DIR" && ./demo.sh "$cmd" </dev/null 2>&1) | tee "$log" |
+      { grep --line-buffered $'^\033\\[1m' || true; }; then
+      cat "$log"
+      rm -f "$log"
+      die "./demo.sh $cmd failed, which ends the tour. To start part $TOUR_PART again, which heals the demo first," \
+        "run $MAKE_NAME tour PART=$TOUR_PART, or $0 tour $TOUR_PART"
+    fi
+  done
+  rm -f "$log"
+  echo
+  AFTER_PAUSE=1
+}
+
+# The commands put_back runs, as it prints them: join_commands <command>...
+join_commands() {
+  local first="$1"
+  shift
+  printf '%s' "$first"
+  (($# == 0)) || printf ', then ./demo.sh %s' "$@"
+}
+
 # Checks the part the tour starts from: check_tour_from <argument>
 check_tour_from() {
   TOUR_FROM="${1:-1}"
@@ -766,15 +801,12 @@ cmd_tour() {
     instruct "Open Grafana: $GRAFANA_URL" \
       "Every target is up on 'Target health', and 'Scrape time through the WAN, by agent' shows the two agents side" \
       "by side, each well under a tenth of a second."
-    instruct "Each of the next parts ends by healing the WAN." \
-      "./demo.sh heal removes every change to the WAN, brings back every link and proxy, and returns any agent on" \
-      "the standby to the primary, so each part starts from a healthy network."
   fi
 
   if part 2 "A far-away site adds a round trip's delay to every scrape. Here you add a quarter of a second each" \
     "way to agent-branch's links."; then
     step "Add ${FAR_LATENCY_MS} ms, give or take ${FAR_JITTER_MS} ms, each way to agent-branch's links." -- far
-    step "Once you've seen agent-branch's scrape time step up in Grafana, remove the delay." -- heal
+    put_back "remove the delay, once you've seen agent-branch's scrape time step up in Grafana" heal
   fi
 
   if part 3 "A thin link can't carry a large payload in time. Here you limit agent-branch's links to" \
@@ -783,16 +815,15 @@ cmd_tour() {
     step "Limit agent-branch's links to ${THIN_RATE_KBS} KB/s toward the proxies." -- thin
     step "Once its paths have failed in Grafana, after about 15 seconds, restart agent-branch with a filter that" \
       "drops the inventory's per-item price list, which no dashboard uses." -- filter
-    step "Remove the bandwidth limit." -- heal
-    step "Restart agent-branch without the filter, to bring back the full payload." -- unfilter
+    put_back "remove the bandwidth limit, and restart agent-branch without the filter" heal unfilter
   fi
 
   if part 4 "Here you stop the primary proxy. Its connections close, so both agents know at once, and move to" \
     "the standby with nobody touching them."; then
-    instruct "Open agent-branch's Connection view beside the standby's dashboard: $BRANCH_DASHBOARD_URL/connection" \
-      "The proxies can show an agent only once it has connected to them. This view shows the agent's side of the" \
-      "failover as it happens: the endpoint it's on or trying, and the last error it got connecting to each."
-    step "Stop the primary proxy." -- proxy-down
+    step "Open agent-branch's Connection view beside the standby's dashboard, $BRANCH_DASHBOARD_URL/connection, then" \
+      "stop the primary proxy. The proxies can show an agent only once it has connected to them; the Connection" \
+      "view shows the agent's side of the failover as it happens: the endpoint it's on or trying, and the last" \
+      "error it got connecting to each." -- proxy-down
     step "Start the primary proxy again." -- proxy-up
     step "Send the agents back to the primary: heal closes each agent's connection through its link to the standby" \
       "once, so the agent reconnects through its link to the primary." -- heal
@@ -802,25 +833,23 @@ cmd_tour() {
     "agent's goodbye included, which is what a stateful firewall or NAT does when it drops a connection. Neither" \
     "end is told. It takes about 50 seconds to play out; the basics demo's frozen agent showed the proxy's" \
     "side of an eviction, and this shows the agent's."; then
-    instruct "Open agent-branch's Connection view beside the primary's dashboard: $BRANCH_DASHBOARD_URL/connection" \
-      "The primary's dashboard shows what the proxy hears from agent-branch, and the Connection view what the agent" \
-      "tries. agent-branch is connected through branch-to-proxy:50053, its link to the primary."
-    step "Silence agent-branch's link to the primary, without closing it." -- cut
-    step "Once agent-branch is on the standby's dashboard, after about 50 seconds, restore the link and send it" \
-      "back to the primary." -- heal
+    step "Open agent-branch's Connection view beside the primary's dashboard, $BRANCH_DASHBOARD_URL/connection, then" \
+      "silence agent-branch's link to the primary, without closing it. The primary's dashboard shows what the" \
+      "proxy hears from agent-branch, and the Connection view what the agent tries." -- cut
+    put_back "restore the link, once agent-branch is on the standby's dashboard, after about 50 seconds" heal
   fi
 
   if part 6 "Here agent-branch's link to the primary closes its connection about every 15 seconds. The agent" \
     "reconnects each time, and Zipkin shows every reconnect."; then
     step "Make agent-branch's link to the primary close each connection after about 15 seconds of traffic." \
       -- flaky
-    step "Once you've looked at the traces in Zipkin, restore the link." -- heal
+    put_back "restore the link, once you've looked at the traces in Zipkin" heal
   fi
 
   if part 7 "Here every link goes down at once, as if the WAN failed, and then comes back."; then
     step "Take every link down." -- wan-down
     step "Once NetworkNoAgentsConnected fires in Grafana, after about 20 seconds, bring every link back." -- wan-up
-    step "Return any agent that landed on the standby to the primary." -- heal
+    put_back "return any agent that landed on the standby to the primary" heal
   fi
 
   wait_after_output "Press Enter to finish the tour"

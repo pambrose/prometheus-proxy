@@ -126,23 +126,25 @@ sets that library to the agent's version with the property Spring Boot names it 
 library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
 `netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
-### 4. The Agent's Own Dashboard, with the Proxy Stopped and Started
+### 4. The Proxy Goes Away, and the Roastery Stays Healthy
+
+A platform takes an app out of service, or restarts it, when its health check fails. The starter's health indicator
+reports the agent UNKNOWN, not DOWN, when it loses the proxy, so a proxy outage never fails the roastery's health.
 
 The agent serves a dashboard of its own, from inside the roastery: <http://localhost:8495/dashboard>
 
 Compose turns it on with `PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`, which Spring Boot binds to the starter's
 `prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change. Its Paths view lists `/roastery_metrics`,
-registered, with its recent scrapes. Select it to see each scrape the proxy asked for, and press Scrape now, the
-circular arrow after the path's name, to have the agent read the roastery's registry at once. The Activity view lists
-what has happened to the agent, newest first, the Connection view its proxy endpoint, and the Settings view its
-settings.
+registered, with its recent scrapes. Select it, and press Scrape now, the circular arrow after the path's name, to have
+the agent read the roastery's registry at once. The Connection view shows its proxy endpoint, the Activity view what has
+happened to the agent, newest first, and the Settings view its settings.
 
-`./demo.sh proxy-stop` stops the proxy, and its dashboard with it. The agent's still answers: its Connection view
-turns failing, with the error the agent got connecting to the proxy, and its Activity view adds disconnected and
-connect failed. The roastery keeps serving, and Actuator's health keeps it UP while the agent's component turns
-UNKNOWN. Scrape now still reads the roastery's metrics, since it doesn't need the proxy. `./demo.sh proxy-start`
-brings the proxy back: the agent connects within a few seconds and registers its path again, and the Activity view
-adds connected and registered.
+`./demo.sh proxy-stop` stops the proxy, and its dashboard with it. The agent's still answers: its Connection view turns
+failing, with the error the agent got connecting to the proxy, and its Activity view adds disconnected and connect
+failed. Scrape now still reads the roastery's metrics, since it doesn't need the proxy. `./demo.sh health` then shows
+the agent's component UNKNOWN and the roastery's own health UP, so a platform that checks it keeps the roastery in
+service. `./demo.sh proxy-start` brings the proxy back: the agent connects within a few seconds and registers its path
+again, and its component is UP again.
 
 ### 5. A Graceful Shutdown Takes the Agent Down First
 

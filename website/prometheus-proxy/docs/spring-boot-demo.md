@@ -175,12 +175,13 @@ Its Paths view lists `/roastery_metrics`, registered, with the recent scrapes th
 Activity view lists what has happened to the agent, newest first, the Connection view its proxy endpoint, and the
 Settings view the settings it resolved.
 
-`./demo.sh proxy-stop` stops the proxy, and the proxy's dashboard with it, but the agent's still answers. Its
-Connection view turns failing, with the error the agent got connecting to the proxy, and its Activity view adds
-disconnected and connect failed. The roastery keeps serving, and its health stays UP while the agent's component turns
-UNKNOWN. Scrape now still reads the roastery's metrics, since it doesn't need the proxy. `./demo.sh proxy-start`
-brings the proxy back: the agent connects within a few seconds and registers its path again, and the Activity view
-adds connected and registered.
+A platform takes an app out of service, or restarts it, when its health check fails, so a proxy outage mustn't fail the
+roastery's. `./demo.sh proxy-stop` stops the proxy, and the proxy's dashboard with it, but the agent's still answers.
+Its Connection view turns failing, with the error the agent got connecting to the proxy, and its Activity view adds
+disconnected and connect failed. Scrape now still reads the roastery's metrics, since it doesn't need the proxy.
+`./demo.sh health` then shows the agent's component UNKNOWN, not DOWN, and the roastery's own health UP, so a platform
+that checks it keeps the roastery in service. `./demo.sh proxy-start` brings the proxy back: the agent connects within a
+few seconds and registers its path again, and its component is UP again.
 
 ## A Graceful Shutdown
 

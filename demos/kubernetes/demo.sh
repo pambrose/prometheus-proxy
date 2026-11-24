@@ -58,6 +58,8 @@ cluster_port() {
 DASHBOARD_PORT="$(cluster_port "${KUBERNETES_DEMO_DASHBOARD_PORT:-}" 30094 8294)"
 PROMETHEUS_PORT="$(cluster_port "${KUBERNETES_DEMO_PROMETHEUS_PORT:-}" 30090 9290)"
 PROXY_PORT="$(cluster_port "${KUBERNETES_DEMO_PROXY_PORT:-}" 30080 8280)"
+# This demo's page on the docs site, which shows its layout and code
+PAGE_URL="https://prometheus-proxy.com/kubernetes-demo/"
 DASHBOARD_URL="http://localhost:$DASHBOARD_PORT/dashboard"
 PROMETHEUS_URL="http://localhost:$PROMETHEUS_PORT"
 PROXY_URL="http://localhost:$PROXY_PORT"
@@ -145,6 +147,8 @@ print_urls() {
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo "  kubectl:          kubectl --context kind-$MONITORING ...   kubectl --context kind-$TARGET ..."
   echo
+  echo "This demo, explained on the website: $PAGE_URL"
+  echo
   echo "Scenarios: $0 clusters | add-service | delete-agent-pod | change-config ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
 }
@@ -219,7 +223,8 @@ create_cluster() {
   bold "Creating the $name cluster"
   if ! kind create cluster --name "$name" --config "$rendered" --wait 2m; then
     rm -f "$rendered"
-    die "kind couldn't create $name; if a port is taken, move it (see README.md) and run '$MAKE_NAME down' first"
+    die "kind couldn't create $name. If a port is taken, run '$MAKE_NAME down', then move the port as the Kubernetes" \
+      "Demo page says: ${PAGE_URL}#running-it"
   fi
   rm -f "$rendered"
   if [[ -n "$previous" ]]; then
@@ -886,6 +891,36 @@ step() {
   AFTER_PAUSE=0
 }
 
+# Puts back what the tour changed, once the presenter presses Enter, so what follows starts as the demo did. It shows
+# nothing new, so it has no number, and prints only each command's headlines, its bold lines, as they come; a command
+# that fails prints all it said, and ends the tour. put_back <what it puts back> <command>...
+put_back() {
+  local what="$1" cmd log
+  shift
+  blank_line
+  pause "Press Enter to $what: ./demo.sh $(join_commands "$@")"
+  log="$(mktemp)"
+  for cmd in "$@"; do
+    if ! (cd "$DEMO_DIR" && ./demo.sh "$cmd" </dev/null 2>&1) | tee "$log" |
+      { grep --line-buffered $'^\033\\[1m' || true; }; then
+      cat "$log"
+      rm -f "$log"
+      die "./demo.sh $cmd failed, which ends the tour"
+    fi
+  done
+  rm -f "$log"
+  echo
+  AFTER_PAUSE=1
+}
+
+# The commands put_back runs, as it prints them: join_commands <command>...
+join_commands() {
+  local first="$1"
+  shift
+  printf '%s' "$first"
+  (($# == 0)) || printf ', then ./demo.sh %s' "$@"
+}
+
 # Checks the part the tour starts from: check_tour_from <argument>
 check_tour_from() {
   TOUR_FROM="${1:-1}"
@@ -1027,8 +1062,8 @@ cmd_tour() {
   if part 5 "The agent chart keeps the agent's targets apart from its main config. Part 3 changed the targets," \
     "and nothing restarted. Here you change the main config, which only a restart applies."; then
     step "Upgrade the agent chart with a main config that also turns on the agent's JVM metrics." -- change-config
-    step "Upgrade the agent chart with the original config again, which replaces the pod once more." \
-      -- restore-config
+    put_back "upgrade the agent chart with its original config again, which replaces the pod once more" \
+      restore-config
   fi
 
   wait_after_output "Press Enter to finish the tour"

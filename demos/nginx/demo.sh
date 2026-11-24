@@ -73,6 +73,8 @@ SHUTDOWN_SECS=10
 # (proxy.internal.streamKeepAliveSecs).
 DEFAULT_KEEPALIVE_SECS=30
 
+# This demo's page on the docs site, which shows its layout and code
+PAGE_URL="https://prometheus-proxy.com/nginx-demo/"
 DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 # The same dashboard, through nginx (nginx/dashboard-*.conf).
 NGINX_DASHBOARD_URL="http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard"
@@ -167,6 +169,8 @@ print_urls() {
   echo "  agent-current:            $AGENT_DASHBOARD_URL"
   echo "  Prometheus:               $PROMETHEUS_URL"
   echo "  Proxy discovery:          $PROXY_URL/discovery"
+  echo
+  echo "This demo, explained on the website: $PAGE_URL"
   echo
   echo "Scenarios: $0 nginx-log | nginx-long-timeouts | nginx-workers | keepalive 10 | dashboard-host ...  (no" \
     "arguments for help)"
@@ -663,6 +667,36 @@ step() {
   AFTER_PAUSE=0
 }
 
+# Puts back what the tour changed, once the presenter presses Enter, so what follows starts as the demo did. It shows
+# nothing new, so it has no number, and prints only each command's headlines, its bold lines, as they come; a command
+# that fails prints all it said, and ends the tour. put_back <what it puts back> <command>...
+put_back() {
+  local what="$1" cmd log
+  shift
+  blank_line
+  pause "Press Enter to $what: ./demo.sh $(join_commands "$@")"
+  log="$(mktemp)"
+  for cmd in "$@"; do
+    if ! (cd "$DEMO_DIR" && ./demo.sh "$cmd" </dev/null 2>&1) | tee "$log" |
+      { grep --line-buffered $'^\033\\[1m' || true; }; then
+      cat "$log"
+      rm -f "$log"
+      die "./demo.sh $cmd failed, which ends the tour"
+    fi
+  done
+  rm -f "$log"
+  echo
+  AFTER_PAUSE=1
+}
+
+# The commands put_back runs, as it prints them: join_commands <command>...
+join_commands() {
+  local first="$1"
+  shift
+  printf '%s' "$first"
+  (($# == 0)) || printf ', then ./demo.sh %s' "$@"
+}
+
 # Checks the part the tour starts from: check_tour_from <argument>
 check_tour_from() {
   TOUR_FROM="${1:-1}"
@@ -796,7 +830,7 @@ cmd_tour() {
       "After its reconnect to the new proxy, agent-current stays connected: a keepalive every 10 seconds keeps each" \
       "of its streams from going quiet for nginx's 20. agent-legacy, which sends none, is still cut off about every" \
       "20 seconds, in the proxy's Activity view."
-    step "Put nginx and the proxy back as the demo started them." -- reset
+    put_back "put nginx and the proxy back as the demo started them" reset
   fi
 
   if part 4 "The proxy's dashboard updates live, over a WebSocket. Here you put it behind nginx, as you would to" \
