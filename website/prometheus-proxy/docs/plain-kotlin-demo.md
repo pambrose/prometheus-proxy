@@ -82,19 +82,20 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the oven, which takes a few minutes. After that it starts in under a
 minute.
 
-| What | URL |
-|---|---|
-| Proxy dashboard | <http://localhost:8694/dashboard> |
-| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3600> |
-| Prometheus's targets | <http://localhost:9690/targets> |
-| The proxy's service discovery | <http://localhost:8680/discovery> |
+| What | URL | Port variable |
+|---|---|---|
+| Proxy dashboard | <http://localhost:8694/dashboard> | `PLAIN_KOTLIN_DEMO_DASHBOARD_PORT` |
+| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3600> | `PLAIN_KOTLIN_DEMO_GRAFANA_PORT` |
+| Prometheus's targets | <http://localhost:9690/targets> | `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT` |
+| The proxy's service discovery | <http://localhost:8680/discovery> | `PLAIN_KOTLIN_DEMO_PROXY_PORT` |
 
-The ports are the [Basics Demo](basics-demo.md)'s plus 600, so the demos can run side by side. Every port binds to
-`127.0.0.1` only, and the ovens and Redis publish none. To move one that is already taken, set its variable for
-`make up`, for example `PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`. The variables are
-`PLAIN_KOTLIN_DEMO_DASHBOARD_PORT`, `PLAIN_KOTLIN_DEMO_GRAFANA_PORT`, `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT`, and
-`PLAIN_KOTLIN_DEMO_PROXY_PORT`. `make up` saves the port in `docker/.env`, which every later command and docker compose
-read, so you set it once; delete its line there to go back to the default.
+Each port is the [Basics Demo](basics-demo.md)'s plus 600, so the demos can run side by side. If a port is already
+taken, set its variable from the table for `make up`, for example `PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`. `make
+up` saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its line
+there to go back to the default.
+
+Every port binds to `127.0.0.1` only, and the ovens and Redis publish none. The proxy's dashboard has no authentication,
+and Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
 
 ## What's running
 

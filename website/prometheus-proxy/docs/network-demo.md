@@ -83,25 +83,25 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, Zipkin, Toxiproxy, and Python images, which takes a few
 minutes. After that it starts in under a minute, and runs without a network connection.
 
-| What | URL |
-|---|---|
-| Proxy dashboard | <http://localhost:8194/dashboard> |
-| Standby proxy's dashboard | <http://localhost:8195/dashboard> |
-| agent-hq's dashboard | <http://localhost:8196/dashboard> |
-| agent-branch's dashboard | <http://localhost:8197/dashboard> (its connection at `/connection`, its history at `/activity`) |
-| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3100> |
-| Prometheus | <http://localhost:9190> (alerts at `/alerts`) |
-| The proxy's service discovery | <http://localhost:8180/discovery> |
-| Zipkin | <http://localhost:9511/zipkin/> |
+| What | URL | Port variable |
+|---|---|---|
+| Proxy dashboard | <http://localhost:8194/dashboard> | `NETWORK_DEMO_DASHBOARD_PORT` |
+| Standby proxy's dashboard | <http://localhost:8195/dashboard> | `NETWORK_DEMO_STANDBY_DASHBOARD_PORT` |
+| agent-hq's dashboard | <http://localhost:8196/dashboard> | `NETWORK_DEMO_HQ_DASHBOARD_PORT` |
+| agent-branch's dashboard | <http://localhost:8197/dashboard> (its connection at `/connection`, its history at `/activity`) | `NETWORK_DEMO_BRANCH_DASHBOARD_PORT` |
+| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3100> | `NETWORK_DEMO_GRAFANA_PORT` |
+| Prometheus | <http://localhost:9190> (alerts at `/alerts`) | `NETWORK_DEMO_PROMETHEUS_PORT` |
+| The proxy's service discovery | <http://localhost:8180/discovery> | `NETWORK_DEMO_PROXY_PORT` |
+| Zipkin | <http://localhost:9511/zipkin/> | `NETWORK_DEMO_ZIPKIN_PORT` |
 
-Each port is the Basics Demo's plus 100, so the two demos can run side by side. Every port binds to `127.0.0.1` only:
-the dashboards run without their login and Grafana keeps its default admin password, which suits a laptop and nothing
-shared. To move a port that is already taken, set its variable for `make up`, for example
-`NETWORK_DEMO_GRAFANA_PORT=3101 make up`. `make up` saves it in `docker/.env`, which every later command and docker
-compose read, so you set it once; delete its line there to go back to the default. The variables are
-`NETWORK_DEMO_DASHBOARD_PORT`, `NETWORK_DEMO_STANDBY_DASHBOARD_PORT`, `NETWORK_DEMO_HQ_DASHBOARD_PORT`,
-`NETWORK_DEMO_BRANCH_DASHBOARD_PORT`, `NETWORK_DEMO_GRAFANA_PORT`, `NETWORK_DEMO_PROMETHEUS_PORT`,
-`NETWORK_DEMO_PROXY_PORT`, and `NETWORK_DEMO_ZIPKIN_PORT`.
+Each port is the [Basics Demo](basics-demo.md)'s plus 100, so the demos can run side by side. If a port is already
+taken, set its variable from the table for `make up`, for example `NETWORK_DEMO_GRAFANA_PORT=3101 make up`. `make up`
+saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its line there
+to go back to the default. The proxy dashboard's links into Prometheus and Grafana keep the default ports
+(`config/proxy.conf`).
+
+Every port binds to `127.0.0.1` only. The dashboards run without their login, and Grafana uses its default admin
+password, so this setup is for a laptop, not for anything shared.
 
 ## What's running
 

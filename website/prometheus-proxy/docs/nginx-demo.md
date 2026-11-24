@@ -79,20 +79,21 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the proxy, agent, nginx, Prometheus, and Python images, which takes a few minutes. After that
 it starts in under a minute, and runs without a network connection.
 
-| What | URL |
-|---|---|
-| Proxy dashboard | <http://localhost:8594/dashboard> (its history at `/activity`) |
-| The proxy dashboard, through nginx | <http://localhost:8590/dashboard> |
-| agent-current's dashboard | <http://localhost:8595/dashboard> (its connection at `/connection`, its history at `/activity`) |
-| Prometheus | <http://localhost:9590> |
-| The proxy's service discovery | <http://localhost:8580/discovery> |
+| What | URL | Port variable |
+|---|---|---|
+| Proxy dashboard | <http://localhost:8594/dashboard> (its history at `/activity`) | `NGINX_DEMO_DASHBOARD_PORT` |
+| The proxy dashboard, through nginx | <http://localhost:8590/dashboard> | `NGINX_DEMO_NGINX_PORT` |
+| agent-current's dashboard | <http://localhost:8595/dashboard> (its connection at `/connection`, its history at `/activity`) | `NGINX_DEMO_AGENT_DASHBOARD_PORT` |
+| Prometheus | <http://localhost:9590> | `NGINX_DEMO_PROMETHEUS_PORT` |
+| The proxy's service discovery | <http://localhost:8580/discovery> | `NGINX_DEMO_PROXY_PORT` |
 
-Each port is the Basics Demo's plus 500, so the demos can run side by side. Every port binds to `127.0.0.1` only: the
-dashboards run without their login, which suits a laptop and nothing shared. To move a port that is already taken,
-set `NGINX_DEMO_DASHBOARD_PORT`, `NGINX_DEMO_NGINX_PORT`, `NGINX_DEMO_AGENT_DASHBOARD_PORT`,
-`NGINX_DEMO_PROMETHEUS_PORT`, or `NGINX_DEMO_PROXY_PORT` for `make up`, for example
-`NGINX_DEMO_PROMETHEUS_PORT=19590 make up`. `make up` saves it in `docker/.env`, which every later command and docker
-compose read, so you set it once; delete its line there to go back to the default.
+Each port is the [Basics Demo](basics-demo.md)'s plus 500, so the demos can run side by side. If a port is already
+taken, set its variable from the table for `make up`, for example `NGINX_DEMO_PROMETHEUS_PORT=9591 make up`. `make up`
+saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its line there
+to go back to the default. The proxy dashboard's link into Prometheus keeps the default port (`config/proxy.conf`).
+
+Every port binds to `127.0.0.1` only. The dashboards run without their login, so this setup is for a laptop, not for
+anything shared.
 
 ## What's running
 
@@ -101,7 +102,7 @@ compose read, so you set it once; delete its line there to go back to the defaul
 | `proxy` | The proxy, outside the firewall, with its [transport filter](configuration/proxy.md#transport-filter) off, as it must be behind a reverse proxy, its dashboard and [service discovery](service-discovery.md) on, and an identity for each agent. |
 | `nginx` | The agents' entrance, TLS on port 443 with the repository's test certificate, which passes their gRPC calls to the proxy's agent port, and the dashboard's entrance, on port 8590. The scenarios swap each entrance's config and reload nginx. |
 | `agent-current` | An agent of this release, beside a web storefront. It and the proxy send a keepalive on each stream between them after 30 seconds of quiet. Its [dashboard](agent-dashboard.md) is on, on port 8595. |
-| `agent-legacy` | An agent of release 4.6.0, beside a warehouse, from before the stream keepalives. It has no dashboard, which came later. |
+| `agent-legacy` | An agent of release 4.6.0, beside a warehouse, from before the stream keepalives, to show what an agent without them goes through behind nginx. It has no dashboard, which came later. |
 | `nginx-app` | The simulated services, with small metrics. |
 | `prometheus` | Scrapes both agents' paths through the proxy every 5 seconds, and the proxy's own metrics directly. |
 
@@ -143,6 +144,12 @@ with 413 each time its results add up to a megabyte. Every entrance in the demo 
 [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### nginx's stream timeouts cut off an agent from 4.6.0 every minute
+
+This part is for you if the proxy or any agent you run behind nginx, or another reverse proxy, is on 4.6.0 or earlier,
+as happens while you upgrade one before the other: keepalives flow only when both ends are newer, so such a pair goes
+without them. What you'd see is an agent that drops about once a minute, even while it's scraped, and scrapes that fail
+now and then while it reconnects. agent-legacy shows that, and agent-current, behind the same nginx, shows the
+keepalives preventing it.
 
 nginx closes a stream that carries nothing for 60 seconds: its `grpc_read_timeout` covers the streams the proxy sends
 on, scrape requests and path notices, and `client_body_timeout` the streams the agent sends results on. An agent's
