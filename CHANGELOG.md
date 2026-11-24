@@ -246,6 +246,8 @@ All notable changes to this project are documented in this file.
 - `TestPortsTest` fails on a port a spec binds that a demo publishes on the host (a compose port, a kind `hostPort`,
   or a `demo.sh` port default), since a spec run while that demo was up reached the demo's container. The admin-path
   specs and `HarnessHelpersTest` move off the basics and network demos' ports (8098, 8099, 9511)
+- The XXLARGE harness profile (`make xxl-tests`) runs with a 16g test heap, 1,000 concurrent clients, and 100
+  parallel queries against 30 HTTP servers, and XLARGE with 500 concurrent clients
 - `make docker-build` builds the proxy and agent images for this machine into the local Docker, as
   `prometheus-proxy:local` and `prometheus-agent:local`, and `make docker-scan` builds them and lists their CVEs with
   Docker Scout, the libraries inside the fat jars included

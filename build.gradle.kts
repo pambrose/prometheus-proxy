@@ -366,7 +366,7 @@ fun Project.configureTesting() {
     maxHeapSize =
       testMaxHeapOverride
         ?: when (harnessConfig?.uppercase()) {
-          "XXLARGE" -> "8g"
+          "XXLARGE" -> "16g"
           "XLARGE" -> "4g"
           "LARGE" -> "2g"
           else -> "1g"

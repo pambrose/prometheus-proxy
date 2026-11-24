@@ -39,7 +39,7 @@ it, exclude both partitions: `./gradlew koverVerify koverVerifyPerClass -x unitT
 ```bash
 make tests            # All checks (lint + tests), rerunning the tests; the container tests are SKIPPED
 make medium-tests     # `make tests` with the MEDIUM harness profile (a load run; the default is MINI, as in CI)
-make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 8g test heap)
+make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 16g test heap)
 make nh-tests         # Every spec outside the harness (`./gradlew unitTest`)
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
