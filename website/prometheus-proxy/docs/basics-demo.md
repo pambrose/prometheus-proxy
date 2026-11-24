@@ -33,13 +33,18 @@ graph TB
   West1 -->|HTTP fetch| App
   West2 -->|HTTP fetch| App
 
-  subgraph Outside Firewall
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph Outside ["<br>Outside Firewall"]
     G
     P
     Proxy
   end
 
-  subgraph Inside Firewall
+  %% agent-west-1's gRPC edge runs up the middle, where Mermaid centers a zone's title, so trailing em spaces set
+  %% this title to the left of the edge rather than under it.
+  subgraph Inside ["<br>Inside Firewall#8195;#8195;#8195;#8195;#8195;#8195;#8195;#8195;#8195;#8195;"]
     East
     West1
     West2

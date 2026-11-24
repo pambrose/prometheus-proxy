@@ -37,14 +37,17 @@ graph TB
   Current -->|HTTP fetch| App[nginx-app: simulated services]
   Legacy -->|HTTP fetch| App
 
-  subgraph Outside Firewall
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph Outside ["<br>Outside Firewall"]
     P
     Proxy
     Nginx
     Browser
   end
 
-  subgraph Inside Firewall
+  subgraph Inside ["<br>Inside Firewall"]
     Current
     Legacy
     App

@@ -51,8 +51,8 @@ MAVEN_ARTIFACTS_PATTERN := ($(subst $(space),|,$(MAVEN_ARTIFACTS)))
 # still has the previous release's version where step 2 bumps it. Keep this list in step with that step.
 RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud-proxy/docker-compose.yml \
 	charts/prometheus-proxy/Chart.yaml charts/prometheus-agent/Chart.yaml \
-	website/prometheus-proxy/docs/getting-started.md website/prometheus-proxy/docs/index.md \
-	website/prometheus-proxy/docs/docker.md website/prometheus-proxy/docs/grafana.md \
+	website/prometheus-proxy/docs/getting-started.md website/prometheus-proxy/docs/docker.md \
+	website/prometheus-proxy/docs/grafana.md \
 	src/test/kotlin/website/DockerExamples.txt src/test/kotlin/website/GettingStarted.txt \
 	src/test/kotlin/website/ConfigExamples.txt \
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \

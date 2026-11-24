@@ -405,17 +405,6 @@ body {
 /* The home page reads as a group per section, each set close within. The headings' space is the only wide one, so
    space means a new group. */
 
-/* What Try It's command prints, close under the command, as its result: the theme sets the block's margin on both
-   its wrapper and its pre. */
-.md-typeset .highlight:has(+ .pp-result),
-.md-typeset .highlight:has(+ .pp-result) > pre {
-  margin-bottom: 0.5em;
-}
-
-.md-typeset .pp-result {
-  margin-top: 0.5em;
-}
-
 /* The home page's ways on: one list, a row each, the whole row its link, in the dashboard's rows rather than the
    theme's cards. The link is the row's name; the text under it says where it goes. */
 .md-typeset .pp-ways > ul {

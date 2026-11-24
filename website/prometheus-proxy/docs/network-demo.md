@@ -41,14 +41,17 @@ graph TB
   HQ -->|HTTP fetch| App[network-app: simulated services]
   Branch -->|HTTP fetch| App
 
-  subgraph Outside Firewall
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph Outside ["<br>Outside Firewall"]
     G
     P
     Proxy
     Standby
   end
 
-  subgraph Inside Firewall
+  subgraph Inside ["<br>Inside Firewall"]
     HQ
     Branch
     App

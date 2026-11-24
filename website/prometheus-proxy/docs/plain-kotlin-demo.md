@@ -39,13 +39,16 @@ graph TB
   Oven -->|takes orders| Redis[Redis queue]
   Counter[counter] -->|pushes orders| Redis
 
-  subgraph Proxy host
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph host ["<br>Proxy host"]
     G
     P
     Proxy
   end
 
-  subgraph ovens[ovens, 1 to 5, one container and JVM each]
+  subgraph ovens ["<br>ovens, 1 to 5, one container and JVM each"]
     Agent
     Oven
   end

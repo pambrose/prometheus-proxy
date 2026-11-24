@@ -21,23 +21,30 @@ graph TB
   }
   G[Grafana :3300] --> P[Prometheus :9390]
   P -->|scrapes /coffee_shop_metrics| Proxy[Proxy, dashboard :8394]
-  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app below.
-  Proxy ~~~ Agent
-  Agent[embedded agent, dashboard :8395] -->|gRPC over TLS, with a token| Proxy
+  %% The agent connects out to the proxy, so its arrow points up, into the proxy. Mermaid has no reverse arrow, and an
+  %% Agent --> Proxy edge pinned under the proxy by an invisible link drew a second edge beside it, which bent this
+  %% one. A two-headed edge keeps the proxy above the agent on one straight line, and the linkStyle below (this is
+  %% edge 2, counting from 0) drops its arrowhead at the agent's end.
+  Proxy <-->|gRPC over TLS, with a token| Agent[embedded agent, dashboard :8395]
   Agent -->|reads its registry| App[coffee shop: Ktor]
   LB[load balancer :8390] --> App
 
-  subgraph Proxy host
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph host ["<br>Proxy host"]
     G
     P
     Proxy
   end
 
-  subgraph The app's platform
+  subgraph platform ["<br>The app's platform"]
     LB
     Agent
     App
   end
+
+  linkStyle 2 marker-end:none
 ```
 
 ## What You Need

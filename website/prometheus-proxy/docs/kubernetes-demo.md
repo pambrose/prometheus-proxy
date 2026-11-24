@@ -34,12 +34,15 @@ graph TB
   Sync -->|writes| CM[agent-targets ConfigMap]
   CM -->|mounted| Agent
 
-  subgraph pp-monitoring [pp-monitoring: outside the firewall]
+  %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
+  %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
+  %% edges' labels onto their arrowheads.
+  subgraph pp-monitoring ["<br>pp-monitoring: outside the firewall"]
     P
     Proxy
   end
 
-  subgraph pp-target [pp-target: behind the firewall, nothing exposed]
+  subgraph pp-target ["<br>pp-target: behind the firewall, nothing exposed"]
     Agent
     Sync
     CM
