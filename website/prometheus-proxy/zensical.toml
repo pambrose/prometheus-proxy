@@ -72,6 +72,7 @@ nav = [
     { "Ktor Demo" = "ktor-demo.md" },
     { "Spring Boot Starter" = "spring-boot-starter.md" },
     { "Spring Boot Demo" = "spring-boot-demo.md" },
+    { "Upgrading" = "embedded-upgrading.md" },
   ]},
   { "Reference" = [
     { "CLI Reference" = "cli-reference.md" },

@@ -297,36 +297,36 @@ which requires `ADMIN_ENABLED=true`. The manifests also set conservative CPU/mem
 
 <div class="grid cards" markdown>
 
--   :material-robot:{ .lg .middle } __Agent Configuration__
+-   :lucide-cable:{ .lg .middle } __Agent Configuration__
 
     ---
 
     Path configs, HTTP client tuning, and scrape options
 
-    [:octicons-arrow-right-24: Agent Configuration](configuration/agent.md)
+    [:lucide-arrow-right: Agent Configuration](configuration/agent.md)
 
--   :material-shield-lock:{ .lg .middle } __Security & TLS__
+-   :lucide-shield:{ .lg .middle } __Security & TLS__
 
     ---
 
     Secure the proxy-agent channel with TLS and mutual authentication
 
-    [:octicons-arrow-right-24: Security](security/index.md)
+    [:lucide-arrow-right: Security](security/index.md)
 
--   :material-radar:{ .lg .middle } __Service Discovery__
+-   :lucide-radar:{ .lg .middle } __Service Discovery__
 
     ---
 
     Let Prometheus discover proxied targets dynamically
 
-    [:octicons-arrow-right-24: Service Discovery](service-discovery.md)
+    [:lucide-arrow-right: Service Discovery](service-discovery.md)
 
--   :material-activity:{ .lg .middle } __Monitoring__
+-   :lucide-activity:{ .lg .middle } __Monitoring__
 
     ---
 
     Scrape the proxy's and agent's own operational metrics
 
-    [:octicons-arrow-right-24: Monitoring](monitoring.md)
+    [:lucide-arrow-right: Monitoring](monitoring.md)
 
 </div>

@@ -142,52 +142,52 @@ Full API documentation (KDocs) is available at [KDocs](kdocs/).
 
 <div class="grid cards" markdown>
 
--   :material-play-circle:{ .lg .middle } __Demos__
+-   :lucide-monitor-play:{ .lg .middle } __Demos__
 
     ---
 
     Watch the proxy and agents work, with Prometheus and Grafana, on your laptop
 
-    [:octicons-arrow-right-24: Basics Demo](basics-demo.md)
+    [:lucide-arrow-right: Demos](demos/index.md)
 
--   :material-sitemap:{ .lg .middle } __Architecture__
+-   :lucide-layers:{ .lg .middle } __Architecture__
 
     ---
 
     Understand the proxy/agent components, gRPC protocol, and request flow
 
-    [:octicons-arrow-right-24: Architecture](architecture.md)
+    [:lucide-arrow-right: Architecture](architecture.md)
 
--   :material-cog:{ .lg .middle } __Configuration__
+-   :lucide-settings:{ .lg .middle } __Configuration__
 
     ---
 
     Configure the application with HOCON and environment variables
 
-    [:octicons-arrow-right-24: Configuration](configuration/index.md)
+    [:lucide-arrow-right: Configuration](configuration/index.md)
 
--   :material-shield-lock:{ .lg .middle } __Security & TLS__
+-   :lucide-shield:{ .lg .middle } __Security & TLS__
 
     ---
 
     Set up TLS encryption and mutual authentication
 
-    [:octicons-arrow-right-24: Security](security/index.md)
+    [:lucide-arrow-right: Security](security/index.md)
 
--   :material-chart-line:{ .lg .middle } __Monitoring__
+-   :lucide-activity:{ .lg .middle } __Monitoring__
 
     ---
 
     Built-in metrics and Grafana dashboards
 
-    [:octicons-arrow-right-24: Monitoring](monitoring.md)
+    [:lucide-arrow-right: Monitoring](monitoring.md)
 
--   :material-cloud-outline:{ .lg .middle } __Cloud Platforms__
+-   :lucide-cloud:{ .lg .middle } __Cloud Platforms__
 
     ---
 
     Embed the agent in an app on ECS, Cloud Run, or Azure Container Apps
 
-    [:octicons-arrow-right-24: Cloud Platforms](cloud-platforms.md)
+    [:lucide-arrow-right: Cloud Platforms](cloud-platforms.md)
 
 </div>
