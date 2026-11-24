@@ -26,7 +26,7 @@ import java.net.UnknownHostException;
 // Kotlin Demo page's Java tab: replicaName() is below the snippet, as in Main.kt, and the oven and its queue are
 // stand-ins.
 public class PlainKotlinDemoJavaExample {
-  // --8<-- [start:worker-java]
+  // --8<-- [start:plain-kotlin-java]
   public static void main(String[] args) {
     // The host name, the container's ID in Docker, so each oven's paths are its own
     String replica = replicaName();
@@ -34,12 +34,14 @@ public class PlainKotlinDemoJavaExample {
 
     // On SIGTERM, the JVM runs its shutdown hooks, then exits without returning from main. This one has the oven
     // finish the order it's baking and take no more, then waits for main to return, by which time try-with-resources
-    // has stopped the agent.
+    // has stopped the agent. It waits 25 seconds at most, short of the 30 Kubernetes gives a pod to stop. Once it's
+    // added, don't call System.exit() in main: System.exit() waits for the hooks, and this one would wait for main
+    // until its time is up.
     Thread mainThread = Thread.currentThread();
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       oven.stop();
       try {
-        mainThread.join();
+        mainThread.join(25000);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
@@ -53,11 +55,11 @@ public class PlainKotlinDemoJavaExample {
         .agentMetricsAt("oven_" + replica + "_agent_metrics")
         .build();
     // Null when the agent stays off, which try-with-resources takes: the oven runs either way
-    try (EmbeddedAgentInfo agent = config.startIfConfigured(false)) {
+    try (EmbeddedAgentInfo agent = config.startIfConfigured(/* logBanner = */ false)) {
       oven.runUntilStopped();
     }
   }
-  // --8<-- [end:worker-java]
+  // --8<-- [end:plain-kotlin-java]
 
   // The oven's name among the others: HOSTNAME, which Docker sets to the container's ID, or else this machine's host
   // name, as on a developer's machine, whose shell doesn't usually export HOSTNAME. Any character but a letter, a

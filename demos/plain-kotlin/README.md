@@ -118,11 +118,13 @@ fun main() {
 
   // On SIGTERM, the JVM runs its shutdown hooks, then exits without returning from main. This one has the oven finish
   // the order it's baking and take no more, then waits for main to return, by which time use { } has stopped the agent.
+  // It waits 25 seconds at most, short of the 30 Kubernetes gives a pod to stop. Once it's added, don't call
+  // exitProcess() in main: exitProcess() waits for the hooks, and this one would wait for main until its time is up.
   val mainThread = Thread.currentThread()
   Runtime.getRuntime().addShutdownHook(
     Thread {
       oven.stop()
-      mainThread.join()
+      mainThread.join(25000)
     },
   )
 
@@ -149,7 +151,9 @@ fun main() {
   when it returns.
 - On a SIGTERM, the JVM runs its shutdown hooks and exits without returning from `main`. The hook tells the oven to
   stop, and waits for `main` to return: the oven finishes the order it's baking, takes no more, and returns, and then
-  `use { }` stops the agent, which disconnects from the proxy.
+  `use { }` stops the agent, which disconnects from the proxy. The hook waits 25 seconds at most, short of the 30
+  Kubernetes gives a pod to stop. Once it's added, `main` mustn't call `exitProcess()`, which waits for the hooks while
+  this one waits for `main`, so the JVM would hang until the hook gives up.
 
 ## Guided tour
 
