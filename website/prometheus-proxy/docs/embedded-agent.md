@@ -363,12 +363,15 @@ wire the agent yourself, run it from a bean, so it starts and stops with the app
 - **The settings:** a `@ConfigurationProperties` record can hold them, with `application.yml` reading each from the
   environment, as `${PROMETHEUS_AGENT_TOKEN:}` does. Give it a `toString` that leaves the secrets out, so the app can
   log it.
-- **Spring Boot's dependency management** sets the versions of the libraries it knows, some of the agent's among them:
-  kotlinx-serialization, Jackson 2, Logback, and gRPC run older than the agent's own. The agent runs with them, and
-  the demo's roastery runs it at Spring Boot's versions on every pull request
+- **Spring Boot's dependency management** sets the versions of the libraries it knows, some of the agent's among them,
+  and some of those run older than the agent's own. The agent runs with them, and the demo's roastery runs it at
+  Spring Boot's versions on every pull request
   ([Spring Boot's versions](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries)). Were a Spring Boot
-  release to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
-  `jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
+  release to break it, the app's pom sets that library to the agent's version with the property Spring Boot names it
+  by, such as `grpc-java.version` or `netty.version`, which Spring Boot's
+  [Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
+  library it manages. netty-tcnative has none, since Netty's BOM sets it: pin `netty-tcnative-classes` and
+  `netty-tcnative-boringssl-static`, with each native's classifier, in the pom's own `dependencyManagement`.
 - **A health indicator** can report the agent in Actuator's `/actuator/health` from `EmbeddedAgentInfo.isConnected`
   and `proxyEndpoint`: UP while it's connected, and UNKNOWN, not DOWN, when it's off or reconnecting, so a lost proxy
   leaves the app's health UP.

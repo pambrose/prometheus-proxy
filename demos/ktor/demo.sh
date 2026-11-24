@@ -130,8 +130,18 @@ print_urls() {
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
 }
 
-# POSTs to the coffee shop's own knobs, on its published port: shop <path>
-shop() { curl -fsS -X POST "$APP_URL$1" || die "the coffee shop refused $1; is the demo running? See '$0 status'"; }
+# POSTs to the coffee shop's own knobs, on its published port, and prints its answer: shop <path>. When the shop
+# refuses, its answer says why, and that's the error; with no answer, the shop isn't there.
+shop() {
+  local answer
+  if answer="$(curl -s --fail-with-body -X POST "$APP_URL$1")"; then
+    echo "$answer"
+  elif [[ -n "$answer" ]]; then
+    die "the coffee shop refused $1: $answer"
+  else
+    die "the coffee shop didn't answer $1; is the demo running? See '$0 status'"
+  fi
+}
 
 # Runs a command every second until it succeeds, for up to the given seconds; fails if it never does:
 # wait_until <seconds> <command>...
@@ -154,6 +164,9 @@ serves_version() { curl -fsS "$APP_URL/status" 2>/dev/null | grep -Eq "^Version:
 wait_for_version() {
   wait_until 30 serves_version "$1" || die "the coffee shop didn't answer as version $1 within 30s; see '$0 logs'"
 }
+
+# Whether a service's container is running, an on-demand one's included: running <service>
+running() { [[ -n "$("${COMPOSE[@]}" "${ON_DEMAND[@]}" ps --quiet --status running "$1" 2>/dev/null)" ]]; }
 
 # The proxy's log lines that match an extended regex, one a line, or nothing.
 proxy_lines() { "${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep -E "$1" || true; }
@@ -493,9 +506,9 @@ cmd_tour() {
     "from inside the app, that shows its side: its connection, each path's registration, its scrapes as it saw" \
     "them, and what it did, in order. The coffee shop's environment turns it on, with nothing in the app's code."; then
     instruct "Open the coffee shop agent's dashboard: $AGENT_DASHBOARD_URL" \
-      "Its Paths view lists the agent's two paths, each with a green light and the tag registered: the proxy routes" \
-      "their scrapes to this agent. Beside each are the status of its last scrape and its recent scrapes, a strip of" \
-      "dots, green for a success, which fills as Prometheus scrapes every five seconds."
+      "Its Paths view lists the agent's two paths, each with a green light; select one and its header reads" \
+      "registered: the proxy routes its scrapes to this agent. Beside each are the status of its last scrape and its" \
+      "recent scrapes, a strip of dots, green for a success, which fills as Prometheus scrapes every five seconds."
     instruct "Select coffee_shop_metrics." \
       "Its target reads in-process: the agent reads the app's metrics registry itself, with no URL, port, or" \
       "password. Recent scrapes lists the last ones Prometheus asked for, newest first: when each ran, the status," \
@@ -681,6 +694,9 @@ main() {
   baristas)
     local count="${1:-}"
     [[ "$count" =~ ^[0-9]+$ ]] || die "give the number of baristas, from 1 to 12"
+    # 10# reads a count such as 08 as decimal, where bash would take it for octal.
+    ((10#$count >= 1 && 10#$count <= 12)) || die "the coffee shop takes from 1 to 12 baristas, not $count"
+    count=$((10#$count))
     shop "/admin/baristas?count=$count" >/dev/null
     bold "$count baristas on shift"
     how_it_works "This asks the coffee shop, through POST /admin/baristas?count=$count, to have $count baristas brew" \
@@ -709,7 +725,9 @@ main() {
     watch_for
     point "'Espresso' turns red, and 'Orders / sec, by outcome' shows failed orders, about three of every four," \
       "and 'Order requests / sec, by status' shows the counter's 503s."
-    point "After 10 seconds CoffeeShopErrors fires on Prometheus's alerts page: $PROMETHEUS_URL/alerts"
+    point "CoffeeShopErrors fires within about half a minute, not at once: its rule reads the failed orders' share" \
+      "over a 30-second window, which takes a few scrapes to cross one in ten, and then has to stay above it for 10" \
+      "seconds. Watch it go from pending to firing on Prometheus's alerts page: $PROMETHEUS_URL/alerts"
     point "The proxy, the agent, and the scrapes are untouched: the metrics report the failure, they don't fail."
     follow_up "To fix it, run" "$0 fix-machine"
     ;;
@@ -721,11 +739,25 @@ main() {
     point "The failed orders stop, 'Espresso' turns green, and CoffeeShopErrors resolves."
     ;;
   deploy)
-    local overwrites
+    local overwrites next_ran=0
+    if ! running coffee-shop; then
+      if running coffee-shop-next; then
+        bold "Version 1.1 already serves the shop, and version 1.0 has stopped: there's nothing to deploy"
+        follow_up "To put 1.0 back, run" "$0 rollback"
+      else
+        bold "Neither version of the coffee shop is running, so there's nothing to deploy beside"
+        follow_up "To start version 1.0 again, run" "$0 rollback"
+      fi
+      return 0
+    fi
+    running coffee-shop-next && next_ran=1
     overwrites="$(proxy_count "Overwriting path /coffee_shop_metrics")"
     bold "Deploying version 1.1 beside version 1.0"
     "${COMPOSE[@]}" --profile deploy up --detach --no-deps --wait coffee-shop-next
-    proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
+    # A 1.1 that starts now takes the paths from 1.0's agent, which the proxy logs; one already running has them.
+    if ((!next_ran)); then
+      proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
+    fi
     "${COMPOSE[@]}" stop coffee-shop
     wait_for_version 1.1
     bold "Version 1.1 serves the shop and its paths, and version 1.0 has stopped"
@@ -752,10 +784,20 @@ main() {
     follow_up "To put 1.0 back, run" "$0 rollback"
     ;;
   rollback)
-    local overwrites
+    local overwrites old_ran=0 next_ran=0
+    running coffee-shop && old_ran=1
+    running coffee-shop-next && next_ran=1
+    if ((old_ran && !next_ran)); then
+      bold "There's nothing to roll back: version 1.0 serves the shop, and version 1.1 isn't running"
+      follow_up "To deploy version 1.1, run" "$0 deploy"
+      return 0
+    fi
     overwrites="$(proxy_count "Overwriting path /coffee_shop_metrics")"
     "${COMPOSE[@]}" up --detach --no-deps --wait coffee-shop
-    proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
+    # Only a 1.0 that starts while 1.1 runs takes the paths from 1.1's agent, which the proxy logs.
+    if ((!old_ran && next_ran)); then
+      proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
+    fi
     "${COMPOSE[@]}" --profile deploy rm --stop --force coffee-shop-next
     wait_for_version 1.0
     bold "Version 1.0 serves the shop and its paths again, and version 1.1 is removed"
@@ -777,7 +819,8 @@ main() {
       "$0 order"
     point "Grafana's 'Scrape' turns Down, 'Agent' reads Disconnected, and its graphs stop, since Prometheus" \
       "can't reach the proxy." \
-      "After 15 seconds CoffeeShopDown fires on Prometheus's alerts page: $PROMETHEUS_URL/alerts"
+      "Within about half a minute, a failed scrape and then the alert's 15 seconds, CoffeeShopDown fires on" \
+      "Prometheus's alerts page: $PROMETHEUS_URL/alerts"
     point "The coffee shop's log shows its agent retrying: $0 logs coffee-shop"
     point "The agent's /debug page shows an empty AgentId, and the proxy it keeps trying, while its /healthcheck" \
       "stays healthy: $0 debug"

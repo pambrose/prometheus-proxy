@@ -338,6 +338,17 @@ All notable changes to this project are documented in this file.
 - The Spring Boot demo's `application.yml` says where the authority's default, `prometheus-proxy`, comes from and when
   to set `PROMETHEUS_PROXY_AUTHORITY`, and the Plain Kotlin Demo page's Java tab names `startIfConfigured`'s
   `logBanner` argument
+- The demos' tours, scenarios, READMEs, and pages say what each demo shows, after a review that ran every demo: an
+  evicted agent's paths, and a scaled-in oven's, stay on the Paths view as `gone` for an hour while `/discovery`
+  drops them; freezing the basics demo's agent-east also stops the proxy's own metrics, which reach Prometheus
+  through it; the Kubernetes demo's series counts, timings, port-forward, and prerequisites, the Ktor demo's alert
+  timings, and the network demo's Zipkin link and alerts match what happens; the Spring Boot demo's `versions` marks
+  each library older, the same, or newer, and its graph counts the batches roasted in the last minute
+- The demos' scenarios no longer print a false result or wait in silence when there's nothing to do: the Ktor
+  demo's `rollback` and `deploy`, the Kubernetes demo's `add-service` run twice, the network demo's `proxy-down
+  proxy-standby`, and the nginx demo's timeout and keepalive scenarios run out of the tour's order. The nginx demo's
+  `reset` and `keepalive` reconnect each agent once, not twice, and its Troubleshooting covers the 400, 499, and
+  502 codes in nginx's log and gRPC's harmless `Stream closed before write` warning
 
 ### Dependencies
 

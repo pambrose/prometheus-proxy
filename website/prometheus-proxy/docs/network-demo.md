@@ -227,14 +227,16 @@ stateful firewall or NAT that drops a connection does, and nothing tells either 
   <figcaption>The primary hears nothing from agent-branch: its idle time climbs toward the eviction</figcaption>
 </figure>
 
-Within about 10 seconds agent-branch's scrapes time out. Its heartbeat fails three times, with a 5-second deadline
-each, so at about 20 seconds the agent gives up on the connection and dials the head of its list again: the same dead
-link, where the connect waits out its 30-second deadline (`agent.grpc.unaryDeadlineSecs`). Meanwhile the primary,
-which has heard nothing, evicts the agent after 30 seconds of silence (`proxy.internal.maxAgentInactivitySecs`, which
-the demo sets to 30), and **NetworkAgentEvicted** fires. At about 50 seconds agent-branch connects through its link to
-the standby, failed over, while the primary is still up, and Grafana's **Agents off their primary** shows it at 1.
-About 20 seconds later **NetworkAgentNotOnPrimary** fires for agent-branch alone, until `./demo.sh heal` brings it
-back. agent-hq is untouched throughout.
+Within about 10 seconds agent-branch's scrapes time out, and **NetworkTargetDown** goes pending for inventory,
+shipping, and agent-branch, which Prometheus can't scrape through either proxy; it fires at about 25 seconds. The
+agent's heartbeat fails three times, with a 5-second deadline each, so at about 20 seconds the agent gives up on the
+connection and dials the head of its list again: the same dead link, where the connect waits out its 30-second
+deadline (`agent.grpc.unaryDeadlineSecs`). Meanwhile the primary, which has heard nothing, evicts the agent after 30
+seconds of silence (`proxy.internal.maxAgentInactivitySecs`, which the demo sets to 30), and **NetworkAgentEvicted**
+fires. At about 50 seconds agent-branch connects through its link to the standby, failed over, while the primary is
+still up, and about then **NetworkTargetDown** clears. Grafana's **Agents off their primary** shows it at 1. About 20
+seconds later **NetworkAgentNotOnPrimary** fires for agent-branch alone, until `./demo.sh heal` brings it back.
+agent-hq is untouched throughout.
 
 agent-branch's Connection view, <http://localhost:8197/dashboard/connection>, shows the agent's side of the wait: from
 about 20 seconds it reads **connecting**, with `branch-to-proxy:50053` tagged **trying**, until the connect's deadline
@@ -301,8 +303,10 @@ and **failed over**, counted on one line as it repeats with each pass back throu
 
 `./demo.sh wan-up` brings the links back. Within a few seconds each agent reconnects, through whichever of its links it
 tries next, so one may land on the standby, and the alert resolves, leaving a gap in the graphs where nothing could be
-scraped. On agent-branch's Connection view, only the endpoint it connected through loses its error; the other keeps
-its error until a connect through it succeeds. `./demo.sh heal` returns any agent on the standby to the primary.
+scraped. An agent that lands on the standby shows at 1 on **Agents off their primary**, and about 20 seconds later
+**NetworkAgentNotOnPrimary** fires for it. On agent-branch's Connection view, only the endpoint it connected through
+loses its error; the other keeps its error until a connect through it succeeds. `./demo.sh heal` returns any agent on
+the standby to the primary.
 
 ## Scenario reference
 

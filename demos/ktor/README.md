@@ -140,9 +140,9 @@ The proxy's dashboard shows only what reaches the proxy. The agent serves a
 [dashboard of its own](https://prometheus-proxy.com/agent-dashboard/), from inside the app, that shows its side: its
 connection, each path's registration, its scrapes as it saw them, and what it did, in order.
 
-- Open it at <http://localhost:8395/dashboard>. Its **Paths** view lists the agent's two paths, each `registered`: the
-  proxy routes their scrapes to this agent. Beside each are the status of its last scrape and a strip of its recent
-  scrapes, which fills as Prometheus scrapes every five seconds.
+- Open it at <http://localhost:8395/dashboard>. Its **Paths** view lists the agent's two paths, each with a green
+  light; select one and its header reads `registered`: the proxy routes its scrapes to this agent. Beside each are the
+  status of its last scrape and a strip of its recent scrapes, which fills as Prometheus scrapes every five seconds.
 - Select `coffee_shop_metrics`. Its target is `in-process`, the app's registry, which the agent reads itself, and
   **Recent scrapes** lists the scrapes Prometheus asked for, newest first. **Scrape now** reads the registry at once,
   from inside the app, and shows the status, the size, the metric families and samples, and the start of the body. It
@@ -195,8 +195,9 @@ with a 429, and **Orders / sec, by outcome** shows them rejected. Eight baristas
 ```
 
 Every espresso drink fails with a 503, about three orders in four. **Espresso** turns red, the failed orders
-show by outcome and by HTTP status, and after 10 seconds `CoffeeShopErrors` fires on Prometheus's alerts page. The
-proxy and the agent are untouched: the metrics report the failure, they don't fail.
+show by outcome and by HTTP status, and within about half a minute `CoffeeShopErrors` fires on Prometheus's alerts
+page: its rule reads the failed orders' share over a 30-second window, and has to stay above one in ten for 10 seconds.
+The proxy and the agent are untouched: the metrics report the failure, they don't fail.
 
 ### 6. A deploy hands the path to the new version
 

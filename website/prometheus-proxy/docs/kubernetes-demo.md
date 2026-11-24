@@ -46,10 +46,13 @@ build. Unlike the other demos, this one needs kind, `kubectl`, and Helm as well 
 needs:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
-  node as a container.
+  node as a container, and each node uses about 1 to 1.5 GiB of memory, so give Docker Desktop about 4 GB (its
+  Resources settings).
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or later,
-  [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and [Helm](https://helm.sh/docs/intro/install/) 3 or 4.
-  `demo.sh` checks for each.
+  [`kubectl`](https://kubernetes.io/docs/tasks/tools/) 1.36 to 1.38, and [Helm](https://helm.sh/docs/intro/install/) 3
+  or 4. The clusters run Kubernetes 1.37, the version of the node image the demo pins, and kubectl supports one minor
+  version either side of it. `demo.sh` checks for each, and for kind's and Helm's versions. If kind can't create a
+  cluster, see its [known issues](https://kind.sigs.k8s.io/docs/user/known-issues/).
 - `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
   have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 - `curl`, which the demo uses to wait for each service to answer.
@@ -165,9 +168,9 @@ resolves. The Connection view shows the agent connected to the proxy's NodePort,
 chart mounts from the targets ConfigMap, read every 5 seconds, with how its last read went. The Activity view lists
 what the agent did since its pod started: it connected, then registered its static path and its discovered ones.
 
-The agent keeps that list in memory, so each pod starts its own, and a port-forward reaches one pod, so it ends when
-the agent's pod is replaced, as in the scenarios below that delete the pod or change its config: run
-`./demo.sh agent-dashboard` again to reach the new one.
+The agent keeps that list in memory, so each pod starts its own, and a port-forward reaches one pod, so once the
+agent's pod is replaced, as in the scenarios below that delete the pod or change its config, it fails at the next
+request: run `./demo.sh agent-dashboard` again to reach the new one.
 
 ### Annotate a Service, and Prometheus scrapes it
 
@@ -177,9 +180,9 @@ the agent's pod is replaced, as in the scenarios below that delete the pod or ch
 
 targets-sync sees the new Service and writes it into the agent's targets ConfigMap. The kubelet copies the ConfigMap
 into the agent's pod, the agent re-reads it and registers the path, and Prometheus picks it up from the proxy's
-`/discovery`. The path was in `/discovery` 1 to 7 seconds after the Service was created, and in Prometheus within its
-5-second discovery refresh after that. Nothing restarted: the agent's pod is the same one, and no other path missed a
-scrape.
+`/discovery`. The path was in `/discovery` up to about 10 seconds after the Service was created, and in Prometheus up
+to about 10 seconds after that, at a 5-second discovery refresh. Nothing restarted: the agent's pod is the same one,
+and no other path missed a scrape.
 
 <figure markdown="span">
   ![The Paths view, with search_metrics from discovery](images/kubernetes-demo/discovered.webp#only-dark){ loading=lazy }
@@ -187,13 +190,16 @@ scrape.
   <figcaption>search_metrics on the Paths view, its source disc: from discovery, not the agent's config</figcaption>
 </figure>
 
-The delay is mostly the kubelet's. It copies a changed ConfigMap into the pods that mount it on its periodic sync, every
-`syncFrequency`, which is a minute on a production kubelet; the demo's target cluster lowers it to 5 seconds. With the
-default, which the demo's monitoring cluster keeps, the same change took 63 to 74 seconds to reach a pod; with 5
-seconds, 1 to 7. The agent's own re-read, `agent.discovery.reconcileIntervalSecs`, comes on top.
+On a production kubelet, the delay is mostly the kubelet's. It copies a changed ConfigMap into the pods that mount it
+on its periodic sync, every `syncFrequency`, which is a minute by default; the demo's target cluster lowers it to 5
+seconds. With the default, which the demo's monitoring cluster keeps, the same change took 63 to 74 seconds to reach a
+pod; with 5 seconds, 1 to 7. The agent's own re-read, `agent.discovery.reconcileIntervalSecs`, comes on top, so in the
+demo the two take about as long as each other.
 `./demo.sh remove-service` removes the annotation, and the path leaves `/discovery` within about 10 seconds, again
 without a restart. On the agent's own dashboard, `search_metrics` joined the Paths view as discovered and registered,
-and left it again, each with a line in its Activity view.
+and left it again, each with a line in its Activity view. Prometheus's last scrape of search fails: the agent lets the
+path go before Prometheus's next discovery refresh drops the target, so the scrape that lands in between gets a 404
+from the proxy, which logs `WARN Invalid path request /search_metrics`, and `up{job="search"}` ends at 0.
 
 The [Basics Demo](basics-demo.md) shows dynamic discovery itself, from a file; here Kubernetes drives it. targets-sync
 is the demo's: a discovery source in the agent that read Services itself would replace it.
@@ -222,8 +228,9 @@ Prometheus scrape that lands in it fails, and the next succeeds. Nobody touched 
   <figcaption>The Activity view, newest first: the new pod's agent arriving with every path, the old one leaving, and below, the search service's path coming and going</figcaption>
 </figure>
 
-The agent's own dashboard went with the old pod, since a port-forward reaches one pod. Run `./demo.sh agent-dashboard`
-again, and the new pod's Activity view lists only its own start, where the proxy's, above, saw both pods.
+The agent's own dashboard reached the old pod, since a port-forward reaches one pod, so its port-forward fails at the
+next request. Run `./demo.sh agent-dashboard` again, and the new pod's Activity view lists only its own start, where
+the proxy's, above, saw both pods.
 
 ### A config change restarts the agent; a targets change doesn't
 
@@ -255,7 +262,7 @@ original config back, with another replacement.
 | `demo.sh add-service` / `remove-service` | Deploys the search service and then its annotated Service; or removes the annotation and then deletes both | `kubectl apply` / `kubectl annotate ... prometheus-proxy/path-`; targets-sync rewrites the `agent-targets` ConfigMap, which the kubelet copies into the agent's pod |
 | `demo.sh delete-agent-pod` | Deletes the agent's pod, and reports when its replacement registered and how long scrapes failed | `kubectl delete pod`; the agent's Deployment starts a replacement |
 | `demo.sh change-config` / `restore-config` | Upgrades the agent chart with or without the config change, and reports the replacement the same way | `helm upgrade --set-file config=...`; the config's checksum on the pod template makes the Deployment replace the pod |
-| `demo.sh agent-dashboard` | Forwards `localhost:8295` to the agent's dashboard, in the foreground, until Ctrl-C or the agent's pod is replaced | `kubectl port-forward deploy/prometheus-agent 8295:8095`, through the target cluster's API server |
+| `demo.sh agent-dashboard` | Forwards `localhost:8295` to the agent's dashboard, in the foreground, until Ctrl-C or the first request after the agent's pod is replaced | `kubectl port-forward deploy/prometheus-agent 8295:8095`, through the target cluster's API server |
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | Both clusters' pods and Services, the Helm releases, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows a workload's logs: `agent`, the default, `proxy`, `prometheus`, `targets-sync`, or a service |  |

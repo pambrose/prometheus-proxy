@@ -166,6 +166,9 @@ prom_number() {
 # How many ovens Prometheus scrapes: the oven job's targets it has an up for.
 scraped_ovens() { prom_number 'count(up{job="oven"})'; }
 
+# How many ovens' agents Prometheus scrapes: the oven-agent job's targets it has an up for.
+scraped_agents() { prom_number 'count(up{job="oven-agent"})'; }
+
 # Whether the counts are as given: has_count <want> <command>...
 has_count() {
   local want="$1"
@@ -455,7 +458,9 @@ scale_up() {
   wait_until 60 has_count "$count" discovered_ovens ||
     die "the new ovens' agents didn't register their paths within 60s; see '$0 logs oven'"
   bold "$count ovens; each one's agent has registered its paths with the proxy"
+  # Both of each new oven's targets, so none is listed before its first scrape, with its health unknown
   wait_until 30 has_count "$count" scraped_ovens || true
+  wait_until 30 has_count "$count" scraped_agents || true
   print_targets
   how_it_works "This runs docker compose up --scale oven=$count. Each new oven is the same image, whose host name" \
     "is its new container's ID: its agent registers oven_<id>_metrics and oven_<id>_agent_metrics with the proxy," \
@@ -471,8 +476,9 @@ scale_up() {
 # Stops the ovens past the count given, one SIGTERM each, as a scale-in does, and shows how they went:
 # scale_down <count>
 scale_down() {
-  local count="$1" number host up
+  local count="$1" number host up remaining="the remaining ovens' paths"
   local -a hosts=()
+  ((count > 1)) || remaining="the remaining oven's two paths"
   while read -r number host; do
     ((number > count)) || continue
     hosts+=("$host")
@@ -511,7 +517,9 @@ scale_down() {
   watch_for
   point "Each stopped oven's log, above, shows the oven finishing the order it was baking, then its agent" \
     "disconnecting and stopping. No order taken from the queue is lost."
-  point "The proxy dashboard's Paths view lists only the remaining ovens' paths: $DASHBOARD_URL/paths"
+  point "The proxy's service discovery, which Prometheus follows, lists only $remaining: $PROXY_URL/discovery"
+  point "The proxy dashboard's Paths view lists the stopped ovens' paths as 'gone', and keeps them for an hour" \
+    "(proxy.dashboard.departedPathRetentionSecs), so it's clear what left: $DASHBOARD_URL/paths"
   point "In Grafana, 'Scrape up, by oven' can show that one 0 for a stopped oven, then its series ends."
 }
 
@@ -526,6 +534,8 @@ cmd_scale() {
     scale_up "$count"
   elif ((count < running)); then
     scale_down "$count"
+  elif ((count == 1)); then
+    bold "1 oven is running already"
   else
     bold "$count ovens are running already"
   fi
@@ -783,9 +793,12 @@ cmd_tour() {
   if part 4 "A scale-in sends each oven it stops a SIGTERM, as Kubernetes or ECS does. The oven finishes the order" \
     "it's baking and takes no more, then its agent stops and disconnects from the proxy, which drops its paths."; then
     step "Once the backlog has cleared, go back to one oven." -- scale 1
+    instruct "Open the proxy's service discovery: $PROXY_URL/discovery" \
+      "It lists only the remaining oven's two paths, so Prometheus, which follows it, scrapes that oven alone now."
     instruct "Open the proxy dashboard's Paths view: $DASHBOARD_URL/paths" \
-      "Only the remaining oven's two paths are left. The Activity view, $DASHBOARD_URL/activity, lists each" \
-      "stopped oven's agent as disconnected: Connection closed; released 2 paths."
+      "It still lists the stopped ovens' four paths, marked 'gone', and its status bar counts them as departed: the" \
+      "view keeps a departed path for an hour, so it's clear what left. The Activity view, $DASHBOARD_URL/activity," \
+      "lists each stopped oven's agent as disconnected: Connection closed; released 2 paths."
   fi
 
   if part 5 "An oven's metrics aren't worth an outage. startIfConfigured() starts the agent only where a proxy is" \
@@ -807,8 +820,8 @@ cmd_tour() {
   echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
   echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
     "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
-  echo "The agent in a Ktor app, with its own dashboard, TLS, and secrets from the environment, is in the embedded" \
-    "demo, in demos/ktor."
+  echo "The agent in a Ktor app, with its own dashboard, TLS, and secrets from the environment, is in the Ktor demo," \
+    "in demos/ktor."
   echo "The agent in a Spring Boot app, written in Java, is in the Spring Boot demo, in demos/spring-boot."
   echo
   echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."

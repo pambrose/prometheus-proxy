@@ -220,8 +220,8 @@ scrapes of both paths give up at its 4-second timeout, recorded as 499 (`client_
 
 Once the proxy evicts it, agent-west-2's own `/agent_west_2_metrics` stays in the Paths view marked `gone`, the status
 bar counts it as departed, and agent-west-1 carries `/shipping_metrics` alone, which now shows agent-west-1's own
-target. The Activity view lists the eviction as a problem, with how long the proxy waited and the paths the agent
-served. `./demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
+target. The Activity view lists the eviction as a problem, with how long the proxy waited and how many paths it
+released. `./demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
 
 ### Per-team tokens restrict which paths an agent can register
 
@@ -245,7 +245,7 @@ shows it, searched here for the contractor's agent:
 The command also prints the proxy's log line:
 
 ```
-WARN  [ProxyServiceImpl.kt:360] - Agent identity 'contractor' denied registration of path /payments_metrics
+WARN - Agent identity 'contractor' denied registration of path /payments_metrics
 ```
 
 Payments keeps coming from agent-east, untouched. With a shared token, the newer agent would have taken the path
@@ -297,11 +297,11 @@ holds nothing from the old one, so the proxy's dashboard starts its histories ov
 
 Someone deployed agent-east's config twice. The copy registers the same paths with the same identity, and the newer
 registration takes each one: agent-east-copy serves all six, and agent-east stays connected with none. The two
-settle; agent-east waits rather than taking the paths back, which used to make two such agents swap them every few
-seconds. The command prints the proxy's log line, which names both agents by agentId and gives the fix:
-`agent.consolidated = true` on each, if both should serve the paths. The proxy told agent-east, whose own dashboard
-lists its six paths as `retrying`, each taken over by agent-east-copy. `./demo.sh duplicate-agent-stop` removes the
-copy, and agent-east, told that no agent serves its paths any more, takes them back within seconds, with no restart.
+settle; agent-east waits, rather than the two taking the paths from each other every few seconds. The command prints
+the proxy's log line, which names both agents by agentId and gives the fix: `agent.consolidated = true` on each, if
+both should serve the paths. The proxy told agent-east, whose own dashboard lists its six paths as `retrying`, each
+taken over by agent-east-copy. `./demo.sh duplicate-agent-stop` removes the copy, and agent-east, told that no agent
+serves its paths any more, takes them back within seconds, with no restart.
 
 ### A login for the dashboard
 

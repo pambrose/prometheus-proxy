@@ -479,7 +479,8 @@ start_demo() {
   done
   check_ports
   if [[ "$built" == local ]]; then
-    # Each image goes only to the cluster that runs it. kind skips an image the node already has.
+    # Each image goes only to the cluster that runs it. kind skips an image whose ID the node already has, but with
+    # Docker's containerd image store the IDs never match, so every up loads both again, which takes a few seconds.
     kind load docker-image "$PROXY_IMAGE" --name "$MONITORING"
     kind load docker-image "$AGENT_IMAGE" --name "$TARGET"
   fi
@@ -563,7 +564,8 @@ cmd_logs() {
 
 # Forwards a host port to the agent's dashboard, in the foreground, as the agent chart's notes tell an operator to:
 # pp-target publishes no port, and the chart leaves the dashboard off the agent's Service. kubectl port-forward goes
-# through the API server to one pod, so it ends when that pod is replaced.
+# through the API server to one pod, so once that pod is replaced it fails at the next request, though it goes on
+# listening until then.
 cmd_agent_dashboard() {
   local port
   [[ "$AGENT_DASHBOARD_PORT" =~ ^[0-9]+$ ]] || die "'$AGENT_DASHBOARD_PORT' isn't a port number"
@@ -575,8 +577,9 @@ cmd_agent_dashboard() {
   [[ -n "$port" ]] || die "the agent's dashboard is off; '$MAKE_NAME up' installs the agent with it on"
   bold "Forwarding localhost:$AGENT_DASHBOARD_PORT to port $port, the agent's dashboard, in its pod in $TARGET"
   wrap "  " "  " "Open the agent's dashboard: $AGENT_DASHBOARD_URL"
-  wrap "  " "  " "This runs until you press Ctrl-C, or until the agent's pod is replaced, as delete-agent-pod and" \
-    "change-config do. Then run $0 agent-dashboard again, to reach the new pod."
+  wrap "  " "  " "This runs until you press Ctrl-C. It reaches one pod, so once the agent's pod is replaced, as" \
+    "delete-agent-pod and change-config do, it fails at the next request. Then run $0 agent-dashboard again, to" \
+    "reach the new pod."
   if ! show kubectl --context "kind-$TARGET" -n monitoring port-forward deploy/prometheus-agent \
     "$AGENT_DASHBOARD_PORT:$port"; then
     echo
@@ -621,6 +624,10 @@ cmd_clusters() {
 # would time out. The Service has no labels of its own, so the first apply's selector leaves it out.
 cmd_add_service() {
   local start deadline agent
+  if "${TK[@]}" -n apps get service search >/dev/null 2>&1; then
+    echo "  search is deployed already; $0 remove-service removes it."
+    return
+  fi
   agent="$(agent_pod)"
   "${TK[@]}" apply -f "$DEMO_DIR/k8s/search.yaml" -l app.kubernetes.io/name=search >/dev/null
   "${TK[@]}" -n apps rollout status deployment/search --timeout 120s >/dev/null
@@ -639,16 +646,17 @@ cmd_add_service() {
     "waits for it, then the Service, so the time above is the Service's alone. targets-sync, a small controller this" \
     "demo runs in the $TARGET cluster, watches the Services in apps and writes each annotated one into the agent's" \
     "targets ConfigMap, agent-targets. The kubelet copies a changed ConfigMap into the pods that mount it every" \
-    "syncFrequency, a minute by default, which this demo lowers to 5 seconds: most of the time above. The agent" \
-    "re-reads the file and registers each new path."
+    "syncFrequency, a minute by default, which this demo lowers to 5 seconds. The agent re-reads the file every 5" \
+    "seconds too, and registers each new path, so the two waits make the time above up to about 10 seconds."
   watch_for
   point "On the proxy dashboard's Paths view, search_metrics appears with source 'disc'. The agent's pod is the" \
     "same one, with no restarts, and no other path missed a scrape."
   point "On the agent's dashboard, with $0 agent-dashboard running, search_metrics joins the Paths view," \
     "discovered and registered, the Connection view counts four discovery entries, and the Activity view adds a" \
     "registered line for it: $AGENT_DASHBOARD_URL"
-  point "Prometheus finds search_metrics within its 5-second discovery refresh, and scrapes it through the proxy." \
-    "Open its targets page to see it: $PROMETHEUS_URL/targets"
+  point "Prometheus finds search_metrics at a discovery refresh, every 5 seconds, and scrapes it through the proxy," \
+    "up to about 10 seconds after the path reached /discovery. Open its targets page to see it:" \
+    "$PROMETHEUS_URL/targets"
   follow_up "To undo it, run" "$0 remove-service"
 }
 
@@ -679,6 +687,10 @@ cmd_remove_service() {
   watch_for
   point "The agent unregistered the path, again without restarting, and Prometheus drops the target at its next" \
     "discovery refresh."
+  point "Prometheus's last scrape of search fails. The agent lets the path go before Prometheus's next discovery" \
+    "refresh drops the target, so the scrape that lands in between gets a 404 from the proxy, and" \
+    "up{job=\"search\"} ends at 0. The proxy logs it as WARN Invalid path request /search_metrics, which" \
+    "$0 logs proxy shows."
   point "On the agent's dashboard, search_metrics leaves the Paths view, and the Activity view adds an unregistered" \
     "line for it."
 }
@@ -699,9 +711,10 @@ cmd_delete_agent_pod() {
   point "A Prometheus scrape that landed in the gap measured above failed, and the next one succeeded."
   point "In Prometheus, each target's agent label is the pod's name, so the new pod starts new series, as a pod" \
     "label would."
-  point "If $0 agent-dashboard was running, it ended with the old pod, since a port-forward reaches one pod. Run" \
-    "it again: the new pod's Activity view starts with its own connect and registrations, since each agent keeps" \
-    "its activity in memory, while the proxy dashboard's Activity view saw both pods."
+  point "If $0 agent-dashboard was running, it fails at the next request, with error: lost connection to pod," \
+    "since a port-forward reaches one pod, the old one. Run it again: the new pod's Activity view starts with its own" \
+    "connect and registrations, since each agent keeps its activity in memory, while the proxy dashboard's Activity" \
+    "view saw both pods."
 }
 
 cmd_change_config() {
@@ -719,12 +732,14 @@ cmd_change_config() {
     watch_for
     point "Scrapes failed for the gap measured above, between the old pod stopping and the new one registering its" \
       "paths."
-    point "The new pod's agent_metrics carries the JVM's metrics, so count({job=\"prometheus-agent\"}) in Prometheus" \
-      "climbs from about 30 series to over 200."
+    point "The new pod's agent_metrics carries the JVM's metrics. In Prometheus," \
+      "count({job=\"prometheus-agent\", __name__=~\"jvm_.*|process_.*\"}) found no series before, and now finds" \
+      "about 80."
     point "Compare part 3, where the targets changed and nothing restarted. That's why the agent chart keeps its" \
       "targets in a ConfigMap of their own, which the agent re-reads in place."
-    point "If $0 agent-dashboard was running, it ended with the old pod; run it again. The new pod's dashboard is" \
-      "on too, since --reuse-values keeps the chart's dashboard.enabled from values/agent.yaml."
+    point "If $0 agent-dashboard was running, it fails at the next request, since it reached the old pod; run it" \
+      "again. The new pod's dashboard is on too, since --reuse-values keeps the chart's dashboard.enabled from" \
+      "values/agent.yaml."
     follow_up "To undo it, run" "$0 restore-config"
   fi
   rm -f "$config"
@@ -786,8 +801,8 @@ tour_contents() {
     printf '  %2d. %s (%s min)\n' "$n" "${entry#* }" "${entry%% *}"
   done
   echo
-  wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
-    "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. To start from another part, run" \
+    "$MAKE_NAME tour PART=<n>, or $0 tour <n>."
   pause "Press Enter to start"
 }
 
@@ -919,7 +934,8 @@ cmd_tour() {
     instruct "Open the proxy dashboard's Activity view." \
       "It shows the old pod's paths leaving and the new pod's arriving."
     instruct "Run ./demo.sh agent-dashboard again, and open the agent's Activity view: $AGENT_DASHBOARD_URL/activity" \
-      "The port-forward in the second terminal ended with the old pod, since it reaches one pod. The new pod's" \
+      "The port-forward in the second terminal reached the old pod, so it fails at the next request after the" \
+      "replacement, with error: lost connection to pod; if it's still running, press Ctrl-C first. The new pod's" \
       "Activity view lists only its own start: it connected, and registered every path. The proxy saw both pods," \
       "but each agent sees only its own."
   fi
