@@ -113,7 +113,7 @@ times on this page were measured on an Apple-silicon laptop.
 ./demo.sh clusters    # pp-target's Services, each cluster's Helm release, and Prometheus's one job
 ```
 
-```text
+``` { .text .pp-output title="./demo.sh clusters" }
 $ kubectl --context kind-pp-target get services --all-namespaces
 NAMESPACE     NAME               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                  AGE
 apps          orders             ClusterIP   10.96.135.38    <none>        8000/TCP                 2m27s
@@ -204,7 +204,7 @@ is the demo's: a discovery source in the agent that read Services itself would r
 ./demo.sh delete-agent-pod   # deletes the agent's pod; its Deployment starts another
 ```
 
-```text
+``` { .text .pp-output title="./demo.sh delete-agent-pod" }
 $ kubectl --context kind-pp-target -n monitoring delete pod prometheus-agent-8588c987c9-dqns8 --wait=false
 pod "prometheus-agent-8588c987c9-dqns8" deleted from monitoring namespace
 prometheus-agent-8588c987c9-llglr is on the dashboard with its paths, 2s after
@@ -231,7 +231,7 @@ again, and the new pod's Activity view lists only its own start, where the proxy
 ./demo.sh change-config      # helm upgrade with a change to the agent's main config
 ```
 
-```text
+``` { .text .pp-output title="./demo.sh change-config" }
 Upgrading the prometheus-agent chart with config/agent-change.conf added to its main config
 $ helm --kube-context kind-pp-target --namespace monitoring upgrade prometheus-agent ../../charts/prometheus-agent \
     --reuse-values --set-file config=<(cat config/agent.conf config/agent-change.conf)

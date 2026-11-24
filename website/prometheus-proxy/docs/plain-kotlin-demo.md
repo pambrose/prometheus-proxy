@@ -142,7 +142,7 @@ client's `prometheus-metrics-core` for its metrics. On every pull request, the p
 `./demo.sh sockets` shows that compose publishes no port for the oven, and reads what the oven's JVM has open from
 `/proc` in its container, the JVM being its process 1:
 
-```text
+``` { .text .pp-output title="./demo.sh sockets" }
 What the oven's JVM has open, from /proc in its container
   Listening:   nothing: no TCP port, UDP socket, or Unix socket
   Connected:   out to Redis, on port 6379
@@ -185,7 +185,7 @@ change to its config. The three clear the backlog in about two minutes.
 `./demo.sh scale 1` stops the other two with SIGTERM, as a scale-in on Kubernetes or ECS does, and shows each one's
 log:
 
-```text
+``` { .text .pp-output title="A stopped oven's log" }
 Stopping: the oven finishes the order it's baking, and takes no more
 The oven is off, after baking 20 orders
 Disconnected from proxy at proxy:50051
@@ -207,14 +207,14 @@ log, and stop it, and each oven bakes:
 - `./demo.sh no-proxy` starts one without `PROMETHEUS_PROXY`, as on a developer's machine. `startIfConfigured()` doesn't
   start the agent, and logs one line:
 
-    ```text
+    ``` { .text .pp-output title="The oven's log" }
     INFO  i.p.a.EmbeddedAgentConfig - No proxy is set, so the Prometheus agent stays off
     ```
 
 - `./demo.sh bad-cert` starts one whose `PROMETHEUS_PROXY_CERT` isn't a certificate. The agent rejects it as it starts,
   and `startIfConfigured()` logs why, naming the variable, without the PEM, and returns `null`:
 
-    ```text
+    ``` { .text .pp-output title="The oven's log" }
     ERROR i.p.a.EmbeddedAgentConfig - The Prometheus agent could not start, so it stays off: Invalid configuration:
       PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem: trustCertCollectionPem
       is neither PEM text nor the base64 of PEM text
@@ -225,7 +225,7 @@ log, and stop it, and each oven bakes:
   set, and keeps retrying, at DEBUG. In the 20 seconds the scenario watches, the proxy refuses it about seven times,
   which `proxy_agent_auth_failures_total` counts, and the oven logs one:
 
-    ```text
+    ``` { .text .pp-output title="The oven's log" }
     ERROR i.p.a.AgentGrpcService - The proxy at proxy:50051 refused the agent's token (StatusException:
       UNAUTHENTICATED: Missing or invalid agent token). Check that the agent has a token the proxy accepts: it's given
       with --agent_token, AGENT_TOKEN, or agent.agentToken, in that order of precedence, which an embedded agent's

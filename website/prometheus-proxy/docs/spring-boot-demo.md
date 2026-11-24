@@ -164,7 +164,7 @@ adds connected and registered.
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. The agent, in the
 last lifecycle phase, stops first, and the roastery's log shows the order:
 
-```text
+``` { .text .pp-output title="The roastery's log" }
 Stopping the Prometheus agent roastery-1.0
 Commencing graceful shutdown. Waiting for active requests to complete
 Graceful shutdown complete

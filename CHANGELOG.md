@@ -326,6 +326,9 @@ All notable changes to this project are documented in this file.
 - The docs site's callouts take the dashboard's colors: amber for a warning and red for a danger, with a note, a tip,
   and an info neutral, where the theme gave each a hue of its own and a warning the orange that marks a link. Light
   mode's code sits on the dashboard's cool gray, and its links are a shade darker, so they keep 4.5:1 on every ground
+- The docs site sets what a command prints apart from what you type: the Quick Start's Verify step and the demo pages
+  show a log or a script's output outlined, under a label naming whose output it is, with no Copy button, and Verify
+  shows the agent's log with the dashboard's ok light and its HTTP statuses as the dashboard's green and red pills
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering
