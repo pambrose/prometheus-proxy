@@ -12,6 +12,13 @@ Azure Container Apps and the proxy on another host, run on one machine.
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Ktor Demo's containers
+  accDescr {
+    On the proxy host, Grafana on port 3300 reads Prometheus on 9390, which scrapes /coffee_shop_metrics through the
+    proxy, dashboard 8394. On the app's platform, a load balancer on 8390 sends traffic to the coffee shop, a Ktor
+    app, whose embedded agent, dashboard 8395, reads its registry and connects to the proxy over gRPC with TLS and a
+    token.
+  }
   G[Grafana :3300] --> P[Prometheus :9390]
   P -->|scrapes /coffee_shop_metrics| Proxy[Proxy, dashboard :8394]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app below.

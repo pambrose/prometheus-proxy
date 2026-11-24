@@ -23,6 +23,13 @@ environment, and the [Spring Boot Demo](spring-boot-demo.md) in a Spring Boot ap
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Plain Kotlin Demo's containers
+  accDescr {
+    On the proxy host, Grafana on port 3600 reads Prometheus on 9690, which reads the proxy's service discovery and
+    scrapes each oven's path through the proxy, dashboard 8694. One to five ovens, each a plain Kotlin program with
+    no port in a container and JVM of its own, take orders from a Redis queue the counter pushes them to. Each
+    oven's embedded agent reads its registry in-process and connects out to the proxy over gRPC with a token.
+  }
   G[Grafana :3600] --> P[Prometheus :9690]
   P -->|reads /discovery, scrapes each oven's path| Proxy[Proxy, dashboard :8694]
   %% The agents connect out to the proxy, so their arrow points back. The invisible link keeps the ovens below.

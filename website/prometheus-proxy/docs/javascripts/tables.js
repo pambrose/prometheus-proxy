@@ -1,7 +1,7 @@
 // The reference tables' identifiers break only where they divide: after a dot, an underscore, or a slash.
 //
 // A table's flags, config keys, and environment variables (--agent_port, proxy.admin.debugEnabled, PROXY_CONFIG) are
-// long single words, and the CLI Reference's five columns of them don't fit the page's column. The theme broke them at
+// long single words, and the CLI Reference's columns of them don't fit the page's column. The theme broke them at
 // any letter to fit, as --agent_por|t or proxy.admin.enabl|ed; held on one line instead, they squeezed each table's
 // description column to a word wide. This splits each word of a table's code after each dot, underscore, and slash
 // that a letter or digit follows, holds each piece on one line (stylesheets/extra.css), and puts a break opportunity, a

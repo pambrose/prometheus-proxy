@@ -329,6 +329,11 @@ All notable changes to this project are documented in this file.
 - The docs site sets what a command prints apart from what you type: the Quick Start's Verify step and the demo pages
   show a log or a script's output outlined, under a label naming whose output it is, with no Copy button, and Verify
   shows the agent's log with the dashboard's ok light and its HTTP statuses as the dashboard's green and red pills
+- The docs site's diagrams each have a text equivalent, which a screen reader reads with the diagram's button, named
+  by the diagram's title, where it heard only "Enlarge the diagram". A diagram too tall to show whole at its size on
+  the page opens at up to twice that size, to scroll through, where it opened smaller than on the page. The
+  screenshots' lightbox marks the focused button in the site's orange, where GLightbox drew a navy ring the overlay all
+  but hid, and Tab no longer stops on each line of a code block
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

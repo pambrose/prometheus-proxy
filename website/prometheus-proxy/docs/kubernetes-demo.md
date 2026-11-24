@@ -16,6 +16,14 @@ as Docker: see [What you need](#what-you-need).
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Kubernetes Demo's two clusters
+  accDescr {
+    In pp-monitoring, outside the firewall, Prometheus on port 9290 discovers and scrapes paths through the
+    prometheus-proxy chart, dashboard 8294. In pp-target, behind the firewall with nothing exposed, the prometheus-
+    agent chart, dashboard 8295 through kubectl port-forward, connects out over gRPC to a NodePort of the proxy and
+    fetches metrics over HTTP from the orders, payments, shipping, and search services. targets-sync watches those
+    services and writes the agent-targets ConfigMap, which is mounted in the agent.
+  }
   P[Prometheus :9290] -->|discovery and scrapes| Proxy[prometheus-proxy chart, dashboard :8294]
   %% The agent connects out, across Docker's kind network, so its arrow points back. The invisible link keeps the
   %% target cluster below the monitoring one.

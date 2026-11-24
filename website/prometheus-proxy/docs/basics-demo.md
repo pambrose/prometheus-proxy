@@ -12,6 +12,13 @@ screenshot on this page comes from it.
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Basics Demo's containers
+  accDescr {
+    Outside the firewall, Grafana on port 3000 reads Prometheus on 9090, which discovers and scrapes paths through
+    the proxy, whose dashboard is on 8094. Inside the firewall, three agents, agent-east, agent-west-1, and agent-
+    west-2, with dashboards on 8095 to 8097, each connect out to the proxy over gRPC and fetch metrics over HTTP
+    from demo-app's simulated services.
+  }
   G[Grafana :3000] --> P[Prometheus :9090]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8094]
   %% Each agent connects out to the proxy, so its arrow points back. The invisible links keep the agents

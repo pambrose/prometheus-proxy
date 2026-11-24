@@ -17,6 +17,14 @@ of each failure: the endpoint it's trying, the error it got from each, and what 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Network Demo's containers
+  accDescr {
+    Outside the firewall, Grafana on port 3100 reads Prometheus on 9190, which discovers and scrapes paths through
+    the primary proxy, dashboard 8194, and the standby proxy, dashboard 8195. Inside the firewall, agent-hq and
+    agent-branch, dashboards 8196 and 8197, connect over gRPC through a simulated WAN, Toxiproxy, whose primary
+    links reach the primary proxy and whose standby links reach the standby, and they fetch metrics over HTTP from
+    network-app's simulated services.
+  }
   G[Grafana :3100] --> P[Prometheus :9190]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8194]
   P -->|discovery and scrapes| Standby[Standby proxy, dashboard :8195]

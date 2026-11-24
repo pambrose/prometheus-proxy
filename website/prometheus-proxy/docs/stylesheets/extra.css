@@ -220,6 +220,14 @@ body {
   color: var(--pp-crit);
 }
 
+/* The screenshots' lightbox is dark in either scheme, so its buttons' focus ring is the dark scheme's accent, 7:1 on
+   its overlay, where GLightbox drew a navy one the overlay all but hid, and the browser's own for a focus the site's
+   script moves (javascripts/screenshots.js). */
+.glightbox-container .gbtn:is(.focused, :focus-visible) {
+  outline: 2px solid #ff7043;
+  outline-offset: 2px;
+}
+
 /* A table's text a step up from the theme's 12.8px. */
 .md-typeset table:not([class]) {
   font-size: 0.7rem;
