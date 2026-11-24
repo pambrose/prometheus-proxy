@@ -1,5 +1,38 @@
 {% extends "base.html" %}
 
+{#- A link to a page, pasted into a chat or a social post, previews with the page's heading, the site's description, and
+    the site's card (images/social-card.png, rendered from social-card/card.html), where it showed a bare URL. The
+    heading, as the theme's table of contents finds it, says more than the page's short title in the navigation
+    ("Agent Configuration", not "Agent"). The image and the page's address are absolute, as a preview fetches them
+    from outside the site. #}
+{% block extrahead %}
+  {%- set heading = page.toc | first if page.toc else none -%}
+  {%- set preview_title = page.meta.title if page.meta and page.meta.title
+        else (heading.title | striptags if heading and heading.level == 1
+        else (page.title | striptags if page.title else config.site_name)) -%}
+  {%- set preview_description = page.meta.description if page.meta and page.meta.description
+        else config.site_description -%}
+  {%- set preview_image = config.site_url ~ "images/social-card.png" -%}
+  {%- set preview_alt = "Prometheus Proxy: Prometheus scrapes endpoints behind a firewall, still by pull" -%}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name | e }}">
+  <meta property="og:title" content="{{ preview_title | e }}">
+  <meta property="og:description" content="{{ preview_description | e }}">
+  {%- if page.canonical_url %}
+  <meta property="og:url" content="{{ page.canonical_url }}">
+  {%- endif %}
+  <meta property="og:image" content="{{ preview_image }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{ preview_alt | e }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ preview_title | e }}">
+  <meta name="twitter:description" content="{{ preview_description | e }}">
+  <meta name="twitter:image" content="{{ preview_image }}">
+  <meta name="twitter:image:alt" content="{{ preview_alt | e }}">
+{% endblock %}
+
 {% block scripts %}
   {#- Ahead of the theme's bundle, which draws the Mermaid diagrams: it has them wait for the page's font, so their
       labels fit, and opens each full size with a click. See the script's header. #}

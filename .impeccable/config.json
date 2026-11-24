@@ -9,6 +9,15 @@
         "rule": "design-system-font-size",
         "value": "16px",
         "createdAt": "2026-11-24T02:44:04.060Z"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "website/prometheus-proxy/social-card/card.html"
+        ],
+        "createdAt": "2026-11-24T03:41:18.268Z",
+        "reason": "User confirmed: the social card is a 1200x630 preview image that feeds shrink to a thumbnail, so its text needs display sizes, not the dashboard's type ramp"
       }
     ]
   }
