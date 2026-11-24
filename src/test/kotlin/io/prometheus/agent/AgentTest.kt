@@ -40,6 +40,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldStartWith
+import io.kotest.matchers.types.shouldNotBeInstanceOf
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.mockk.every
@@ -241,6 +242,35 @@ class AgentTest : StringSpec() {
           agent.metricsService.isRunning.shouldBeFalse()
           cacheFailure?.message.orEmpty() shouldContain "closed"
           stopFailure.shouldBeNull()
+        }
+      }
+    }
+
+    // An initBlock runs inside the constructor, before the properties declared below the init block are set, so a
+    // startup it began that failed released through a still-null list: a NullPointerException hid the failure, and the
+    // gRPC channel and HTTP client cache stayed open. The harness starts its agents this way.
+    "a startup that fails in initBlock should throw its own failure and release what the agent holds" {
+      PrometheusRegistry.defaultRegistry.clear()
+      ServerSocket(0).use { takenAdminPort ->
+        val args = ["--proxy", "localhost:$PROXY_AGENT_PORT", "--admin", "--admin_port", "${takenAdminPort.localPort}"]
+        var built: Agent? = null
+        val failure =
+          shouldThrow<IllegalStateException> {
+            Agent(
+              options = agentOptions(args, exitOnMissingConfig = false),
+              inProcessServerName = "agent-test-${System.nanoTime()}",
+              testMode = true,
+            ) {
+              built = this
+              startSync()
+            }
+          }
+
+        val agent = built.shouldNotBeNull().also { createdAgents += it }
+        assertSoftly {
+          failure.cause.shouldNotBeInstanceOf<NullPointerException>()
+          agent.state() shouldBe Service.State.FAILED
+          agent.grpcService.channel.isShutdown.shouldBeTrue()
         }
       }
     }

@@ -874,16 +874,19 @@ class Agent(
 
   // What this class's constructor built and startup started, released whether startup failed or the agent stops. The
   // tracing closes after the services that trace, and before super.shutDown() stops the reporter, which sends what's
-  // still queued. listOf, not a collection literal: Dokka 2.3.0 can't translate a public class's property initialized
-  // with one, and fails the KDoc build.
-  private val releaseSteps: List<() -> Unit> =
-    listOf(
-      { dashboardService?.stopSync() },
-      { grpcService.shutDown() },
-      { runBlocking { agentHttpService.close() } },
-      { if (tracingHolder.isInitialized()) tracing?.close() },
-      { closeMetrics() },
-    )
+  // still queued. A getter: an initBlock that starts the agent runs in the init block, before a property declared down
+  // here is set, so a startup that failed there released through a null list, and a NullPointerException took the
+  // failure's place. listOf, not a collection literal: Dokka 2.3.0 can't translate a public class's property
+  // initialized with one, and fails the KDoc build.
+  private val releaseSteps: List<() -> Unit>
+    get() =
+      listOf(
+        { dashboardService?.stopSync() },
+        { grpcService.shutDown() },
+        { runBlocking { agentHttpService.close() } },
+        { if (tracingHolder.isInitialized()) tracing?.close() },
+        { closeMetrics() },
+      )
 
   // super.startUp() stops the admin, metrics and Zipkin services it started when it fails (common-utils 5.0.0), but
   // not the gRPC channel and HTTP client cache this class's constructor built. Each step runs whether or not the

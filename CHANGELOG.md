@@ -173,6 +173,9 @@ All notable changes to this project are documented in this file.
   against the hover's ground, under WCAG AA's 4.5:1; it now steps up to the secondary ink, at 6.14:1 and 6.28:1
 - The discovery entries the agent skips, which its debug page and dashboard read from other threads, are now published
   to them safely
+- An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a
+  `NullPointerException` in place of a startup failure, such as an admin or metrics port already in use, and left its
+  gRPC channel and HTTP client cache open. It now throws the failure and releases them
 
 ### Behavior Changes
 
