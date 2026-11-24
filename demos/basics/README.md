@@ -75,27 +75,27 @@ make down    # stops it and removes its containers, network, and volume
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, and Python images, which takes a few minutes. After
 that it starts in under a minute, even without a network connection.
 
-| What | URL |
-|---|---|
-| Proxy dashboard | <http://localhost:8094/dashboard> |
-| agent-east's dashboard | <http://localhost:8095/dashboard> |
-| agent-west-1's and agent-west-2's dashboards | <http://localhost:8096/dashboard>, <http://localhost:8097/dashboard> |
-| agent-rogue's and agent-east-copy's dashboards, while their scenarios run | <http://localhost:8098/dashboard>, <http://localhost:8099/dashboard> |
-| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3000> |
-| Prometheus | <http://localhost:9090> (alerts at `/alerts`) |
-| The proxy's service discovery | <http://localhost:8080/discovery> |
+| What | URL | Port variable |
+|---|---|---|
+| Proxy dashboard | <http://localhost:8094/dashboard> | `DEMO_DASHBOARD_PORT` |
+| agent-east's dashboard | <http://localhost:8095/dashboard> | `DEMO_AGENT_EAST_DASHBOARD_PORT` |
+| agent-west-1's dashboard | <http://localhost:8096/dashboard> | `DEMO_AGENT_WEST_1_DASHBOARD_PORT` |
+| agent-west-2's dashboard | <http://localhost:8097/dashboard> | `DEMO_AGENT_WEST_2_DASHBOARD_PORT` |
+| agent-rogue's dashboard, while its scenario runs | <http://localhost:8098/dashboard> | `DEMO_AGENT_ROGUE_DASHBOARD_PORT` |
+| agent-east-copy's dashboard, while its scenario runs | <http://localhost:8099/dashboard> | `DEMO_AGENT_EAST_COPY_DASHBOARD_PORT` |
+| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3000> | `DEMO_GRAFANA_PORT` |
+| Prometheus | <http://localhost:9090> (alerts at `/alerts`) | `DEMO_PROMETHEUS_PORT` |
+| The proxy's service discovery | <http://localhost:8080/discovery> | `DEMO_PROXY_PORT` |
 
 `make open` opens the proxy's dashboard, agent-east's, Grafana, and Prometheus's alerts in your browser.
 
-If a port is already taken, move it by setting its variable for `make up`, for example `DEMO_GRAFANA_PORT=3001 make up`.
+If a port is already taken, set its variable from the table for `make up`, for example `DEMO_GRAFANA_PORT=3001 make up`.
 `make up` saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its
-line there to go back to the default. The variables are `DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`,
-`DEMO_PROMETHEUS_PORT`, and `DEMO_PROXY_PORT`, and for the agents' dashboards `DEMO_AGENT_EAST_DASHBOARD_PORT`,
-`DEMO_AGENT_WEST_1_DASHBOARD_PORT`, `DEMO_AGENT_WEST_2_DASHBOARD_PORT`, `DEMO_AGENT_ROGUE_DASHBOARD_PORT`, and
-`DEMO_AGENT_EAST_COPY_DASHBOARD_PORT`; the proxy dashboard's links into Prometheus and Grafana keep the default ports
-(`config/proxy.conf`). Every port binds to `127.0.0.1` only. The
-dashboards run without a login, but for the proxy's in part 11 of the tour, and Grafana uses its default admin
-password, so this setup is for a laptop, not for anything shared.
+line there to go back to the default. The proxy dashboard's links into Prometheus and Grafana keep the default ports
+(`config/proxy.conf`).
+
+Every port binds to `127.0.0.1` only. The dashboards run without a login, but for the proxy's in part 11 of the tour,
+and Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
 
 ## What's running
 

@@ -67,24 +67,25 @@ the agent's and Python's, which takes a few minutes. After that, `make up` on ru
 `make down` deletes the clusters, and the images inside them, so the next `make up` needs a network connection again.
 To show it without a network connection, run `make up` once beforehand and leave it running.
 
-| What | URL |
-|---|---|
-| Proxy dashboard | <http://localhost:8294/dashboard> |
-| Agent dashboard | <http://localhost:8295/dashboard>, while `./demo.sh agent-dashboard` runs |
-| Prometheus | <http://localhost:9290> (targets at `/targets`) |
-| The proxy's service discovery | <http://localhost:8280/discovery> |
-| `kubectl` | `kubectl --context kind-pp-monitoring …` and `kubectl --context kind-pp-target …` |
+| What | URL | Port variable |
+|---|---|---|
+| Proxy dashboard | <http://localhost:8294/dashboard> | `KUBERNETES_DEMO_DASHBOARD_PORT` |
+| Agent dashboard | <http://localhost:8295/dashboard>, while `./demo.sh agent-dashboard` runs | `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` |
+| Prometheus | <http://localhost:9290> (targets at `/targets`) | `KUBERNETES_DEMO_PROMETHEUS_PORT` |
+| The proxy's service discovery | <http://localhost:8280/discovery> | `KUBERNETES_DEMO_PROXY_PORT` |
+| `kubectl` | `kubectl --context kind-pp-monitoring …` and `kubectl --context kind-pp-target …` | — |
 
 `make open` opens the proxy dashboard and Prometheus's targets in your browser.
 
-Every port is the basics demo's plus 200, so all the demos can run at once. kind publishes them when it creates
-`pp-monitoring`, so to move one that's already taken, set its variable for the `make up` that creates the clusters, for
-example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You set it once: every command after reads the ports back from
-the running cluster. The variables are `KUBERNETES_DEMO_DASHBOARD_PORT`, `KUBERNETES_DEMO_PROMETHEUS_PORT`, and
-`KUBERNETES_DEMO_PROXY_PORT`; the dashboard's link into Prometheus keeps the default port (`config/proxy.conf`). A
-running cluster keeps the ports it was created with, and `make up` says so if a variable asks for another: `make down`
-first, and the next `make up` creates the clusters with the ports you set, or the defaults. Every port binds to
-`127.0.0.1` only. The dashboard runs without its login, so this setup is for a laptop, not for anything shared.
+Each port is the basics demo's plus 200, so the demos can run side by side. kind publishes the ports, through NodePort
+Services in the monitoring cluster, when it creates `pp-monitoring`, so if one is already taken, set its variable from
+the table for the `make up` that creates the clusters, for example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You
+set it once: every command after reads the ports back from the running cluster, which keeps them until `make down`
+deletes it, and `make up` says so if a variable asks for another. The proxy dashboard's link into Prometheus keeps the
+default port (`config/proxy.conf`).
+
+Every port binds to `127.0.0.1` only. The dashboard runs without its login, so this setup is for a laptop, not for
+anything shared.
 
 The agent dashboard's port, 8295, isn't one kind publishes: `pp-target` publishes none, and the agent chart leaves the
 dashboard off the agent's Service. `./demo.sh agent-dashboard` reaches it as the chart's notes tell an operator to,

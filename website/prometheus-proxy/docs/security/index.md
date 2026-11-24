@@ -142,8 +142,9 @@ legacy token and a `proxy.auth` identity cannot take over each other's live path
 
 ### Onboarding a team
 
-A team gets an identity of its own: a name, a token, and the path patterns its agents may register. Adding one takes
-a proxy restart, so plan it as a change to shared infrastructure.
+When several teams share one proxy, each team, meaning a group that runs its own agents, gets an identity of its own:
+a name, a token, and the path patterns its agents may register. Adding a team takes a proxy restart, so plan it as a
+change to shared infrastructure.
 
 1. **Choose the team's path prefix and make its token.** Agree on a prefix every path of the team's will start with,
    such as `team_b_`, and generate a token:

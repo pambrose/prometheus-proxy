@@ -762,7 +762,8 @@ cmd_tour() {
 
   if part 2 "An agent keeps several gRPC streams open to the proxy, and nginx closes a stream that carries nothing" \
     "for 60 seconds. Here you see what that does to an agent from before the keepalives, and how raising" \
-    "nginx's timeouts fixes it."; then
+    "nginx's timeouts fixes it. It matters if the proxy or any agent you run behind a reverse proxy is on 4.6.0" \
+    "or earlier, as while you upgrade one before the other: keepalives flow only when both ends are newer."; then
     instruct "Open the proxy dashboard's Activity view: $DASHBOARD_URL/activity" \
       "About once a minute, agent-legacy disconnects, with the reason 'Stream terminated (transport filter" \
       "disabled)', and connects again a few seconds later. agent-current doesn't. An agent's stream for results sent" \

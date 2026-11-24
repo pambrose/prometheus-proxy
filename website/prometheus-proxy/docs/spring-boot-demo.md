@@ -79,21 +79,22 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the roastery, which takes a few minutes. After that it starts in under
 a minute.
 
-| What | URL |
-|---|---|
-| The roastery's status page | <http://localhost:8490> |
-| Proxy dashboard | <http://localhost:8494/dashboard> |
-| The roastery agent's dashboard | <http://localhost:8495/dashboard> |
-| Prometheus | <http://localhost:9490> |
-| The roastery's metrics, through the proxy | <http://localhost:8480/roastery_metrics> |
+| What | URL | Port variable |
+|---|---|---|
+| The roastery's status page | <http://localhost:8490> | `SPRING_BOOT_DEMO_APP_PORT` |
+| Proxy dashboard | <http://localhost:8494/dashboard> | `SPRING_BOOT_DEMO_DASHBOARD_PORT` |
+| The roastery agent's dashboard | <http://localhost:8495/dashboard> | `SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT` |
+| Prometheus | <http://localhost:9490> | `SPRING_BOOT_DEMO_PROMETHEUS_PORT` |
+| The roastery's metrics, through the proxy | <http://localhost:8480/roastery_metrics> | `SPRING_BOOT_DEMO_PROXY_PORT` |
 
-The ports are the [Basics Demo](basics-demo.md)'s plus 400, so the demos can run side by side. Every port binds to
-`127.0.0.1` only. To move one that is already taken, set its variable for `make up`: `SPRING_BOOT_DEMO_APP_PORT`,
-`SPRING_BOOT_DEMO_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_PROMETHEUS_PORT`, or
-`SPRING_BOOT_DEMO_PROXY_PORT`, for example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`. `make up` saves it in the demo's
-`docker/.env`, which every later command and docker compose read, so you set it once; delete its line there to go back
-to the default. The same file holds the demo's secrets, the repository's test certificates and a token, which `make up`
-writes the first time it runs.
+Each port is the [Basics Demo](basics-demo.md)'s plus 400, so the demos can run side by side. If a port is already
+taken, set its variable from the table for `make up`, for example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`. `make up`
+saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its line there
+to go back to the default. The same file holds the demo's secrets, the repository's test certificates and a token, which
+`make up` writes the first time it runs.
+
+Every port binds to `127.0.0.1` only. The agent's dashboard has no password, so the agent warns at startup, in the
+roastery's log, that it listens on all interfaces without a login: the container's, which only `127.0.0.1` reaches.
 
 ## What's running
 

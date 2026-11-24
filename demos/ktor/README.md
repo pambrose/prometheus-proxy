@@ -73,28 +73,27 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the coffee shop, which takes a few minutes. After that it starts in
 under a minute.
 
-| What | URL |
-|---|---|
-| The coffee shop, through its load balancer | <http://localhost:8390> |
-| Proxy dashboard | <http://localhost:8394/dashboard> |
-| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3300> |
-| Prometheus | <http://localhost:9390> (alerts at `/alerts`) |
-| The coffee shop's metrics, through the proxy | <http://localhost:8380/coffee_shop_metrics> |
-| The coffee shop agent's dashboard | <http://localhost:8395/dashboard> |
-| Version 1.1's agent's dashboard, after `./demo.sh deploy` | <http://localhost:8396/dashboard> |
-| The agent's `/debug` page, on its admin port | <http://localhost:8393/debug> |
+| What | URL | Port variable |
+|---|---|---|
+| The coffee shop, through its load balancer | <http://localhost:8390> | `KTOR_DEMO_APP_PORT` |
+| Proxy dashboard | <http://localhost:8394/dashboard> | `KTOR_DEMO_DASHBOARD_PORT` |
+| Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3300> | `KTOR_DEMO_GRAFANA_PORT` |
+| Prometheus | <http://localhost:9390> (alerts at `/alerts`) | `KTOR_DEMO_PROMETHEUS_PORT` |
+| The coffee shop's metrics, through the proxy | <http://localhost:8380/coffee_shop_metrics> | `KTOR_DEMO_PROXY_PORT` |
+| The coffee shop agent's dashboard | <http://localhost:8395/dashboard> | `KTOR_DEMO_AGENT_DASHBOARD_PORT` |
+| Version 1.1's agent's dashboard, after `./demo.sh deploy` | <http://localhost:8396/dashboard> | `KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT` |
+| The agent's `/debug` page, on its admin port | <http://localhost:8393/debug> | `KTOR_DEMO_AGENT_ADMIN_PORT` |
 
 `make open` opens the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in your
 browser.
 
-The ports are the basics demo's plus 300, so the demos can run side by side. If a port is already taken, move it by
-setting its variable for `make up`, for example `KTOR_DEMO_GRAFANA_PORT=3301 make up`. `make up` saves it in
-`docker/.env`, which every later command and docker compose read, so you set it once; delete its line there to go back
-to the default. The variables are `KTOR_DEMO_APP_PORT`, `KTOR_DEMO_DASHBOARD_PORT`, `KTOR_DEMO_GRAFANA_PORT`,
-`KTOR_DEMO_PROMETHEUS_PORT`, `KTOR_DEMO_PROXY_PORT`, `KTOR_DEMO_AGENT_ADMIN_PORT`, `KTOR_DEMO_AGENT_DASHBOARD_PORT`,
-and `KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT`. Every port binds to `127.0.0.1` only. The dashboards and the agent's admin
-endpoints have no authentication, the coffee shop's knobs need none, and Grafana uses its default admin password, so
-this setup is for a laptop, not for anything shared.
+Each port is the basics demo's plus 300, so the demos can run side by side. If a port is already taken, set its variable
+from the table for `make up`, for example `KTOR_DEMO_GRAFANA_PORT=3301 make up`. `make up` saves it in `docker/.env`,
+which every later command and docker compose read, so you set it once; delete its line there to go back to the default.
+
+Every port binds to `127.0.0.1` only. The dashboards and the agent's admin endpoints have no authentication, the coffee
+shop's knobs need none, and Grafana uses its default admin password, so this setup is for a laptop, not for anything
+shared.
 
 ## What's running
 
