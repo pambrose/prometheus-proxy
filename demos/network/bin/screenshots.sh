@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Network Demo page (website/prometheus-proxy/docs/network-demo.md) from the
 # running demo: it plays the page's scenarios, parts 2 to 7, captures the dashboards, Grafana, and Zipkin in headless
-# Chrome at twice the pixel density, each a whole window, and writes lossless WebP to
+# Chrome at three times the pixel density, each a whole window, and writes lossless WebP to
 # website/prometheus-proxy/docs/images/network-demo/: <name>.webp in the dark theme and <name>-light.webp in the light
 # one, which the page shows by the reader's theme. Zipkin's UI has one theme, so its shot is taken once. It puts the
 # demo back to normal when it finishes, or when it fails.
@@ -40,6 +40,10 @@ SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 WIDTH=1280
 HEIGHT=800
 THEMES=(dark light)
+# SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
+# opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
+# (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
+SCALE=3
 # The recent scrapes an agent's detail shows in the window, about, which a shot of one waits for.
 DETAIL_ROWS=13
 
@@ -212,14 +216,14 @@ connect_traces() {
 # Whether Zipkin has at least this many of them: one for each reconnect.
 has_connect_traces() { (($(connect_traces | wc -l) >= $1)); }
 
-# Captures a page at WIDTH x the given CSS height, at 2x, in a theme: the dashboard follows the browser's preferred
+# Captures a page at WIDTH x the given CSS height, at SCALE, in a theme: the dashboard follows the browser's preferred
 # color scheme. Grafana and Zipkin render after loading their data, so their captures get a longer virtual-time budget.
 capture() {
   local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor=2 --blink-settings=preferredColorScheme=$scheme \
+    --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
     --window-size="$WIDTH,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
@@ -233,7 +237,7 @@ shoot_fixed() {
   for theme in "${THEMES[@]}"; do
     png="$WORK/$(named "$name" "$theme").png"
     capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
-    magick "$png" -crop "$((WIDTH * 2))x$((HEIGHT * 2))+0+0" +repage "$png"
+    magick "$png" -crop "$((WIDTH * SCALE))x$((HEIGHT * SCALE))+0+0" +repage "$png"
   done
 }
 
