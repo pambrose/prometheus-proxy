@@ -47,9 +47,32 @@ const textNodes = (element) => {
   return nodes;
 };
 
+// The reference tables, by their header row's first two cells: the CLI Reference's options, and a configuration page's
+// settings, which stylesheets/extra.css lays out at a desktop's width. A table's class would take it out of the
+// theme's table styles, which select a table with none, so the kind is a data attribute.
+const KINDS = new Map([
+  ["CLI Option / Env Var|Property", "options"],
+  ["Setting / CLI Option / Env Var|Default", "settings"],
+  ["Setting|Default", "settings"],
+]);
+
+const kindOf = (table) =>
+  KINDS.get(
+    [...table.querySelectorAll("thead th")]
+      .slice(0, 2)
+      .map((th) => th.textContent.trim())
+      .join("|"),
+  );
+
 document$.subscribe(() => {
   for (const code of document.querySelectorAll(".md-typeset table:not([class]) code:not([data-breaks])")) {
     code.dataset.breaks = "";
     textNodes(code).forEach(makeBreakable);
+  }
+  for (const table of document.querySelectorAll(".md-typeset table:not([class]):not([data-kind])")) {
+    const kind = kindOf(table);
+    if (kind) {
+      table.dataset.kind = kind;
+    }
   }
 });

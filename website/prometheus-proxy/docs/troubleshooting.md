@@ -31,8 +31,6 @@ Before diving into a specific symptom, gather signal:
    mode; see [Monitoring](monitoring.md) for the full table.
 5. **Read the logs.** The proxy and agent log the reason for most rejections at WARN/INFO.
 
----
-
 ## The proxy or agent exits at startup
 
 ### `java.net.BindException: Address already in use`
@@ -69,8 +67,6 @@ Settings that fail startup since 4.5.0:
   ([Links](web-dashboard.md#links)).
 - A negative `proxy.internal.maxTargetUrlLength` or `proxy.internal.maxAgentsPerIdentity`.
 
----
-
 ## Agent can't connect to the proxy
 
 ### Connection refused / timeouts on the gRPC port
@@ -100,8 +96,6 @@ The proxy has an agent token configured and the agent's token is missing or does
   `fromEnvironment()` reads from `PROMETHEUS_AGENT_TOKEN`; the agent's own `AGENT_TOKEN`, if the app's environment has
   one, takes precedence over it. An empty token on the proxy disables the check only when no `proxy.auth` identities
   are configured. See [Security](security/index.md#agent-authentication-pre-shared-token).
-
----
 
 ## Prometheus scrape returns an error
 
@@ -180,8 +174,6 @@ normally shows up as `upstream_timed_out`.
   scrapes run in parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
 - See [Performance Tuning](advanced.md#performance-tuning).
 
----
-
 ## Registration is rejected
 
 The proxy logs the reason and returns `valid = false` to the agent:
@@ -229,8 +221,6 @@ paths from the other's config, or stop it. Earlier versions disconnected the dis
 paths from each other in turn, each reconnecting every few seconds. Agents and proxies predating the notice show a
 taken-over path as registered on the displaced agent, which takes it back only when it reconnects.
 
----
-
 ## TLS handshake failures
 
 - **Untrusted certificate** — the side validating the cert needs the signing CA in its
@@ -245,8 +235,6 @@ taken-over path as registered on the displaced agent, which takes it back only w
 
 See [TLS Setup](security/tls.md) and the [example configs](examples.md).
 
----
-
 ## Metrics or admin endpoints don't answer
 
 The endpoints are **disabled by default**, so their ports refuse connections until you enable them with
@@ -258,8 +246,6 @@ An agent's metrics at a proxy path (`agent.metrics.proxyPath`, or an embedded ag
 port: scrape them through the proxy, at `http://<proxy-host>:8080/<path>`, which answers only while the agent is
 connected and has registered the path. A 404 there means it hasn't; the agent's startup log names the path, and
 [Port or Proxy Path](monitoring.md#port-or-proxy-path) says when the port suits instead.
-
----
 
 ## Disconnects aren't detected behind Nginx
 
@@ -320,8 +306,6 @@ in once another agent leaves.
   agents from using up another's room. See
   [Transport Filter](configuration/proxy.md#transport-filter).
 
----
-
 ## The dashboard behind a reverse proxy stays on reconnecting…
 
 The page loads, but its live indicator never turns green, and Scrape now may say `Origin not allowed`. With a login,
@@ -331,8 +315,6 @@ the login form says it instead, and the page never loads.
   `Host` header that doesn't match the browser's `Origin`, which the dashboard refuses.
 - **Fix:** pass both headers, over HTTP/1.1, and the browser's `Host`, or list the dashboard's public address in
   `proxy.dashboard.allowedOrigins`; see [Behind a reverse proxy](web-dashboard.md#behind-a-reverse-proxy).
-
----
 
 ## Still stuck?
 

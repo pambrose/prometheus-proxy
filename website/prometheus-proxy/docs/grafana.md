@@ -31,10 +31,10 @@ drop-down; it starts on Grafana's default datasource:
 
 ```bash
 # Proxy dashboard
-curl -O https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/grafana/prometheus-proxy.json
+curl -O https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/grafana/prometheus-proxy.json
 
 # Agents dashboard
-curl -O https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/grafana/prometheus-agents.json
+curl -O https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/grafana/prometheus-agents.json
 ```
 
 What each dashboard section watches is described under

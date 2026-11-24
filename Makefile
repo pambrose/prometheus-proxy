@@ -52,7 +52,9 @@ MAVEN_ARTIFACTS_PATTERN := ($(subst $(space),|,$(MAVEN_ARTIFACTS)))
 RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud-proxy/docker-compose.yml \
 	charts/prometheus-proxy/Chart.yaml charts/prometheus-agent/Chart.yaml \
 	website/prometheus-proxy/docs/getting-started.md website/prometheus-proxy/docs/index.md \
-	website/prometheus-proxy/docs/docker.md src/test/kotlin/website/DockerExamples.txt \
+	website/prometheus-proxy/docs/docker.md website/prometheus-proxy/docs/grafana.md \
+	src/test/kotlin/website/DockerExamples.txt src/test/kotlin/website/GettingStarted.txt \
+	src/test/kotlin/website/ConfigExamples.txt \
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md \
 	demos/basics/README.md demos/network/README.md demos/nginx/README.md demos/kubernetes/README.md \
@@ -640,7 +642,7 @@ release-check: _require-version _check-gpg-env _check-maven-central-env _check-d
 	@prev=$$(awk -v h='## [$(VERSION)]' 'f && /^## \[/ { sub(/^## \[/, ""); sub(/\].*/, ""); print; exit } index($$0, h) == 1 { f = 1 }' CHANGELOG.md); \
 	[ -n "$$prev" ] || { echo "ERROR: CHANGELOG.md has no release section below [$(VERSION)]" >&2; exit 1; }; \
 	p=$$(printf '%s' "$$prev" | sed 's/\./\\./g'); \
-	stale=$$(grep -nE "(prometheus-(proxy|agent)|$(MAVEN_ARTIFACTS_PATTERN)):$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal|--branch $$p( |\$$)" \
+	stale=$$(grep -nE "(prometheus-(proxy|agent)|$(MAVEN_ARTIFACTS_PATTERN)):$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal|--branch $$p( |\$$)|/prometheus-proxy/$$p/" \
 		$(RELEASE_VERSION_FILES) | sed 's/^/  /'); \
 	[ -z "$$stale" ] || { printf 'ERROR: still at the previous version, %s (step 2 of docs/RELEASE.md):\n%s\n' "$$prev" "$$stale" >&2; exit 1; }
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \

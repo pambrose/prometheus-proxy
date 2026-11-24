@@ -135,8 +135,6 @@ Since 4.3.0, three more groups are available, also off by default:
   `-XX:NativeMemoryTracking=summary` (for the Docker images, set `JAVA_TOOL_OPTIONS=-XX:NativeMemoryTracking=summary`).
   Without it the flag exports nothing, and tracking adds some overhead of its own.
 
----
-
 ## Proxy Metrics
 
 ### Counters
@@ -271,8 +269,6 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 script's Basic Auth, as `failure`, and a login refused because its address made too many wrong ones as `blocked`. A
 script's right Basic Auth logs in on every request, so it isn't counted.
 
----
-
 ## Agent Metrics
 
 ### Counters
@@ -354,8 +350,6 @@ An agent's metrics reach Prometheus through the proxy unless it scrapes the agen
 can't report `agent_connected` as 0: its job's `up` goes to 0 instead. A scraper on the agent's own network can read
 it from its metrics port throughout (see [Port or Proxy Path](#port-or-proxy-path)).
 
----
-
 ## Metric Flow
 
 ```text
@@ -381,8 +375,6 @@ Prometheus --- HTTP GET ---> Proxy                        Agent
                               |
                 <-- HTTP response ---
 ```
-
----
 
 ## PromQL Examples
 
@@ -416,8 +408,6 @@ Prometheus --- HTTP GET ---> Proxy                        Agent
 --8<-- "MonitoringExamples.txt:promql-agent-latency"
 ```
 
----
-
 ## Admin Endpoints
 
 ```text
@@ -430,8 +420,6 @@ Enable admin endpoints:
 java -jar prometheus-proxy.jar --admin
 java -jar prometheus-agent.jar --admin
 ```
-
----
 
 ## Grafana Dashboards
 

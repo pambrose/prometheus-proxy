@@ -207,12 +207,12 @@ proxy) and register the paths for which they will provide data. One proxy can wo
    ```bash
    java -jar prometheus-agent.jar \
      -Dagent.proxy.hostname=mymachine.local \
-     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
 
    # or use --proxy option
    java -jar prometheus-agent.jar \
      --proxy mymachine.local \
-     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
    ```
 
 4. Configure Prometheus to scrape from the proxy at `http://mymachine.local:8080`
@@ -234,7 +234,7 @@ proxy) and register the paths for which they will provide data. One proxy can wo
 
    # On the agent's machine
    nohup java -jar prometheus-agent.jar --proxy mymachine.local \
-     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf > agent.log 2>&1 &
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf > agent.log 2>&1 &
    echo $! > agent.pid
 
    # Later, to follow a log or stop a process
@@ -257,7 +257,7 @@ prometheus-proxy
 # On the agent's machine, inside the firewall
 brew install pambrose/tap/prometheus-agent
 prometheus-agent --proxy mymachine.local \
-  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
 ```
 
 To keep either one running in the background, edit its config in `$(brew --prefix)/etc/` and start it with
@@ -309,7 +309,7 @@ docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
 # Start agent, in another terminal
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
-  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf' \
   pambrose/prometheus-agent:4.7.0
 
 # Scrape the proxy's and the agent's own metrics through the proxy
@@ -342,7 +342,7 @@ docker rm prometheus-proxy              # remove the stopped container
 ### Agent Configuration
 
 If the prometheus-proxy were running on a machine named *mymachine.local* and the `agent.pathConfigs` value in the
-[myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) config file had
+[myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf) config file had
 the contents:
 
 ```hocon
@@ -460,14 +460,14 @@ docker run --detach --name prometheus-agent --restart unless-stopped \
         --network prometheus-proxy-net \
         -p 8083:8083 -p 8093:8093 \
         --env PROXY_HOSTNAME=prometheus-proxy \
-        --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf' \
         pambrose/prometheus-agent:4.7.0
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
 that scrapes through them (`docker compose -f etc/compose/proxy.yml up`).
 
-Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
+Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy's scrape port on *localhost* at:
 
 * http://localhost:8080/proxy_metrics

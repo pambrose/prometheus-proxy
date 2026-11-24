@@ -1,6 +1,6 @@
 ---
-# The page has two sections, which a scroll finds; its Try It command, one line of which is mostly a long URL, takes
-# the table of contents' width to fit
+# The page has two sections, which a scroll finds; its Try It agent command, one line of which is mostly a long URL,
+# takes the table of contents' width to fit
 hide:
   - toc
 ---
@@ -33,30 +33,32 @@ which fetches the endpoint and sends the result back over its connection.
 
 ## Try It
 
-On one machine, with Docker. The agent serves two paths through the proxy, the proxy's metrics and its own, so there's
-nothing else to set up.
+On one machine, with Docker, in three terminals. The agent serves two paths through the proxy, the proxy's metrics and
+its own, so there's nothing else to set up.
 
-```bash
+```bash title="Terminal 1: the proxy"
 # A network for the two containers, so the agent reaches the proxy by its name
 docker network create prometheus-proxy-net
 
-# Start the proxy
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
   -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
   pambrose/prometheus-proxy:4.7.0
+```
 
-# Start the agent, in another terminal
+```bash title="Terminal 2: the agent"
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
-  --env AGENT_CONFIG=https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf \
+  --env AGENT_CONFIG=https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf \
   pambrose/prometheus-agent:4.7.0
+```
 
-# Scrape the proxy's and the agent's own metrics through the proxy
+```bash title="Terminal 3: scrape through the proxy"
 curl http://localhost:8080/proxy_metrics
 curl http://localhost:8080/agent_metrics
 ```
 
 Each `curl` prints metrics in Prometheus's text format, which the agent fetched and sent back through the proxy.
+Ctrl+C stops each container, and `docker network rm prometheus-proxy-net` then removes the network.
 { .pp-result }
 
 ## Next Steps
@@ -66,7 +68,8 @@ Each `curl` prints metrics in Prometheus's text format, which the agent fetched 
 - [Try a demo](basics-demo.md)
 
     The Basics Demo runs the proxy, three agents behind a simulated firewall, Prometheus, and Grafana with one
-    `make up`, and a guided tour walks you through it. Six more are under Demos.
+    `make up`, and a guided tour walks you through it. The Demos page lists six more: a simulated WAN, nginx,
+    Kubernetes, and three apps that embed the agent.
 
 - [Install it](getting-started.md)
 

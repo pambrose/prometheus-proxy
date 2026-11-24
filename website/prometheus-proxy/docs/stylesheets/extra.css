@@ -352,6 +352,56 @@ body {
   background-color: var(--md-accent-fg-color--transparent);
 }
 
+/* The reference tables, which javascripts/tables.js marks by their header row, span the column and share their
+   columns' widths, so each table's columns line up under the last's, where the theme sized each table to its own
+   rows; a value wider than its column widens it. In them an option or a variable never breaks, and a key breaks only
+   before its last part, as proxy.grpc. / permitKeepAliveWithoutCalls: a break opportunity tables.js puts in is
+   gone when its <wbr> isn't displayed, as white-space can't take it away. On a narrower screen, the tables size
+   their columns to their rows and break where tables.js allows. */
+@media screen and (min-width: 45em) {
+  .md-typeset__table:has(> table[data-kind="settings"]) {
+    display: block;
+  }
+
+  .md-typeset table[data-kind="settings"] {
+    display: table;
+    width: 100%;
+  }
+
+  .md-typeset table[data-kind="settings"] th:first-child {
+    width: 40%;
+  }
+
+  .md-typeset table[data-kind="settings"] td:first-child > :not(:first-child) wbr,
+  .md-typeset table[data-kind="settings"] td:first-child > :first-child wbr:not(:last-of-type) {
+    display: none;
+  }
+}
+
+@media screen and (min-width: 60em) {
+  .md-typeset__table:has(> table[data-kind="options"]) {
+    display: block;
+  }
+
+  .md-typeset table[data-kind="options"] {
+    display: table;
+    width: 100%;
+  }
+
+  .md-typeset table[data-kind="options"] th:nth-child(-n + 2) {
+    width: 30%;
+  }
+
+  .md-typeset table[data-kind="options"] th:nth-child(3) {
+    width: 10%;
+  }
+
+  .md-typeset table[data-kind="options"] td:first-child wbr,
+  .md-typeset table[data-kind="options"] td:nth-child(2) wbr:not(:last-of-type) {
+    display: none;
+  }
+}
+
 /* The home page reads as three groups, each set close within: what the project does (the title, the lede, the flow
    line, and how it works), Try It, and Next Steps. The headings' space is the only wide one, so space means a new
    group. */

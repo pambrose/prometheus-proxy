@@ -142,7 +142,7 @@ docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
 # Start agent, in another terminal (in a real deployment, on another host, with PROXY_HOSTNAME the proxy's address)
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
-  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf' \
   pambrose/prometheus-agent:4.7.0
 
 # Scrape the proxy's and the agent's own metrics through the proxy

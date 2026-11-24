@@ -6,8 +6,9 @@ icon: lucide/cable
 
 The agent runs inside the firewall and scrapes local metrics endpoints on behalf of the proxy.
 
-The settings below are keys in the agent's config file. Most also have a command-line option and an environment
-variable, which the [CLI Reference](../cli-reference.md#agent-options) gives in each key's row.
+The settings below are keys in the agent's config file. Each section's table gives a key over its command-line option
+and environment variable, where it has them, and links the key to its row in the
+[CLI Reference](../cli-reference.md#agent-options). A key with neither is set in the config file, or with `-D`.
 
 ## Path Configs
 
@@ -79,9 +80,9 @@ paths against a **watched file** at runtime — no restart, and paths that did n
 ```hocon
 agent {
   discovery {
-    enabled = true                                     // Enable dynamic discovery
-    file.path = "/etc/prometheus-proxy/targets.conf"   // HOCON/JSON list of paths
-    reconcileIntervalSecs = 30                         // Poll and full-resync interval
+    enabled = true
+    file.path = "/etc/prometheus-proxy/targets.conf"  // A list of paths
+    reconcileIntervalSecs = 30                        // Poll, and resync
   }
 }
 ```
@@ -151,10 +152,17 @@ agent {
 }
 ```
 
-Or specify on the command line:
+| Setting / CLI Option / Env Var                                                                          | Default     | Description                                                            |
+|:--------------------------------------------------------------------------------------------------------|:------------|:-----------------------------------------------------------------------|
+| [`agent.proxy.hostname`](../cli-reference.md#agent.proxy.hostname)<br>`--proxy, -p`<br>`PROXY_HOSTNAME` | "localhost" | The proxy's host, or `host:port`; used when `endpoints` is empty       |
+| `agent.proxy.port`                                                                                      | 50051       | The proxy's port, and the port of an `endpoints` entry that names none |
+| `agent.proxy.endpoints`                                                                                 | []          | Proxies to fail over between, in order ([below](#proxy-failover))      |
+
+Or on the command line:
 
 ```bash
-java -jar prometheus-agent.jar --proxy proxy-host.example.com:50051 --config agent.conf
+java -jar prometheus-agent.jar \
+  --proxy proxy-host.example.com:50051 --config agent.conf
 ```
 
 ### Proxy failover
@@ -168,10 +176,10 @@ reconnect. Only one connection is active at a time.
 ```hocon
 agent {
   proxy {
-    port = 50051                                    // Default port for entries that omit one
+    port = 50051                    // For an entry that names no port
     endpoints = [
-      "proxy-a.example.com:50051",                  // Tried first
-      "proxy-b.example.com:50051"                   // Used when proxy-a is unreachable
+      "proxy-a.example.com:50051",  // Tried first
+      "proxy-b.example.com:50051"   // Used when proxy-a is unreachable
     ]
   }
 }
@@ -181,7 +189,8 @@ agent {
 **replaces** `endpoints` entirely rather than adding to it:
 
 ```bash
-java -jar prometheus-agent.jar --proxy proxy-a.example.com:50051,proxy-b.example.com:50051
+java -jar prometheus-agent.jar \
+  --proxy proxy-a.example.com:50051,proxy-b.example.com:50051
 ```
 
 A single value behaves exactly as it always has, so existing configurations need no change. `hostname`
@@ -219,6 +228,15 @@ Configure how the agent makes HTTP requests to scrape endpoints:
 --8<-- "ConfigExamples.txt:agent-http-config"
 ```
 
+| Setting / CLI Option / Env Var                                                                                                                                      | Default | Description                                                                             |
+|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------|:----------------------------------------------------------------------------------------|
+| [`agent.http.maxConcurrentClients`](../cli-reference.md#agent.http.maxConcurrentClients)<br>`--max_concurrent_clients`<br>`MAX_CONCURRENT_CLIENTS`                  | 1       | Scrapes the agent runs at once                                                          |
+| [`agent.http.clientTimeoutSecs`](../cli-reference.md#agent.http.clientTimeoutSecs)<br>`--client_timeout_secs`<br>`CLIENT_TIMEOUT_SECS`                              | 90      | Seconds a request to a target may take                                                  |
+| [`agent.http.maxContentLengthMBytes`](../cli-reference.md#agent.http.maxContentLengthMBytes)<br>`--max_content_length_mbytes`                                       | 10      | Largest scrape response, in megabytes                                                   |
+| [`agent.http.enableTrustAllX509Certificates`](../cli-reference.md#agent.http.enableTrustAllX509Certificates)<br>`--trust_all_x509`<br>`TRUST_ALL_X509_CERTIFICATES` | false   | Skip certificate verification on HTTPS targets                                          |
+| [`agent.http.trustStorePath`](../cli-reference.md#agent.http.trustStorePath)<br>`--https_truststore`<br>`HTTPS_TRUST_STORE_PATH`                                    | ""      | A JKS or PKCS12 trust store for HTTPS targets a private CA signed; empty uses the JDK's |
+| [`agent.http.trustStorePassword`](../cli-reference.md#agent.http.trustStorePassword)<br>`--https_truststore_password`<br>`HTTPS_TRUST_STORE_PASSWORD`               | ""      | The trust store's password                                                              |
+
 ### HTTP Client Cache
 
 The agent caches HTTP clients keyed by the basic auth credentials in a target's URL, if any. Configure
@@ -227,6 +245,13 @@ cache behavior:
 ```hocon
 --8<-- "ConfigExamples.txt:agent-cache-config"
 ```
+
+| Setting / CLI Option / Env Var                                                                                                                                                            | Default | Description                      |
+|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------|:---------------------------------|
+| [`agent.http.clientCache.maxSize`](../cli-reference.md#agent.http.clientCache.maxSize)<br>`--max_cache_size`<br>`MAX_CLIENT_CACHE_SIZE`                                                   | 100     | HTTP clients kept                |
+| [`agent.http.clientCache.maxAgeMins`](../cli-reference.md#agent.http.clientCache.maxAgeMins)<br>`--max_cache_age_mins`<br>`MAX_CLIENT_CACHE_AGE_MINS`                                     | 30      | Minutes a client is kept         |
+| [`agent.http.clientCache.maxIdleMins`](../cli-reference.md#agent.http.clientCache.maxIdleMins)<br>`--max_cache_idle_mins`<br>`MAX_CLIENT_CACHE_IDLE_MINS`                                 | 10      | Minutes an unused client is kept |
+| [`agent.http.clientCache.cleanupIntervalMins`](../cli-reference.md#agent.http.clientCache.cleanupIntervalMins)<br>`--cache_cleanup_interval_mins`<br>`CLIENT_CACHE_CLEANUP_INTERVAL_MINS` | 5       | Minutes between cleanups         |
 
 ## Scraping HTTPS Endpoints
 
@@ -244,12 +269,12 @@ loaded as the agent starts, so a missing file or a wrong password fails the agen
 --8<-- "ConfigExamples.txt:agent-scrape-config"
 ```
 
-| Setting / CLI Option / Env Var                                                                                  | Default | Description                                                                                                                                                                               |
-|:----------------------------------------------------------------------------------------------------------------|:--------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`scrapeTimeoutSecs`](../cli-reference.md#agent.scrapeTimeoutSecs)<br>`--timeout`<br>`SCRAPE_TIMEOUT_SECS`      | 15      | Total time allowed for a scrape including retries; a shorter Prometheus scrape timeout wins, and the agent sends whichever applies to the target in `X-Prometheus-Scrape-Timeout-Seconds` |
-| [`scrapeMaxRetries`](../cli-reference.md#agent.scrapeMaxRetries)<br>`--max_retries`<br>`SCRAPE_MAX_RETRIES`     | 0       | Maximum retries; 0 disables retries                                                                                                                                                       |
-| [`chunkContentSizeKbs`](../cli-reference.md#agent.chunkContentSizeKbs)<br>`--chunk`<br>`CHUNK_CONTENT_SIZE_KBS` | 32      | Gzipped result chunked at this size; at most 4032                                                                                                                                         |
-| [`minGzipSizeBytes`](../cli-reference.md#agent.minGzipSizeBytes)<br>`--gzip`<br>`MIN_GZIP_SIZE_BYTES`           | 512     | Gzip-compressed above this; at most 4128768                                                                                                                                               |
+| Setting / CLI Option / Env Var                                                                                        | Default | Description                                                                                                                                                                               |
+|:----------------------------------------------------------------------------------------------------------------------|:--------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`agent.scrapeTimeoutSecs`](../cli-reference.md#agent.scrapeTimeoutSecs)<br>`--timeout`<br>`SCRAPE_TIMEOUT_SECS`      | 15      | Total time allowed for a scrape including retries; a shorter Prometheus scrape timeout wins, and the agent sends whichever applies to the target in `X-Prometheus-Scrape-Timeout-Seconds` |
+| [`agent.scrapeMaxRetries`](../cli-reference.md#agent.scrapeMaxRetries)<br>`--max_retries`<br>`SCRAPE_MAX_RETRIES`     | 0       | Maximum retries; 0 disables retries                                                                                                                                                       |
+| [`agent.chunkContentSizeKbs`](../cli-reference.md#agent.chunkContentSizeKbs)<br>`--chunk`<br>`CHUNK_CONTENT_SIZE_KBS` | 32      | Gzipped result chunked at this size; at most 4032                                                                                                                                         |
+| [`agent.minGzipSizeBytes`](../cli-reference.md#agent.minGzipSizeBytes)<br>`--gzip`<br>`MIN_GZIP_SIZE_BYTES`           | 512     | Gzip-compressed above this; at most 4128768                                                                                                                                               |
 
 !!! note "Text exposition formats only"
 
@@ -386,6 +411,8 @@ agents to register the same path:
 --8<-- "ConfigExamples.txt:consolidated-mode"
 ```
 
+Also set with [`--consolidated`](../cli-reference.md#agent.consolidated) or `CONSOLIDATED=true`.
+
 This is useful for redundancy — if one agent goes down, the others keep serving the path. Give each
 agent its own instance of the service to scrape: the proxy merges every agent's answer into each scrape,
 so agents that scrape the same endpoint send each series twice. See
@@ -399,7 +426,7 @@ Give agents descriptive names for easier identification in logs and metrics:
 java -jar prometheus-agent.jar --name production-agent-01 --config agent.conf
 ```
 
-Or in the config file:
+Or with `AGENT_NAME`, or in the config file:
 
 ```hocon
 agent.name = "production-agent-01"
@@ -418,11 +445,27 @@ agent {
   dashboard {
     enabled = true
     port = 8095
-    host = "127.0.0.1"          // Keeps it on the agent's host; the default, "0.0.0.0", is every interface
-    password = ""               // Requires a login; better set as DASHBOARD_PASSWORD
+    host = "127.0.0.1"   // Keeps it on the agent's host
+    password = ""        // Requires a login; better set as DASHBOARD_PASSWORD
   }
 }
 ```
+
+| Setting / CLI Option / Env Var                                                                                   | Default     | Description                                                                       |
+|:-----------------------------------------------------------------------------------------------------------------|:------------|:----------------------------------------------------------------------------------|
+| [`agent.dashboard.enabled`](../cli-reference.md#agent.dashboard.enabled)<br>`--dashboard`<br>`DASHBOARD_ENABLED` | false       | Serve the agent's dashboard                                                       |
+| [`agent.dashboard.port`](../cli-reference.md#agent.dashboard.port)<br>`--dashboard_port`<br>`DASHBOARD_PORT`     | 8095        | Its port                                                                          |
+| [`agent.dashboard.path`](../cli-reference.md#agent.dashboard.path)<br>`--dashboard_path`<br>`DASHBOARD_PATH`     | "dashboard" | Its base path                                                                     |
+| [`agent.dashboard.host`](../cli-reference.md#agent.dashboard.host)<br>`--dashboard_host`<br>`DASHBOARD_HOST`     | "0.0.0.0"   | The address it listens on; `"127.0.0.1"` keeps it on the agent's host             |
+| [`agent.dashboard.username`](../cli-reference.md#agent.dashboard.username)<br>`DASHBOARD_USERNAME`               | "admin"     | The login's username, once a password is set                                      |
+| [`agent.dashboard.password`](../cli-reference.md#agent.dashboard.password)<br>`DASHBOARD_PASSWORD`               |             | Requires a login, from the login page or as Basic Auth; empty leaves it open      |
+| `agent.dashboard.refreshIntervalSecs`                                                                            | 2           | Seconds between pushes of values that drift rather than change, such as uptime    |
+| `agent.dashboard.pathHistorySize`                                                                                | 20          | Scrapes kept per path, for its history strip and Recent scrapes                   |
+| `agent.dashboard.scrapeNowEnabled`                                                                               | true        | A Scrape now button on each path, which scrapes its target from the agent at once |
+| `agent.dashboard.activityLogSize`                                                                                | 500         | Lines kept in the Activity feed                                                   |
+| `agent.dashboard.maxSessions`                                                                                    | 50          | Open WebSocket sessions; more are closed                                          |
+| `agent.dashboard.allowedOrigins`                                                                                 | []          | Browser origins allowed besides the dashboard's own host                          |
+| `agent.dashboard.allowedHosts`                                                                                   | []          | Host names the dashboard answers to; empty turns the check off                    |
 
 ## The Agent's Own Metrics
 
@@ -432,16 +475,23 @@ turned on, on a metrics port of their own, at a path of the proxy's, or both:
 ```hocon
 agent {
   metrics {
-    enabled = true                    // The metrics port, METRICS_ENABLED
+    enabled = true
     port = 8083
 
-    // Since 4.7.0: served through the proxy at /east_agent_metrics, read in-process, with no port
-    // (--metrics_proxy_path, METRICS_PROXY_PATH)
+    // Since 4.7.0: served through the proxy at /east_agent_metrics
     proxyPath = east_agent_metrics
-    proxyPathLabels = "{\"region\": \"east\"}"   // Optional: the path's service discovery labels
+    proxyPathLabels = "{\"region\": \"east\"}"
   }
 }
 ```
+
+| Setting / CLI Option / Env Var                                                                                             | Default   | Description                                                                      |
+|:---------------------------------------------------------------------------------------------------------------------------|:----------|:---------------------------------------------------------------------------------|
+| [`agent.metrics.enabled`](../cli-reference.md#agent.metrics.enabled)<br>`--metrics, -e`<br>`METRICS_ENABLED`               | false     | Serve the agent's metrics on a port of their own                                 |
+| [`agent.metrics.port`](../cli-reference.md#agent.metrics.port)<br>`--metrics_port, -m`<br>`METRICS_PORT`                   | 8083      | Their port                                                                       |
+| `agent.metrics.path`                                                                                                       | "metrics" | Their path on that port                                                          |
+| [`agent.metrics.proxyPath`](../cli-reference.md#agent.metrics.proxyPath)<br>`--metrics_proxy_path`<br>`METRICS_PROXY_PATH` | ""        | A proxy path the agent serves its metrics at, read in-process; empty serves none |
+| `agent.metrics.proxyPathLabels`                                                                                            | "{}"      | The proxy path's service discovery labels, as JSON                               |
 
 Prometheus, outside the firewall, reaches the agent's metrics only through the proxy, so the proxy path is all most
 agents need. The port suits a scraper on the agent's own network, which can read the agent while it can't reach the

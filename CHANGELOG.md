@@ -323,14 +323,17 @@ All notable changes to this project are documented in this file.
   showed through them, and the screenshots' lightbox is GLightbox 3.3.1 served from the site, where the theme fetched
   whichever 3.x was newest from unpkg
 - The docs site's home page says what the project does in one line, draws it in another (Prometheus and the proxy on
-  one side of the firewall, the agent on the other), gives one Docker command to try it, and offers three ways on: a
-  demo, the Quick Start, and onboarding a team. It dropped its list of eleven benefits, its use cases, and its six
+  one side of the firewall, the agent on the other), gives the Docker commands to try it, a block for each of the three
+  terminals they run in, and offers three ways on: a demo, the Quick Start, and onboarding a team. It dropped its list of eleven benefits, its use cases, and its six
   cards, and its JAR tab, which ran a jar it never downloaded
-- The docs site's CLI Reference stacks each setting's option over its environment variable, so its descriptions fit
-  a line, and gives each row an anchor named by its config key (`#agent.scrapeTimeoutSecs`), marked when a link lands
-  on it. The configuration pages point there for each setting's option and variable, the agent's scrape settings give
-  theirs, the proxy's internal settings say they have none, and the pages that name `maxAgentInactivitySecs` link to
-  it. The site's tables take the dashboard's padding
+- The docs site's CLI Reference groups its settings by what they configure (ports, admin and metrics, dashboard, TLS,
+  gRPC, and the rest), in tables whose columns line up, stacks each setting's option over its environment variable,
+  and gives each row an anchor named by its config key (`#agent.scrapeTimeoutSecs`), marked when a link lands on it.
+  Each section of the Agent and Proxy configuration pages has a table of its settings, each key over its option and
+  variable, linked to its row, with its default, and its config example fits the column, where comments ran off its
+  edge. The pages that name `maxAgentInactivitySecs` link to it, and the site's tables take the dashboard's padding
+- The docs site's, the README's, and `llms.txt`'s commands that fetch an example config or a Grafana dashboard fetch
+  it at the release's tag, where they fetched `master`'s, which can be ahead of the images and JARs they run
 - The Security page has the steps for onboarding a team: choose its path prefix and token, add its identity, restart
   the proxy (which reconnects every agent, now said up front rather than in a closing note), hand over the token, and
   confirm the team's agents on the dashboard. Its identity examples read each token from an environment variable,
