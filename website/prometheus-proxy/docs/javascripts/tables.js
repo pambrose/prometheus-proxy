@@ -7,34 +7,49 @@
 // that a letter or digit follows, holds each piece on one line (stylesheets/extra.css), and puts a break opportunity, a
 // <wbr>, between the pieces, so a key wraps as proxy.admin. / debugEnabled, and a flag never after its dashes, as
 // --conf, - / c. The spaces between words still break. A <wbr> adds no character, so copied text is unchanged.
-//
-// The theme's document$ emits for the first page and for every page instant navigation swaps in after it.
+
+/* global document$ */ // The theme's bundle defines it: it emits for the first page and each one instant navigation shows
+
+// A word of code's pieces, split after each dot, underscore, and slash that a letter or digit follows
+const pieces = (word) => word.split(/(?<=[._/])(?=[A-Za-z0-9])/);
+
+// A word of code as its pieces, each held on one line, with a break opportunity between each two
+const breakableWord = (word) => {
+  const fragment = document.createDocumentFragment();
+  pieces(word).forEach((piece, i) => {
+    if (i > 0) {
+      fragment.append(document.createElement("wbr"));
+    }
+    const span = document.createElement("span");
+    span.className = "md-table-key";
+    span.textContent = piece;
+    fragment.append(span);
+  });
+  return fragment;
+};
+
+// A text node of code, its words made breakable, and the spaces between them left as they are
+const makeBreakable = (text) => {
+  const fragment = document.createDocumentFragment();
+  for (const word of text.data.split(/(\s+)/)) {
+    fragment.append(word.trim() ? breakableWord(word) : word);
+  }
+  text.replaceWith(fragment);
+};
+
+// An element's text nodes, all found before any is replaced
+const textNodes = (element) => {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) {
+    nodes.push(walker.currentNode);
+  }
+  return nodes;
+};
+
 document$.subscribe(() => {
   for (const code of document.querySelectorAll(".md-typeset table:not([class]) code:not([data-breaks])")) {
     code.dataset.breaks = "";
-    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
-    const texts = [];
-    while (walker.nextNode()) {
-      texts.push(walker.currentNode);
-    }
-    for (const text of texts) {
-      const fragment = document.createDocumentFragment();
-      for (const word of text.data.split(/(\s+)/)) {
-        if (!word.trim()) {
-          fragment.append(word);
-          continue;
-        }
-        word.split(/(?<=[._/])(?=[A-Za-z0-9])/).forEach((piece, i) => {
-          if (i > 0) {
-            fragment.append(document.createElement("wbr"));
-          }
-          const span = document.createElement("span");
-          span.className = "md-table-key";
-          span.textContent = piece;
-          fragment.append(span);
-        });
-      }
-      text.replaceWith(fragment);
-    }
+    textNodes(code).forEach(makeBreakable);
   }
 });
