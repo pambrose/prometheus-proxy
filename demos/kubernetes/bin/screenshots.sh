@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Kubernetes Demo page (website/prometheus-proxy/docs/kubernetes-demo.md) from
 # the running demo: it plays the page's scenarios, parts 1, 3, and 4, captures the dashboard and Prometheus in headless
-# Chrome at twice the pixel density, each a whole window, and writes lossless WebP to
+# Chrome at three times the pixel density, each a whole window, and writes lossless WebP to
 # website/prometheus-proxy/docs/images/kubernetes-demo/: <name>.webp in the dark theme and <name>-light.webp in the
 # light one, which the page shows by the reader's theme. It puts the demo back to normal when it finishes, or when it
 # fails.
@@ -41,6 +41,10 @@ HEIGHT=800
 TABLE_WIDTH=1680
 TABLE_HEIGHT=1050
 THEMES=(dark light)
+# SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
+# opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
+# (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
+SCALE=3
 
 # A screenshot's file name in a theme: the dark one keeps the plain name.
 named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
@@ -158,15 +162,15 @@ normal() {
   [[ -n "$(agent_id "$(agent_pod)")" ]] && prometheus_has 'count(up == 1) == 4'
 }
 
-# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at 2x, in a theme: the dashboard
-# and Prometheus follow the browser's preferred color scheme. Prometheus renders after loading its data, so its capture
-# gets a longer virtual-time budget.
+# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at SCALE, in a theme: the
+# dashboard and Prometheus follow the browser's preferred color scheme. Prometheus renders after loading its data, so
+# its capture gets a longer virtual-time budget.
 capture() {
   local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor=2 --blink-settings=preferredColorScheme=$scheme \
+    --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
     --window-size="$width,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"

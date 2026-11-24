@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's nginx Demo page (website/prometheus-proxy/docs/nginx-demo.md) from the
-# running demo: it plays the page's scenarios, captures the dashboards in headless Chrome at twice the pixel density,
-# each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/nginx-demo/: <name>.webp in the
-# dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It puts the demo back
-# as `make up` starts it when it finishes, or when it fails.
+# running demo: it plays the page's scenarios, captures the dashboards in headless Chrome at three times the pixel
+# density, each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/nginx-demo/:
+# <name>.webp in the dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It
+# puts the demo back as `make up` starts it when it finishes, or when it fails.
 #
 # `make screenshots`, in demos/nginx, builds the demo from this checkout and starts it first, so the screenshots show
 # the dashboard as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7 (`magick`),
@@ -33,6 +33,10 @@ WAIT_SECS="${WAIT_SECS:-150}"
 WIDTH=1280
 HEIGHT=800
 THEMES=(dark light)
+# SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
+# opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
+# (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
+SCALE=3
 SHOTS=(agents legacy-cut short-timeouts dashboard-reconnecting dashboard-live)
 
 # A screenshot's file name in a theme: the dark one keeps the plain name.
@@ -126,7 +130,7 @@ disconnects() {
 # Whether both agents are connected to the proxy.
 both_connected() { [[ -n "$(agent_id agent-current)" && -n "$(agent_id agent-legacy)" ]]; }
 
-# Captures a page at WIDTH x HEIGHT, at 2x, in a theme: the dashboard follows the browser's preferred color scheme.
+# Captures a page at WIDTH x HEIGHT, at SCALE, in a theme: the dashboard follows the browser's preferred color scheme.
 # The timing is Chrome's: --virtual-time-budget=<ms>, the virtual time the page gets to load and run, or
 # --timeout=<ms>, real time, for a page waiting on something virtual time skips past, such as a WebSocket's answer.
 # capture <url> <png> <theme> <timing>
@@ -135,7 +139,7 @@ capture() {
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor=2 --blink-settings=preferredColorScheme=$scheme \
+    --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
     --window-size="$WIDTH,$HEIGHT" "$timing" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
@@ -150,11 +154,12 @@ shoot() {
 }
 
 # Whether a dashboard shot's live indicator reads reconnecting...: red, where the status bar's indicator starts when it
-# does (at 2x, right of the tabs), and where "live", which is shorter, leaves the bar empty. The page renders as live,
-# and turns red once its WebSocket's first handshake fails; with virtual time, a capture came before that as often as
-# not, so these take real time, and are checked.
+# does (65 x 15 CSS pixels at 722,17, right of the tabs), and where "live", which is shorter, leaves the bar empty. The
+# page renders as live, and turns red once its WebSocket's first handshake fails; with virtual time, a capture came
+# before that as often as not, so these take real time, and are checked.
 shows_reconnecting() {
-  [[ "$(magick "$1" -crop 130x30+1445+35 -format '%[fx:mean.r - mean.g > 0.02]' info:)" == 1 ]]
+  local region="$((65 * SCALE))x$((15 * SCALE))+$((722 * SCALE))+$((17 * SCALE))"
+  [[ "$(magick "$1" -crop "$region" -format '%[fx:mean.r - mean.g > 0.02]' info:)" == 1 ]]
 }
 
 # The dashboard through nginx's stock entrance, in each theme, captured again, up to 5 times, until its indicator
