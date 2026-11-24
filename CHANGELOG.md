@@ -258,6 +258,11 @@ All notable changes to this project are documented in this file.
   60 seconds, so with its defaults an agent reconnected every minute and was briefly without its paths, even while it
   was scraped, since its stream for chunked results is quiet while its results are small. The example drops
   `client_header_timeout`, which doesn't apply to a quiet stream
+- The nginx example and the nginx demo's entrances set `client_max_body_size 0`, and the README and the Advanced
+  Topics, Troubleshooting, and Kubernetes pages say to: nginx counts all an agent sends on a stream as one request
+  body, so with its default limit, 1 MB, every agent is cut off with 413 each time its results add up to a megabyte.
+  The nginx demo also names the path notices among the streams `grpc_read_timeout` covers, which its 504s come from,
+  and its tour waits for the day-long timeouts and the shorter keepalive to take hold
 - The Advanced Topics page says that an `nginx -s reload` leaves a connected agent on an old worker, under the old
   config, for as long as its connection lasts, which with keepalives is indefinitely, and that
   `worker_shutdown_timeout` bounds it; that an agent dialing a TLS-terminating nginx needs a trust collection; and the
