@@ -17,9 +17,10 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
 - **Prefer per-agent identities over one shared token.** A shared token cannot tell agents
   apart, so any holder can register — and silently take over — any path, including one already
   served by another agent. Named identities under `proxy.auth` scope each agent to its own path
-  patterns and can be revoked individually. See
-  [Per-Agent Identities](security/index.md#per-agent-identities-and-path-authorization),
-  including the incremental migration path from a shared token.
+  patterns, and one can be revoked without touching the others, though adding or revoking one takes a proxy
+  restart, which reconnects every agent. See
+  [Per-Agent Identities](security/index.md#per-agent-identities-and-path-authorization), including
+  [onboarding a team](security/index.md#onboarding-a-team) and the incremental migration path from a shared token.
 - **Segment the network** so only trusted agents can reach the gRPC port (`50051`).
 - **Keep the scrape port (`8080`) to Prometheus.** It has no authentication, and whoever reaches it can have
   the agents scrape their targets with their own query string and `Authorization` header. Bind it to a

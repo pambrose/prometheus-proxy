@@ -85,12 +85,15 @@ proxy safe for **multiple teams**, none of which can step on another's paths:
 ```hocon
 proxy {
   auth = [
-    { name = team-a, token = "team-a-token", paths = ["team_a_*"] }
-    { name = team-b, token = "team-b-token", paths = ["team_b_*"] }
-    { name = infra,  token = "infra-token",  paths = [] }  // empty paths = may register any path
+    { name = team-a, token = ${TEAM_A_TOKEN}, paths = ["team_a_*"] }
+    { name = team-b, token = ${TEAM_B_TOKEN}, paths = ["team_b_*"] }
+    { name = infra,  token = ${INFRA_TOKEN},  paths = [] }  // empty paths = may register any path
   ]
 }
 ```
+
+Each token comes from an environment variable of the proxy's, through HOCON substitution, so no token is written in
+the config file; a variable that isn't set stops the proxy at startup.
 
 Each agent presents its identity's token the usual way (`--agent_token`, `AGENT_TOKEN`, or
 `agent.agentToken`) — no agent-side change is needed. The proxy resolves the token to an identity and
@@ -104,16 +107,19 @@ enforces, on every path registration, that the requested path matches one of the
 | Empty `paths` list       | Identity may register **any** path (allow-all)     |
 
 Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
-(e.g. `team_a_*`). A path is checked against the patterns only once it has passed the path limits
+(e.g. `team_a_*`).
+
+A path is checked against the patterns only once it has passed the path limits
 (`proxy.internal.maxPathLength` and the rest; see
 [Proxy configuration](../configuration/proxy.md#internal-settings)), so a path that is too long, has more
 than one segment, or has whitespace, a control character, `?`, or `#` in it is refused as invalid, whatever the
 patterns. A `*` matches any run of characters, line breaks included, so this check is what keeps an agent from
-registering a path that would forge lines in the proxy's log. A path also belongs to the identity whose agent
-serves it: while a live agent serves a path in [consolidated mode](../advanced.md#consolidated-mode) (multiple
-agents serving one path), only an agent of the same identity may join it, so agents that share a consolidated path
-must present one identity. Another identity's registration is refused, and retried, until the path's agents are
-gone, even when its patterns match.
+registering a path that would forge lines in the proxy's log.
+
+A path also belongs to the identity whose agent serves it: while a live agent serves a path in
+[consolidated mode](../advanced.md#consolidated-mode) (multiple agents serving one path), only an agent of the same
+identity may join it, so agents that share a consolidated path must present one identity. Another identity's
+registration is refused, and retried, until the path's agents are gone, even when its patterns match.
 
 A non-consolidated path is protected the same way. While a live agent serves it, only an agent of the
 same identity may take it over, which keeps redeploys working; an agent of another identity is refused
@@ -130,10 +136,52 @@ legacy token and a `proxy.auth` identity cannot take over each other's live path
     proxy gives the legacy shared token in its logs (the dashboard shows it as *shared token*), even when
     `proxy.agentToken` isn't set; the proxy fails fast at startup otherwise.
 
-    A token can still come from the environment, through HOCON substitution: `token = ${TEAM_A_TOKEN}`
-    reads the `TEAM_A_TOKEN` variable, which keeps the tokens out of the config file. In Kubernetes, set the
-    variables from a Secret, or keep the whole config in one (the proxy chart's `existingSecret`); a ConfigMap
-    can be read by anyone who can read ConfigMaps in its namespace.
+    A token can still come from the environment, through HOCON substitution, as in the example above. In
+    Kubernetes, set the variables from a Secret, or keep the whole config in one (the proxy chart's
+    `existingSecret`); a ConfigMap can be read by anyone who can read ConfigMaps in its namespace.
+
+### Onboarding a team
+
+A team gets an identity of its own: a name, a token, and the path patterns its agents may register. Adding one takes
+a proxy restart, so plan it as a change to shared infrastructure.
+
+1. **Choose the team's path prefix and make its token.** Agree on a prefix every path of the team's will start with,
+   such as `team_b_`, and generate a token:
+
+    ```bash
+    openssl rand -hex 32
+    ```
+
+2. **Add the identity to the proxy's config**, with its token read from a variable, and set the variable in the
+   proxy's environment (in Kubernetes, from a Secret):
+
+    ```hocon
+    proxy.auth = [
+      // ...the identities already there
+      {
+        name = team-b
+        token = ${TEAM_B_TOKEN}
+        paths = ["team_b_*"]
+      }
+    ]
+    ```
+
+3. **Restart the proxy.** Identities are read only at startup. Every team's agents lose their connection, reconnect
+   on their own once the proxy is back (gRPC's backoff between attempts grows while it's down, so a quick restart is
+   a quick reconnect), and register their paths again; a scrape that lands in between fails. Once it's up, the
+   [dashboard](../web-dashboard.md)'s **Settings** layout lists `team-b` and its patterns under Agent
+   authentication.
+
+4. **Give the team its token.** Its agents present it as `AGENT_TOKEN` (or `--agent_token`, or `agent.agentToken`),
+   and name their paths with the prefix, as `team_b_orders`.
+
+5. **Confirm the team's agents are in.** The dashboard's **Agents** layout shows each with `team-b` as its identity,
+   and the **Paths** layout, searched with `?q=team-b`, shows the paths they registered. A path outside the team's
+   patterns appears in **Activity** as `rejected`, with the reason, and on the team's
+   [agent dashboard](../agent-dashboard.md), where it's on, as refused.
+
+To take a team's access away, remove its identity and restart the proxy: from then on, its agents are refused with
+`UNAUTHENTICATED`.
 
 ### Migrating from a shared token
 
@@ -156,8 +204,8 @@ it still has allow-all access — the per-agent entries constrain only the agent
 
 !!! note "Current limits"
 
-    Identities are read at startup, so revoking one requires a **proxy restart** — there is no hot
-    reload. Identity derives from the presented token, not from an mTLS client certificate, and
+    Identities are read at startup, so adding or revoking one requires a **proxy restart**, which
+    reconnects every agent (see [Onboarding a team](#onboarding-a-team)) — there is no hot reload. Identity derives from the presented token, not from an mTLS client certificate, and
     tokens come from the proxy's config, written there or substituted from environment variables as
     described above. Compare tokens' operational weight against [mutual TLS](tls.md) when choosing a
     posture; the two can be combined.

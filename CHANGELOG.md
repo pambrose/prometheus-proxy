@@ -319,6 +319,10 @@ All notable changes to this project are documented in this file.
   on it. The configuration pages point there for each setting's option and variable, the agent's scrape settings give
   theirs, the proxy's internal settings say they have none, and the pages that name `maxAgentInactivitySecs` link to
   it. The site's tables take the dashboard's padding
+- The Security page has the steps for onboarding a team: choose its path prefix and token, add its identity, restart
+  the proxy (which reconnects every agent, now said up front rather than in a closing note), hand over the token, and
+  confirm the team's agents on the dashboard. Its identity examples read each token from an environment variable,
+  where they wrote it in the config, and the Running in Production page says that revoking an identity takes a restart
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

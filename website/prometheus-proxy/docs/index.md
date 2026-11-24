@@ -73,7 +73,7 @@ Each `curl` prints metrics in Prometheus's text format, which the agent fetched 
     Run the proxy beside Prometheus and an agent beside your services, from the JAR, Homebrew, Docker, or Helm, and
     point Prometheus at the proxy.
 
-- [Onboard a team](security/index.md#per-agent-identities-and-path-authorization)
+- [Onboard a team](security/index.md#onboarding-a-team)
 
     Give each team's agents an identity of their own, scoped to the paths they may register, so one proxy serves every
     team.
