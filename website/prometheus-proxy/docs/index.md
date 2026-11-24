@@ -19,9 +19,10 @@ gRPC connection initiated from inside the firewall, preserving Prometheus's nati
     - the [Network Demo](network-demo.md), with a simulated WAN between the agents and the proxies;
     - the [nginx Demo](nginx-demo.md), with nginx, a reverse proxy, between the agents and the proxy;
     - the [Kubernetes Demo](kubernetes-demo.md), with the Helm charts on two kind clusters;
-    - the [Embedded Demo](embedded-demo.md), with the agent embedded in a Ktor app;
+    - the [Ktor Demo](ktor-demo.md), with the agent embedded in a Ktor app;
     - the [Spring Boot Demo](spring-boot-demo.md), with the agent embedded in a Spring Boot app;
-    - the [Worker Demo](worker-demo.md), with the agent embedded in a plain Kotlin program with no HTTP server.
+    - the [Plain Kotlin Demo](plain-kotlin-demo.md), with the agent embedded in a plain Kotlin program with no HTTP
+      server.
 
     All but the Kubernetes Demo need only Docker; it also needs kind, `kubectl`, and Helm.
 

@@ -8,7 +8,7 @@ An app on a platform such as ECS, Cloud Run, or Azure Container Apps can't be sc
 platform without opening its metrics to the internet. An [embedded agent](embedded-agent.md) reverses the direction: it
 connects to a proxy beside Prometheus, and answers each scrape by reading the app's own `/metrics`. This page sets
 that up for a JVM app, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway. The
-[Embedded Demo](embedded-demo.md) runs the same setup on one machine.
+[Ktor Demo](ktor-demo.md) runs the same setup on one machine.
 
 ```text
 App platform (ECS, Cloud Run, ...)               Proxy host (AWS, GCP, Azure, DigitalOcean, Railway)
@@ -112,7 +112,7 @@ environment variables. A two-stage Dockerfile, for a Gradle app named `my-app` t
   `JDK_JAVA_OPTIONS`, which the `java` launcher reads, or on its command line.
 - Any JDK 17 or later runs the agent; the stock images run 25.
 
-The [Embedded Demo](embedded-demo.md)'s coffee shop is built the same way.
+The [Ktor Demo](ktor-demo.md)'s coffee shop is built the same way.
 
 ### What the App Platform Must Give It
 

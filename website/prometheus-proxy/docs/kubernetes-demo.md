@@ -275,5 +275,5 @@ original config back, with another replacement.
   agent's targets ConfigMap feeds.
 - [Agent Dashboard](agent-dashboard.md) covers the agent's dashboard: each view, Scrape now, and its login, which the
   agent chart's `dashboard.login.existingSecret` turns on.
-- The [Embedded Demo](embedded-demo.md) runs the agent inside an app instead, a Ktor coffee shop, and the
+- The [Ktor Demo](ktor-demo.md) runs the agent inside an app instead, a Ktor coffee shop, and the
   [Spring Boot Demo](spring-boot-demo.md) inside a Spring Boot app written in Java.

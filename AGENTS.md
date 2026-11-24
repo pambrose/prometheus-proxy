@@ -50,10 +50,10 @@ demo's `up`, `up-local`, or `down` in turn (its `DEMOS` list), and keep going pa
 The nginx demo's `agent-legacy` runs release 4.6.0's agent image on purpose, as an agent from before the stream
 keepalives, so keep it pinned there (Dependabot ignores it).
 
-The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of its own, outside the root build, that
+The Ktor demo's coffee shop, `demos/ktor/app`, is a Gradle project of its own, outside the root build, that
 embeds the agent through the Ktor plugin, which reads its Micrometer registry in-process, and reads
 `gradle/libs.versions.toml` (its Ktor and Micrometer entries are there for it). CI's `consumer-check` job builds it
-against the checkout with `make embedded-demo-check` (`./gradlew -p demos/embedded/app -PlocalProxy build`, a composite
+against the checkout with `make ktor-demo-check` (`./gradlew -p demos/ktor/app -PlocalProxy build`, a composite
 build, which lints it too; its `settings.gradle.kts` substitutes `:ktor-plugin` for `com.pambrose:prometheus-proxy-ktor`,
 since the project's name isn't the artifact's), so a change to the plugin or to `EmbeddedAgentConfig` must keep it
 compiling.
@@ -70,17 +70,17 @@ proxy in the same JVM and scrapes through it, so a change to the starter, or a S
 at runtime, fails there. Its `prometheus-proxy.version` is a release version literal; while the latest release
 predates what the demo shows, `demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` build the library from the checkout.
 
-The worker demo's oven, `demos/worker/app`, is a Gradle project of its own, like the coffee shop: a plain Kotlin program
-with no framework or HTTP server that takes orders from a Redis queue (through Jedis, whose version is in
+The plain Kotlin demo's oven, `demos/plain-kotlin/app`, is a Gradle project of its own, like the coffee shop: a plain
+Kotlin program with no framework or HTTP server that takes orders from a Redis queue (through Jedis, whose version is in
 `gradle/libs.versions.toml` for it) and embeds the agent in its `main` with `embeddedAgent { }`, `fromEnvironment()`,
 `source(path, registry)` of the Prometheus Java client's default registry, `agentMetricsAt(path)`, and
-`startIfConfigured().use { }`. The website's Worker Demo page shows that `main` between snippet markers, and its Java tab
-is `src/test/java/website/WorkerDemoJavaExample.java`, which `make consumer-check` compiles. Each replica's paths are
-named after its container's host name, and Prometheus finds them through the proxy's service discovery, so
-`demo.sh scale` adds and removes targets with no Prometheus change. CI's `consumer-check` job builds it against the
-checkout with `make worker-demo-check` (`./gradlew -p demos/worker/app -PlocalProxy build`, a composite build, which lints
-it too), so a change to `EmbeddedAgentConfig`, `MetricsSource`, or `EmbeddedAgentInfo` must keep it compiling. IntelliJ
-links it as the coffee shop is, its wrapper properties a symlink to the root's.
+`startIfConfigured().use { }`. The website's Plain Kotlin Demo page shows that `main` between snippet markers, and its
+Java tab is `src/test/java/website/PlainKotlinDemoJavaExample.java`, which `make consumer-check` compiles. Each
+replica's paths are named after its container's host name, and Prometheus finds them through the proxy's service
+discovery, so `demo.sh scale` adds and removes targets with no Prometheus change. CI's `consumer-check` job builds it
+against the checkout with `make plain-kotlin-demo-check` (`./gradlew -p demos/plain-kotlin/app -PlocalProxy build`, a
+composite build, which lints it too), so a change to `EmbeddedAgentConfig`, `MetricsSource`, or `EmbeddedAgentInfo` must
+keep it compiling. IntelliJ links it as the coffee shop is, its wrapper properties a symlink to the root's.
 
 The Spring Boot starter, `spring-boot-starter/`, is one of the build's two subprojects (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration

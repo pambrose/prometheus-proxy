@@ -20,7 +20,7 @@ It shows what's particular to Spring Boot:
 The agent's own [dashboard](agent-dashboard.md) is on too, turned on by the environment with no change to the
 roastery, and shows the proxy stopping and starting again from the agent's side.
 
-The [Embedded Demo](embedded-demo.md)'s coffee shop shows the rest with an app in Kotlin.
+The [Ktor Demo](ktor-demo.md)'s coffee shop shows the rest with an app in Kotlin.
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
@@ -193,7 +193,7 @@ Graceful shutdown complete
   and changing the agent's settings in code.
 - [Embedded Agent](embedded-agent.md) covers the API the starter builds on.
 - [Agent Dashboard](agent-dashboard.md) covers the agent's dashboard: its views, and the settings that turn it on.
-- The [Embedded Demo](embedded-demo.md) runs a Kotlin app with the agent embedded under load, with Grafana, alerts, a
+- The [Ktor Demo](ktor-demo.md) runs a Kotlin app with the agent embedded under load, with Grafana, alerts, a
   deploy, the proxy going away, and secrets from the environment.
 - [Cloud Platforms](cloud-platforms.md) sets an app with the agent embedded up for real, and
   [Packaging the App](cloud-platforms.md#packaging-the-app) covers its image.

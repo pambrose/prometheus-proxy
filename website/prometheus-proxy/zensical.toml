@@ -31,9 +31,9 @@ nav = [
     { "Network Demo" = "network-demo.md" },
     { "nginx Demo" = "nginx-demo.md" },
     { "Kubernetes Demo" = "kubernetes-demo.md" },
-    { "Embedded Demo" = "embedded-demo.md" },
+    { "Ktor Demo" = "ktor-demo.md" },
     { "Spring Boot Demo" = "spring-boot-demo.md" },
-    { "Worker Demo" = "worker-demo.md" },
+    { "Plain Kotlin Demo" = "plain-kotlin-demo.md" },
   ]},
   { "Deployment" = [
     { "Docker" = "docker.md" },
@@ -146,6 +146,7 @@ auto_caption = true
 # The old address of a renamed page goes on working: it leaves a page there that sends the reader to the new one.
 [project.plugins.redirects.redirect_maps]
 "demo.md" = "basics-demo.md"
+"embedded-demo.md" = "ktor-demo.md"
 
 # ----------------------------------------------------------------------------
 # Markdown extensions

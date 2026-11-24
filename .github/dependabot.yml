@@ -126,33 +126,33 @@ updates:
       # agent-legacy is release 4.6.0 on purpose: it predates the stream keepalives the demo shows.
       - dependency-name: "pambrose/prometheus-agent"
 
-  # The embedded demo's third-party images (demos/embedded/docker/compose.yml): Grafana and Caddy, the coffee shop's
+  # The Ktor demo's third-party images (demos/ktor/docker/compose.yml): Grafana and Caddy, the coffee shop's
   # load balancer, each pinned by tag and digest. Its proxy image is the latest release's or one built from this
   # checkout, and its coffee shop is built, so there's nothing to update for them here.
   - package-ecosystem: docker-compose
-    directory: /demos/embedded/docker
+    directory: /demos/ktor/docker
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
     groups:
-      embedded-demo:
+      ktor-demo:
         patterns: ["*"]
     ignore:
       # As in the other demos, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
       - dependency-name: "prom/prometheus"
 
-  # The images the embedded demo's coffee shop is built and runs on (demos/embedded/app/Dockerfile): Gradle, on the
+  # The images the Ktor demo's coffee shop is built and runs on (demos/ktor/app/Dockerfile): Gradle, on the
   # JDK the runtime ships, and eclipse-temurin's JRE, both pinned by tag and digest. Its Kotlin, Ktor, and Micrometer
   # come from the repository's version catalog, which the gradle entry above keeps up to date.
   - package-ecosystem: docker
-    directory: /demos/embedded/app
+    directory: /demos/ktor/app
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
     groups:
-      embedded-demo-app:
+      ktor-demo-app:
         patterns: ["*"]
     ignore:
       # Java 25, the LTS the proxy and agent images ship, as in /etc/docker; moving to another line is a deliberate
@@ -198,33 +198,33 @@ updates:
       # The release the demo builds against with make up, which each release bumps (docs/RELEASE.md step 2).
       - dependency-name: "com.pambrose:prometheus-proxy-spring-boot-starter"
 
-  # The worker demo's third-party images (demos/worker/docker/compose.yml): Grafana, and Redis, the bakery's order queue
-  # and the image its counter runs on, each pinned by tag and digest. Its proxy image is the latest release's or one
-  # built from this checkout, and its oven is built, so there's nothing to update for them here.
+  # The plain Kotlin demo's third-party images (demos/plain-kotlin/docker/compose.yml): Grafana, and Redis, the bakery's
+  # order queue and the image its counter runs on, each pinned by tag and digest. Its proxy image is the latest
+  # release's or one built from this checkout, and its oven is built, so there's nothing to update for them here.
   - package-ecosystem: docker-compose
-    directory: /demos/worker/docker
+    directory: /demos/plain-kotlin/docker
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
     groups:
-      worker-demo:
+      plain-kotlin-demo:
         patterns: ["*"]
     ignore:
       # As in the other demos, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
       - dependency-name: "prom/prometheus"
 
-  # The images the worker demo's oven is built and runs on (demos/worker/app/Dockerfile): Gradle, on the JDK the runtime
-  # ships, and eclipse-temurin's JRE, both pinned by tag and digest. Its Kotlin and Jedis come from the repository's
-  # version catalog, which the gradle entry above keeps up to date.
+  # The images the plain Kotlin demo's oven is built and runs on (demos/plain-kotlin/app/Dockerfile): Gradle, on the JDK
+  # the runtime ships, and eclipse-temurin's JRE, both pinned by tag and digest. Its Kotlin and Jedis come from the
+  # repository's version catalog, which the gradle entry above keeps up to date.
   - package-ecosystem: docker
-    directory: /demos/worker/app
+    directory: /demos/plain-kotlin/app
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
     groups:
-      worker-demo-app:
+      plain-kotlin-demo-app:
         patterns: ["*"]
     ignore:
       # Java 25, the LTS the proxy and agent images ship, as in /etc/docker; moving to another line is a deliberate

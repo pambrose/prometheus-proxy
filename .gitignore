@@ -2,8 +2,8 @@
 build/
 .superset
 
-# The embedded demo's secrets, which its demo.sh writes for docker compose, and its app's Kotlin daemon state
-demos/embedded/docker/.env
+# The Ktor demo's secrets, which its demo.sh writes for docker compose, and its app's Kotlin daemon state
+demos/ktor/docker/.env
 .kotlin/
 
 # The Spring Boot demo's secrets, which its demo.sh writes for docker compose, and its app's Maven build

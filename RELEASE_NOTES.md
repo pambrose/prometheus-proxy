@@ -42,8 +42,8 @@ _Released 2026-11-23_
   agent sets it with `agentMetricsAt(path)`, and the Spring Boot starter and the Ktor plugin with
   `metrics-proxy-path`. The metrics port is still there for a scraper on the agent's own network, which can read an
   agent that can't reach the proxy; the Monitoring page says when each fits.
-- **A demo of the agent in a worker.** `demos/worker` runs a bakery whose ovens are plain Kotlin programs, with no
-  framework or HTTP server, each with the agent started in a few lines of its `main`. An oven listens on no port and
+- **A demo of the agent in a program with no framework.** `demos/plain-kotlin` runs a bakery whose ovens are plain
+  Kotlin programs, with no framework or HTTP server, each with the agent started in a few lines of its `main`. An oven listens on no port and
   is scraped all the same, more ovens become more Prometheus targets with no change to Prometheus's config, and an
   oven with no proxy, or with the agent's settings wrong, keeps baking.
 - **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot app and set the proxy's
@@ -53,7 +53,7 @@ _Released 2026-11-23_
 - **A Ktor plugin.** Add `prometheus-proxy-ktor` to a Ktor app and `install(PrometheusProxyAgent)` with the app's
   registry and a path: the agent starts and stops with the app and serves its metrics to Prometheus without a
   `/metrics` route. Set the proxy in code or in `application.conf`. The new Ktor Plugin page lists its settings, and
-  the embedded demo's coffee shop now runs its agent with it.
+  the Ktor demo's coffee shop now runs its agent with it.
 - **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
   follows your system and is where it starts. Your browser remembers it.
 - **The proxy counts what happens to its agents.** New metrics count agents disconnecting and why, connects and
@@ -137,6 +137,8 @@ _Released 2026-11-23_
   the Ktor plugin and the Spring Boot starter do.
 - **Quieter starts and stops.** The proxy and agent log their services' setup steps, and their starting and stopping,
   at DEBUG instead of INFO, and the shutdown hook's lines go to the log instead of stderr.
+- **The embedded demo is now the Ktor demo.** `demos/embedded` is `demos/ktor`, since the Spring Boot and plain
+  Kotlin demos embed the agent too. Its page's old address still works, and its port variables are `KTOR_DEMO_*`.
 
 ### Documentation
 
@@ -151,7 +153,7 @@ _Released 2026-11-23_
   the environment, with which one wins when two are set.
 - **Debugging an embedded agent.** The Embedded Agent page's new Debugging section turns on the agent's admin
   endpoints and `/debug` with `ADMIN_ENABLED` and `DEBUG_ENABLED`, says what each shows, and puts the agent's own
-  metrics on the Agents dashboard with `agentMetricsAt`. The embedded demo's tour walks through them.
+  metrics on the Agents dashboard with `agentMetricsAt`. The Ktor demo's tour walks through them.
 - **Stopping an embedded agent on SIGTERM.** The Embedded Agent page shows, in Kotlin and Java, the shutdown hook a
   program that runs until it's stopped adds, so its work finishes first and `use` then stops the agent.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's

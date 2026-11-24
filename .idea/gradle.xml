@@ -28,12 +28,12 @@
             </builds>
           </compositeBuild>
         </compositeConfiguration>
-        <option name="externalProjectPath" value="$PROJECT_DIR$/demos/embedded/app" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$/demos/ktor/app" />
         <option name="gradleJvm" value="17" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/demos/embedded/app" />
+            <option value="$PROJECT_DIR$/demos/ktor/app" />
             <option value="$PROJECT_DIR$/ktor-plugin" />
             <option value="$PROJECT_DIR$/spring-boot-starter" />
           </set>
@@ -53,12 +53,12 @@
             </builds>
           </compositeBuild>
         </compositeConfiguration>
-        <option name="externalProjectPath" value="$PROJECT_DIR$/demos/worker/app" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$/demos/plain-kotlin/app" />
         <option name="gradleJvm" value="17" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/demos/worker/app" />
+            <option value="$PROJECT_DIR$/demos/plain-kotlin/app" />
             <option value="$PROJECT_DIR$/ktor-plugin" />
             <option value="$PROJECT_DIR$/spring-boot-starter" />
           </set>

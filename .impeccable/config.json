@@ -4,6 +4,12 @@
     "ignoreFiles": [
       "website/prometheus-proxy/site/**"
     ],
-    "ignoreValues": []
+    "ignoreValues": [
+      {
+        "rule": "design-system-font-size",
+        "value": "16px",
+        "createdAt": "2026-11-24T02:44:04.060Z"
+      }
+    ]
   }
 }
