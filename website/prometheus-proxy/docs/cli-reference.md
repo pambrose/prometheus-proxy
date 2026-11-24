@@ -1,5 +1,8 @@
 ---
 icon: lucide/terminal
+# The page's tables, five columns of flags, variables, and keys each, take the table of contents' width to fit
+hide:
+  - toc
 ---
 
 # CLI Reference

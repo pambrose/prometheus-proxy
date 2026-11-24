@@ -23,10 +23,6 @@ behind a firewall and preserves the native pull-based model architecture.
 **See it work on your laptop:** seven self-contained [demos](#-try-the-demos) run the proxy, its agents, and
 Prometheus, with Grafana in four of them, with one command, and a guided tour walks you through each one.
 
-Questions about the API? The [docs site](https://prometheus-proxy.com/) has a
-[Context7](https://context7.com/pambrose/prometheus-proxy) chat on every page that answers from this project's
-documentation.
-
 ## Table of Contents
 
 - [Try the Demos](#-try-the-demos)

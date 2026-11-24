@@ -1,7 +1,3 @@
----
-icon: lucide/settings
----
-
 # Configuration Overview
 
 Prometheus Proxy uses the [Typesafe Config](https://github.com/lightbend/config) library for
