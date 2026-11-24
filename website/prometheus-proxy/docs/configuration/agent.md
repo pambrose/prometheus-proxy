@@ -443,7 +443,8 @@ agent {
 Prometheus, outside the firewall, reaches the agent's metrics only through the proxy, so the proxy path is all most
 agents need. The port suits a scraper on the agent's own network, which can read the agent while it can't reach the
 proxy. A standalone agent serves the same metrics at either, its JVM metrics included (`standardExportsEnabled` and
-the rest). See [Monitoring](../monitoring.md#port-or-proxy-path) for when each fits.
+the rest). See [Monitoring](../monitoring.md#port-or-proxy-path) for when each fits. Agents that share a config file
+each need a path of their own (see [Scraping Internal Metrics](../monitoring.md#scraping-internal-metrics)).
 
 ## Full Example
 

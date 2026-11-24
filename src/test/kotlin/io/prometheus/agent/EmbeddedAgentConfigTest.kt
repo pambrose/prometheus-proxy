@@ -498,6 +498,7 @@ class EmbeddedAgentConfigTest : StringSpec() {
     // As a setting the agent rejects throws ConfigLoadException when it starts, so does a value the builder rejects.
     "a blank path, a port out of range, or a URL with no scheme throws ConfigLoadException" {
       shouldThrow<ConfigLoadException> { embeddedAgent { agentMetricsAt(path = "/") } }
+      shouldThrow<ConfigLoadException> { embeddedAgent { agentMetricsAt(path = " / ") } }
       shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf(" ", 8080) } }
       shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf("app", 0) } }
       shouldThrow<ConfigLoadException> { embeddedAgent { path("", "http://host/metrics") } }

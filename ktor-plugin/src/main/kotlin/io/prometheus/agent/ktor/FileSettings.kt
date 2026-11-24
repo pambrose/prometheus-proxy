@@ -16,6 +16,7 @@
 
 package io.prometheus.agent.ktor
 
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.server.config.ApplicationConfig
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
@@ -67,13 +68,21 @@ internal class FileSettings(
   private fun features(builder: EmbeddedAgentConfig.Builder) {
     boolean("consolidated")?.also { builder.consolidated = it }
     int("metrics-port")?.also { builder.agentMetricsPort = it }
-    string("metrics-proxy-path")?.also {
-      builder.agentMetricsAt(path = it, labels = stringMap("metrics-proxy-path-labels"))
-    }
+    metricsProxyPath(builder)
     int("dashboard.port")?.also { builder.dashboard(port = it, host = string("dashboard.host")) }
     string("dashboard.password")?.also {
       builder.dashboardLogin(password = it, username = string("dashboard.username") ?: "admin")
     }
+  }
+
+  // The agent's own metrics at a proxy path, with its labels, which do nothing without it, as the log then says
+  private fun metricsProxyPath(builder: EmbeddedAgentConfig.Builder) {
+    val labels = stringMap("metrics-proxy-path-labels")
+    val path = string("metrics-proxy-path")
+    if (path != null)
+      builder.agentMetricsAt(path = path, labels = labels)
+    else if (labels.isNotEmpty())
+      logger.warn { "$SECTION.metrics-proxy-path-labels is set without metrics-proxy-path, so it does nothing" }
   }
 
   // The paths list's targets, or none when the file has no paths
@@ -89,6 +98,7 @@ internal class FileSettings(
 
   private companion object {
     const val SECTION = "prometheus-proxy.agent"
+    val logger = logger {}
 
     fun flattened(
       values: Map<String, Any?>,

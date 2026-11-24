@@ -163,13 +163,16 @@ the starter's and the plugin's `metrics-proxy-path`, or `METRICS_PROXY_PATH` in 
 
 - **They're the `agent_*` series, this agent's alone:** another agent in the same JVM serves its own, and the JVM's
   metrics stay with the app's path, which the dashboard doesn't read them from. A standalone agent's path serves its
-  JVM's metrics too, since its JVM is its own.
+  JVM's metrics too, since its JVM is its own, and so does an `Agent` an app constructs and starts itself: only one
+  started with `startAsyncAgent()` or this builder, as the starter and the plugin start theirs, counts as embedded.
 - **They're kept from the start,** whether or not the agent's metrics port is on (`agentMetrics(port)`,
   `METRICS_ENABLED`), and a source of the default registry leaves them out. The
   [agent's dashboard](agent-dashboard.md) shows them as on in its Settings view, with their path, and their port when
   it's on too.
 - **The path is checked as a `pathConfigs` entry is:** one another path also names, or that has a character the proxy
   refuses, fails `start()`, and the error names `agent.metrics.proxyPath`.
+- **Give each of the app's replicas a path of its own,** as the [Worker Demo](worker-demo.md) names its replicas'
+  after their host names: replicas sharing one would have the proxy serve only one of them there.
 - **Give the path a Prometheus job of its own,** since the dashboard tells agents apart by `job`:
 
 ```yaml

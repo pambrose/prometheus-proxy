@@ -312,6 +312,8 @@ class Agent(
         Metrics Service:
         ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
 
+        Metrics Proxy Path: ${options.metricsProxyPath.ifEmpty { null }?.let { "/$it" } ?: "None"}
+
       """.trimIndent()
 
     logger.info { "Agent name: $agentName" }
@@ -942,6 +944,7 @@ class Agent(
       add("proxyHost", proxyHost)
       add("adminService", if (isAdminEnabled) servletService else "Disabled")
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
+      add("metricsProxyPath", options.metricsProxyPath.ifEmpty { "None" })
     }
 
   companion object {

@@ -40,7 +40,7 @@ dependencies {
   testImplementation(libs.ktor.server.metrics.micrometer)
   testImplementation(libs.micrometer.registry.prometheus)
   testImplementation(libs.prometheus.metrics.core)
-  testRuntimeOnly(libs.logback.classic)
+  testImplementation(libs.logback.classic)
 }
 
 tasks.test {

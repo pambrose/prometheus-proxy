@@ -175,19 +175,19 @@ class RegistryMetricsSourceTest : StringSpec() {
 
     // A standalone agent's JVM is its own, so its path serves the JVM's metrics too, as its metrics port would
     "a standalone agent's own source serves the rest of the default registry too, with only its own agent series" {
-      val jvm = Gauge.builder().name("jvm_threads_current").help("Threads").register().apply { set(12.0) }
+      val jvm = Gauge.builder().name("test_standalone_jvm_threads").help("Threads").register().apply { set(12.0) }
       try {
         agentMetrics("first-launch")
         agentMetrics("second-launch")
         val source = AgentMetricsSource(standalone = { true }, launchId = { "first-launch" })
 
         source.written().second.also {
-          it shouldContain "jvm_threads_current 12.0"
+          it shouldContain "test_standalone_jvm_threads 12.0"
           it shouldContain """agent_connected{launch_id="first-launch"} 0.0"""
           it shouldNotContain "second-launch"
         }
-        source.written(names = setOf("jvm_threads_current")).second.also {
-          it shouldContain "jvm_threads_current 12.0"
+        source.written(names = setOf("test_standalone_jvm_threads")).second.also {
+          it shouldContain "test_standalone_jvm_threads 12.0"
           it shouldNotContain "agent_"
         }
       } finally {

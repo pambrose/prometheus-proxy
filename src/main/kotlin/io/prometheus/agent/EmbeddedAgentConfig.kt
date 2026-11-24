@@ -347,8 +347,8 @@ class EmbeddedAgentConfig private constructor(
       labels: Map<String, String> = emptyMap(),
     ): Builder =
       apply {
-        val normalized = path.removePrefix("/")
-        if (normalized.isBlank()) invalid("A path is required")
+        val normalized = path.trim().removePrefix("/")
+        if (normalized.isEmpty()) invalid("A path is required")
         put("metrics.proxyPath", normalized)
         put("metrics.proxyPathLabels", labelsJson(labels) ?: "{}")
       }

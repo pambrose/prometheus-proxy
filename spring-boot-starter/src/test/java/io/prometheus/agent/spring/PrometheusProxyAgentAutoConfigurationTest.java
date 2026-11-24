@@ -361,6 +361,19 @@ class PrometheusProxyAgentAutoConfigurationTest {
         });
   }
 
+  // Labels with no path would do nothing, so the starter says so rather than drop them unseen
+  @Test
+  void metricsProxyPathLabelsWithoutAPathAreWarnedOf() {
+    List<String> lines = agentLog(() ->
+        runner
+            .withPropertyValues("prometheus-proxy.agent.metrics-proxy-path-labels.team=coffee")
+            .run(context -> assertThat(config(context)).doesNotContain("proxyPath")));
+
+    assertThat(lines)
+        .contains(
+            "prometheus-proxy.agent.metrics-proxy-path-labels is set without metrics-proxy-path, so it does nothing");
+  }
+
   // A customizer can point the agent elsewhere, so the line that says it started names no proxy: the line before it
   // gives the settings it starts with, and the agent logs the proxy it connects to
   @Test

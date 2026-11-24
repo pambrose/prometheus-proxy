@@ -16,6 +16,9 @@
 
 package io.prometheus.agent.ktor
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -31,6 +34,7 @@ import io.ktor.server.config.yaml.YamlConfig
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import org.slf4j.LoggerFactory
 
 class PrometheusProxyAgentConfigTest : StringSpec() {
   init {
@@ -125,6 +129,22 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig("dashboard.password" to "pw"))
 
       config.builder().build().toString() shouldContain "username=admin"
+    }
+
+    // Labels with no path would do nothing, so the plugin says so rather than drop them unseen
+    "metrics proxy path labels without a path are warned of" {
+      val logger = LoggerFactory.getLogger(FileSettings::class.java) as Logger
+      val events = ListAppender<ILoggingEvent>().apply { start() }
+      logger.addAppender(events)
+      try {
+        val config = PrometheusProxyAgentConfig(MapApplicationConfig("metrics-proxy-path-labels.team" to "agents"))
+        config.builder().build().toString() shouldNotContain "proxyPath"
+      } finally {
+        logger.detachAppender(events)
+      }
+
+      events.list.map { it.formattedMessage } shouldBe
+        listOf("prometheus-proxy.agent.metrics-proxy-path-labels is set without metrics-proxy-path, so it does nothing")
     }
 
     "enabled and required that aren't true or false fail at once" {

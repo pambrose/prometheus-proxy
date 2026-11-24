@@ -29,6 +29,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.prometheus.Agent
+import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -67,15 +69,19 @@ class AgentMetricsProxyPathTest : StringSpec() {
           deleteOnExit()
         }
 
-      val proxy = startProxy(args = ["--agent_port", "$GRPC_PORT"], proxyPort = HTTP_PORT)
-      val agent =
-        startAgent(
-          configArgs = ["--config", configFile.absolutePath],
-          args = ["--proxy", "$LOOPBACK_HOST:$GRPC_PORT"],
-        )
+      var proxy: Proxy? = null
+      var agent: Agent? = null
       try {
+        // Inside the try, so a proxy that started is stopped when the agent fails to
+        proxy = startProxy(args = ["--agent_port", "$GRPC_PORT"], proxyPort = HTTP_PORT)
+        agent =
+          startAgent(
+            configArgs = ["--config", configFile.absolutePath],
+            args = ["--proxy", "$LOOPBACK_HOST:$GRPC_PORT"],
+          )
         agent.isMetricsEnabled.shouldBeFalse()
         agent.collectsMetrics.shouldBeTrue()
+        agent.toString() shouldContain "metricsProxyPath=$PROXY_PATH"
 
         HttpClient(ClientCIO).use { client ->
           eventually(20.seconds) {
@@ -90,7 +96,7 @@ class AgentMetricsProxyPathTest : StringSpec() {
           }
         }
       } finally {
-        stopAll(agent, proxy)
+        stopAll(*listOfNotNull(agent, proxy).toTypedArray())
         // The JVM metric groups stay registered once the agent stops, as they do for the metrics port's
         PrometheusRegistry.defaultRegistry.clear()
         SystemMetrics.forget(PrometheusRegistry.defaultRegistry)

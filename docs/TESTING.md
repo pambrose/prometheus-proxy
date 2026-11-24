@@ -282,8 +282,10 @@ carries a `logback.xml`, which would replace the host application's logging conf
   options reject, a wrong-typed or unparseable `-D` override included, throws `ConfigLoadException`;
   `PROXY_HOSTNAME` overrides a malformed or blank config endpoint without parsing it; and options built from an
   in-memory config take its settings, fall back to the built-in defaults, resolve its substitutions, and take a
-  trusted certificate as PEM text; `metricsProxyPath` is none by default, comes from `agent.metrics.proxyPath` without
-  a leading slash, with its labels, and `--metrics_proxy_path` takes precedence over it
+  trusted certificate as PEM text
+- **AgentMetricsProxyPathOptionsTest** — `metricsProxyPath` is none by default, comes from `agent.metrics.proxyPath`
+  without a leading slash, with its labels, and `--metrics_proxy_path` takes precedence over it; a path of only a
+  slash is rejected, and labels without a path are warned of
 - **AgentDashboardOptionsTest** — the agent dashboard's options, `agent.dashboard` and the `--dashboard*` flags, which
   the agent resolves as the proxy resolves its own: off by default, on port 8095 apart from the admin port and the
   proxy's, path and host defaults, settable from the command line and read from the agent's config, not the proxy's; an
@@ -957,7 +959,7 @@ mechanism that the standard suite cannot reach:
   cause chain, or the log
 - **AgentMetricsProxyPathTest** — a standalone agent with `agent.metrics.proxyPath` set and its metrics port off
   serves, through the proxy, its own `agent_*` series and the JVM metric groups its `agent.metrics` settings turn on,
-  which it registers itself, since only the port's service did
+  which it registers itself, since only the port's service did; its `toString()` names the path
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
   once each connect and count their own connects without a registry clear in between; a stopped agent's series go
   with it; and a host metric with an agent metric's name fails `startAsyncAgent()`, with the registry's rejection
@@ -1131,7 +1133,7 @@ agent runs with what it gets in an app. `TestingGuideTest` reads only the root p
 - **PrometheusProxyAgentAutoConfigurationTest** — the auto-configuration, through `ApplicationContextRunner`: the agent
   stays off without a proxy, starts and stops with the context with one, and isn't made with `enabled=false`; each
   property becomes its `EmbeddedAgentConfig` setting, `metrics-proxy-path` and its labels included, with the secrets
-  out of `toString`; the default name (the app's,
+  out of `toString`, and labels without a path are warned of; the default name (the app's,
   with its build's version) and path (`<app>_metrics`, or `application_metrics`); the registry served, or not with
   `source=none` or no `PrometheusRegistry` bean; `settings` keys keeping their case from a properties file, and losing
   it from an environment variable; customizers running after the properties in their order, a builder method of one
@@ -1172,8 +1174,9 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
 - **PrometheusProxyAgentConfigTest** — `prometheus-proxy.agent` in HOCON, YAML (`full-section.yaml`), and a
   `MapApplicationConfig` builds the tree the same builder calls do, `metrics-proxy-path` and its labels included; a blank
   value, such as YAML's empty default for an unset environment variable (`unset-proxy.yaml`), counts as unset; the
-  dashboard login's default username; a value that isn't a boolean or a number; the registry served at its path, and
-  refused without one; the install block's settings taking precedence, and every `agent { }` block running in turn.
+  dashboard login's default username; a value that isn't a boolean or a number; metrics proxy path labels without a
+  path warned of; the registry served at its path, and refused without one; the install block's settings taking
+  precedence, and every `agent { }` block running in turn.
 - **PrometheusProxyAgentPluginTest** — the plugin in a `testApplication`, with a real agent pointed at a port nothing
   listens on (`closedPort()`, in **TestSupport.kt**): started by the file's proxy or the install block's, and stopped
   with the app; off when the file disables it; off on a setting it rejects, which fails the app's start when required.

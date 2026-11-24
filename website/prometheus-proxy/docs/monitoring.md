@@ -48,6 +48,12 @@ labels, `agent.metrics.proxyPathLabels`, are the path's labels in the proxy's
 checked as a `pathConfigs` entry is: one another path also names, or that has a character the proxy refuses, stops the
 agent at startup.
 
+Give each agent a path of its own, as each is a job of its own. Agents that share a config file, such as replicas or
+the agents of a [consolidated](advanced.md#consolidated-mode) path, would otherwise name the same one, and the proxy
+would serve one agent there, or, consolidated, one job for them all. Set each one's path with `METRICS_PROXY_PATH` or
+`--metrics_proxy_path`, or build it in the shared file from an environment variable each agent has its own value of,
+such as the host name a container gets: `proxyPath = ${HOSTNAME}_agent_metrics`.
+
 Then add the scrape jobs to your `prometheus.yml`:
 
 ```yaml
