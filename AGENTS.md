@@ -252,8 +252,11 @@ per-section `assign*` function it belongs to.
 Releases follow `docs/RELEASE.md`: after the version bump and changelogs are merged, `make release` publishes to Maven
 Central and Docker Hub, gated by `make release-check` (clean, up-to-date `master` on which every check, and each CI
 job `RELEASE_REQUIRED_JOBS` lists, passed; a dated section for the version in both changelogs; the version, and not
-the previous one, in every bumped file; not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors
-step 2's list of hard-coded version literals; keep the two in step.
+the previous one, in every bumped file; every demo's `NEEDS_RELEASE_AFTER` below the version; not already
+published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors step 2's list of hard-coded version literals; keep
+the two in step. Step 2 raises each demo's `NEEDS_RELEASE_AFTER` to the new version, so `make up` builds from the
+checkout while the release isn't published, and the last change before `make release` lowers it again
+(`_check-demos-pull-release`), so `make up` from the release's tag pulls its images.
 
 `make release` ends by pushing the release tag (`make release-tag`), which the docs' `git clone --branch` commands
 check out, and deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), the only run

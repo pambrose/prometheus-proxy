@@ -12,7 +12,8 @@
         release-tag tree depends lint detekt detekt-baseline \
         versions versions-all kdocs clean-site check-site upgrade-site build-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
-        upgrade-wrapper _check-gpg-env _check-maven-central-env _require-version _require-gradle-version _tla-tools
+        upgrade-wrapper _check-gpg-env _check-maven-central-env _require-version _require-gradle-version _tla-tools \
+        _check-demos-pull-release
 
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
 # The snapshot targets' version: VERSION with one -SNAPSHOT suffix, whether or not gradle.properties already has it.
@@ -618,8 +619,9 @@ docker-verify: _require-version  ## Check both published VERSION images carry ev
 # coordinate, a Maven <version>, a chart's version or appVersion, a git clone's --branch, or the backticked examples
 # in docker.md, docs/RELEASE.md, and the skill. Historical mentions, such as "Version 4.3.0 (released ...)", don't
 # match. And every CI check passing isn't enough, since with [skip ci] or a disabled workflow a lone third-party check
-# can be the whole list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD and passed.
-release-check: _require-version _check-gpg-env _check-maven-central-env  ## Fail unless this checkout is fit to publish VERSION
+# can be the whole list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD and passed. And every demo's
+# NEEDS_RELEASE_AFTER must be below VERSION (_check-demos-pull-release).
+release-check: _require-version _check-gpg-env _check-maven-central-env _check-demos-pull-release  ## Fail unless this checkout is fit to publish VERSION
 	@case "$(VERSION)" in *SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
 		echo "ERROR: $(VERSION) is a pre-release; make release publishes final versions" >&2; exit 1;; esac
 	@test -z "$$(git status --porcelain)" \
@@ -819,6 +821,21 @@ _check-maven-central-env:
 
 _require-version:
 	@[ -n "$(VERSION)" ] || { echo "ERROR: Could not determine project version from gradle.properties" >&2; exit 1; }
+
+# Fails unless every demo's NEEDS_RELEASE_AFTER is below VERSION. A demo's `make up` pulls the release its docs name
+# only when that release is after NEEDS_RELEASE_AFTER, and builds from the checkout otherwise, so step 2 of
+# docs/RELEASE.md raises it to the new version while the release isn't published. Left there, `make up` from the
+# release's tag would build from source, needing a JDK, and say the release predates the demo. sort -V orders
+# versions as the demos' version_after does.
+_check-demos-pull-release: _require-version
+	@late=$$(for demo in $(DEMOS); do \
+			n=$$(sed -n 's/^NEEDS_RELEASE_AFTER=//p' "demos/$$demo/demo.sh"); \
+			[ -n "$$n" ] || continue; \
+			{ [ "$$n" != '$(VERSION)' ] && [ "$$(printf '%s\n%s\n' "$$n" '$(VERSION)' | sort -V | head -n 1)" = "$$n" ]; } \
+				|| echo "  demos/$$demo/demo.sh: NEEDS_RELEASE_AFTER=$$n"; \
+		done); \
+	[ -z "$$late" ] || { printf 'ERROR: not below $(VERSION), so make up from the release would build from source ' >&2; \
+		printf '(step 2 of docs/RELEASE.md):\n%s\n' "$$late" >&2; exit 1; }
 
 _require-gradle-version:
 	@[ -n "$(GRADLE_VERSION)" ] || { echo "ERROR: Could not determine gradle version from gradle/libs.versions.toml" >&2; exit 1; }
