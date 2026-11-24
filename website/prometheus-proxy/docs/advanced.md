@@ -140,10 +140,10 @@ remaining agents continue serving the path.
 
 Use cases:
 
-- **Several instances behind one path** -- each agent scrapes its own instance of a service, whose
+- **Several instances behind one path** — each agent scrapes its own instance of a service, whose
   series carry a label that tells the instances apart, and Prometheus scrapes them as one target
-- **Redundancy** -- the path keeps answering, with the remaining agents' series, while one agent is down
-- **Rolling upgrades** -- new agent registers before old one deregisters
+- **Redundancy** — the path keeps answering, with the remaining agents' series, while one agent is down
+- **Rolling upgrades** — new agent registers before old one deregisters
 
 !!! warning "Agents that scrape the same endpoint send each series twice"
 
@@ -161,7 +161,7 @@ Use cases:
     With [per-agent identities](security/index.md#per-agent-identities-and-path-authorization), a
     consolidated path records the identity that registered it, and only agents presenting that identity
     may join. Another identity's registration is rejected and retried, so it joins once the agents
-    serving the path disconnect. Agents that share an identity -- all of them, when agent auth is off --
+    serving the path disconnect. Agents that share an identity — all of them, when agent auth is off --
     can still join each other's consolidated paths, and a joining agent's output is merged into every
     scrape of the path, so one that never answers holds each scrape until it times out.
 

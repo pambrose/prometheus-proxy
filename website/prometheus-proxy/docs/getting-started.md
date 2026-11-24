@@ -8,23 +8,25 @@ icon: lucide/play
 
 ## Installation
 
-=== "Download JARs"
+Pick a tab: the same choice opens the same tab in each step below.
 
-    Download the latest proxy and agent JAR files from the
-    [GitHub Releases](https://github.com/pambrose/prometheus-proxy/releases) page.
+=== "JAR"
 
-=== "Build from Source"
+    Download the proxy's and the agent's JARs from the
+    [4.7.0 release](https://github.com/pambrose/prometheus-proxy/releases/tag/4.7.0):
+
+    ```bash
+    curl -fLO https://github.com/pambrose/prometheus-proxy/releases/download/4.7.0/prometheus-proxy.jar
+    curl -fLO https://github.com/pambrose/prometheus-proxy/releases/download/4.7.0/prometheus-agent.jar
+    ```
+
+    Or build them from source, into `build/libs/prometheus-proxy.jar` and `build/libs/prometheus-agent.jar`:
 
     ```bash
     git clone https://github.com/pambrose/prometheus-proxy.git
     cd prometheus-proxy
     ./gradlew agentJar proxyJar
     ```
-
-    JARs are generated in `build/libs/`:
-
-    - `build/libs/prometheus-proxy.jar`
-    - `build/libs/prometheus-agent.jar`
 
 === "Homebrew"
 
@@ -60,7 +62,7 @@ icon: lucide/play
 
 The proxy runs outside the firewall alongside your Prometheus server.
 
-=== "CLI"
+=== "JAR"
 
     **In the foreground**, the proxy runs in your terminal and logs there until you stop it with
     Ctrl+C:
@@ -183,12 +185,12 @@ agent {
 
 Each entry in `pathConfigs` maps:
 
-- `path` -- the URL path on the proxy that Prometheus will scrape
-- `url` -- the actual metrics endpoint the agent will fetch from
+- `path` — the URL path on the proxy that Prometheus will scrape
+- `url` — the actual metrics endpoint the agent will fetch from
 
 ### Start the Agent
 
-=== "CLI"
+=== "JAR"
 
     **In the foreground**, the agent runs in your terminal and logs there until you stop it with
     Ctrl+C:
@@ -303,15 +305,13 @@ Each entry in `pathConfigs` maps:
     `proxy.hostname` is required, and takes precedence over the one in `agent.conf`. See
     [Kubernetes](kubernetes.md#installing-with-helm) for TLS, agent tokens, and discovery.
 
-=== "Remote Config"
+The config can also be a URL, in `--config` or `AGENT_CONFIG`, so one server can hand every agent its config:
 
-    The agent can load configuration from a URL:
-
-    ```bash
-    java -jar prometheus-agent.jar \
-      --proxy proxy-host.example.com \
-      --config https://example.com/configs/agent.conf
-    ```
+```bash
+java -jar prometheus-agent.jar \
+  --proxy proxy-host.example.com \
+  --config https://example.com/configs/agent.conf
+```
 
 ## Configure Prometheus
 
@@ -329,11 +329,30 @@ The `metrics_path` must match the `path` value in the agent's `pathConfigs`.
 
 ## Verify
 
-Check that metrics are flowing through the proxy:
+The agent's log says when it has connected and registered each path:
+
+```text
+Connected to proxy at proxy-host.example.com:50051 using plaintext
+Registered http://localhost:9100/metrics as /my_app_metrics with labels {} (static)
+```
+
+Then scrape the path through the proxy, as Prometheus will:
 
 ```bash
-curl -s http://proxy-host.example.com:8080/my_app_metrics | head
+curl -i http://proxy-host.example.com:8080/my_app_metrics
 ```
+
+`HTTP/1.1 200 OK`, followed by the same metrics `curl http://localhost:9100/metrics` returns on the agent's host,
+means every hop works: Prometheus can reach the proxy, the agent is connected and has registered the path, and the
+agent can reach the target. Any other status says which hop failed:
+
+- **`404 Not Found`**: no agent has registered the path. Check the agent's log for the `Registered` line, and that
+  the path matches the agent's `path`.
+- **`503 Service Unavailable`**: the agent has the path, but it couldn't reach the target, or it was disconnected.
+  Check the `url` with `curl` from the agent's host.
+
+[Troubleshooting](troubleshooting.md#prometheus-scrape-returns-an-error) covers every status. Once Prometheus has
+scraped the job, its target page (Status → Target health) shows `my-app` as up.
 
 ## Multiple Endpoints
 

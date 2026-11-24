@@ -293,6 +293,11 @@ All notable changes to this project are documented in this file.
 - A link to a docs site page, pasted into a chat or a social post, previews with the page's heading, the site's
   description, and a card of its own (OpenGraph and Twitter tags, `images/social-card.png`), where it showed a bare
   URL. The site's header stays in place as the page scrolls, so search and the color toggle are always at hand
+- The Quick Start's install, proxy, and agent steps share their tabs (JAR, Homebrew, Docker, Helm), so a choice in
+  one opens the same tab in the others, and its JAR tab gives the download commands, where it only linked to the
+  releases. Its Verify step shows what the agent logs once it's connected, and what the proxy's 404 and 503 mean, and
+  the TLS page shows how to confirm TLS is on, in the agent's log and with `openssl s_client`. The pages' literal
+  ` -- ` are em dashes
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering
