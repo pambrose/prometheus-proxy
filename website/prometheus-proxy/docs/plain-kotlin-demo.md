@@ -75,7 +75,7 @@ its targets:
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/plain-kotlin
 make up      # builds the oven, starts everything, prints the URLs
-make tour    # walks through the parts below, pausing before each step
+make tour    # walks through the scenarios below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
 
@@ -90,9 +90,11 @@ minute.
 | The proxy's service discovery | <http://localhost:8680/discovery> |
 
 The ports are the [Basics Demo](basics-demo.md)'s plus 600, so the demos can run side by side. Every port binds to
-`127.0.0.1` only, and the ovens and Redis publish none. To move one that is already taken, set
-`PLAIN_KOTLIN_DEMO_DASHBOARD_PORT`, `PLAIN_KOTLIN_DEMO_GRAFANA_PORT`, `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT`, or
-`PLAIN_KOTLIN_DEMO_PROXY_PORT`, for example `PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`.
+`127.0.0.1` only, and the ovens and Redis publish none. To move one that is already taken, set its variable for
+`make up`, for example `PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`. The variables are
+`PLAIN_KOTLIN_DEMO_DASHBOARD_PORT`, `PLAIN_KOTLIN_DEMO_GRAFANA_PORT`, `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT`, and
+`PLAIN_KOTLIN_DEMO_PROXY_PORT`. `make up` saves the port in `docker/.env`, which every later command and docker compose
+read, so you set it once; delete its line there to go back to the default.
 
 ## What's running
 
@@ -249,17 +251,19 @@ log, and stop it, and each oven bakes:
 
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `./demo.sh sockets` | Shows that the oven publishes no port and its JVM listens on none, and its targets in Prometheus |
-| `./demo.sh metrics` | Reads the oven's metrics, and its agent's, through the proxy, each at its own path |
-| `./demo.sh rush` | 500 more orders, ten a second |
-| `./demo.sh scale <count>` | Runs 1 to 5 ovens; a scale-in stops the extra ovens with SIGTERM and shows their logs |
-| `./demo.sh no-proxy` | Starts an oven with no proxy set, shows its log, and stops it |
-| `./demo.sh bad-cert` | Starts an oven whose `PROMETHEUS_PROXY_CERT` isn't a certificate, shows its log, and stops it |
-| `./demo.sh wrong-token` | Starts an oven whose token the proxy refuses, shows its log, and stops it |
-| `make status` | The containers, the ovens and their paths, the queue, and the URLs |
-| `make logs SERVICE=oven` | Follows one service's log |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh sockets` | Shows that the oven publishes no port and its JVM listens on none, and its targets in Prometheus | `docker port` of the oven, its JVM's sockets from `/proc/1/fd` and `/proc/net` in its container, and Prometheus's targets API |
+| `demo.sh metrics` | Reads the oven's metrics, and its agent's, through the proxy, each at its own path | `curl` of the proxy's `/oven_<id>_metrics` and `/oven_<id>_agent_metrics` |
+| `demo.sh rush` | 500 more orders, ten a second | `counter.sh rush 500`, run in the counter's container |
+| `demo.sh scale <count>` | Runs 1 to 5 ovens; a scale-in stops the extra ovens with SIGTERM and shows their logs | `docker compose up --scale oven=<count>` to add ovens; `docker stop`, a SIGTERM, to stop the extra ones |
+| `demo.sh no-proxy` | Starts an oven with no proxy set, shows its log, and stops it | Starts the compose service `oven-no-proxy` (profile `misconfigured`), with `PROMETHEUS_PROXY` unset |
+| `demo.sh bad-cert` | Starts an oven whose `PROMETHEUS_PROXY_CERT` isn't a certificate, shows its log, and stops it | Starts the compose service `oven-bad-cert` (profile `misconfigured`) |
+| `demo.sh wrong-token` | Starts an oven whose token the proxy refuses, shows its log, and stops it | Starts the compose service `oven-wrong-token` (profile `misconfigured`), whose `PROMETHEUS_AGENT_TOKEN` the proxy doesn't accept |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, the ovens and their paths, the queue, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the proxy's dashboard, Grafana, and Prometheus's targets in the browser |  |
 
 ## Going further
 
@@ -270,6 +274,15 @@ log, and stop it, and each oven bakes:
 - A job that finishes before Prometheus's next scrape, such as a nightly batch, needs the
   [Pushgateway](https://github.com/prometheus/pushgateway), not an agent: there's nothing left to scrape when Prometheus
   comes.
-- The [Ktor Demo](ktor-demo.md) runs the agent in a Ktor app under load, with its own dashboard, TLS, a deploy,
-  the proxy going away, and secrets from the environment, and the [Spring Boot Demo](spring-boot-demo.md) in a Spring
-  Boot app written in Java.
+- The other demos, in the order the [Demos](demos/index.md) page gives them:
+    - [Basics Demo](basics-demo.md): the whole system on one machine, the proxy and its dashboard, three agents behind
+      a simulated firewall, Prometheus, and Grafana
+    - [Network Demo](network-demo.md): a simulated WAN between the agents and the proxies, and what a far, thin, dead,
+      flaky, or missing link does
+    - [nginx Demo](nginx-demo.md): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS
+      ended on one port
+    - [Kubernetes Demo](kubernetes-demo.md): the Helm charts on two kind clusters, with Kubernetes doing the operating
+      and the target cluster exposing nothing
+    - [Ktor Demo](ktor-demo.md): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+    - [Spring Boot Demo](spring-boot-demo.md): a roastery, a Spring Boot app in Java whose agent the starter starts
+      from properties

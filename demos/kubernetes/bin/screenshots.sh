@@ -23,8 +23,17 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/kubernetes-demo"
 
-DASHBOARD_URL="http://localhost:${KUBERNETES_DEMO_DASHBOARD_PORT:-8294}/dashboard"
-PROMETHEUS_URL="http://localhost:${KUBERNETES_DEMO_PROMETHEUS_PORT:-9290}"
+# A host port of pp-monitoring's, as demo.sh takes it: its variable's value, or, with the variable unset, the port the
+# running cluster publishes the NodePort on, from its node container's port mappings, or else the default.
+# cluster_port <the variable's value> <NodePort> <default>
+cluster_port() {
+  local port="$1"
+  [[ -n "$port" ]] || port="$(docker port pp-monitoring-control-plane "$2/tcp" 2>/dev/null |
+    sed -nE 's/^127\.0\.0\.1:([0-9]+)$/\1/p' | head -1 || true)"
+  echo "${port:-$3}"
+}
+DASHBOARD_URL="http://localhost:$(cluster_port "${KUBERNETES_DEMO_DASHBOARD_PORT:-}" 30094 8294)/dashboard"
+PROMETHEUS_URL="http://localhost:$(cluster_port "${KUBERNETES_DEMO_PROMETHEUS_PORT:-}" 30090 9290)"
 TK=(kubectl --context kind-pp-target)
 
 # The settings in the header. SKIP_UPTIME_WAIT takes exactly 1; any other value leaves the wait in.

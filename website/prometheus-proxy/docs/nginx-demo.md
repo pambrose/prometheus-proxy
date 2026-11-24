@@ -90,7 +90,9 @@ it starts in under a minute, and runs without a network connection.
 Each port is the Basics Demo's plus 500, so the demos can run side by side. Every port binds to `127.0.0.1` only: the
 dashboards run without their login, which suits a laptop and nothing shared. To move a port that is already taken,
 set `NGINX_DEMO_DASHBOARD_PORT`, `NGINX_DEMO_NGINX_PORT`, `NGINX_DEMO_AGENT_DASHBOARD_PORT`,
-`NGINX_DEMO_PROMETHEUS_PORT`, or `NGINX_DEMO_PROXY_PORT`, for example `NGINX_DEMO_PROMETHEUS_PORT=19590 make up`.
+`NGINX_DEMO_PROMETHEUS_PORT`, or `NGINX_DEMO_PROXY_PORT` for `make up`, for example
+`NGINX_DEMO_PROMETHEUS_PORT=19590 make up`. `make up` saves it in `docker/.env`, which every later command and docker
+compose read, so you set it once; delete its line there to go back to the default.
 
 ## What's running
 
@@ -238,25 +240,41 @@ it to proxy.dashboard.allowedOrigins if expected`. Passing the browser's `Host` 
 
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `demo.sh nginx-log [n]` | Shows the last n gRPC calls nginx passed to the proxy (default 12), by agent |
-| `demo.sh nginx-stock` | The agents' entrance with nginx's default stream timeouts, 60 seconds |
-| `demo.sh nginx-long-timeouts` | Both stream timeouts raised to a day |
-| `demo.sh nginx-short-timeouts` | Both stream timeouts cut to 20 seconds |
-| `demo.sh nginx-workers` | Lists nginx's processes, the old workers a reload left among them |
-| `demo.sh nginx-shutdown-timeout` | Sets `worker_shutdown_timeout` to 10 seconds, and restarts nginx |
-| `demo.sh keepalive <secs>` | Recreates the proxy with this stream keepalive interval, and restarts nginx, which looks up the new proxy's address |
-| `demo.sh dashboard-stock` | The dashboard's entrance as a plain `proxy_pass` |
-| `demo.sh dashboard-upgrade` | The same, passing the WebSocket handshake's headers |
-| `demo.sh dashboard-host` | The same, passing the browser's `Host` too |
-| `demo.sh reset` | nginx and the proxy as `make up` starts them |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh nginx-log [n]` | Shows the last n gRPC calls nginx passed to the proxy (default 12), by agent | Reads nginx's access log, a line per call as it ends, and names each agent by its address |
+| `demo.sh nginx-stock` | The agents' entrance with nginx's default stream timeouts, 60 seconds | Copies `nginx/agents-stock.conf` in as `conf.d/agents.conf` and reloads nginx |
+| `demo.sh nginx-long-timeouts` | Both stream timeouts raised to a day | `nginx/agents-long-timeouts.conf`: `client_body_timeout` and `grpc_read_timeout` of `1d` |
+| `demo.sh nginx-short-timeouts` | Both stream timeouts cut to 20 seconds | `nginx/agents-short-timeouts.conf`: both at `20s` |
+| `demo.sh nginx-workers` | Lists nginx's processes, the old workers a reload left among them | `ps` in the nginx container |
+| `demo.sh nginx-shutdown-timeout` | nginx's old workers close their connections 10 seconds after a reload | Copies `nginx/main-shutdown-timeout.conf` (`worker_shutdown_timeout 10s`) into `main.d` and restarts nginx |
+| `demo.sh keepalive <secs>` | The proxy's stream keepalive interval, for both directions | Stops nginx, recreates the proxy with `-Dproxy.internal.streamKeepAliveSecs=<secs>`, and starts nginx again, which looks up the new proxy's address |
+| `demo.sh dashboard-stock` | The dashboard's entrance as a plain `proxy_pass` | `nginx/dashboard-stock.conf` in as `conf.d/dashboard.conf`, and a reload |
+| `demo.sh dashboard-upgrade` | The same, passing the WebSocket handshake's headers | `nginx/dashboard-upgrade.conf`: HTTP/1.1, `Upgrade`, and `Connection` |
+| `demo.sh dashboard-host` | The same, passing the browser's `Host` too | `nginx/dashboard-host.conf`: `proxy_set_header Host $http_host` |
+| `demo.sh reset` | nginx and the proxy as `make up` starts them | The stock configs, no `worker_shutdown_timeout`, a restart of nginx if anything differed, and the default keepalive |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, nginx's configs in use, its old workers, the proxy's keepalive, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the proxy dashboard, directly and through nginx, agent-current's dashboard, and a Prometheus graph of whether each agent's path answered |  |
+
+`reset` undoes every scenario. For a clean slate, `make down && make up`.
 
 ## Going further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx) has these scenarios as
   a guided tour, explaining how each one works, and lists the files that set the demo up, nginx's configs among them.
 - [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) covers the settings this demo uses, for your own nginx.
-- The [Kubernetes Demo](kubernetes-demo.md) deploys the same proxy and agent with their Helm charts on two kind
-  clusters. It needs kind, `kubectl`, and Helm as well as Docker.
 - [Web Dashboard](web-dashboard.md#behind-a-reverse-proxy) covers putting the dashboard behind a reverse proxy.
+- The other demos, in the order the [Demos](demos/index.md) page gives them:
+    - [Basics Demo](basics-demo.md): the whole system on one machine, the proxy and its dashboard, three agents behind
+      a simulated firewall, Prometheus, and Grafana
+    - [Network Demo](network-demo.md): a simulated WAN between the agents and the proxies, and what a far, thin, dead,
+      flaky, or missing link does
+    - [Kubernetes Demo](kubernetes-demo.md): the Helm charts on two kind clusters, with Kubernetes doing the operating
+      and the target cluster exposing nothing
+    - [Ktor Demo](ktor-demo.md): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+    - [Spring Boot Demo](spring-boot-demo.md): a roastery, a Spring Boot app in Java whose agent the starter starts
+      from properties
+    - [Plain Kotlin Demo](plain-kotlin-demo.md): a bakery's ovens, workers with no framework or HTTP server, each
+      reading its own metrics in-process

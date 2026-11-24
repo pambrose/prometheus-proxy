@@ -80,12 +80,12 @@ SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 # plugin's and Spring Boot starter's tests, and src/test/kotlin/hosts, none of which names a version.
 SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
 
-# The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, the network
-# between the agents and the proxies, nginx between them, the Helm charts deployed on two kind clusters, an app with the
-# agent embedded, its metrics in Grafana, a Spring Boot app with the agent embedded, and a worker with no HTTP server
-# with the agent embedded, scaled out and in. Each demo under demos/ is
-# self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`); this one's only
-# demo targets, demos-up, demos-up-local, and demos-down, run those Makefiles' up, up-local, and down for every demo.
+# The customer demos, whose Prometheus configs and rules check-rules validates: the basics demo, with the proxy's
+# dashboard and Grafana; the network between the agents and the proxies; nginx between them; the Helm charts deployed on
+# two kind clusters; and the agent embedded in a Ktor app, in a Spring Boot app, and in a plain Kotlin program with no
+# HTTP server. Each demo under demos/ is self-contained, with its own Makefile for starting and stopping it
+# (`make -C demos/<name> help`); this one's only demo targets, demos-up, demos-up-local, and demos-down, run those
+# Makefiles' up, up-local, and down for every demo.
 BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
 NGINX_DEMO_DIR := demos/nginx

@@ -12,10 +12,50 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
 MAKE_NAME="${MAKE##*/}"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# Where up keeps the host ports moved with the *_PORT variables (docker/compose.yml's list), so each later command, and
+# docker compose, which reads this file on its own, uses them with no variable set again. Not committed. Delete a
+# port's line to go back to its default.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
+# publishes. A variable set on the command line wins, and up saves it in turn.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
+
+# Saves in docker/.env each port variable compose.yml reads that the environment sets, in place of its old line,
+# keeping the file's other lines: save_ports
+save_ports() {
+  local name saved=""
+  local -a lines=()
+  while IFS= read -r name; do
+    if [[ -n "${!name:-}" ]]; then
+      lines+=("$name=${!name}")
+      saved+="|$name"
+    fi
+  done < <(grep -oE '\$\{[A-Z0-9_]+_PORT:-' "$DEMO_DIR/docker/compose.yml" | sed 's/^\${//; s/:-$//' | sort -u)
+  ((${#lines[@]})) || return 0
+  (
+    umask 077
+    {
+      # The file's other lines; grep finds none when every line is a port saved again, which isn't a failure
+      [[ ! -f "$PORTS_FILE" ]] || grep -vE "^(${saved#|})=" "$PORTS_FILE" || true
+      printf '%s\n' "${lines[@]}"
+    } >"$PORTS_FILE.new"
+    mv "$PORTS_FILE.new" "$PORTS_FILE"
+  )
+}
 # The images the demo runs, under these tags whichever way they came. The proxy's is pulled from Docker Hub (up) or
 # built from this checkout (up-local), under the tag the other demos use, so there's one copy of it; the coffee shop's
 # is built either way, against the latest release (up) or this checkout (up-local).
-IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/embedded-app:local)
+IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/ktor-app:local)
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # The demo shows what came after this release (the agent's own dashboard), so until a later one is out, up builds
 # everything from this checkout, as up-local does.
@@ -52,13 +92,21 @@ text_width() {
 }
 
 # Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
-# wrap <first> <rest> <text>...
+# wrap <first> <rest> <text>... It breaks lines only between words, and gives a word longer than a line, such as a
+# Prometheus URL, a line of its own, unbroken, so a terminal still opens it as a link.
 wrap() {
   local first="$1" rest="$2" line
   while IFS= read -r line; do
-    printf '%s%s\n' "$first" "${line% }"
+    printf '%s%s\n' "$first" "$line"
     first="$rest"
-  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+  done < <(awk -v width=$(($(text_width) - ${#rest})) '{
+      for (i = 1; i <= NF; i++) {
+        if (len > 0 && len + 1 + length($i) > width) { print out; out = ""; len = 0 }
+        out = len > 0 ? out " " $i : $i
+        len += (len > 0 ? 1 : 0) + length($i)
+      }
+    }
+    END { if (len > 0) print out }' <<<"${*:3}")
 }
 
 # What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
@@ -156,7 +204,7 @@ wait_until() {
 
 answers() { curl -fsS -o /dev/null "$1" 2>/dev/null; }
 
-wait_for() { wait_until 120 answers "$1" || die "$2 did not answer at $1 within 120s; see '$0 logs'"; }
+wait_for() { wait_until 120 answers "$1" || die "$2 did not answer within 120s; see '$0 logs'. It was asked at $1"; }
 
 # Whether the coffee shop's address, its load balancer, answers from version $1.
 serves_version() { curl -fsS "$APP_URL/status" 2>/dev/null | grep -Eq "^Version: +$1\$"; }
@@ -208,10 +256,10 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 # The tools up and up-local need, checked before anything is pulled, built, or started. Without curl, the wait for
 # each service would retry for two minutes and then blame the service.
 check_tools() {
-  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
+  need docker "install Docker: https://docs.docker.com/get-started/get-docker/"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
   docker compose version >/dev/null 2>&1 ||
-    die "the demo needs Docker Compose v2, the docker compose plugin (https://docs.docker.com/compose/install/)"
+    die "the demo needs Docker Compose v2, the docker compose plugin: https://docs.docker.com/compose/install/"
   need curl "install curl; the demo uses it to wait for each service to answer"
 }
 
@@ -220,7 +268,7 @@ check_tools() {
 check_jdk() {
   local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
   command -v "$java" >/dev/null 2>&1 ||
-    die "building from this checkout takes a JDK 17 or later; install one, or set JAVA_HOME (https://adoptium.net)"
+    die "building from this checkout takes a JDK 17 or later; set JAVA_HOME to one, or get one at https://adoptium.net"
   version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
   if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
     die "building from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown version} ($java)"
@@ -232,14 +280,15 @@ check_jdk() {
 # presents. The certificates are the repository's test ones (testing/certs), public, so this suits a demo on a laptop
 # and nothing else; the Cloud Platforms page shows how to make your own.
 write_env() {
-  [[ -f "$ENV_FILE" ]] && return
+  grep -q '^AGENT_TOKEN=' "$ENV_FILE" 2>/dev/null && return
   b64() { base64 <"$CERTS_DIR/$1" | tr -d '\n'; }
   random_hex() { od -An -N16 -tx1 /dev/urandom | tr -d ' \n'; }
   (
     umask 077
-    cat >"$ENV_FILE" <<EOF
-# Written by demos/ktor/demo.sh, and read by docker compose (compose.yml). Not committed: delete it, and the next
-# make up writes a new one, with a new token.
+    cat >>"$ENV_FILE" <<EOF
+# Written by demos/ktor/demo.sh, and read by docker compose (compose.yml): these secrets, and any host ports make up
+# saved, moved with the KTOR_DEMO_*_PORT variables. Not committed. Delete a port's line to put it back to its default,
+# or the whole file, and the next make up writes a new one, with a new token.
 CERT_CHAIN_PEM=$(b64 server1.pem)
 PRIVATE_KEY_PEM=$(b64 server1.key)
 PROXY_CA_PEM=$(b64 ca.pem)
@@ -288,6 +337,7 @@ start_demo() {
   # The Grafana container of a demo already running, if any, which has to be restarted to read changed files.
   grafana_before="$("${COMPOSE[@]}" ps --quiet grafana 2>/dev/null || true)"
   write_env
+  save_ports
 
   if [[ $# -gt 0 ]]; then
     bold "Starting the demo with the proxy of release $1, from Docker Hub, and the coffee shop built against it"
@@ -307,9 +357,9 @@ start_demo() {
   # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config and rules (SIGHUP), and restart
   # a Grafana that was already running for its dashboards, so a demo started from an older checkout runs this one's. A
   # Grafana just created read them as they are.
-  "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
+  "${COMPOSE[@]}" --progress quiet kill --signal SIGHUP prometheus >/dev/null
   if [[ -n "$grafana_before" && "$grafana_before" == "$("${COMPOSE[@]}" ps --quiet grafana)" ]]; then
-    "${COMPOSE[@]}" restart grafana >/dev/null
+    "${COMPOSE[@]}" --progress quiet restart grafana >/dev/null
   fi
 
   for id in $old_ids; do
@@ -477,6 +527,57 @@ TOUR_PARTS=(
   "2 The secrets come from the environment"
 )
 
+# The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,
+# and how to stop this one. tour_ending <this demo's directory under demos/>
+tour_ending() {
+  local demo
+  bold "That's the tour."
+  wrap "" "" "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  echo
+  bold "The other demos:"
+  for demo in basics network nginx kubernetes ktor spring-boot plain-kotlin; do
+    [[ "$demo" != "$1" ]] || continue
+    case "$demo" in
+    basics)
+      wrap "  - " "    " "Standalone agents behind a simulated firewall, with the proxy's dashboard, discovery," \
+        "eviction, and an identity for each agent, are in the basics demo, in demos/basics."
+      ;;
+    network)
+      wrap "  - " "    " "Proxy failover, filtering at the agent, and tracing, over a simulated WAN, are in the" \
+        "network demo, in demos/network."
+      ;;
+    nginx)
+      wrap "  - " "    " "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo," \
+        "in demos/nginx."
+      ;;
+    kubernetes)
+      wrap "  - " "    " "The proxy and agent deployed on Kubernetes with their Helm charts are in the Kubernetes" \
+        "demo, in demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+      ;;
+    ktor)
+      wrap "  - " "    " "The agent embedded in a Ktor app through the Ktor plugin, under load, with alerts and a" \
+        "deploy, is in the Ktor demo, in demos/ktor."
+      ;;
+    spring-boot)
+      wrap "  - " "    " "The agent embedded in a Spring Boot app written in Java, through the Spring Boot starter," \
+        "is in the Spring Boot demo, in demos/spring-boot."
+      ;;
+    plain-kotlin)
+      wrap "  - " "    " "The agent embedded in plain Kotlin programs with no framework or HTTP server, scaled out" \
+        "and in, is in the plain Kotlin demo, in demos/plain-kotlin."
+      ;;
+    esac
+  done
+  echo
+  if [[ "$1" == kubernetes ]]; then
+    wrap "" "" "This demo's two kind clusters take a few GB of memory. To delete them and free it, run" \
+      "$MAKE_NAME down, or $0 down."
+  else
+    wrap "" "" "The demos use different ports, so they can run side by side, but each takes memory and CPU." \
+      "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  fi
+}
+
 cmd_tour() {
   check_tour_from "${1:-}"
   answers "$APP_URL/healthz" ||
@@ -630,21 +731,7 @@ cmd_tour() {
 
   wait_after_output "Press Enter to finish the tour"
   blank_line
-  bold "That's the tour."
-  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  echo
-  bold "The other demos:"
-  echo "Standalone agents behind a firewall, with the proxy's dashboard, are in the basics demo, in demos/basics."
-  echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
-  echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
-  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
-    "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
-  echo "The agent in a Spring Boot app, written in Java, is in the Spring Boot demo, in demos/spring-boot."
-  echo "The agent in a plain Kotlin program with no HTTP server, scaled out and in, is in the plain Kotlin demo, in" \
-    "demos/plain-kotlin."
-  echo
-  echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
-  echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  tour_ending ktor
 }
 
 main() {
@@ -672,10 +759,28 @@ main() {
       "with the Ktor plugin, reads the app's metrics registry in-process for each scrape, and sends the metrics to" \
       "the proxy over its own connection. Prometheus scrapes the proxy at the path the agent registered," \
       "/coffee_shop_metrics, and needs no password, port, or way into the app."
+    watch_for
+    point "Past these lines are Ktor's HTTP metrics and the JVM's, which Micrometer keeps in the same registry, so" \
+      "the one path carries them all. Open it in a browser to see the whole page: $PROXY_URL/coffee_shop_metrics"
+    point "The agent's own metrics, its connection and its scrapes, come through the proxy too, at a path of their" \
+      "own that the app's code adds with agentMetricsAt: $PROXY_URL/coffee_shop_agent_metrics"
     ;;
   order)
-    local drink="${1:-latte}"
-    curl -sS -X POST "$APP_URL/orders?drink=$drink"
+    local drink="${1:-latte}" reply code
+    reply="$(curl -sS -w '%{http_code}' -X POST "$APP_URL/orders?drink=$drink")" ||
+      die "the coffee shop didn't answer; is the demo running? See '$0 status'"
+    # The status code is the last three characters, after the answer's own newline.
+    code="${reply: -3}"
+    reply="${reply%???}"
+    bold "The counter answered $code: ${reply%$'\n'}"
+    how_it_works "This sends POST /orders?drink=$drink to the coffee shop, through its load balancer: the request its" \
+      "built-in customers send about one and a half times a second. The counter queues the order for a barista with" \
+      "a 202, or turns it away: with a 429 while the queue is full, or a 503 for an espresso drink while the machine" \
+      "is broken."
+    watch_for
+    point "The app answers on its own: with the proxy stopped ($0 proxy-stop), an order still goes through, since" \
+      "the app's requests never wait on its agent."
+    point "A queued order is counted under Served on the status page once a barista has brewed it: $APP_URL"
     ;;
   rush)
     shop "/admin/rush?on=true" >/dev/null
@@ -768,9 +873,9 @@ main() {
       "then does, as the end of a rolling deploy would. The load balancer in front of the shop, its one address," \
       "sends requests to 1.0 while it runs, and to 1.1 once it has stopped."
     watch_for
-    point "The coffee shop's page, $APP_URL, now reads Version 1.1, at the same address. 1.1 is a new process, so" \
-      "its counts start from zero, and its queue, baristas, and machine are as the shop opened: the knobs now act" \
-      "on it."
+    point "1.1 is a new process, so its counts start from zero, and its queue, baristas, and machine are as the shop" \
+      "opened: the knobs now act on it. The coffee shop's page, at the same address, now reads Version 1.1:" \
+      "$APP_URL"
     point "On the proxy dashboard's Agents view, coffee-shop-1.1 has the two paths, and coffee-shop-1.0 goes once it" \
       "stops."
     point "Version 1.1's agent has a dashboard of its own, inside its app, which lists the two paths registered:" \
@@ -845,13 +950,13 @@ main() {
   debug)
     local health threads
     answers "$AGENT_ADMIN_URL/ping" ||
-      die "the coffee shop's agent didn't answer at $AGENT_ADMIN_URL; is version 1.0 running? See '$0 status'"
+      die "the coffee shop's agent didn't answer on its admin port; is version 1.0 running? See '$0 status'"
     # Each health check's name and result, from the JSON, which also holds a timestamp and a duration for each.
     health="$(curl -fsS "$AGENT_ADMIN_URL/healthcheck" | grep -oE '"[a-z_]+":\{"healthy":(true|false)' |
       sed -E -e 's/^"([a-z_]+)":\{"healthy":/\1: /' -e 's/: true$/: healthy/' -e 's/: false$/: unhealthy/' || true)"
     # Each thread in the dump starts with its name in quotes.
     threads="$(curl -fsS "$AGENT_ADMIN_URL/threaddump" | grep -c '^"' || true)"
-    bold "The agent's admin endpoints, on $AGENT_ADMIN_URL, and what each answered:"
+    bold "What each of the agent's admin endpoints answered, on $AGENT_ADMIN_URL"
     endpoint /ping "$(curl -fsS "$AGENT_ADMIN_URL/ping")"
     endpoint /version "$(curl -fsS "$AGENT_ADMIN_URL/version" |
       sed -E 's/^.*"version":"([^"]*)".*"release_date":"([^"]*)".*"build_time":"([^"]*)".*$/\1, released \2, built \3/')"
@@ -859,7 +964,7 @@ main() {
     endpoint /threaddump "$threads threads: the coffee shop's JVM, the app's as well as the agent's"
     endpoint /debug "the page below, which DEBUG_ENABLED adds"
     echo
-    bold "The agent's /debug page, $AGENT_ADMIN_URL/debug:"
+    bold "The agent's /debug page, at $AGENT_ADMIN_URL/debug"
     # awk ends the page's last line, which has no newline of its own, and leaves its blank lines empty.
     curl -fsS "$AGENT_ADMIN_URL/debug" | awk '{ print ($0 == "" ? "" : "  " $0) }'
     how_it_works "The agent in the coffee shop reads ADMIN_ENABLED=true from the container's environment" \

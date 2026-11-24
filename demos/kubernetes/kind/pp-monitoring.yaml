@@ -5,7 +5,8 @@
 # (k8s/monitoring.yaml), which these mappings publish on 127.0.0.1 only: the dashboard has no authentication, which
 # suits a demo on a laptop and nothing else. Each host port is the basics demo's plus 200, so the demos can run at
 # once. demo.sh replaces each hostPort with its KUBERNETES_DEMO_*_PORT variable, named in the line's comment, when
-# it creates the cluster; a running cluster keeps the ports it was created with.
+# it creates the cluster; a running cluster keeps the ports it was created with, and demo.sh reads them back from it
+# when a variable isn't set.
 #
 # The agent in pp-target reaches the proxy's gRPC NodePort (the chart's agentService) at this node's address on
 # Docker's kind network, which needs no mapping here.

@@ -39,10 +39,25 @@ MIN_KIND_VERSION=0.33.0
 # The services `make up` deploys (k8s/services.yaml); part 3 adds search (k8s/search.yaml).
 SERVICES=(orders payments shipping)
 
-# The host ports kind publishes pp-monitoring's NodePorts on (kind/pp-monitoring.yaml), read as it creates the cluster.
-DASHBOARD_PORT="${KUBERNETES_DEMO_DASHBOARD_PORT:-8294}"
-PROMETHEUS_PORT="${KUBERNETES_DEMO_PROMETHEUS_PORT:-9290}"
-PROXY_PORT="${KUBERNETES_DEMO_PROXY_PORT:-8280}"
+# The host port a pp-monitoring NodePort is published on, from the node container's port mappings, or nothing, as
+# when the cluster isn't there.
+published_port() {
+  docker port "$MONITORING-control-plane" "$1/tcp" 2>/dev/null | sed -nE 's/^127\.0\.0\.1:([0-9]+)$/\1/p' | head -1 ||
+    true
+}
+
+# A host port kind publishes a pp-monitoring NodePort on (kind/pp-monitoring.yaml): its variable's value, read as kind
+# creates the cluster, or, with the variable unset, the port the running cluster publishes, so a port moved when the
+# clusters were created stays moved for every command after; or else the default.
+# cluster_port <the variable's value> <NodePort> <default>
+cluster_port() {
+  local port="$1"
+  [[ -n "$port" ]] || port="$(published_port "$2")"
+  echo "${port:-$3}"
+}
+DASHBOARD_PORT="$(cluster_port "${KUBERNETES_DEMO_DASHBOARD_PORT:-}" 30094 8294)"
+PROMETHEUS_PORT="$(cluster_port "${KUBERNETES_DEMO_PROMETHEUS_PORT:-}" 30090 9290)"
+PROXY_PORT="$(cluster_port "${KUBERNETES_DEMO_PROXY_PORT:-}" 30080 8280)"
 DASHBOARD_URL="http://localhost:$DASHBOARD_PORT/dashboard"
 PROMETHEUS_URL="http://localhost:$PROMETHEUS_PORT"
 PROXY_URL="http://localhost:$PROXY_PORT"
@@ -67,13 +82,21 @@ text_width() {
 }
 
 # Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
-# wrap <first> <rest> <text>...
+# wrap <first> <rest> <text>... It breaks lines only between words, and gives a word longer than a line, such as a
+# Prometheus URL, a line of its own, unbroken, so a terminal still opens it as a link.
 wrap() {
   local first="$1" rest="$2" line
   while IFS= read -r line; do
-    printf '%s%s\n' "$first" "${line% }"
+    printf '%s%s\n' "$first" "$line"
     first="$rest"
-  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+  done < <(awk -v width=$(($(text_width) - ${#rest})) '{
+      for (i = 1; i <= NF; i++) {
+        if (len > 0 && len + 1 + length($i) > width) { print out; out = ""; len = 0 }
+        out = len > 0 ? out " " $i : $i
+        len += (len > 0 ? 1 : 0) + length($i)
+      }
+    }
+    END { if (len > 0) print out }' <<<"${*:3}")
 }
 
 # What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
@@ -149,11 +172,11 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 
 check_tools() {
   local kind_version helm_version
-  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
+  need docker "install Docker: https://docs.docker.com/get-started/get-docker/"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
-  need kind "install kind $MIN_KIND_VERSION or later (https://kind.sigs.k8s.io/)"
-  need kubectl "install kubectl (https://kubernetes.io/docs/tasks/tools/)"
-  need helm "install Helm 3 or 4 (https://helm.sh/docs/intro/install/)"
+  need kind "install kind $MIN_KIND_VERSION or later: https://kind.sigs.k8s.io/"
+  need kubectl "install kubectl: https://kubernetes.io/docs/tasks/tools/"
+  need helm "install Helm 3 or 4: https://helm.sh/docs/intro/install/"
   # Without curl, the wait for each service would retry until its deadline and then blame the service.
   need curl "install curl; the demo uses it to wait for each service to answer"
   kind_version="$(kind version | sed -nE 's/^kind v([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
@@ -171,7 +194,7 @@ check_jdk() {
   local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
   command -v "$java" >/dev/null 2>&1 ||
     die "building the proxy and agent from this checkout takes a JDK 17 or later;" \
-      "install one, or set JAVA_HOME (https://adoptium.net)"
+      "set JAVA_HOME to one, or get one at https://adoptium.net"
   version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
   if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
     die "building the proxy and agent from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown" \
@@ -180,11 +203,6 @@ check_jdk() {
 }
 
 cluster_exists() { kind get clusters 2>/dev/null | grep -qx "$1"; }
-
-# The host port a pp-monitoring NodePort is published on, from the node container's port mappings, or nothing.
-published_port() {
-  docker port "$MONITORING-control-plane" "$1/tcp" 2>/dev/null | sed -nE 's/^127\.0\.0\.1:([0-9]+)$/\1/p' | head -1
-}
 
 # Creates a cluster from its kind config, with the KUBERNETES_DEMO_*_PORT variables in place of the host ports the
 # config tags with their names. kind makes the new cluster kubectl's current context; the demo names its context on
@@ -211,15 +229,18 @@ create_cluster() {
   fi
 }
 
-# A running pp-monitoring keeps the ports it was created with; say so, rather than print URLs that don't answer. The
-# agent dashboard's port isn't one of them: kubectl port-forward holds it only while agent-dashboard runs.
+# A running pp-monitoring keeps the ports it was created with, so a variable set to another port can't move one; say
+# so, rather than print URLs that don't answer. The agent dashboard's port isn't one of them: kubectl port-forward
+# holds it only while agent-dashboard runs.
 check_ports() {
-  local port want node_port
-  for node_port in 30094:"$DASHBOARD_PORT" 30090:"$PROMETHEUS_PORT" 30080:"$PROXY_PORT"; do
-    want="${node_port#*:}"
-    port="$(published_port "${node_port%%:*}")"
+  local entry node_port want variable port
+  for entry in 30094:"$DASHBOARD_PORT":KUBERNETES_DEMO_DASHBOARD_PORT \
+    30090:"$PROMETHEUS_PORT":KUBERNETES_DEMO_PROMETHEUS_PORT 30080:"$PROXY_PORT":KUBERNETES_DEMO_PROXY_PORT; do
+    IFS=: read -r node_port want variable <<<"$entry"
+    port="$(published_port "$node_port")"
     [[ "$port" == "$want" ]] ||
-      die "$MONITORING publishes port ${port:-none} where $want was asked for; '$MAKE_NAME down' first to move it"
+      die "$MONITORING publishes port ${port:-none} where $variable asks for $want; unset $variable to keep" \
+        "the cluster's port, or run '$MAKE_NAME down' first to move it"
   done
 }
 
@@ -290,7 +311,7 @@ ensure_token() {
 wait_for() {
   local url="$1" name="$2" deadline=$((SECONDS + 120))
   until curl -fsS -o /dev/null "$url" 2>/dev/null; do
-    ((SECONDS < deadline)) || die "$name did not answer at $url within 120s; see '$0 status'"
+    ((SECONDS < deadline)) || die "$name did not answer within 120s; see '$0 status'. It was asked at $url"
     sleep 2
   done
 }
@@ -608,6 +629,10 @@ cmd_clusters() {
   "${MK[@]}" -n monitoring get configmap prometheus-config -o go-template='{{index .data "prometheus.yml"}}' |
     sed -n '/^scrape_configs:/,$p' | grep -v '^ *#'
   echo
+  how_it_works "This only reads, and changes nothing. It runs kubectl get services across every namespace of" \
+    "$TARGET, and helm list across every namespace of each cluster, each naming its cluster's context. Then it" \
+    "prints the scrape_configs section of Prometheus's config, without its comments, from the prometheus-config" \
+    "ConfigMap in $MONITORING, which Prometheus mounts."
   watch_for
   point "Every Service in $TARGET is ClusterIP, so nothing in it can be reached from outside the cluster. The" \
     "agent opened its connection from $TARGET to the proxy's NodePort in $MONITORING; nothing connected in."
@@ -733,8 +758,8 @@ cmd_change_config() {
     point "Scrapes failed for the gap measured above, between the old pod stopping and the new one registering its" \
       "paths."
     point "The new pod's agent_metrics carries the JVM's metrics. In Prometheus," \
-      "count({job=\"prometheus-agent\", __name__=~\"jvm_.*|process_.*\"}) found no series before, and now finds" \
-      "about 80."
+      "count({job=\"prometheus-agent\", __name__=~\"jvm_.*|process_.*\"}) found no series before, and finds about" \
+      "80 within about 10 seconds, at Prometheus's next scrape of the new pod."
     point "Compare part 3, where the targets changed and nothing restarted. That's why the agent chart keeps its" \
       "targets in a ConfigMap of their own, which the agent re-reads in place."
     point "If $0 agent-dashboard was running, it fails at the next request, since it reached the old pod; run it" \
@@ -750,6 +775,14 @@ cmd_restore_config() {
   if switch_agent_config "$DEMO_DIR/config/agent.conf" config/agent.conf; then
     how_it_works "This runs the same helm upgrade with config/agent.conf alone, so the config's checksum changes" \
       "back, and the Deployment replaces the agent's pod again."
+    watch_for
+    point "Scrapes failed again for the gap measured above: putting a config back costs a restart, as changing it" \
+      "did."
+    point "The new pod's agent_metrics carries no JVM metrics. In Prometheus," \
+      "count({job=\"prometheus-agent\", __name__=~\"jvm_.*|process_.*\"}) finds no series again, once the old pod's" \
+      "target has gone, a few seconds after the replacement."
+    point "If $0 agent-dashboard was running, it fails at the next request once more; run it again to reach the" \
+      "new pod."
   fi
 }
 
@@ -870,6 +903,57 @@ TOUR_PARTS=(
   "3 A config change restarts the agent; a targets change doesn't"
 )
 
+# The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,
+# and how to stop this one. tour_ending <this demo's directory under demos/>
+tour_ending() {
+  local demo
+  bold "That's the tour."
+  wrap "" "" "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  echo
+  bold "The other demos:"
+  for demo in basics network nginx kubernetes ktor spring-boot plain-kotlin; do
+    [[ "$demo" != "$1" ]] || continue
+    case "$demo" in
+    basics)
+      wrap "  - " "    " "Standalone agents behind a simulated firewall, with the proxy's dashboard, discovery," \
+        "eviction, and an identity for each agent, are in the basics demo, in demos/basics."
+      ;;
+    network)
+      wrap "  - " "    " "Proxy failover, filtering at the agent, and tracing, over a simulated WAN, are in the" \
+        "network demo, in demos/network."
+      ;;
+    nginx)
+      wrap "  - " "    " "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo," \
+        "in demos/nginx."
+      ;;
+    kubernetes)
+      wrap "  - " "    " "The proxy and agent deployed on Kubernetes with their Helm charts are in the Kubernetes" \
+        "demo, in demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+      ;;
+    ktor)
+      wrap "  - " "    " "The agent embedded in a Ktor app through the Ktor plugin, under load, with alerts and a" \
+        "deploy, is in the Ktor demo, in demos/ktor."
+      ;;
+    spring-boot)
+      wrap "  - " "    " "The agent embedded in a Spring Boot app written in Java, through the Spring Boot starter," \
+        "is in the Spring Boot demo, in demos/spring-boot."
+      ;;
+    plain-kotlin)
+      wrap "  - " "    " "The agent embedded in plain Kotlin programs with no framework or HTTP server, scaled out" \
+        "and in, is in the plain Kotlin demo, in demos/plain-kotlin."
+      ;;
+    esac
+  done
+  echo
+  if [[ "$1" == kubernetes ]]; then
+    wrap "" "" "This demo's two kind clusters take a few GB of memory. To delete them and free it, run" \
+      "$MAKE_NAME down, or $0 down."
+  else
+    wrap "" "" "The demos use different ports, so they can run side by side, but each takes memory and CPU." \
+      "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  fi
+}
+
 cmd_tour() {
   check_tour_from "${1:-}"
   curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
@@ -931,7 +1015,7 @@ cmd_tour() {
   if part 4 "Here you delete the agent's pod, as a failed node or an eviction would, and see Kubernetes replace" \
     "it with nobody touching the agent."; then
     step "Delete the agent's pod." -- delete-agent-pod
-    instruct "Open the proxy dashboard's Activity view." \
+    instruct "Open the proxy dashboard's Activity view: $DASHBOARD_URL/activity" \
       "It shows the old pod's paths leaving and the new pod's arriving."
     instruct "Run ./demo.sh agent-dashboard again, and open the agent's Activity view: $AGENT_DASHBOARD_URL/activity" \
       "The port-forward in the second terminal reached the old pod, so it fails at the next request after the" \
@@ -949,8 +1033,7 @@ cmd_tour() {
 
   wait_after_output "Press Enter to finish the tour"
   blank_line
-  bold "That's the tour."
-  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  tour_ending kubernetes
 }
 
 main() {

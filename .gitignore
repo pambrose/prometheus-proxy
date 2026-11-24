@@ -2,12 +2,13 @@
 build/
 .superset
 
-# The Ktor demo's secrets, which its demo.sh writes for docker compose, and its app's Kotlin daemon state
-demos/ktor/docker/.env
-.kotlin/
+# Each demo's docker/.env, which its demo.sh writes for docker compose: the ports moved with its *_PORT variables, and
+# the Ktor and Spring Boot demos' secrets
+demos/*/docker/.env
+demos/*/docker/.env.new
 
-# The Spring Boot demo's secrets, which its demo.sh writes for docker compose, and its app's Maven build
-demos/spring-boot/docker/.env
+# The Ktor demo's app's Kotlin daemon state, and the Spring Boot demo's app's Maven build
+.kotlin/
 demos/spring-boot/app/target/
 
 # TLA+ tools (downloaded by `make tla-checks`) and TLC's working files

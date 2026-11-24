@@ -20,6 +20,21 @@ DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/ktor-demo"
+# Where demo.sh's up keeps the host ports moved with the *_PORT variables, so the URLs below match what compose
+# publishes with no variable set again.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, as demo.sh does.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
 
 APP_URL="http://localhost:${KTOR_DEMO_APP_PORT:-8390}"
 DASHBOARD_URL="http://localhost:${KTOR_DEMO_DASHBOARD_PORT:-8394}/dashboard"

@@ -12,6 +12,46 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
 MAKE_NAME="${MAKE##*/}"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# Where up keeps the host ports moved with the *_PORT variables (docker/compose.yml's list), so each later command, and
+# docker compose, which reads this file on its own, uses them with no variable set again. Not committed. Delete a
+# port's line to go back to its default.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
+# publishes. A variable set on the command line wins, and up saves it in turn.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
+
+# Saves in docker/.env each port variable compose.yml reads that the environment sets, in place of its old line,
+# keeping the file's other lines: save_ports
+save_ports() {
+  local name saved=""
+  local -a lines=()
+  while IFS= read -r name; do
+    if [[ -n "${!name:-}" ]]; then
+      lines+=("$name=${!name}")
+      saved+="|$name"
+    fi
+  done < <(grep -oE '\$\{[A-Z0-9_]+_PORT:-' "$DEMO_DIR/docker/compose.yml" | sed 's/^\${//; s/:-$//' | sort -u)
+  ((${#lines[@]})) || return 0
+  (
+    umask 077
+    {
+      # The file's other lines; grep finds none when every line is a port saved again, which isn't a failure
+      [[ ! -f "$PORTS_FILE" ]] || grep -vE "^(${saved#|})=" "$PORTS_FILE" || true
+      printf '%s\n' "${lines[@]}"
+    } >"$PORTS_FILE.new"
+    mv "$PORTS_FILE.new" "$PORTS_FILE"
+  )
+}
 # The proxy and agent images the demo runs, under these tags whichever way they came: pulled from Docker Hub (up)
 # or built from this checkout (up-local). The other demos run the same tags, so there's one copy of each.
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
@@ -65,13 +105,21 @@ text_width() {
 }
 
 # Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
-# wrap <first> <rest> <text>...
+# wrap <first> <rest> <text>... It breaks lines only between words, and gives a word longer than a line, such as a
+# Prometheus URL, a line of its own, unbroken, so a terminal still opens it as a link.
 wrap() {
   local first="$1" rest="$2" line
   while IFS= read -r line; do
-    printf '%s%s\n' "$first" "${line% }"
+    printf '%s%s\n' "$first" "$line"
     first="$rest"
-  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+  done < <(awk -v width=$(($(text_width) - ${#rest})) '{
+      for (i = 1; i <= NF; i++) {
+        if (len > 0 && len + 1 + length($i) > width) { print out; out = ""; len = 0 }
+        out = len > 0 ? out " " $i : $i
+        len += (len > 0 ? 1 : 0) + length($i)
+      }
+    }
+    END { if (len > 0) print out }' <<<"${*:3}")
 }
 
 # What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
@@ -211,7 +259,7 @@ reset_wan() {
 wait_for() {
   local url="$1" name="$2" deadline=$((SECONDS + 120))
   until curl -fsS -o /dev/null "$url" 2>/dev/null; do
-    ((SECONDS < deadline)) || die "$name did not answer at $url within 120s; see '$0 logs'"
+    ((SECONDS < deadline)) || die "$name did not answer within 120s; see '$0 logs'. It was asked at $url"
     sleep 2
   done
 }
@@ -257,8 +305,23 @@ agent_jobs() {
   fi
 }
 
-# Whether a proxy's container is running.
+# Whether a service's container is running.
 running() { [[ -n "$("${COMPOSE[@]}" ps --status running --quiet "$1" 2>/dev/null)" ]]; }
+
+# Stops a command that needs the demo with a message, rather than Docker's errors, when it isn't running. The wan
+# service stands for the demo: up starts it, down removes it, and no scenario stops it.
+require_running() {
+  running wan || die "the demo isn't running; start it with '$MAKE_NAME up' in demos/network"
+}
+
+# Whether agent-branch runs with the filter: its container's AGENT_CONFIG names the filtered config (compose.yml).
+branch_filtered() {
+  local id env
+  id="$("${COMPOSE[@]}" ps --quiet agent-branch 2>/dev/null)"
+  [[ -n "$id" ]] || return 1
+  env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$id")"
+  grep -qx 'AGENT_CONFIG=/app/agent-branch-filtered.conf' <<<"$env"
+}
 
 # Whether the dashboard at a base URL lists a connected agent by this name. Each agent's row carries its name as a
 # data attribute (agentListInner in ProxyDashboardHtml.kt), and the closing quote keeps one name from matching another
@@ -295,10 +358,10 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 # The tools up and up-local need, checked before anything is pulled, built, or started. Without curl, the wait for
 # each service would retry for two minutes and then blame the service.
 check_tools() {
-  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
+  need docker "install Docker: https://docs.docker.com/get-started/get-docker/"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
   docker compose version >/dev/null 2>&1 ||
-    die "the demo needs Docker Compose v2, the docker compose plugin (https://docs.docker.com/compose/install/)"
+    die "the demo needs Docker Compose v2, the docker compose plugin: https://docs.docker.com/compose/install/"
   need curl "install curl; the demo uses it to wait for each service to answer"
 }
 
@@ -309,7 +372,7 @@ check_jdk() {
   local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
   command -v "$java" >/dev/null 2>&1 ||
     die "building the proxy and agent from this checkout takes a JDK 17 or later;" \
-      "install one, or set JAVA_HOME (https://adoptium.net)"
+      "set JAVA_HOME to one, or get one at https://adoptium.net"
   version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
   if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
     die "building the proxy and agent from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown" \
@@ -355,6 +418,7 @@ cmd_up_local() {
 # with ones built from this checkout (start_demo).
 start_demo() {
   local old_ids id
+  save_ports
   # The images the demo ran, to remove below once nothing tags them: a build from changed code makes new ones, and a
   # release's tags replace a build's. One another demo still runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
@@ -372,8 +436,8 @@ start_demo() {
   # Compose recreates a container when its own config changes, not when a file it mounts does, and neither Prometheus
   # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config and rules (SIGHUP), and restart
   # Grafana for its dashboard, so a demo started from an older checkout runs this one's.
-  "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
-  "${COMPOSE[@]}" restart grafana >/dev/null
+  "${COMPOSE[@]}" --progress quiet kill --signal SIGHUP prometheus >/dev/null
+  "${COMPOSE[@]}" --progress quiet restart grafana >/dev/null
 
   for id in $old_ids; do
     if [[ -z "$(docker image inspect -f '{{join .RepoTags ""}}' "$id" 2>/dev/null)" ]]; then
@@ -494,6 +558,7 @@ cmd_heal() {
 # The tour: the presenter's script (README.md), one part at a time. It numbers each part's steps, and waits for Enter
 # after each one, and before it runs a scenario.
 TOUR_FROM=1
+TOUR_PART=0
 TOUR_STEP=0
 # Whether the last thing the tour printed was a pause, which leaves an empty line of its own.
 AFTER_PAUSE=0
@@ -551,6 +616,7 @@ part() {
   shift
   ((n >= TOUR_FROM)) || return 1
   wait_after_output "Press Enter to go on to part $n"
+  TOUR_PART="$n"
   TOUR_STEP=0
   blank_line
   bold "Part $n of ${#TOUR_PARTS[@]}: ${TOUR_PARTS[n - 1]#* }"
@@ -577,7 +643,8 @@ instruct() {
 
 # A step that runs a scenario once the presenter presses Enter: step <what it does>... -- <command> [argument]. What
 # it does is joined into one paragraph. It runs as ./demo.sh from this directory, so the commands it prints read
-# ./demo.sh too, and its stdin is closed, so docker compose can't take the tour's input.
+# ./demo.sh too, and its stdin is closed, so docker compose can't take the tour's input. A scenario that fails ends
+# the tour, saying how to start the part again.
 step() {
   local -a text=()
   while [[ "$1" != -- ]]; do
@@ -587,7 +654,9 @@ step() {
   shift
   number_step "${text[*]}"
   pause "Press Enter to run ./demo.sh $*"
-  (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null)
+  (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null) ||
+    die "./demo.sh $* failed, which ends the tour. To start part $TOUR_PART again, which heals the demo first, run" \
+      "$MAKE_NAME tour PART=$TOUR_PART, or $0 tour $TOUR_PART"
   AFTER_PAUSE=0
 }
 
@@ -610,10 +679,69 @@ TOUR_PARTS=(
   "3 The whole WAN goes down: an alert fires, and the agents reconnect"
 )
 
+# The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,
+# and how to stop this one. tour_ending <this demo's directory under demos/>
+tour_ending() {
+  local demo
+  bold "That's the tour."
+  wrap "" "" "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  echo
+  bold "The other demos:"
+  for demo in basics network nginx kubernetes ktor spring-boot plain-kotlin; do
+    [[ "$demo" != "$1" ]] || continue
+    case "$demo" in
+    basics)
+      wrap "  - " "    " "Standalone agents behind a simulated firewall, with the proxy's dashboard, discovery," \
+        "eviction, and an identity for each agent, are in the basics demo, in demos/basics."
+      ;;
+    network)
+      wrap "  - " "    " "Proxy failover, filtering at the agent, and tracing, over a simulated WAN, are in the" \
+        "network demo, in demos/network."
+      ;;
+    nginx)
+      wrap "  - " "    " "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo," \
+        "in demos/nginx."
+      ;;
+    kubernetes)
+      wrap "  - " "    " "The proxy and agent deployed on Kubernetes with their Helm charts are in the Kubernetes" \
+        "demo, in demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+      ;;
+    ktor)
+      wrap "  - " "    " "The agent embedded in a Ktor app through the Ktor plugin, under load, with alerts and a" \
+        "deploy, is in the Ktor demo, in demos/ktor."
+      ;;
+    spring-boot)
+      wrap "  - " "    " "The agent embedded in a Spring Boot app written in Java, through the Spring Boot starter," \
+        "is in the Spring Boot demo, in demos/spring-boot."
+      ;;
+    plain-kotlin)
+      wrap "  - " "    " "The agent embedded in plain Kotlin programs with no framework or HTTP server, scaled out" \
+        "and in, is in the plain Kotlin demo, in demos/plain-kotlin."
+      ;;
+    esac
+  done
+  echo
+  if [[ "$1" == kubernetes ]]; then
+    wrap "" "" "This demo's two kind clusters take a few GB of memory. To delete them and free it, run" \
+      "$MAKE_NAME down, or $0 down."
+  else
+    wrap "" "" "The demos use different ports, so they can run side by side, but each takes memory and CPU." \
+      "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  fi
+}
+
 cmd_tour() {
   check_tour_from "${1:-}"
-  curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-    die "the demo isn't running; start it with '$MAKE_NAME up' in demos/network"
+  require_running
+  # A tour stopped part-way leaves the demo as that part left it, with a proxy stopped, a link cut, or agent-branch
+  # filtered, and every part expects it as up starts it. heal puts back the WAN, the proxies, and the agents, and
+  # unfilter puts back agent-branch's config. unfilter runs only when agent-branch has the filter, since compose would
+  # also recreate an unfiltered agent-branch whose image another demo has rebuilt since.
+  echo
+  wrap "" "" "Putting the demo back as $MAKE_NAME up starts it, which each part expects: every link healed, both" \
+    "proxies running, both agents on the primary, and agent-branch without the filter."
+  { "$DEMO_DIR/demo.sh" heal && { ! branch_filtered || "$DEMO_DIR/demo.sh" unfilter; }; } </dev/null >/dev/null 2>&1 ||
+    die "the demo couldn't be put back as $MAKE_NAME up starts it; to see why, run $0 heal"
   tour_contents "network demo"
 
   if part 1 "This demo runs the basics demo's proxy and agents with a simulated WAN between them, so you can" \
@@ -697,21 +825,16 @@ cmd_tour() {
 
   wait_after_output "Press Enter to finish the tour"
   blank_line
-  bold "That's the tour."
-  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  echo
-  bold "The other demos:"
-  echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
-  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
-    "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
-  echo
-  echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
-  echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  tour_ending network
 }
 
 main() {
   local cmd="${1:-}"
   [[ $# -gt 0 ]] && shift
+  # Every scenario changes the running demo (the tour checks for it too).
+  case "$cmd" in
+  far | thin | filter | unfilter | proxy-down | proxy-up | cut | flaky | wan-down | wan-up | heal) require_running ;;
+  esac
   case "$cmd" in
   up) cmd_up ;;
   up-local) cmd_up_local ;;
@@ -946,10 +1069,9 @@ main() {
       "and the agent stays on $(primary_link "$agent"), with no 'failed over' tag. Its Activity view shows each drop" \
       "as disconnected, then connected and registered: $(agent_dashboard "$agent")/activity"
     point "Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats and the" \
-      "stream of path notices, under its own service name. In Zipkin, the search is serviceName = $agent and" \
-      "spanName = proxyservice/connectagent. Open this link, which fills that search in, and click Run Query:"
-    # On a line of its own, unwrapped: it's longer than a narrow terminal's text, and wrap would split it.
-    printf '    %s\n' "$ZIPKIN_URL/zipkin/?serviceName=$agent&spanName=proxyservice%2Fconnectagent"
+      "stream of path notices, under its own service name. To see $agent's reconnects, open Zipkin's search for" \
+      "serviceName = $agent and spanName = proxyservice/connectagent, which this link fills in, and click Run Query:" \
+      "$ZIPKIN_URL/zipkin/?serviceName=$agent&spanName=proxyservice%2Fconnectagent"
     point "Each reconnect is a connectagent trace, followed by registeragent and a registerpath for each path." \
       "Zipkin joins the agent's side and the proxy's side of each call into one span, so the trace names both."
     follow_up "To undo it, run" "$0 heal"

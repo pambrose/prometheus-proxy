@@ -83,10 +83,12 @@ under a minute.
 | The agent's `/debug` page, on its admin port | <http://localhost:8393/debug> |
 
 The ports are the [Basics Demo](basics-demo.md)'s plus 300, so the two can run side by side. Every port binds to
-`127.0.0.1` only. To move one that is already taken, set `KTOR_DEMO_APP_PORT`, `KTOR_DEMO_DASHBOARD_PORT`,
-`KTOR_DEMO_GRAFANA_PORT`, `KTOR_DEMO_PROMETHEUS_PORT`, `KTOR_DEMO_PROXY_PORT`,
-`KTOR_DEMO_AGENT_ADMIN_PORT`, `KTOR_DEMO_AGENT_DASHBOARD_PORT`, or
-`KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT`, for example `KTOR_DEMO_GRAFANA_PORT=3301 make up`.
+`127.0.0.1` only. To move one that is already taken, set its variable for `make up`, for example
+`KTOR_DEMO_GRAFANA_PORT=3301 make up`. `make up` saves it in `docker/.env`, which every later command and docker
+compose read, so you set it once; delete its line there to go back to the default. The variables are
+`KTOR_DEMO_APP_PORT`, `KTOR_DEMO_DASHBOARD_PORT`, `KTOR_DEMO_GRAFANA_PORT`, `KTOR_DEMO_PROMETHEUS_PORT`,
+`KTOR_DEMO_PROXY_PORT`, `KTOR_DEMO_AGENT_ADMIN_PORT`, `KTOR_DEMO_AGENT_DASHBOARD_PORT`, and
+`KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT`.
 
 ## What's running
 
@@ -100,8 +102,8 @@ The ports are the [Basics Demo](basics-demo.md)'s plus 300, so the two can run s
 | `grafana` | Opens on the Coffee Shop dashboard, which links to the two dashboards the project ships. |
 
 The secrets are the repository's test certificates and a token, which `make up` writes to the demo's `docker/.env`
-the first time it runs. The certificates are public, so this suits a laptop and nothing shared;
-[Cloud Platforms](cloud-platforms.md#securing-the-link) shows how to make your own.
+the first time it runs, beside any port you moved. The certificates are public, so this suits a laptop and nothing
+shared; [Cloud Platforms](cloud-platforms.md#securing-the-link) shows how to make your own.
 
 ## The app and its agent
 
@@ -126,13 +128,16 @@ The agent reads the app's registry in-process, so Prometheus needs no password, 
 On the proxy dashboard, the embedded agent is an agent like any other: `coffee-shop-1.0`, named after the app's version,
 with two paths, the coffee shop's metrics and its own, and its scrapes as they happen.
 
-The agent has a [dashboard](agent-dashboard.md) of its own, served from inside the app at
-<http://localhost:8395/dashboard>, with its side of the same two paths: each one's registration with the proxy, and its
-recent scrapes as the agent saw them. Select `coffee_shop_metrics`, whose target is `in-process`, and **Scrape now**
-reads the app's registry at once, from inside the app, and shows what came back, whether or not the proxy has the path. Its Connection view shows the agent's connection to the proxy, and its Activity view what the agent did, in
-order. The coffee shop's environment turns it on, with nothing in the app's code: `DASHBOARD_ENABLED=true`, and a
-`DASHBOARD_PORT` for each version, 8395 for 1.0 and 8396 for 1.1, which the agent reads itself, over anything the app's
-code sets.
+The agent has a [dashboard](agent-dashboard.md) of its own, served from inside the app, with its side of the same two
+paths: each one's registration with the proxy, and its recent scrapes as the agent saw them. Select
+`coffee_shop_metrics`, whose target is `in-process`, and **Scrape now** reads the app's registry at once, from inside
+the app, and shows what came back, whether or not the proxy has the path. Its Connection view shows the agent's
+connection to the proxy, and its Activity view what the agent did, in order. Open it at
+<http://localhost:8395/dashboard>
+
+The coffee shop's environment turns the agent's dashboard on, with nothing in the app's code: `DASHBOARD_ENABLED=true`,
+and a `DASHBOARD_PORT` for each version, 8395 for 1.0 and 8396 for 1.1, which the agent reads itself, over anything the
+app's code sets.
 
 ## Where the agent is configured
 
@@ -194,20 +199,21 @@ the queue, and with the espresso machine broken, about three orders in four fail
 ## A deploy
 
 <figure markdown="span">
-  ![The Paths view after a deploy: coffee-shop-1.1 serves both paths](images/ktor-demo/deploy.webp#only-dark){ loading=lazy }
-  ![The Paths view after a deploy: coffee-shop-1.1 serves both paths](images/ktor-demo/deploy-light.webp#only-light){ loading=lazy }
-  <figcaption>After a deploy, version 1.1's agent serves both paths</figcaption>
+  ![The proxy dashboard's Paths view after a deploy: coffee-shop-1.1 serves both paths](images/ktor-demo/deploy.webp#only-dark){ loading=lazy }
+  ![The proxy dashboard's Paths view after a deploy: coffee-shop-1.1 serves both paths](images/ktor-demo/deploy-light.webp#only-light){ loading=lazy }
+  <figcaption>The proxy dashboard's Paths view after a deploy: version 1.1's agent serves both paths</figcaption>
 </figure>
 
 `./demo.sh deploy` starts version 1.1 beside 1.0, then stops 1.0, as a rolling deploy does. 1.1's agent registers the
 same paths with the same token, and the proxy gives each one to the newer registration, so Prometheus scrapes 1.0
 through 1.0's agent, then 1.1 through 1.1's, with no gap in the graphs. The coffee shop keeps one address throughout:
-its load balancer sends requests to 1.0 while it runs, and to 1.1 once it has stopped, so the status page at
-<http://localhost:8390> now reads Version 1.1. Each version's agent has its own dashboard, inside its own app: 1.1's,
-at <http://localhost:8396/dashboard>, lists the two paths registered. The proxy tells 1.0's agent it gave the paths
-away, so until 1.0 stops, its own dashboard shows them as `retrying`, taken over by `coffee-shop-1.1`, and had 1.1
-stopped first, as a failed deploy's new version does, 1.0's agent would have taken them back within seconds.
-`./demo.sh rollback` puts 1.0 back.
+its load balancer sends requests to 1.0 while it runs, and to 1.1 once it has stopped, so the status page now reads
+Version 1.1. The proxy tells 1.0's agent it gave the paths away, so until 1.0 stops, its own dashboard shows them as
+`retrying`, taken over by `coffee-shop-1.1`, and had 1.1 stopped first, as a failed deploy's new version does, 1.0's
+agent would have taken them back within seconds. `./demo.sh rollback` puts 1.0 back.
+
+Each version's agent has its own dashboard, inside its own app, and 1.1's lists the two paths registered:
+<http://localhost:8396/dashboard>
 
 ## Debugging the agent
 
@@ -247,14 +253,17 @@ Docker to publish its port, which the demo binds to `127.0.0.1`.
 
 `./demo.sh proxy-stop` stops the proxy. The coffee shop keeps serving, and an order still goes through
 (`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach
-the proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown` fires. The agent's `/debug` page, <http://localhost:8393/debug>,
-shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its
-`/healthcheck` still reads healthy. On the agent's dashboard, the Connection view,
-<http://localhost:8395/dashboard/connection>, reads `failing`, with the error the agent's last try to reach
-`proxy:50051` got, and its paths read `pending`. `./demo.sh proxy-start` brings the proxy back, and the agent
-reconnects within a few seconds and registers its paths again. The dashboard's Activity view,
-<http://localhost:8395/dashboard/activity>, then tells the outage in order, newest first: the paths `registered`,
-`connected`, `connect failed`, and `disconnected`.
+the proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown` fires. The agent's
+`/debug` page shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its
+`/healthcheck` still reads healthy: <http://localhost:8393/debug>
+
+On the agent's dashboard, the Connection view reads `failing`, with the error the agent's last try to reach
+`proxy:50051` got, and its paths read `pending`. It's the first place to look when an agent won't connect:
+<http://localhost:8395/dashboard/connection>
+
+`./demo.sh proxy-start` brings the proxy back, and the agent reconnects within a few seconds and registers its paths
+again. The dashboard's Activity view then tells the outage in order, newest first: the paths `registered`,
+`connected`, `connect failed`, and `disconnected`. Open it at <http://localhost:8395/dashboard/activity>
 
 ## Secrets from the environment
 
@@ -266,21 +275,22 @@ no shell to write a variable to a file, takes its certificate and key as base64 
 
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `demo.sh peek` | Looks for the coffee shop's `/metrics`, which it doesn't have, then reads its metrics through the proxy |
-| `demo.sh order [drink]` | Orders a drink at the counter (default `latte`) |
-| `demo.sh rush` / `calm` | Starts a rush, or ends it and keeps three baristas |
-| `demo.sh baristas <count>` | Puts this many baristas on shift, from 1 to 12 |
-| `demo.sh break-machine` / `fix-machine` | Every espresso drink fails, or is served again |
-| `demo.sh deploy` / `rollback` | Deploys version 1.1 beside 1.0 and stops 1.0, or puts 1.0 back |
-| `demo.sh proxy-stop` / `proxy-start` | Stops or starts the proxy |
-| `demo.sh debug` | Calls each of the agent's admin endpoints, and shows its `/debug` page |
-| `demo.sh secrets` | Shows where the secrets come from |
-| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |
-| `make status` | The containers, the coffee shop's state, and the URLs |
-| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |
-| `make open` | Opens the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in the browser |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh peek` | Looks for the coffee shop's `/metrics`, which it doesn't have, then reads its metrics through the proxy | `curl` of the app's `/metrics`, then of the proxy's `/coffee_shop_metrics` |
+| `demo.sh order [drink]` | Orders a drink at the counter (default `latte`) | `POST /orders?drink=<drink>` |
+| `demo.sh rush` | Customers order three times as often | `POST /admin/rush?on=true` |
+| `demo.sh baristas <count>` | Puts this many baristas on shift (1 to 12) | `POST /admin/baristas?count=<count>`: one sent home finishes the drink in hand |
+| `demo.sh calm` | Ends the rush, and keeps three baristas | `POST /admin/rush?on=false` and `/admin/baristas?count=3` |
+| `demo.sh break-machine` / `fix-machine` | Every espresso drink fails, or is served again | `POST /admin/machine?broken=true` / `false` |
+| `demo.sh deploy` / `rollback` | Deploys version 1.1 beside 1.0 and stops 1.0, or puts 1.0 back | Starts `coffee-shop-next` (compose profile `deploy`), whose agent takes the paths, then stops `coffee-shop`, and the load balancer sends the shop's requests to 1.1; `rollback` the other way round |
+| `demo.sh proxy-stop` / `proxy-start` | Stops or starts the proxy | `docker compose stop` / `start proxy`: the agent retries every 3 seconds until it's back |
+| `demo.sh debug` | Calls each of the agent's admin endpoints, and shows its `/debug` page | `curl` of `/ping`, `/version`, `/healthcheck`, `/threaddump`, and `/debug` on the agent's admin port, which the coffee shop's environment turns on |
+| `demo.sh secrets` | Shows where the secrets come from | The names of the app's and the proxy's variables, and the app's container's files |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, the coffee shop's state, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in the browser |  |
 
 `calm`, `fix-machine`, `rollback`, and `proxy-start` undo every scenario. For a clean slate, `make down && make up`.
 
@@ -293,8 +303,16 @@ no shell to write a variable to a file, takes its certificate and key as base64 
   Apps, and the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, with your own certificate and token.
 - [Embedded Agent](embedded-agent.md) covers the API the coffee shop uses, and the agent's logging and metrics inside
   a host app.
-- The [Spring Boot Demo](spring-boot-demo.md) embeds the agent in a Spring Boot app written in Java with the Spring
-  Boot starter, and shows the agent's lifecycle with the app's, the app's metrics read in-process, and the versions
-  Spring Boot picks.
-- The [Basics Demo](basics-demo.md) runs standalone agents behind a simulated firewall, with the proxy's dashboard.
-- The [nginx Demo](nginx-demo.md) puts the proxy behind nginx, a reverse proxy that ends the agents' TLS.
+- The other demos, in the order the [Demos](demos/index.md) page gives them:
+    - [Basics Demo](basics-demo.md): the whole system on one machine, the proxy and its dashboard, three agents behind
+      a simulated firewall, Prometheus, and Grafana
+    - [Network Demo](network-demo.md): a simulated WAN between the agents and the proxies, and what a far, thin, dead,
+      flaky, or missing link does
+    - [nginx Demo](nginx-demo.md): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS
+      ended on one port
+    - [Kubernetes Demo](kubernetes-demo.md): the Helm charts on two kind clusters, with Kubernetes doing the operating
+      and the target cluster exposing nothing
+    - [Spring Boot Demo](spring-boot-demo.md): a roastery, a Spring Boot app in Java whose agent the starter starts
+      from properties
+    - [Plain Kotlin Demo](plain-kotlin-demo.md): a bakery's ovens, workers with no framework or HTTP server, each
+      reading its own metrics in-process

@@ -96,10 +96,12 @@ minutes. After that it starts in under a minute, and runs without a network conn
 
 Each port is the Basics Demo's plus 100, so the two demos can run side by side. Every port binds to `127.0.0.1` only:
 the dashboards run without their login and Grafana keeps its default admin password, which suits a laptop and nothing
-shared. To move a port that is already taken, set `NETWORK_DEMO_DASHBOARD_PORT`, `NETWORK_DEMO_STANDBY_DASHBOARD_PORT`,
-`NETWORK_DEMO_HQ_DASHBOARD_PORT`, `NETWORK_DEMO_BRANCH_DASHBOARD_PORT`, `NETWORK_DEMO_GRAFANA_PORT`,
-`NETWORK_DEMO_PROMETHEUS_PORT`, `NETWORK_DEMO_PROXY_PORT`, or `NETWORK_DEMO_ZIPKIN_PORT`, for example
-`NETWORK_DEMO_GRAFANA_PORT=3101 make up`.
+shared. To move a port that is already taken, set its variable for `make up`, for example
+`NETWORK_DEMO_GRAFANA_PORT=3101 make up`. `make up` saves it in `docker/.env`, which every later command and docker
+compose read, so you set it once; delete its line there to go back to the default. The variables are
+`NETWORK_DEMO_DASHBOARD_PORT`, `NETWORK_DEMO_STANDBY_DASHBOARD_PORT`, `NETWORK_DEMO_HQ_DASHBOARD_PORT`,
+`NETWORK_DEMO_BRANCH_DASHBOARD_PORT`, `NETWORK_DEMO_GRAFANA_PORT`, `NETWORK_DEMO_PROMETHEUS_PORT`,
+`NETWORK_DEMO_PROXY_PORT`, and `NETWORK_DEMO_ZIPKIN_PORT`.
 
 ## What's running
 
@@ -268,8 +270,9 @@ agent stays on `branch-to-proxy:50053`, with no **failed over** tag; its Activit
 
 Every proxy and agent reports a [Zipkin](advanced.md#zipkin-tracing) span for each gRPC call between them but
 heartbeats and the stream of path notices, under its own service name. In Zipkin, the search is `serviceName` =
-`agent-branch` and `spanName` = `proxyservice/connectagent`.
-Open <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that search in, and click **Run Query**.
+`agent-branch` and `spanName` = `proxyservice/connectagent`. Open
+<http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that search
+in, and click **Run Query**.
 
 <figure markdown="span">
   ![A reconnect's connectagent call, traced from agent-branch to the proxy](images/network-demo/tracing.webp){ loading=lazy }
@@ -283,8 +286,8 @@ and appear as the connection closes, each about 15 seconds long: as long as the 
 
 Each scrape is a trace of its own: the proxy's `scrape` span, a `forward` span for the agent it went to, and under that
 agent-branch's `fetch` of the target, which joins the trace the proxy sent with the request. Open
-<http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A failed scrape's spans are red: the one in flight as a connection drops ends its
-`forward` span as `agent_disconnected`.
+<http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A failed scrape's
+spans are red: the one in flight as a connection drops ends its `forward` span as `agent_disconnected`.
 
 ### The whole WAN goes down: an alert fires, and the agents reconnect
 
@@ -328,7 +331,7 @@ the standby to the primary.
 | `demo.sh flaky [agent]` | Closes each connection through the agent's link to the primary after about 15 seconds of its traffic | A `limit_data` toxic, which closes each connection after a set number of bytes |
 | `demo.sh wan-down` / `wan-up` | Takes every link down, or brings every link back | Disables or enables all four Toxiproxy links; a disabled link closes its connections and refuses new ones |
 | `demo.sh heal` | Removes every change to the WAN, brings back every link and proxy, and returns any agent on the standby to the primary | Removes the toxics, enables the links, starts the proxies, and disables an agent's link to the standby for a second, so it reconnects to the primary |
-| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step | First runs `heal`, and `unfilter` if agent-branch has the filter, so a part starts from the demo as `make up` starts it |
 | `make status` | The containers, each link's state and changes, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
 | `make open` | Opens both proxy dashboards, agent-branch's dashboard, Grafana, and Prometheus's alerts in the browser |  |
@@ -341,13 +344,19 @@ clean slate, `make down && make up`.
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/network) has these scenarios as
   a guided tour, explaining how each one works, and lists the files that set the demo up,
   including which Toxiproxy toxic each scenario uses.
-- The [nginx Demo](nginx-demo.md) puts nginx, a reverse proxy that ends the agents' TLS, between the agents and the
-  proxy, and shows what its stream timeouts and its reloads do to an agent's connection, and what the dashboard needs
-  behind it.
-- The [Kubernetes Demo](kubernetes-demo.md) deploys the same proxy and agent with their Helm charts on two kind
-  clusters, and shows Kubernetes driving the agent's targets and replacing its pod. It needs kind, `kubectl`, and Helm
-  as well as Docker.
 - [Agent Dashboard](agent-dashboard.md) covers the agent's own dashboard: its Paths, Connection, Activity, and Settings
   views, and Scrape now.
 - [Running in Production](production.md#high-availability) covers a standby proxy and the agent's ordered endpoints.
 - [Advanced Topics](advanced.md#stale-agent-cleanup) covers how the proxy evicts a silent agent.
+- The other demos, in the order the [Demos](demos/index.md) page gives them:
+    - [Basics Demo](basics-demo.md): the whole system on one machine, the proxy and its dashboard, three agents behind
+      a simulated firewall, Prometheus, and Grafana
+    - [nginx Demo](nginx-demo.md): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS
+      ended on one port
+    - [Kubernetes Demo](kubernetes-demo.md): the Helm charts on two kind clusters, with Kubernetes doing the operating
+      and the target cluster exposing nothing
+    - [Ktor Demo](ktor-demo.md): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+    - [Spring Boot Demo](spring-boot-demo.md): a roastery, a Spring Boot app in Java whose agent the starter starts
+      from properties
+    - [Plain Kotlin Demo](plain-kotlin-demo.md): a bakery's ovens, workers with no framework or HTTP server, each
+      reading its own metrics in-process

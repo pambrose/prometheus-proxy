@@ -93,8 +93,9 @@ the agent's and Python's, which takes a few minutes. After that, `make up` on ru
 Each port is the Basics Demo's plus 200, so all the demos can run side by side. kind publishes them on `127.0.0.1`
 only, through NodePort Services in the monitoring cluster: the dashboard runs without its login, which suits a laptop
 and nothing shared. To move a port that is already taken, set `KUBERNETES_DEMO_DASHBOARD_PORT`,
-`KUBERNETES_DEMO_PROMETHEUS_PORT`, or `KUBERNETES_DEMO_PROXY_PORT` when the cluster is created, for example
-`KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`.
+`KUBERNETES_DEMO_PROMETHEUS_PORT`, or `KUBERNETES_DEMO_PROXY_PORT` for the `make up` that creates the clusters, for
+example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You set it once: every command after reads the ports back from
+the running cluster, which keeps them until `make down` deletes it.
 
 The agent's dashboard is the exception, since the target cluster publishes no port: `./demo.sh agent-dashboard` reaches
 it with `kubectl port-forward`, on `localhost` only, and holds its port only while it runs.
@@ -290,5 +291,15 @@ original config back, with another replacement.
   agent's targets ConfigMap feeds.
 - [Agent Dashboard](agent-dashboard.md) covers the agent's dashboard: each view, Scrape now, and its login, which the
   agent chart's `dashboard.login.existingSecret` turns on.
-- The [Ktor Demo](ktor-demo.md) runs the agent inside an app instead, a Ktor coffee shop, and the
-  [Spring Boot Demo](spring-boot-demo.md) inside a Spring Boot app written in Java.
+- The other demos, in the order the [Demos](demos/index.md) page gives them:
+    - [Basics Demo](basics-demo.md): the whole system on one machine, the proxy and its dashboard, three agents behind
+      a simulated firewall, Prometheus, and Grafana
+    - [Network Demo](network-demo.md): a simulated WAN between the agents and the proxies, and what a far, thin, dead,
+      flaky, or missing link does
+    - [nginx Demo](nginx-demo.md): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS
+      ended on one port
+    - [Ktor Demo](ktor-demo.md): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+    - [Spring Boot Demo](spring-boot-demo.md): a roastery, a Spring Boot app in Java whose agent the starter starts
+      from properties
+    - [Plain Kotlin Demo](plain-kotlin-demo.md): a bakery's ovens, workers with no framework or HTTP server, each
+      reading its own metrics in-process

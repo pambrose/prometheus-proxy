@@ -53,7 +53,7 @@ services:
   # The app. demo.sh builds its image (app/Dockerfile): against the latest release, from Maven Central (make up), or
   # from the build on the host against this checkout (make up-local).
   coffee-shop:
-    image: prometheus-proxy-demo/embedded-app:local
+    image: prometheus-proxy-demo/ktor-app:local
     build:
       context: ../app
       additional_contexts:
@@ -82,7 +82,7 @@ services:
   # The next release of the app, which `demo.sh deploy` starts beside the running one, as a rolling deploy does.
   # The load balancer sends it the shop's requests once the deploy has stopped 1.0.
   coffee-shop-next:
-    image: prometheus-proxy-demo/embedded-app:local
+    image: prometheus-proxy-demo/ktor-app:local
     profiles: [deploy]
     environment:
       <<: *coffee-shop-env

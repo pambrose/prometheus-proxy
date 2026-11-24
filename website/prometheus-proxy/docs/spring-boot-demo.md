@@ -88,9 +88,12 @@ a minute.
 | The roastery's metrics, through the proxy | <http://localhost:8480/roastery_metrics> |
 
 The ports are the [Basics Demo](basics-demo.md)'s plus 400, so the demos can run side by side. Every port binds to
-`127.0.0.1` only. To move one that is already taken, set `SPRING_BOOT_DEMO_APP_PORT`, `SPRING_BOOT_DEMO_DASHBOARD_PORT`,
-`SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_PROMETHEUS_PORT`, or `SPRING_BOOT_DEMO_PROXY_PORT`, for
-example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`.
+`127.0.0.1` only. To move one that is already taken, set its variable for `make up`: `SPRING_BOOT_DEMO_APP_PORT`,
+`SPRING_BOOT_DEMO_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_PROMETHEUS_PORT`, or
+`SPRING_BOOT_DEMO_PROXY_PORT`, for example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`. `make up` saves it in the demo's
+`docker/.env`, which every later command and docker compose read, so you set it once; delete its line there to go back
+to the default. The same file holds the demo's secrets, the repository's test certificates and a token, which `make up`
+writes the first time it runs.
 
 ## What's running
 
@@ -138,14 +141,16 @@ which starts the agent against a proxy and scrapes through it, so a Spring Boot 
 there. Were one to break it, the app's pom sets that library to the agent's version with the property Spring Boot names
 it by, such as `grpc-java.version` or `netty.version`, which Spring Boot's
 [Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
-library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom pins `netty-tcnative-classes` and
+library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
 `netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
 ## The agent's dashboard
 
-The agent serves a [dashboard](agent-dashboard.md) of its own, from inside the roastery, at
-<http://localhost:8495/dashboard>. The demo's compose file turns it on with an environment variable, which Spring Boot
-binds to the starter's `prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change:
+The agent serves a [dashboard](agent-dashboard.md) of its own, from inside the roastery:
+<http://localhost:8495/dashboard>
+
+The demo's compose file turns it on with an environment variable, which Spring Boot binds to the starter's
+`prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change:
 
 ```yaml
 services:
@@ -172,7 +177,9 @@ adds connected and registered.
 ## A graceful shutdown
 
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. The agent, in the
-last lifecycle phase, stops first, and the roastery's log shows the order:
+last lifecycle phase, stops first: it disconnects from the proxy, which drops the roastery's path and stops sending
+scrapes before Spring Boot starts shutting down the rest of the app, so no scrape reaches an app that's going away. The
+roastery's log shows the order:
 
 ``` { .text .pp-output title="The roastery's log" }
 Stopping the Prometheus agent roastery-1.0
@@ -182,18 +189,24 @@ Graceful shutdown complete
 
 `./demo.sh start-app` starts it again, and the agent registers its path once more.
 
+The [Plain Kotlin Demo](plain-kotlin-demo.md)'s ovens stop the other way round: each finishes the order it's baking,
+then stops its agent. A worker with no web server has no requests to drain, and nothing a scrape could find half shut
+down, so its agent serves the oven's metrics until its work is done.
+
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `./demo.sh settings` | Shows the agent's settings as Spring Boot bound them, and the agent starting |
-| `./demo.sh peek` | Tries `/actuator/prometheus`, which the roastery doesn't expose, then reads its metrics through the proxy |
-| `./demo.sh health` | Shows the agent in Actuator's `/actuator/health`: connected, and to which proxy |
-| `./demo.sh versions` | Compares the versions of the agent's libraries in the roastery with the agent's own |
-| `./demo.sh proxy-stop` / `proxy-start` | Stops the proxy, or starts it again, which the agent's dashboard shows |
-| `./demo.sh stop-app` / `start-app` | Stops the roastery with SIGTERM, or starts it again |
-| `make status` | The containers, the roastery's state, and the URLs |
-| `make logs SERVICE=roastery` | Follows one service's log |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh settings` | Shows the agent's settings as Spring Boot bound them, and the agent starting | The roastery's log lines from the starter's `PrometheusProxyAgent` and the agent |
+| `demo.sh peek` | Tries `/actuator/prometheus`, which the roastery doesn't expose, then reads its metrics through the proxy | `curl` of the app's `/actuator/prometheus`, then of the proxy's `/roastery_metrics` |
+| `demo.sh health` | Shows the agent in Actuator's `/actuator/health`: connected, and to which proxy | `curl` of the app's `/actuator/health`, whose `prometheusAgent` component the starter reports from `EmbeddedAgentInfo.isConnected` |
+| `demo.sh versions` | Compares the versions of the agent's libraries in the roastery with the agent's own | The jar names in the image's `/app/lib`, against `gradle/libs.versions.toml` |
+| `demo.sh proxy-stop` / `proxy-start` | Stops the proxy, or starts it again, which the agent's dashboard shows | `docker compose stop` / `start proxy`: the agent retries every few seconds, its dashboard's Connection view shows the error, and its Activity view the disconnect and the reconnect |
+| `demo.sh stop-app` / `start-app` | Stops the roastery with SIGTERM, or starts it again | `docker compose stop` / `start roastery`: Spring Boot stops the agent first, then shuts down the web server |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, the roastery's state, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the roastery, the proxy's and the agent's dashboards, and Prometheus's graph of the batches roasted in the browser |  |
 
 ## Going further
 
@@ -203,7 +216,17 @@ Graceful shutdown complete
   and changing the agent's settings in code.
 - [Embedded Agent](embedded-agent.md) covers the API the starter builds on.
 - [Agent Dashboard](agent-dashboard.md) covers the agent's dashboard: its views, and the settings that turn it on.
-- The [Ktor Demo](ktor-demo.md) runs a Kotlin app with the agent embedded under load, with Grafana, alerts, a
-  deploy, the proxy going away, and secrets from the environment.
 - [Cloud Platforms](cloud-platforms.md) sets an app with the agent embedded up for real, and
   [Packaging the App](cloud-platforms.md#packaging-the-app) covers its image.
+- The other demos, in the order the [Demos](demos/index.md) page gives them:
+    - [Basics Demo](basics-demo.md): the whole system on one machine, the proxy and its dashboard, three agents behind
+      a simulated firewall, Prometheus, and Grafana
+    - [Network Demo](network-demo.md): a simulated WAN between the agents and the proxies, and what a far, thin, dead,
+      flaky, or missing link does
+    - [nginx Demo](nginx-demo.md): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS
+      ended on one port
+    - [Kubernetes Demo](kubernetes-demo.md): the Helm charts on two kind clusters, with Kubernetes doing the operating
+      and the target cluster exposing nothing
+    - [Ktor Demo](ktor-demo.md): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+    - [Plain Kotlin Demo](plain-kotlin-demo.md): a bakery's ovens, workers with no framework or HTTP server, each
+      reading its own metrics in-process

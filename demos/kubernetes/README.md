@@ -78,12 +78,13 @@ To show it without a network connection, run `make up` once beforehand and leave
 `make open` opens the proxy dashboard and Prometheus's targets in your browser.
 
 Every port is the basics demo's plus 200, so all the demos can run at once. kind publishes them when it creates
-`pp-monitoring`, so to move one that's already taken, set its variable when the cluster is created, and for every
-command after, for example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. The variables are
-`KUBERNETES_DEMO_DASHBOARD_PORT`, `KUBERNETES_DEMO_PROMETHEUS_PORT`, and `KUBERNETES_DEMO_PROXY_PORT`; the dashboard's
-link into Prometheus keeps the default port (`config/proxy.conf`). A running cluster keeps the ports it was created
-with, and `make up` says so if they differ: `make down` first. Every port binds to `127.0.0.1` only. The dashboard runs
-without its login, so this setup is for a laptop, not for anything shared.
+`pp-monitoring`, so to move one that's already taken, set its variable for the `make up` that creates the clusters, for
+example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You set it once: every command after reads the ports back from
+the running cluster. The variables are `KUBERNETES_DEMO_DASHBOARD_PORT`, `KUBERNETES_DEMO_PROMETHEUS_PORT`, and
+`KUBERNETES_DEMO_PROXY_PORT`; the dashboard's link into Prometheus keeps the default port (`config/proxy.conf`). A
+running cluster keeps the ports it was created with, and `make up` says so if a variable asks for another: `make down`
+first, and the next `make up` creates the clusters with the ports you set, or the defaults. Every port binds to
+`127.0.0.1` only. The dashboard runs without its login, so this setup is for a laptop, not for anything shared.
 
 The agent dashboard's port, 8295, isn't one kind publishes: `pp-target` publishes none, and the agent chart leaves the
 dashboard off the agent's Service. `./demo.sh agent-dashboard` reaches it as the chart's notes tell an operator to,
@@ -225,7 +226,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 - That's a gap: scrapes through the proxy fail for about 1.3 seconds (1.3 to 1.4 in six runs), and the new pod's agent
   is on the dashboard about 2 seconds after the upgrade began. Its `agent_metrics` now carries the JVM's metrics, so
   `count({job="prometheus-agent", __name__=~"jvm_.*|process_.*"})` in Prometheus, which found no series before, finds
-  about 80.
+  about 80 within about 10 seconds.
 - Compare part 3, where the targets changed and nothing restarted. That's why the agent chart keeps its targets in a
   ConfigMap of their own, which the agent re-reads in place, and its main config, which only a restart applies, apart.
 - The port-forward fails at the next request here too; run `./demo.sh agent-dashboard` again. The new pod's dashboard
@@ -247,6 +248,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | Both clusters' pods and Services, the Helm releases, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows a workload's logs: `agent` (the default), `proxy`, `prometheus`, `targets-sync`, or a service |  |
+| `make open` | Opens the proxy dashboard and Prometheus's targets in the browser |  |
 
 `remove-service` and `restore-config` undo every scenario. For a clean slate, `make down && make up`.
 
@@ -321,7 +323,8 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
 
 - **`make up` fails creating `pp-monitoring` with a port in use**: another service holds 8294, 9290, or 8280, and not
   another demo, since none of them uses those ports. Move it with the variables above, then `make down && make up`.
-- **`make up` says a port differs**: the running `pp-monitoring` was created with other ports. `make down` first.
+- **`make up` says a port differs**: a variable asks for a port other than the one the running `pp-monitoring` was
+  created with. Unset it to keep the cluster's port, or `make down` first to move it.
 - **The dashboard shows no agent**: `make logs` shows the agent's log, and `make status` both clusters' pods. The
   agent reaches the proxy through `pp-monitoring`'s node address, which changes if Docker restarts the node:
   `make up` installs the agent with the current one.
@@ -335,3 +338,19 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
   authentication and listens on all interfaces. All are expected here: the token crosses only Docker's `kind` network
   on this machine, every published port binds to `127.0.0.1`, and the agent's dashboard is on no Service, so only
   `kubectl port-forward` reaches it.
+
+## The other demos
+
+In the order the website's [Demos](https://prometheus-proxy.com/demos/) page gives them:
+
+- [Basics demo](../basics): the whole system on one machine, the proxy and its dashboard, three agents behind a
+  simulated firewall, Prometheus, and Grafana
+- [Network demo](../network): a simulated WAN between the agents and the proxies, and what a far, thin, dead, flaky, or
+  missing link does
+- [nginx demo](../nginx): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS ended on one
+  port
+- [Ktor demo](../ktor): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+- [Spring Boot demo](../spring-boot): a roastery, a Spring Boot app in Java whose agent the starter starts from
+  properties
+- [Plain Kotlin demo](../plain-kotlin): a bakery's ovens, workers with no framework or HTTP server, each reading its own
+  metrics in-process

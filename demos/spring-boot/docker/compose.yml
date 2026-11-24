@@ -1,7 +1,7 @@
 # The Spring Boot demo (../README.md): the roastery, a Spring Boot app with the prometheus-proxy agent embedded, the
 # stock proxy, and Prometheus. demo.sh starts it, and writes .env beside this file, which compose reads: the proxy's TLS
-# certificate and key, the CA certificate the agent trusts, and the agent's token. Every port is published on 127.0.0.1
-# only.
+# certificate and key, the CA certificate the agent trusts, the agent's token, and any host ports moved with the
+# SPRING_BOOT_DEMO_*_PORT variables below. Every port is published on 127.0.0.1 only.
 name: prometheus-proxy-spring-boot-demo
 
 services:
