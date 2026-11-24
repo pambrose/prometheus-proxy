@@ -205,7 +205,7 @@ consolidation and identity conflicts, and a path another agent took over, which 
 leave; it doesn't retry the others while it stays connected.
 
 The proxy logs the first rejection of a path for an agent connection at WARN, and an identical repeat at
-DEBUG -- an agent retries a rejection that can clear, and a lasting conflict would otherwise fill the log.
+DEBUG — an agent retries a rejection that can clear, and a lasting conflict would otherwise fill the log.
 A multi-segment path is logged at ERROR, and a path the agent's identity may not register at WARN, each time, as the
 agent retries neither. To see every attempt, set `io.prometheus.proxy.ProxyPathManager` to DEBUG. The agent logs its
 own side of the same conflict, so its log shows whether it is still retrying.

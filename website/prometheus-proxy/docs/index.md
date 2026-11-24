@@ -41,30 +41,30 @@ graph LR
 
 The system comprises two components:
 
-- **Proxy** -- runs outside the firewall alongside Prometheus. Accepts scrape requests from Prometheus
+- **Proxy** — runs outside the firewall alongside Prometheus. Accepts scrape requests from Prometheus
   on HTTP (port 8080) and communicates with agents via gRPC (port 50051).
-- **Agent** -- runs inside the firewall with monitored services. Initiates an *outbound* gRPC
+- **Agent** — runs inside the firewall with monitored services. Initiates an *outbound* gRPC
   connection to the proxy and responds to scrape requests by fetching metrics from local endpoints.
 
 ## Key Benefits
 
-- **Firewall-friendly** -- only requires an outbound connection from the agent
-- **Preserves pull model** -- Prometheus continues to pull metrics as normal
-- **High performance** -- built with Kotlin coroutines and gRPC streaming
-- **Secure** -- optional TLS with mutual authentication, plus
+- **Firewall-friendly** — only requires an outbound connection from the agent
+- **Preserves pull model** — Prometheus continues to pull metrics as normal
+- **High performance** — built with Kotlin coroutines and gRPC streaming
+- **Secure** — optional TLS with mutual authentication, plus
   [per-agent identities](security/index.md#per-agent-identities-and-path-authorization) that scope
   each agent to the paths it may register
-- **Scalable** -- one proxy supports many agents, each serving multiple paths
-- **Highly available** -- agents [fail over](production.md#high-availability) across an ordered list
+- **Scalable** — one proxy supports many agents, each serving multiple paths
+- **Highly available** — agents [fail over](production.md#high-availability) across an ordered list
   of proxies, and return to a recovered primary at their next reconnect
-- **Dynamic** -- agents pick up target changes from a
+- **Dynamic** — agents pick up target changes from a
   [watched file](configuration/agent.md#dynamic-target-discovery) at runtime, no restart needed
-- **Bandwidth-conscious** -- optional per-path
+- **Bandwidth-conscious** — optional per-path
   [metric filtering](configuration/agent.md#metric-filtering) drops unwanted families at the agent,
   before they cross the WAN
-- **Observable** -- a [live dashboard](web-dashboard.md) shows every agent, path, and recent
+- **Observable** — a [live dashboard](web-dashboard.md) shows every agent, path, and recent
   scrape in one place, and scrapes a path on demand
-- **Embeddable** -- the agent can [run inside a JVM app](embedded-agent.md), with its settings
+- **Embeddable** — the agent can [run inside a JVM app](embedded-agent.md), with its settings
   built in code, so an app on a [cloud platform](cloud-platforms.md) needs no secret files
 - **Zero changes** to existing Prometheus configuration patterns
 
@@ -72,7 +72,7 @@ The system comprises two components:
 
 Get running in under a minute:
 
-=== "CLI"
+=== "JAR"
 
     ```bash
     # Start the proxy

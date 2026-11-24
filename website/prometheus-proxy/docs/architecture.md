@@ -10,19 +10,19 @@ icon: lucide/layers
 
 The Proxy runs outside the firewall alongside the Prometheus server. It provides:
 
-- **HTTP Service** (default port 8080) -- serves metrics endpoints that Prometheus scrapes
-- **gRPC Service** (default port 50051) -- accepts persistent connections from agents
-- **Service Discovery** -- optional HTTP SD endpoint for Prometheus auto-discovery
-- **Admin/Metrics** -- optional health checks and operational metrics
+- **HTTP Service** (default port 8080) — serves metrics endpoints that Prometheus scrapes
+- **gRPC Service** (default port 50051) — accepts persistent connections from agents
+- **Service Discovery** — optional HTTP SD endpoint for Prometheus auto-discovery
+- **Admin/Metrics** — optional health checks and operational metrics
 
 ### Agent
 
 The Agent runs inside the firewall with the monitored services. It provides:
 
-- **gRPC Client** -- establishes and maintains an *outbound* connection to the proxy
-- **HTTP Client** -- scrapes actual metrics endpoints on behalf of the proxy
-- **Path Registration** -- registers configured endpoints with the proxy
-- **Heartbeat** -- sends periodic keep-alive messages to maintain the connection
+- **gRPC Client** — establishes and maintains an *outbound* connection to the proxy
+- **HTTP Client** — scrapes actual metrics endpoints on behalf of the proxy
+- **Path Registration** — registers configured endpoints with the proxy
+- **Heartbeat** — sends periodic keep-alive messages to maintain the connection
 
 ## Request Flow
 
@@ -132,15 +132,15 @@ agent.internal {
 
 ## Connection Lifecycle
 
-1. **Startup** -- Agent reads configuration and initializes services
-2. **Connection** -- Agent establishes outbound gRPC connection to proxy
-3. **Registration** -- Agent registers its identity and configured paths; a path rejected because a live
+1. **Startup** — Agent reads configuration and initializes services
+2. **Connection** — Agent establishes outbound gRPC connection to proxy
+3. **Registration** — Agent registers its identity and configured paths; a path rejected because a live
    agent holds it is retried while the agent stays connected, first after `agent.internal.rejectedPathRetrySecs`
    for a static path, or `agent.discovery.reconcileIntervalSecs` for a discovered one, and then on a backoff that
    doubles up to `agent.internal.rejectedPathRetryMaxSecs`
-4. **Operation** -- Agent processes scrape requests and sends heartbeats
-5. **Reconnection** -- On disconnect, agent automatically reconnects with rate limiting
-6. **Shutdown** -- Graceful cleanup of connections and resources
+4. **Operation** — Agent processes scrape requests and sends heartbeats
+5. **Reconnection** — On disconnect, agent automatically reconnects with rate limiting
+6. **Shutdown** — Graceful cleanup of connections and resources
 
 ## Stale Agent Cleanup
 

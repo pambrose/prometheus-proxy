@@ -144,18 +144,18 @@ Since 4.3.0, three more groups are available, also off by default:
 | Metric                                    | Labels    | Description                                                     |
 |:------------------------------------------|:----------|:----------------------------------------------------------------|
 | `proxy_scrape_requests_total`             | `type`    | Scrape request outcomes (see below)                             |
-| `proxy_connect_count_total`               | --        | Agent connects the proxy accepted                               |
+| `proxy_connect_count_total`               | —         | Agent connects the proxy accepted                               |
 | `proxy_agent_connect_refusals_total`      | `reason`  | Agent connects refused (see below)                              |
 | `proxy_agent_disconnects_total`           | `reason`  | Agents the proxy removed: `eviction`, `termination`, `stream_terminated` |
-| `proxy_eviction_count_total`              | --        | Stale agent evictions                                           |
-| `proxy_heartbeat_count_total`             | --        | Heartbeats the proxy accepted                                   |
+| `proxy_eviction_count_total`              | —         | Stale agent evictions                                           |
+| `proxy_heartbeat_count_total`             | —         | Heartbeats the proxy accepted                                   |
 | `proxy_agent_auth_failures_total`         | `reason`  | Agent calls refused for their token: `missing_token`, `unknown_token` |
 | `proxy_path_rejections_total`             | `cause`   | Path registrations refused, by cause (see below)                |
 | `proxy_binding_mismatches_total`          | `rpc`     | Agent calls naming another agent or identity than their connection's |
-| `proxy_late_scrape_results_total`         | --        | Scrape results that arrived after their scrape had ended        |
+| `proxy_late_scrape_results_total`         | —         | Scrape results that arrived after their scrape had ended        |
 | `proxy_chunk_validation_failures_total`   | `stage`   | Chunk integrity failures (`chunk` or `summary`)                 |
-| `proxy_chunked_transfers_abandoned_total` | --        | Chunked transfers whose scrape ended before they finished       |
-| `proxy_agent_displacement_total`          | --        | Path registrations that displaced another agent                 |
+| `proxy_chunked_transfers_abandoned_total` | —         | Chunked transfers whose scrape ended before they finished       |
+| `proxy_agent_displacement_total`          | —         | Path registrations that displaced another agent                 |
 | `proxy_dashboard_logins_total`            | `outcome` | Dashboard logins: `success`, `failure`, `blocked`               |
 
 **`proxy_scrape_requests_total` type labels:**
@@ -235,7 +235,7 @@ timeout, counts in `proxy_late_scrape_results_total`. The scrape itself was alre
 | Metric                                 | Labels             | Description                                                   |
 |:---------------------------------------|:-------------------|:--------------------------------------------------------------|
 | `proxy_scrape_request_latency_seconds` | `path`, `outcome`  | End-to-end scrape latency                                     |
-| `proxy_scrape_queue_wait_seconds`      | --                 | Time a scrape waited before the agent's stream took it        |
+| `proxy_scrape_queue_wait_seconds`      | —                  | Time a scrape waited before the agent's stream took it        |
 | `proxy_scrape_response_bytes`          | `path`, `encoding` | Response payload size after decompression                     |
 
 A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`. A scrape still in flight when that happens is not recorded, so it cannot bring the series back.

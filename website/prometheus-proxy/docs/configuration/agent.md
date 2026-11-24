@@ -103,8 +103,8 @@ Ansible template, or a cron job querying a service registry. Automation then nee
 write a file, never to restart the agent, and the churning target list stays separate from the stable
 config holding ports, TLS, and the proxy address.
 
-A fully annotated version of this file -- required versus defaulted fields, the single-segment `path`
-rule, HOCON substitutions, and the empty-versus-deleted distinction -- ships as
+A fully annotated version of this file — required versus defaulted fields, the single-segment `path`
+rule, HOCON substitutions, and the empty-versus-deleted distinction — ships as
 [`examples/discovery-targets.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/discovery-targets.conf)
 and is shown verbatim on the [Example Configs](../examples.md) page.
 
@@ -274,7 +274,7 @@ rather than nested inside `pathConfigs`:
 | `metricNameAllow` | Yes      | Fully-anchored regexes; an empty list allows every family     |
 | `metricNameDeny`  | Yes      | Fully-anchored regexes; evaluated after `metricNameAllow`     |
 
-Both list fields must be present on every element -- write `metricNameAllow: []` for a deny-only
+Both list fields must be present on every element — write `metricNameAllow: []` for a deny-only
 filter. The default is `filters: []` (no filtering), so an existing config with no `filters` key loads
 unchanged.
 
@@ -284,9 +284,9 @@ to match `go_goroutines`.
 
 **Matching is against the metric family, not each series.** A `# HELP` or `# TYPE` line (or `# UNIT`,
 for OpenMetrics) opens a family and the allow/deny verdict is computed once against the family name;
-every sample line that belongs to that family -- the exact name, or the name plus a recognized
+every sample line that belongs to that family — the exact name, or the name plus a recognized
 histogram/summary/OpenMetrics suffix (`_bucket`, `_sum`, `_count`, `_created`, `_total`, `_gsum`,
-`_gcount`, `_info`) -- inherits that verdict instead of being matched again. A histogram's `_bucket`,
+`_gcount`, `_info`) — inherits that verdict instead of being matched again. A histogram's `_bucket`,
 `_sum`, and `_count` series are therefore always kept or dropped together, along with the family's
 metadata lines. One consequence worth knowing: once a family is open, a series-level rule such as
 `metricNameDeny: [ "http_req_duration_seconds_bucket" ]` is a silent no-op, since the `_bucket` lines
@@ -341,7 +341,7 @@ of its series missing.
 
     A non-text `Content-Type` (protobuf, an HTML error body) passes through unfiltered. A body that is
     not valid UTF-8 also passes through unfiltered and byte-exact rather than risk corrupting it. Both
-    conditions log a warning once per path -- the worst case is bandwidth not saved, never a corrupted
+    conditions log a warning once per path — the worst case is bandwidth not saved, never a corrupted
     payload.
 
 Filters apply by path to both statically configured paths and paths added by
@@ -371,7 +371,7 @@ that actually have a filter configured:
 | `agent_filter_bytes_saved_total`   | `launch_id`, `path`           | Bytes removed from the payload by the filter |
 | `agent_filter_fail_open_total`     | `launch_id`, `path`, `reason` | Scrapes let through unfiltered, by reason    |
 
-Not implemented: `dropLabels`, metric renaming/relabeling, and an agent-global filter -- every filter
+Not implemented: `dropLabels`, metric renaming/relabeling, and an agent-global filter — every filter
 is per-path.
 
 ## Consolidated Mode
@@ -383,7 +383,7 @@ agents to register the same path:
 --8<-- "ConfigExamples.txt:consolidated-mode"
 ```
 
-This is useful for redundancy -- if one agent goes down, the others keep serving the path. Give each
+This is useful for redundancy — if one agent goes down, the others keep serving the path. Give each
 agent its own instance of the service to scrape: the proxy merges every agent's answer into each scrape,
 so agents that scrape the same endpoint send each series twice. See
 [Consolidated Mode](../advanced.md#consolidated-mode).
@@ -456,6 +456,6 @@ Here is a real-world config from the `examples/` directory:
 
 See also:
 
-- [`examples/myapps.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/myapps.conf) -- multiple endpoints
-- [`examples/federate.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf) -- Prometheus federation
-- [`examples/discovery-targets.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/discovery-targets.conf) -- a [dynamic discovery](#dynamic-target-discovery) targets file (watched, not passed to `--config`)
+- [`examples/myapps.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/myapps.conf) — multiple endpoints
+- [`examples/federate.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf) — Prometheus federation
+- [`examples/discovery-targets.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/discovery-targets.conf) — a [dynamic discovery](#dynamic-target-discovery) targets file (watched, not passed to `--config`)

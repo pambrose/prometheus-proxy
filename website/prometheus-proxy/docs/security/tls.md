@@ -103,6 +103,34 @@ every certificate, so keep it off the proxy and agent hosts.
     --8<-- "TlsExamples.txt:tls-mutual-conf"
     ```
 
+## Confirm It's On
+
+The agent logs how it connected, each time it does:
+
+```text
+Connected to proxy at proxy.example.com:50051 using TLS (no mutual auth)
+```
+
+With a certificate of its own, it says `using TLS with mutual auth`. `using plaintext` means it has no TLS settings,
+and it can't connect to a proxy that serves TLS. The [proxy's](../web-dashboard.md#the-settings-layout) and the
+[agent's](../agent-dashboard.md#the-settings-view) dashboards show the same in their Settings views' TLS row.
+
+From any host that can reach the proxy's agent port, OpenSSL shows the certificate the proxy serves, and whether it
+chains to your CA:
+
+```bash
+openssl s_client -connect proxy.example.com:50051 -CAfile ca.crt </dev/null 2>/dev/null \
+  | grep -E 'subject=|Verify return code'
+```
+
+```text
+subject=CN=proxy.example.com
+Verify return code: 0 (ok)
+```
+
+Any other return code means the agents won't trust it either: `21` (`unable to verify the first certificate`) is a
+certificate your CA didn't sign. LibreSSL, as macOS ships it, writes the subject as `subject=/CN=proxy.example.com`.
+
 ## Using the Included Test Certificates
 
 The repository includes test certificates for development:
