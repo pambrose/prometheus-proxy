@@ -1,6 +1,17 @@
-/* The site's Mermaid diagrams, which javascripts/diagrams.js makes open full size: the diagrams' cursor and focus ring,
-   and the dialog that shows one. A stylesheet in extra_css rather than a style the script adds, since instant
-   navigation rebuilds the page's head from the next page's, keeping only what every page lists. */
+/* The site's Mermaid diagrams, which javascripts/diagrams.js makes open full size: the size their labels are measured
+   at, the diagrams' cursor and focus ring, and the dialog that shows one. A stylesheet in extra_css rather than a style
+   the script adds, since instant navigation rebuilds the page's head from the next page's, keeping only what every page
+   lists. */
+
+/* Mermaid measures each label in a scratch copy of the diagram that it adds to the page's body, d<id> for the theme's
+   id __mermaid_<n>, and sizes the boxes, and the room between them, to fit. The copy's own style sets its labels'
+   16px; this sets it on the copy itself too, so a browser that hasn't applied that style yet measures them at 16px
+   rather than at the body's smaller size, which once had Safari cut off the subgraphs' titles and run labels past their
+   boxes. */
+body > div[id^="d__mermaid_"] {
+  font-size: 16px;
+}
+
 .md-typeset div.mermaid[role="button"] {
   cursor: zoom-in;
 }

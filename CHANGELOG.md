@@ -267,7 +267,8 @@ All notable changes to this project are documented in this file.
   that walks through them
 - The pages that said the dashboard has no authentication say how to set its login, and that it needs TLS in front
 - The docs site's diagrams open full size with a click, or Enter, and stay sharp at any size. They wait for the page's
-  font before they're drawn, so on a first visit their labels no longer overflow their boxes
+  font before they're drawn, and their labels are measured at the size they're drawn at, so on a first visit, Safari's
+  included, their labels no longer overflow their boxes
 - The demo pages' screenshots are taken at three times the pixel density, and their lightbox no longer draws one
   larger than its pixels, so their text is sharp when opened on a large screen and when zoomed
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
