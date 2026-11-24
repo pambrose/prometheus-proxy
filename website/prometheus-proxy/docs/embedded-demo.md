@@ -17,7 +17,7 @@ graph LR
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
   Agent[embedded agent, dashboard :8395] -->|gRPC over TLS, with a token| Proxy
-  Agent -->|reads its registry in-process| App[coffee shop: Ktor]
+  Agent -->|reads its registry| App[coffee shop: Ktor]
   LB[load balancer :8390] --> App
 
   subgraph Proxy host
