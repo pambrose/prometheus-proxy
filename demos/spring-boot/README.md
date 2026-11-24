@@ -111,23 +111,27 @@ bean, where Micrometer keeps the meters, so there's no metrics endpoint, passwor
 ### 3. What Spring Boot's dependency management picked
 
 Spring Boot sets the version of every library it knows, some of the agent's among them, whatever version the agent
-asks for: kotlinx-serialization, Jackson 2, Logback, and gRPC run older than the agent's own. `./demo.sh versions`
-prints the versions the roastery runs beside the ones the agent is built with.
+asks for, so some run older than the agent's own. `./demo.sh versions` prints the versions the roastery runs beside
+the ones the agent is built with, and marks each one older, the same, or newer.
 
 The agent runs with Spring Boot's versions, as the roastery shows. On every pull request,
 `make spring-boot-demo-check` builds the roastery and runs its `RoasteryAgentTest`, which starts the agent against a
-proxy and scrapes through it, so a Spring Boot release that breaks the agent fails there. Were one to break it, a
-property in the pom sets that library back: `kotlin-serialization.version`, `jackson-2-bom.version`,
-`logback.version`, or `grpc-java.version`.
+proxy and scrapes through it, so a Spring Boot release that breaks the agent fails there. Were one to break it, the pom
+sets that library to the agent's version with the property Spring Boot names it by, such as `grpc-java.version` or
+`netty.version`, which Spring Boot's
+[Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
+library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom pins `netty-tcnative-classes` and
+`netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
 ### 4. The agent's own dashboard, with the proxy stopped and started
 
 The agent serves a dashboard of its own, from inside the roastery, at <http://localhost:8495/dashboard>. Compose
 turns it on with `PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`, which Spring Boot binds to the starter's
-`prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change. Its Paths view lists
-`/roastery_metrics`, registered, with its recent scrapes. Select it to see each scrape the proxy asked for, and press
-Scrape now to have the agent read the roastery's registry at once. The Activity view lists what has happened to the
-agent, newest first, the Connection view its proxy endpoint, and the Settings view its settings.
+`prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change. Its Paths view lists `/roastery_metrics`,
+registered, with its recent scrapes. Select it to see each scrape the proxy asked for, and press Scrape now, the
+circular arrow after the path's name, to have the agent read the roastery's registry at once. The Activity view lists
+what has happened to the agent, newest first, the Connection view its proxy endpoint, and the Settings view its
+settings.
 
 `./demo.sh proxy-stop` stops the proxy, and its dashboard with it. The agent's still answers: its Connection view
 turns failing, with the error the agent got connecting to the proxy, and its Activity view adds disconnected and
@@ -140,7 +144,8 @@ adds connected and registered.
 
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. Spring Boot stops
 its lifecycle beans from the last phase down, so the agent stops first: it disconnects from the proxy, which drops
-the roastery's path, and no scrape reaches the web server once it starts draining. The roastery's log shows the order.
+the roastery's path and stops sending scrapes before Spring Boot starts shutting down the rest of the app. The
+roastery's log shows the order.
 `./demo.sh start-app` starts it again.
 
 ## Scenario reference

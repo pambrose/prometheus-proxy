@@ -113,11 +113,15 @@ has none, since it couldn't choose between them.
 
 ## Spring Boot's Versions of the Agent's Libraries
 
-Spring Boot's dependency management sets the versions of the libraries it knows, some of the agent's among them:
-kotlinx-serialization, Jackson 2, Logback, and gRPC run older than the agent's own. The agent runs with them, and the
-starter's tests run it at Spring Boot's versions, as the [Spring Boot Demo](spring-boot-demo.md) does. Were a Spring
-Boot release to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
-`jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
+Spring Boot's dependency management sets the versions of the libraries it knows, some of the agent's among them, and
+some of those run older than the agent's own. The agent runs with them, and the starter's tests run it at Spring
+Boot's versions, as the [Spring Boot Demo](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries) does,
+whose `./demo.sh versions` shows which are older. Were a Spring Boot release to break it, the app's pom sets that
+library to the agent's version with the property Spring Boot names it by, such as `grpc-java.version` or
+`netty.version`, which Spring Boot's
+[Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
+library it manages. netty-tcnative has none, since Netty's BOM sets it: pin `netty-tcnative-classes` and
+`netty-tcnative-boringssl-static`, with each native's classifier, in the pom's own `dependencyManagement`.
 
 ## Without the Starter
 

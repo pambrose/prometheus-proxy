@@ -227,6 +227,9 @@ what the agent tries.
 
 - Within about 10 seconds agent-branch's scrapes start timing out, and on the primary's dashboard its **idle** time
   climbs and its **evicted in** countdown runs.
+- Prometheus can't scrape agent-branch's paths through either proxy, so **NetworkTargetDown** goes pending for
+  inventory, shipping, and agent-branch at about 10 seconds, and fires at about 25. It clears at about 50 seconds,
+  about when the agent reaches the standby.
 - The agent's heartbeat fails three times, with a 5-second deadline each, so at about 20 seconds it gives up on the
   connection. It dials the head of its list again, the same dead link, where the connect waits out its 30-second
   deadline (`agent.grpc.unaryDeadlineSecs`). agent-branch's Connection view shows that wait: from about 20 seconds it
@@ -302,6 +305,8 @@ what the agent tries.
 
 - Within a few seconds each agent reconnects, through whichever of its links it tries next, so one may land on the
   standby. Their targets return, the alert resolves, and the graphs keep a gap where nothing could be scraped.
+- An agent that lands on the standby shows at 1 on **Agents off their primary**, and about 20 seconds later
+  **NetworkAgentNotOnPrimary** fires for it, until `heal` returns it to the primary.
 - agent-branch's Connection view reads **connected** again, marked **failed over** if it reached its link to the
   standby. Only the endpoint it connected through loses its error; the other keeps its error until a connect through
   it succeeds.

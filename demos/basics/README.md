@@ -144,7 +144,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
   application metrics that Prometheus collected through the proxy.
 - The **Prometheus Proxy** and **Prometheus Agents** links open the dashboards the project ships for operating the
   proxy itself.
-- Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each agent's labels set the
+- Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each path's labels set the
   `job`. Its answer is at <http://localhost:8080/discovery>.
 
 ### 4. An outage and a timeout
@@ -289,9 +289,9 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 
 - Someone deployed agent-east's config twice. The copy registers the same paths, with the same identity, and the
   newer registration takes each one: the dashboard shows agent-east-copy with 6 paths and agent-east with 0.
-- They settle. agent-east stays connected without paths, and waits rather than taking them back, which used to make
-  two such agents swap the paths every few seconds. The command prints the proxy's log line, which names both agents
-  by agentId and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
+- They settle. agent-east stays connected without paths and waits, rather than the two taking the paths from each
+  other every few seconds. The command prints the proxy's log line, which names both agents by agentId and says the
+  fix: `agent.consolidated = true` on each, if both should serve the paths.
 - The proxy told agent-east. Its own dashboard, <http://localhost:8095/dashboard>, lists its six paths as `retrying`,
   each taken over by agent-east-copy, and its **Activity** view has the takeover.
 - The copy's own dashboard lists the six paths, each green, since the proxy accepted every one:
@@ -377,7 +377,9 @@ and Prometheus doesn't notice one at all, so `make up` reloads Prometheus's conf
 
 ## Troubleshooting
 
-- **`port is already allocated`**: another service holds the port. Move it with the variables above.
+- **`port is already allocated`**, or **`ports are not available: … bind: address already in use`**: something
+  already holds the port, another container for the first message, or another program on the machine for the second.
+  Move it with the variables above.
 - **The dashboard is empty, or shows only some agents**: the agents connect a few seconds after the proxy starts.
   Give it ten seconds, or check `make logs SERVICE=agent-east`.
 - **A scenario left things in an odd state**: `./demo.sh recover`, `undiscover`, `agent-thaw`, `agent-start`,

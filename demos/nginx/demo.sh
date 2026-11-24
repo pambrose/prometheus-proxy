@@ -208,6 +208,53 @@ keepalive_secs() {
   if [[ "$cmd" =~ streamKeepAliveSecs=([0-9]+) ]]; then echo "${BASH_REMATCH[1]}"; else echo unknown; fi
 }
 
+# The same, as a number for a scenario to compare: the default, which compose starts the proxy with, if it can't tell.
+keepalive_number() {
+  local secs
+  secs="$(keepalive_secs)"
+  [[ "$secs" =~ ^[0-9]+$ ]] || secs="$DEFAULT_KEEPALIVE_SECS"
+  echo "$secs"
+}
+
+# How a keepalive interval compares with a stream timeout, both in seconds: off, sooner (a quiet stream's keepalive
+# comes before the timeout would end it), same (the two race), or later (the timeout ends a quiet stream first). A
+# timeout of 0, an entrance changed by hand, counts as unknown. keepalive_vs <keepalive secs> <timeout secs>
+keepalive_vs() {
+  if (($1 == 0)); then
+    echo off
+  elif (($2 == 0)); then
+    echo unknown
+  elif (($1 < $2)); then
+    echo sooner
+  elif (($1 == $2)); then
+    echo same
+  else
+    echo later
+  fi
+}
+
+# The stream timeouts of a variant of the agents' entrance, in seconds, or 0 for one changed by hand:
+# timeout_of <variant>
+timeout_of() {
+  case "$1" in
+  stock) echo 60 ;;
+  long-timeouts) echo 86400 ;;
+  short-timeouts) echo 20 ;;
+  *) echo 0 ;;
+  esac
+}
+
+# The stream timeouts of a variant of the agents' entrance, and the file that sets them, for a sentence:
+# timeouts_phrase <variant>
+timeouts_phrase() {
+  case "$1" in
+  stock) echo "nginx's stream timeouts, the default 60 seconds under nginx/agents-stock.conf" ;;
+  long-timeouts) echo "nginx's stream timeouts, a day in nginx/agents-long-timeouts.conf" ;;
+  short-timeouts) echo "nginx's stream timeouts, 20 seconds in nginx/agents-short-timeouts.conf" ;;
+  *) echo "nginx's stream timeouts, in an agents' entrance changed by hand" ;;
+  esac
+}
+
 # The line agent-current logs as it registers, saying how often it sends stream keepalives, the first since a time
 # (RFC 3339, UTC), waiting up to 30 seconds for it to reconnect: keepalive_line_since <time>. Prints nothing if it
 # hasn't by then.
@@ -226,12 +273,17 @@ keepalive_line_since() {
 
 # Recreates the proxy with a keepalive interval, unless it runs with that one, and waits for its dashboard. nginx
 # resolves the proxy's name as it loads its config, and a recreated proxy can get another address, so nginx restarts
-# too, which also closes every agent's connection. start_proxy <secs>; fails if the proxy ran with that interval.
+# too. It stops first, and starts again once the new proxy answers, so each agent's connection closes once, and each
+# agent reconnects once, through an nginx that has the new proxy's address. Left running, nginx would pass the agents'
+# reconnects to the proxy's old address, which the new proxy often gets, and its restart would close them again.
+# start_proxy <secs>; fails if the proxy ran with that interval.
 start_proxy() {
   [[ "$(keepalive_secs)" != "$1" ]] || return 1
+  "${COMPOSE[@]}" stop nginx >/dev/null
   NGINX_DEMO_KEEPALIVE_SECS="$1" "${COMPOSE[@]}" up --detach --no-deps proxy
   wait_for "$DASHBOARD_URL" "The proxy dashboard"
-  restart_nginx
+  "${COMPOSE[@]}" start nginx >/dev/null
+  wait_for "$NGINX_DASHBOARD_URL" "The proxy dashboard, through nginx,"
 }
 
 # Puts nginx and the proxy back as `up` starts them: nginx's stock configs and no worker_shutdown_timeout, then the
@@ -688,18 +740,35 @@ main() {
     follow_up "To see every request as it comes, run" "$0 logs nginx"
     ;;
   nginx-stock)
-    local shutdown=0
+    local shutdown=0 ka why
     use_conf agents stock
     shutdown_timeout_set && shutdown=1
+    ka="$(keepalive_number)"
     bold "nginx's agents' entrance has its default stream timeouts again, 60 seconds"
     how_it_works "$(copies_sentence agents stock)" \
       "It sets neither grpc_read_timeout, for the streams the proxy sends on, scrape requests and path notices, nor" \
       "client_body_timeout, for the streams the agent sends results on, so both are nginx's default, 60 seconds."
     watch_for
     reload_point "$shutdown"
-    point "Under these timeouts, agent-current, whose keepalives come after 30 seconds, stays connected, and" \
-      "agent-legacy, with nothing on its stream for results in chunks, is cut off every minute, once its connection" \
-      "is with a worker under them."
+    case "$(keepalive_vs "$ka" 60)" in
+    sooner)
+      point "Under these timeouts, agent-current, whose keepalives come after $ka seconds, stays connected, and" \
+        "agent-legacy, with nothing on its stream for results in chunks, is cut off every minute, once its" \
+        "connection is with a worker under them."
+      ;;
+    same)
+      point "Under these timeouts, agent-legacy, with nothing on its stream for results in chunks, is cut off every" \
+        "minute, once its connection is with a worker under them. agent-current's keepalives come after 60" \
+        "seconds, just as these timeouts would end a quiet stream, so whether it's cut off too is a race."
+      ;;
+    *)
+      why="agent-current's keepalives come after $ka seconds"
+      ((ka > 0)) || why="the proxy runs with its keepalives off"
+      point "Under these timeouts, both agents are cut off every minute, once their connections are with a worker" \
+        "under them: agent-legacy has nothing on its stream for results in chunks, and $why."
+      follow_up "To keep agent-current connected, run" "$0 keepalive $DEFAULT_KEEPALIVE_SECS"
+      ;;
+    esac
     ;;
   nginx-long-timeouts)
     local shutdown=0
@@ -724,28 +793,62 @@ main() {
       "$CUTS_GRAPH_URL"
     ;;
   nginx-short-timeouts)
-    local shutdown=0
+    local shutdown=0 before ka vs against
+    before="$(conf_in_use agents)"
     use_conf agents short-timeouts
     shutdown_timeout_set && shutdown=1
+    ka="$(keepalive_number)"
+    vs="$(keepalive_vs "$ka" 20)"
+    case "$vs" in
+    off) against=". The proxy runs with its stream keepalives off, so nothing keeps a quiet stream open." ;;
+    sooner) against=", longer than the $ka seconds after which the proxy and agent-current send a keepalive." ;;
+    same) against=", the same as the $ka seconds after which the proxy and agent-current send a keepalive." ;;
+    *) against=", under the $ka seconds after which the proxy and agent-current send a keepalive." ;;
+    esac
     bold "nginx's agents' entrance now closes a stream after 20 seconds without anything on it"
     how_it_works "$(copies_sentence agents short-timeouts)" \
       "It cuts grpc_read_timeout, for the streams the proxy sends on, scrape requests and path notices, and" \
-      "client_body_timeout, for the streams the agent sends results on, to 20 seconds, under the" \
-      "$(keepalive_secs) seconds after which the proxy and agent-current send a keepalive."
+      "client_body_timeout, for the streams the agent sends results on, to 20 seconds$against"
     watch_for
     reload_point "$shutdown"
-    if ((shutdown)); then
-      point "Then both agents are cut off about every 20 seconds, agent-current included: its stream for results in" \
-        "chunks, and the proxy's stream of path notices to it, go quiet for 20 seconds before their keepalives" \
-        "come. Its own Activity view shows each disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
+    if [[ "$vs" == sooner ]]; then
+      point "agent-current stays connected, whichever worker it's on: a keepalive every $ka seconds keeps each of" \
+        "its streams from going quiet for 20, so these timeouts never end one. Its own Activity view shows no" \
+        "disconnect from a timeout: $AGENT_DASHBOARD_URL/activity"
+      if ((shutdown)); then
+        point "agent-legacy, which sends no keepalives, is cut off about every 20 seconds, and a scrape that lands" \
+          "while it reconnects fails, so its path dips in Prometheus: $UP_GRAPH_URL"
+      fi
+    elif ((shutdown)); then
+      case "$vs" in
+      off)
+        point "Then both agents are cut off about every 20 seconds, agent-current included: with the keepalives" \
+          "off, its streams go as quiet as agent-legacy's. Its own Activity view shows each disconnect, with the" \
+          "reason: $AGENT_DASHBOARD_URL/activity"
+        ;;
+      same)
+        point "Then agent-legacy is cut off about every 20 seconds. agent-current's keepalives come after 20" \
+          "seconds, just as these timeouts would end a quiet stream, so whether it's cut off too is a race. Its own" \
+          "Activity view shows any disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
+        ;;
+      *)
+        point "Then both agents are cut off about every 20 seconds, agent-current included: its stream for results" \
+          "in chunks, and the proxy's stream of path notices to it, go quiet for 20 seconds before their keepalives" \
+          "come, at $ka. Its own Activity view shows each disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
+        ;;
+      esac
       point "A scrape that lands while an agent reconnects fails, so both paths dip in Prometheus: $UP_GRAPH_URL"
       follow_up "Next, run" "$0 keepalive 10"
-    else
-      point "agent-current isn't cut off, though its keepalives come after 30 seconds: its connection is with an" \
+    elif [[ "$(keepalive_vs "$ka" "$(timeout_of "$before")")" == sooner ]]; then
+      point "agent-current isn't cut off, though its keepalives come after $ka seconds: its connection is with an" \
         "old worker, under the timeouts it opened with. Its own Activity view stays quiet:" \
         "$AGENT_DASHBOARD_URL/activity"
-      follow_up "To see the old workers, run" "$0 nginx-workers"
+    else
+      point "agent-current keeps the connection it has only until the timeouts of the worker it's on end a quiet" \
+        "stream. It then reconnects to a new worker, under these timeouts, and is cut off about every 20 seconds." \
+        "Its own Activity view shows each disconnect: $AGENT_DASHBOARD_URL/activity"
     fi
+    ((shutdown)) || follow_up "To see the old workers, run" "$0 nginx-workers"
     ;;
   nginx-workers)
     local processes old
@@ -796,7 +899,7 @@ main() {
     fi
     ;;
   keepalive)
-    local secs="${1:-}" since line
+    local secs="${1:-}" since line entrance timeouts
     [[ "$secs" =~ ^[0-9]+$ ]] || die "keepalive takes the number of seconds, as in '$0 keepalive 10'"
     since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     if ! start_proxy "$secs"; then
@@ -805,32 +908,64 @@ main() {
       return
     fi
     line="$(keepalive_line_since "$since")"
+    # nginx restarted, so every agent's connection is under the agents' entrance in place.
+    entrance="$(conf_in_use agents)"
+    timeouts="$(timeouts_phrase "$entrance")"
     if ((secs == 0)); then
       bold "The proxy now runs with its stream keepalives off"
     else
       bold "The proxy now sends a keepalive on a stream after ${secs} seconds without anything on it"
     fi
-    how_it_works "This recreates the proxy with proxy.internal.streamKeepAliveSecs set to $secs, on its command line" \
-      "(docker/compose.yml), and restarts nginx, which looks up the new proxy's address. The proxy uses the interval" \
-      "on the streams it sends on, and gives it to each agent as it registers, for the streams the agent sends on," \
-      "so it's set in one place for both directions. Keep it under the shortest idle timeout between the agents and" \
-      "the proxy; 0 turns the keepalives off."
+    how_it_works "This stops nginx, recreates the proxy with proxy.internal.streamKeepAliveSecs set to $secs, on its" \
+      "command line (docker/compose.yml), and starts nginx again once the new proxy answers, so nginx looks up the" \
+      "new proxy's address. The proxy uses the interval on the streams it sends on, and gives it to each agent as it" \
+      "registers, for the streams the agent sends on, so it's set in one place for both directions. Keep it under" \
+      "the shortest idle timeout between the agents and the proxy; 0 turns the keepalives off."
     watch_for
-    point "Recreating the proxy and restarting nginx close every agent's connection, so each reconnects."
+    point "Stopping nginx closes every agent's connection, and each agent reconnects once, to the new proxy, when" \
+      "nginx starts again."
     if [[ -n "$line" ]]; then
       point "agent-current's log says how often it now sends keepalives: $line"
     else
       point "agent-current hasn't reconnected yet; its log will say how often it sends keepalives. To see it, run" \
         "$0 logs agent-current"
     fi
-    if ((secs == 0)); then
-      point "With the keepalives off, agent-current's streams go as quiet as agent-legacy's, and nginx cuts it off" \
-        "as often: its Activity view shows each disconnect, $AGENT_DASHBOARD_URL/activity"
+    case "$(keepalive_vs "$secs" "$(timeout_of "$entrance")")" in
+    off)
+      if [[ "$entrance" == long-timeouts ]]; then
+        point "With the keepalives off, agent-current's streams go as quiet as agent-legacy's, but $timeouts," \
+          "leave both connected."
+      else
+        point "With the keepalives off, agent-current's streams go as quiet as agent-legacy's, and $timeouts, cut it" \
+          "off as often: its Activity view shows each disconnect, $AGENT_DASHBOARD_URL/activity"
+      fi
+      ;;
+    sooner)
+      point "agent-current stays connected: a keepalive every $secs seconds keeps each of its streams from going" \
+        "quiet as long as $timeouts. Its Activity view shows no more disconnects, $AGENT_DASHBOARD_URL/activity"
+      ;;
+    same)
+      point "agent-current's keepalives come just as $timeouts, would end a quiet stream, so whether nginx cuts it" \
+        "off is a race. Its Activity view shows any disconnect, $AGENT_DASHBOARD_URL/activity"
+      ;;
+    later)
+      point "agent-current's keepalives come too late for $timeouts: nginx ends its quiet streams first, and cuts it" \
+        "off as often as agent-legacy. Its Activity view shows each disconnect, $AGENT_DASHBOARD_URL/activity"
+      ;;
+    *)
+      point "The agents' entrance was changed by hand: agent-current stays connected under stream timeouts longer" \
+        "than ${secs} seconds, and is cut off under shorter ones. Its Activity view shows each disconnect," \
+        "$AGENT_DASHBOARD_URL/activity"
+      ;;
+    esac
+    if [[ "$entrance" == long-timeouts ]]; then
+      # With the keepalives off, the point above already says both stay connected.
+      ((secs == 0)) || point "agent-legacy, from 4.6.0, sends no keepalives, and stays connected only because" \
+        "nginx's stream timeouts are a day long, in nginx/agents-long-timeouts.conf."
     else
-      point "agent-current stays connected under any of nginx's stream timeouts longer than ${secs} seconds, as the" \
-        "20-second ones are: its Activity view shows no more disconnects, $AGENT_DASHBOARD_URL/activity"
+      point "agent-legacy, from 4.6.0, sends no keepalives, so nginx's stream timeouts still cut it off: the proxy's" \
+        "Activity view shows each disconnect, $DASHBOARD_URL/activity"
     fi
-    point "agent-legacy, from 4.6.0, still sends nothing, and is cut off as often as before."
     if ((secs != DEFAULT_KEEPALIVE_SECS)); then
       follow_up "To put the default back, run" "$0 keepalive $DEFAULT_KEEPALIVE_SECS"
     fi
@@ -876,8 +1011,9 @@ main() {
       "second, as it does reached directly: $NGINX_DASHBOARD_URL"
     point "The scrape button in the Paths view works through nginx too, and shows the start of what Prometheus" \
       "gets from /storefront_metrics."
-    point "With nginx ending TLS in front of it, the browser's Origin would start with https, and the dashboard" \
-      "would mark its session cookie Secure, so the browser sends it only over TLS."
+    point "Here nginx passes the dashboard on over plain HTTP. If it ended TLS in front of the dashboard, the" \
+      "browser's Origin would start with https, and a login's session cookie would be marked Secure, so the browser" \
+      "would send it only over TLS."
     ;;
   reset)
     reset_demo

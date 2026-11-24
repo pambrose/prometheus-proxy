@@ -229,7 +229,7 @@ The proxy's dashboard updates live over a WebSocket, which a reverse proxy has t
 | `demo.sh nginx-short-timeouts` | Both stream timeouts cut to 20 seconds | `nginx/agents-short-timeouts.conf`: both at `20s` |
 | `demo.sh nginx-workers` | Lists nginx's processes, the old workers a reload left among them | `ps` in the nginx container |
 | `demo.sh nginx-shutdown-timeout` | nginx's old workers close their connections 10 seconds after a reload | Copies `nginx/main-shutdown-timeout.conf` (`worker_shutdown_timeout 10s`) into `main.d` and restarts nginx |
-| `demo.sh keepalive <secs>` | The proxy's stream keepalive interval, for both directions | Recreates the proxy with `-Dproxy.internal.streamKeepAliveSecs=<secs>`, and restarts nginx, which looks up the new proxy's address |
+| `demo.sh keepalive <secs>` | The proxy's stream keepalive interval, for both directions | Stops nginx, recreates the proxy with `-Dproxy.internal.streamKeepAliveSecs=<secs>`, and starts nginx again, which looks up the new proxy's address |
 | `demo.sh dashboard-stock` | The dashboard's entrance as a plain `proxy_pass` | `nginx/dashboard-stock.conf` in as `conf.d/dashboard.conf`, and a reload |
 | `demo.sh dashboard-upgrade` | The same, passing the WebSocket handshake's headers | `nginx/dashboard-upgrade.conf`: HTTP/1.1, `Upgrade`, and `Connection` |
 | `demo.sh dashboard-host` | The same, passing the browser's `Host` too | `nginx/dashboard-host.conf`: `proxy_set_header Host $http_host` |
@@ -266,8 +266,8 @@ it. nginx's configs are in `nginx/`, not `config/`, since they're nginx's own fo
 
 ## Troubleshooting
 
-- **`port is already allocated`**: another service holds the port; the other demos' are 100 to 500 lower, so it isn't
-  one of them. Move it with the variables above.
+- **`port is already allocated`**: another service holds the port; the other demos' ports run from 500 lower than this
+  one's to 100 higher, and none is the same, so it isn't one of them. Move it with the variables above.
 - **A config change doesn't seem to take**: an agent's connection stays with the nginx worker it opened on, under the
   config it opened with, until `worker_shutdown_timeout` is set (part 3). `./demo.sh reset` restarts nginx, and every
   agent reconnects under the stock config.
@@ -275,7 +275,19 @@ it. nginx's configs are in `nginx/`, not `config/`, since they're nginx's own fo
   puts the plain `proxy_pass` back, and reloading the page shows **reconnecting...** again.
 - **agent-current's Activity view is empty, or starts over**: `keepalive` recreates the proxy, not the agent, so this
   means the agent restarted; an agent keeps its activity in memory only.
+- **`./demo.sh nginx-log` shows 400, 499, or 502**: each is a call that ended early, as a cut or a restart ends them.
+  400 and 499 are streams that ended on the agent's side of nginx before the call was done: an agent ends its other
+  streams when nginx cuts one, and an old worker closes its connections to the agents at `worker_shutdown_timeout`.
+  nginx logs 400 if it was reading the agent's messages at that moment, and 499, its code for a client that closed its
+  request, if it was waiting on the proxy. 502 is a call nginx couldn't pass on, since the proxy's agent port didn't
+  answer, as while the proxy restarts; the agent tries again a few seconds later.
+- **The proxy logs `WARNING: Stream Error` and a Netty stack trace, `Stream closed before write could take place`**:
+  now and then as nginx cuts an agent off. nginx passes each gRPC call to the proxy over a connection of its own, and
+  closes it as the call ends; if the proxy still had something to send on the call, gRPC's Netty transport logs that
+  it couldn't, in `java.util.logging`'s format rather than the proxy's. The call was over anyway, and the agent
+  reconnects as usual, so it's harmless.
 - The proxy logs warnings at startup that the dashboard has no authentication, and that agent tokens are set without
   TLS on its agent port: here TLS ends at nginx, and the hop from nginx to the proxy is the demo's private network.
   agent-current logs that its dashboard has no authentication. Both are expected here, and are why every port binds to
-  `127.0.0.1`. An agent logs `Cannot connect to proxy` while nginx restarts, and connects again a second later.
+  `127.0.0.1`. An agent logs `Cannot connect to proxy` while nginx restarts, and connects again a few seconds after
+  nginx is back.

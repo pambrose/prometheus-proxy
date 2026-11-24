@@ -34,9 +34,10 @@ DASHBOARD_URL="http://localhost:${SPRING_BOOT_DEMO_DASHBOARD_PORT:-8494}/dashboa
 AGENT_DASHBOARD_URL="http://localhost:${SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT:-8495}/dashboard"
 PROMETHEUS_URL="http://localhost:${SPRING_BOOT_DEMO_PROMETHEUS_PORT:-9490}"
 PROXY_URL="http://localhost:${SPRING_BOOT_DEMO_PROXY_PORT:-8480}"
-# Prometheus's graph of the batches roasted a minute, by origin: rate(roastery_batches_roasted_total[1m]), with its
-# parentheses and brackets percent-encoded, so a terminal takes the whole URL as one link.
-GRAPH_URL="$PROMETHEUS_URL/query?g0.expr=rate%28roastery_batches_roasted_total%5B1m%5D%29"
+# Prometheus's graph of the batches roasted in the last minute, by origin:
+# increase(roastery_batches_roasted_total[1m]), with its parentheses and brackets percent-encoded, so a terminal takes
+# the whole URL as one link.
+GRAPH_URL="$PROMETHEUS_URL/query?g0.expr=increase%28roastery_batches_roasted_total%5B1m%5D%29"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -323,8 +324,29 @@ lib_version() {
 # A library's version in the repository's version catalog, which the agent is built with: catalog_version <key>
 catalog_version() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$REPO_DIR/gradle/libs.versions.toml"; }
 
-# One row of the versions table: row <library> <the agent's> <the roastery's>
-row() { printf '  %-24s %-14s %s\n' "$1" "$2" "$3"; }
+# A version's first three numbers, as version_after compares them: 4.2.21.Final gives 4.2.21.
+version_numbers() { sed -nE 's/^([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\1.\2.\4/p' <<<"$1"; }
+
+# How the roastery's version of a library compares with the agent's: older, the same, or newer, or nothing when either
+# is missing. compared <the agent's> <the roastery's>
+compared() {
+  local agents roasterys
+  agents="$(version_numbers "$1")"
+  roasterys="$(version_numbers "$2")"
+  if [[ -z "$agents" || -z "$roasterys" ]]; then
+    return 0
+  elif version_after "$agents" "$roasterys"; then
+    echo older
+  elif version_after "$roasterys" "$agents"; then
+    echo newer
+  else
+    echo the same
+  fi
+}
+
+# One row of the versions table, ending with how the roastery's version compares with the agent's:
+# row <library> <the agent's> <the roastery's>
+row() { printf '  %-24s %-14s %-16s %s\n' "$1" "$2" "$3" "$(compared "$2" "$3")"; }
 
 cmd_versions() {
   local libs
@@ -332,19 +354,24 @@ cmd_versions() {
     die "the roastery isn't running; start the demo with '$MAKE_NAME up'"
   bold "The agent's libraries: the versions it's built with, and the ones the roastery runs, which Spring Boot" \
     "$(lib_version "$libs" spring-boot) picked"
-  row "Library" "The agent's" "The roastery's"
+  printf '  %-24s %-14s %s\n' "Library" "The agent's" "The roastery's"
   row "kotlinx-serialization" "$(catalog_version serialization)" "$(lib_version "$libs" kotlinx-serialization-json-jvm)"
   row "Jackson 2" "$(catalog_version jackson)" "$(lib_version "$libs" jackson-databind 2)"
   row "Logback" "$(catalog_version logback)" "$(lib_version "$libs" logback-classic)"
   row "gRPC" "$(catalog_version grpc)" "$(lib_version "$libs" grpc-core)"
   row "Netty" "$(catalog_version netty)" "$(lib_version "$libs" netty-handler)"
+  row "netty-tcnative" "$(catalog_version tcnative)" "$(lib_version "$libs" netty-tcnative-classes)"
   row "Kotlin" "$(catalog_version kotlin)" "$(lib_version "$libs" kotlin-stdlib)"
   how_it_works "Spring Boot's dependency management, which the roastery's pom takes from spring-boot-starter-parent," \
     "sets the version of every library it knows, the agent's dependencies among them, whatever version the agent" \
-    "asks for. The agent runs with these, as the roastery shows here and its RoasteryAgentTest checks on every pull" \
-    "request. Were one to break it, a property in the pom sets that library back: kotlin-serialization.version," \
-    "jackson-2-bom.version, logback.version, or grpc-java.version."
+    "asks for, so some run older than the agent's own. The agent runs with these, as the roastery shows here and its" \
+    "RoasteryAgentTest checks on every pull request. Were one to break it, the pom sets that library to the agent's" \
+    "version with the property Spring Boot names it by, such as grpc-java.version or netty.version, which Spring" \
+    "Boot's Version Properties appendix lists for every library it manages. netty-tcnative has none, since Netty's" \
+    "BOM sets it: the pom pins netty-tcnative-classes and netty-tcnative-boringssl-static, with each native's" \
+    "classifier, in its own dependencyManagement."
   watch_for
+  point "Each row ends with how the roastery's version compares with the agent's: older, the same, or newer."
   point "The roastery's image holds its dependencies as jars in /app/lib, the layout Spring Boot's own extract" \
     "command makes, so this reads their versions from their names: $0 logs roastery shows no error from any."
 }
@@ -491,9 +518,10 @@ cmd_tour() {
   if part 2 "The agent reads the roastery's metrics from its registry, inside the JVM, rather than over HTTP, so" \
     "the roastery serves no metrics endpoint, and has no password or Spring Security to set up for one."; then
     step "Try Actuator's /actuator/prometheus, then read the roastery's metrics through the proxy." -- peek
-    instruct "Open Prometheus's graph of the batches roasted a minute, by origin:" \
+    instruct "Open Prometheus's graph of the batches roasted in the last minute, by origin:" \
       "$GRAPH_URL" \
-      "Prometheus scrapes the proxy at /roastery_metrics, and the instance label names the roastery."
+      "Each line counts one origin's batches in the minute before each point, about 30 in all, a batch every two" \
+      "seconds. Prometheus scrapes the proxy at /roastery_metrics, and the instance label names the roastery."
   fi
 
   if part 3 "Spring Boot sets the versions of the libraries it knows, which include some of the agent's own." \
@@ -511,9 +539,9 @@ cmd_tour() {
       "seconds as Prometheus scrapes the proxy."
     instruct "Select /roastery_metrics, then press Scrape now." \
       "The path's page shows its target, in-process, and its Recent scrapes, newest first: each one's status," \
-      "how long the agent took to read the registry, and the size of what it read. Scrape now has the agent read" \
-      "the registry at once, and shows the status, the metric families and samples, and the start of the" \
-      "roastery's metrics as Prometheus would get them."
+      "how long the agent took to read the registry, and the size of what it read. Scrape now is the circular" \
+      "arrow after the path's name. It has the agent read the registry at once, and shows the status, the metric" \
+      "families and samples, and the start of the roastery's metrics as Prometheus would get them."
     instruct "Open the Activity view: $AGENT_DASHBOARD_URL/activity" \
       "It lists what has happened to the agent, newest first: registered, for /roastery_metrics, and under it" \
       "connected, to the proxy, from when the roastery started."
@@ -652,7 +680,8 @@ main() {
     bold "The roastery has stopped"
     how_it_works "This runs docker compose stop roastery, which sends the app SIGTERM, as a platform does. Spring" \
       "Boot stops its lifecycle beans from the last phase down, so the agent stops first: it disconnects from the" \
-      "proxy, which drops its path, and no scrape reaches the web server once it starts draining its requests."
+      "proxy, which drops its path and stops sending scrapes before Spring Boot starts shutting down the rest of the" \
+      "app."
     watch_for
     point "roastery-1.0 leaves the proxy dashboard's Agents view, and its path goes with it."
     said proxy "Removed path /roastery_metrics" "$stops"

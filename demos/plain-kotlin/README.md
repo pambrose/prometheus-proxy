@@ -220,12 +220,13 @@ each, and the three clear the backlog in about two minutes.
 
 It stops the other two ovens with SIGTERM, as a scale-in on Kubernetes or ECS does, and shows each one's log: the oven
 finishing the order it was baking, so no order taken from the queue is lost, then its agent, which `use { }` stops,
-disconnecting from the proxy. The proxy drops the agents' paths at once: the Paths view of its
-dashboard, <http://localhost:8694/dashboard/paths>, lists only the remaining oven's, and its Activity view each stopped
-oven's agent as disconnected. Prometheus drops their targets at its next discovery refresh, within 5 seconds, with no
-restart and no config change. A scrape that comes between an agent's disconnect and that refresh finds no path and
-records `up` 0, as a terminating pod's can on Kubernetes: **Scrape up, by oven** shows it, and the command says whether
-one did.
+disconnecting from the proxy. The proxy drops the agents' paths at once: its service discovery,
+<http://localhost:8680/discovery>, which Prometheus follows, lists only the remaining oven's two. The Paths view of its
+dashboard, <http://localhost:8694/dashboard/paths>, marks the stopped ovens' paths `gone` and keeps them for an hour, so
+it's clear what left, and its Activity view lists each stopped oven's agent as disconnected. Prometheus drops the
+stopped ovens' targets at its next discovery refresh, within 5 seconds, with no restart and no config change. A scrape
+that comes between an agent's disconnect and that refresh finds no path and records `up` 0, as a terminating pod's can
+on Kubernetes: **Scrape up, by oven** shows it, and the command says whether one did.
 
 ### 5. No proxy, no outage
 
@@ -272,6 +273,7 @@ can run side by side, but each takes memory and CPU: `make down` stops this one 
 | File | What it sets up |
 |---|---|
 | `app/` | The oven: a Gradle project of its own, outside the repository's build, which reads the repository's version catalog (`settings.gradle.kts`). `Main.kt` is its `main`, with the agent, `Oven.kt` the oven and its menu and metrics, and `OrderQueue.kt` the Redis queue, through Jedis. With `-PlocalProxy` it builds against this checkout's library (a composite build), as `make up-local` and CI do. |
+| `app/src/main/resources/logback.xml` | The oven's logging, which is its agent's too, since the library carries no Logback configuration: INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which would bury the lines `startIfConfigured()` logs |
 | `app/Dockerfile` | Builds the oven's image: compiled inside Docker against the latest release (`make up`), or from the build on the host (`make up-local`), on the Temurin JRE, whose shell `demo.sh sockets` reads `/proc` with |
 | `counter/counter.sh` | The counter: the trickle of orders, and a rush |
 | `docker/compose.yml` | The services, their ports, their images, the ovens' settings, and the misconfigured ovens' |

@@ -146,6 +146,11 @@ The oven's build depends on `com.pambrose:prometheus-proxy`, which brings the re
 client's `prometheus-metrics-core` for its metrics. On every pull request, the project builds it against the checkout
 (`make plain-kotlin-demo-check`), so a change to the API it uses that breaks it fails there.
 
+The oven also has a `logback.xml`, which sets the agent's logging along with the oven's, since the library carries no
+Logback configuration of its own: INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no
+framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which
+would bury the lines `startIfConfigured()` logs. [Logging](embedded-agent.md#logging) covers the agent's loggers.
+
 ## A worker with no port
 
 `./demo.sh sockets` shows that compose publishes no port for the oven, and reads what the oven's JVM has open from
@@ -202,11 +207,12 @@ Terminated Agent{...}
 ```
 
 The oven finishes the order it was baking, so no order taken from the queue is lost, and returns, and then `use { }`
-stops its agent, which disconnects from the proxy. The proxy drops its paths at once, so the Paths view of its dashboard
-lists only the remaining oven's. Prometheus drops the stopped ovens' targets at its next discovery refresh, within
-5 seconds. A scrape that comes between the agent's disconnect and that refresh finds no path and records `up` 0, as a
-terminating pod's can on Kubernetes; the Bakery dashboard's **Scrape up, by oven** shows it, and the command says
-whether one did.
+stops its agent, which disconnects from the proxy. The proxy drops its paths at once: its `/discovery`, which
+Prometheus follows, lists only the remaining oven's two, while the Paths view of its dashboard marks the stopped ovens'
+paths `gone` and keeps them for an hour, so it's clear what left. Prometheus drops the stopped ovens' targets at its
+next discovery refresh, within 5 seconds. A scrape that comes between the agent's disconnect and that refresh finds no
+path and records `up` 0, as a terminating pod's can on Kubernetes; the Bakery dashboard's **Scrape up, by oven** shows
+it, and the command says whether one did.
 
 ## No proxy, no outage
 

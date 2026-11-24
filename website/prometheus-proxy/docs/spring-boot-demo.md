@@ -128,15 +128,18 @@ show each part:
 
 Spring Boot's dependency management, which an app takes from `spring-boot-starter-parent`, sets the version of every
 library it knows, whatever version a dependency asks for. Some of the agent's libraries are among them, and the
-roastery runs kotlinx-serialization, Jackson 2, Logback, and gRPC older than the agent is built with.
-`./demo.sh versions` prints both, from the jars the running roastery holds and the project's version catalog.
+roastery runs some of those older than the agent is built with. `./demo.sh versions` prints both, from the jars the
+running roastery holds and the project's version catalog, and marks each of the roastery's older, the same, or newer.
 
 The agent runs with Spring Boot's versions, as the roastery shows. On every pull request, the project builds the
 roastery and runs its
 [`RoasteryAgentTest`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/spring-boot/app/src/test/java/roastery/RoasteryAgentTest.java),
 which starts the agent against a proxy and scrapes through it, so a Spring Boot release that breaks the agent fails
-there. Were one to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
-`jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
+there. Were one to break it, the app's pom sets that library to the agent's version with the property Spring Boot names
+it by, such as `grpc-java.version` or `netty.version`, which Spring Boot's
+[Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
+library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom pins `netty-tcnative-classes` and
+`netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
 ## The agent's dashboard
 
@@ -155,8 +158,9 @@ It has no password here, so the agent warns at startup, in the roastery's log, t
 without a login; the demo publishes its port on `127.0.0.1` only.
 
 Its Paths view lists `/roastery_metrics`, registered, with the recent scrapes the proxy asked for. Select it, and
-**Scrape now** has the agent read the roastery's registry at once. The Activity view lists what has happened to the
-agent, newest first, the Connection view its proxy endpoint, and the Settings view the settings it resolved.
+**Scrape now**, the circular arrow after the path's name, has the agent read the roastery's registry at once. The
+Activity view lists what has happened to the agent, newest first, the Connection view its proxy endpoint, and the
+Settings view the settings it resolved.
 
 `./demo.sh proxy-stop` stops the proxy, and the proxy's dashboard with it, but the agent's still answers. Its
 Connection view turns failing, with the error the agent got connecting to the proxy, and its Activity view adds
