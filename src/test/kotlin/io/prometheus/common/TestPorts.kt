@@ -251,6 +251,10 @@ object TestPorts {
   const val AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT = 9751
   const val AGENT_DASHBOARD_UI_METRICS_PORT = 9753
 
+  // AgentMetricsProxyPathTest: a standalone agent's own metrics, served through the proxy with no metrics port.
+  const val METRICS_PROXY_PATH_HTTP_PORT = 9760
+  const val METRICS_PROXY_PATH_GRPC_PORT = 9761
+
   // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
   // These came from ServerSocket(0), released and bound again later, so another connection could take one in between
   // (October #46). The port each failed-startup case holds open as taken still does.

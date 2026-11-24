@@ -64,7 +64,7 @@ internal object AgentSettings {
       CommonSettings.admin(newAdminConfig(options.adminEnabled, options.adminPort, config.admin), options.debugEnabled),
       CommonSettings.metrics(
         newMetricsConfig(options.metricsEnabled, options.metricsPort, config.metrics),
-        inProcessPath = options.agentMetricsPath,
+        inProcessPath = options.metricsProxyPath,
       ),
       CommonSettings.tracing(newZipkinConfig(config.internal.zipkin), config.internal.zipkin.sampleRate),
       CommonSettings.logging(options.logLevel),

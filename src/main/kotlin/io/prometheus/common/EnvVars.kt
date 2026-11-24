@@ -178,6 +178,13 @@ enum class EnvVars {
   UNARY_DEADLINE_SECS,
 
   /**
+   * The Proxy path the Agent serves its own metrics at, read in-process, with no metrics port: the `agent_*` metrics,
+   * and, for a standalone Agent, the JVM metrics its `agent.metrics` export settings turn on. Empty (default) serves
+   * none.
+   */
+  METRICS_PROXY_PATH,
+
+  /**
    * Agent log level: one of `trace`, `debug`, `info`, `warn`, `error`, `off`.
    * Empty leaves the configured level unchanged.
    */

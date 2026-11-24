@@ -36,6 +36,12 @@ _Released 2026-11-23_
   `agentMetricsAt(path)` serves the agent's own metrics through the proxy, with no port opened for them. The agent's
   handle is `AutoCloseable`, so `startIfConfigured().use { … }` stops the agent with the app. The Embedded Agent page
   shows a whole worker's agent, in Kotlin and Java.
+- **An agent's own metrics without a port.** Set `agent.metrics.proxyPath` (or `--metrics_proxy_path`, or
+  `METRICS_PROXY_PATH`) and the agent serves its own metrics through the proxy at that path, with no metrics port to
+  open, and nothing to point at `localhost:8083`. A standalone agent serves its JVM metrics there too. An embedded
+  agent sets it with `agentMetricsAt(path)`, and the Spring Boot starter and the Ktor plugin with
+  `metrics-proxy-path`. The metrics port is still there for a scraper on the agent's own network, which can read an
+  agent that can't reach the proxy; the Monitoring page says when each fits.
 - **A demo of the agent in a worker.** `demos/worker` runs a bakery whose ovens are plain Kotlin programs, with no
   framework or HTTP server, each with the agent started in a few lines of its `main`. An oven listens on no port and
   is scraped all the same, more ovens become more Prometheus targets with no change to Prometheus's config, and an
@@ -140,6 +146,9 @@ _Released 2026-11-23_
 - **Behind nginx: reloads, TLS, and the dashboard.** The Advanced Topics page explains why a reload of nginx doesn't
   reach a connected agent and how `worker_shutdown_timeout` fixes it, and what an agent needs to reach an nginx that
   ends its TLS; the Dashboard page, what nginx has to pass on for the dashboard's live updates.
+- **Every embedded-agent setting, every way.** The Embedded Agent page shows the ways to run an embedded agent, and
+  each setting's name in all of them: the builder, the config file, the Spring Boot starter and the Ktor plugin, and
+  the environment, with which one wins when two are set.
 - **Debugging an embedded agent.** The Embedded Agent page's new Debugging section turns on the agent's admin
   endpoints and `/debug` with `ADMIN_ENABLED` and `DEBUG_ENABLED`, says what each shows, and puts the agent's own
   metrics on the Agents dashboard with `agentMetricsAt`. The embedded demo's tour walks through them.

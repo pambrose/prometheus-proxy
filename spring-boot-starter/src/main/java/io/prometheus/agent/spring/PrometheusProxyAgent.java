@@ -175,6 +175,12 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     if (properties.getMetricsPort() != null) {
       builder.agentMetrics(properties.getMetricsPort());
     }
+    if (!isBlank(properties.getMetricsProxyPath())) {
+      builder.agentMetricsAt(properties.getMetricsProxyPath(), properties.getMetricsProxyPathLabels());
+    } else if (!properties.getMetricsProxyPathLabels().isEmpty()) {
+      logger.warn(
+          "prometheus-proxy.agent.metrics-proxy-path-labels is set without metrics-proxy-path, so it does nothing");
+    }
     PrometheusProxyAgentProperties.Dashboard dashboard = properties.getDashboard();
     if (dashboard.getPort() != null) {
       builder.dashboard(dashboard.getPort(), blankToNull(dashboard.getHost()));

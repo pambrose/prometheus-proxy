@@ -109,6 +109,8 @@ class PrometheusProxyAgentAutoConfigurationTest {
             "prometheus-proxy.agent.client-key=" + PEM,
             "prometheus-proxy.agent.consolidated=true",
             "prometheus-proxy.agent.metrics-port=9101",
+            "prometheus-proxy.agent.metrics-proxy-path=/orders_agent_metrics",
+            "prometheus-proxy.agent.metrics-proxy-path-labels.team=coffee",
             "prometheus-proxy.agent.dashboard.port=9102",
             "prometheus-proxy.agent.dashboard.host=127.0.0.1",
             "prometheus-proxy.agent.dashboard.username=ops",
@@ -127,7 +129,8 @@ class PrometheusProxyAgentAutoConfigurationTest {
                   "tls={certChainPem=(set), overrideAuthority=prometheus-proxy, privateKeyPem=(set), "
                       + "trustCertCollectionPem=(set)}",
                   "consolidated=true",
-                  "metrics={enabled=true, port=9101}",
+                  "metrics={enabled=true, port=9101, proxyPath=orders_agent_metrics, "
+                      + "proxyPathLabels={\"team\":\"coffee\"}}",
                   "dashboard={enabled=true, host=127.0.0.1, password=(set), port=9102, username=ops}",
                   "labels={\"team\":\"coffee\"}, name=grinder_metrics, path=grinder_metrics, url=http://",
                   "grinder:9100/metrics",
@@ -356,6 +359,19 @@ class PrometheusProxyAgentAutoConfigurationTest {
           agent.start();
           assertThat(agent.agent()).containsSame(first);
         });
+  }
+
+  // Labels with no path would do nothing, so the starter says so rather than drop them unseen
+  @Test
+  void metricsProxyPathLabelsWithoutAPathAreWarnedOf() {
+    List<String> lines = agentLog(() ->
+        runner
+            .withPropertyValues("prometheus-proxy.agent.metrics-proxy-path-labels.team=coffee")
+            .run(context -> assertThat(config(context)).doesNotContain("proxyPath")));
+
+    assertThat(lines)
+        .contains(
+            "prometheus-proxy.agent.metrics-proxy-path-labels is set without metrics-proxy-path, so it does nothing");
   }
 
   // A customizer can point the agent elsewhere, so the line that says it started names no proxy: the line before it

@@ -192,8 +192,8 @@ class EnvVarsTest : StringSpec() {
       }
     }
 
-    "EnvVars enum should have exactly 56 entries" {
-      EnvVars.entries.size shouldBe 56
+    "EnvVars enum should have exactly 57 entries" {
+      EnvVars.entries.size shouldBe 57
     }
 
     // A subset; the test below checks the whole set.
@@ -300,6 +300,7 @@ class EnvVarsTest : StringSpec() {
         "CLIENT_CACHE_CLEANUP_INTERVAL_MINS",
         "KEEPALIVE_WITHOUT_CALLS",
         "UNARY_DEADLINE_SECS",
+        "METRICS_PROXY_PATH",
         "AGENT_LOG_LEVEL",
         "AGENT_TOKEN",
         "DEBUG_ENABLED",
@@ -458,6 +459,7 @@ class EnvVarsTest : StringSpec() {
         EnvVars.MAX_CONCURRENT_CLIENTS,
         EnvVars.CLIENT_TIMEOUT_SECS,
         EnvVars.UNARY_DEADLINE_SECS,
+        EnvVars.METRICS_PROXY_PATH,
         EnvVars.AGENT_LOG_LEVEL,
       ]
 

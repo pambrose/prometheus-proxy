@@ -57,7 +57,8 @@ With that, the app gets:
 
 The `agent { }` block takes the agent's [`EmbeddedAgentConfig.Builder`](embedded-agent.md#embeddedagentconfig), with a
 typed method for each setting, such as a certificate the app reads from a secret store, and `agentMetricsAt(path)`,
-which serves the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) through the proxy too, with no port.
+which serves the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) through the proxy too, with no port,
+as the file's `metrics-proxy-path` does.
 As with any embedded agent, the agent's own environment variables, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, take
 precedence over its settings, so give the app's other names, as `fromEnvironment()`'s `PROMETHEUS_` ones are.
 
@@ -95,7 +96,9 @@ environment variable gives:
 | `labels.<name>`            |                            | The labels of the registry's path, in the proxy's [service discovery](service-discovery.md)                                                                                   |
 | `paths`                    |                            | Other targets the agent scrapes over HTTP, a list, each served at a `path` of its own from its `url`, with `username`, `password`, and `labels`                                |
 | `consolidated`             | `false`                    | Whether the agent registers its paths in [consolidated mode](advanced.md#consolidated-mode), alongside other agents serving them                                               |
-| `metrics-port`             |                            | The port of the agent's own metrics, which are off without one. They stay apart from the app's, whose JVM metrics they'd repeat; the builder's `agentMetricsAt(path)` serves them through the proxy, with no port |
+| `metrics-port`             |                            | The port of the agent's own metrics, which are off without one, for a scraper on the app's own network ([Port or Proxy Path](monitoring.md#port-or-proxy-path)) |
+| `metrics-proxy-path`       |                            | The proxy's path the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) are served at, read in-process, with no port; off without one. They stay apart from the app's path, whose JVM metrics they'd repeat |
+| `metrics-proxy-path-labels.<name>` |                   | The labels of `metrics-proxy-path`, in the proxy's [service discovery](service-discovery.md)                                                                                   |
 | `dashboard.port`, `.host`  |                            | The [agent's dashboard](agent-dashboard.md), off without a port, listening on every interface unless `host` names one, such as `127.0.0.1`                                    |
 | `dashboard.password`       |                            | Requires a login to the dashboard, as `dashboard.username` (`admin` by default)                                                                                               |
 | `required`                 | `false`                    | Whether the app fails to start when the agent can't, or has no proxy                                                                                                          |

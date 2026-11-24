@@ -16,6 +16,9 @@
 
 package io.prometheus.agent.ktor
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -31,6 +34,7 @@ import io.ktor.server.config.yaml.YamlConfig
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import org.slf4j.LoggerFactory
 
 class PrometheusProxyAgentConfigTest : StringSpec() {
   init {
@@ -82,6 +86,8 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
             "client-key" to "KEY",
             "consolidated" to "true",
             "metrics-port" to "9101",
+            "metrics-proxy-path" to "my_app_agent_metrics",
+            "metrics-proxy-path-labels.team" to "agents",
             "dashboard.port" to "9102",
             "dashboard.host" to "127.0.0.1",
             "dashboard.username" to "ops",
@@ -123,6 +129,22 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig("dashboard.password" to "pw"))
 
       config.builder().build().toString() shouldContain "username=admin"
+    }
+
+    // Labels with no path would do nothing, so the plugin says so rather than drop them unseen
+    "metrics proxy path labels without a path are warned of" {
+      val logger = LoggerFactory.getLogger(FileSettings::class.java) as Logger
+      val events = ListAppender<ILoggingEvent>().apply { start() }
+      logger.addAppender(events)
+      try {
+        val config = PrometheusProxyAgentConfig(MapApplicationConfig("metrics-proxy-path-labels.team" to "agents"))
+        config.builder().build().toString() shouldNotContain "proxyPath"
+      } finally {
+        logger.detachAppender(events)
+      }
+
+      events.list.map { it.formattedMessage } shouldBe
+        listOf("prometheus-proxy.agent.metrics-proxy-path-labels is set without metrics-proxy-path, so it does nothing")
     }
 
     "enabled and required that aren't true or false fail at once" {
@@ -195,6 +217,8 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       client-key = KEY
       consolidated = true
       metrics-port = 9101
+      metrics-proxy-path = my_app_agent_metrics
+      metrics-proxy-path-labels { team = agents }
       dashboard { port = 9102, host = "127.0.0.1", username = ops, password = pw }
       paths = [
         {
@@ -230,6 +254,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
         clientCertificatePem(certChainPem = "CHAIN", privateKeyPem = "KEY")
         consolidated = true
         agentMetricsPort = 9101
+        agentMetricsAt(path = "my_app_agent_metrics", labels = mapOf("team" to "agents"))
         dashboard(port = 9102, host = "127.0.0.1")
         dashboardLogin(password = "pw", username = "ops")
         path(

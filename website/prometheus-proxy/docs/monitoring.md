@@ -28,28 +28,84 @@ Metrics are disabled by default. Enable them via CLI, environment variables, or 
 
     Or via CLI: `--metrics` or `METRICS_ENABLED=true`
 
-    Default endpoint: `http://agent-host:8083/metrics`
+    Default endpoint: `http://agent-host:8083/metrics`. Since 4.7.0, an agent can serve its metrics through the
+    proxy instead, with no port (see [Scraping Internal Metrics](#scraping-internal-metrics)).
 
 ### Scraping Internal Metrics
 
 The proxy runs next to Prometheus, so Prometheus scrapes its metrics port directly. The agents sit behind firewalls,
-so give each agent a path for its own `/metrics` and scrape that path through the proxy, one job per agent (the
-Agents dashboard tells agents apart by `job`):
+where Prometheus can't reach their ports, so it scrapes each agent's metrics through the proxy, at a path of the
+agent's own, one job per agent (the Agents dashboard tells agents apart by `job`). Since 4.7.0, the agent serves them
+at that path itself, read in-process, with no metrics port to open (`agent.metrics.proxyPath`):
 
 ```hocon
-agent {
-  pathConfigs: [
-    # ... the agent's targets, plus its own metrics:
-    { name: "Agent metrics", path: cluster_a_agent_metrics, url: "http://localhost:8083/metrics" }
-  ]
-}
+--8<-- "MonitoringExamples.txt:agent-metrics-proxy-path"
 ```
+
+Or via CLI: `--metrics_proxy_path cluster_a_agent_metrics` or `METRICS_PROXY_PATH=cluster_a_agent_metrics`. Its
+labels, `agent.metrics.proxyPathLabels`, are the path's labels in the proxy's
+[service discovery](service-discovery.md), as a `pathConfigs` entry's are, and only the config sets them. The path is
+checked as a `pathConfigs` entry is: one another path also names, or that has a character the proxy refuses, stops the
+agent at startup.
+
+Give each agent a path of its own, as each is a job of its own. Agents that share a config file, such as replicas or
+the agents of a [consolidated](advanced.md#consolidated-mode) path, would otherwise name the same one, and the proxy
+would serve one agent there, or, consolidated, one job for them all. Set each one's path with `METRICS_PROXY_PATH` or
+`--metrics_proxy_path`, or build it in the shared file from an environment variable each agent has its own value of,
+such as the host name a container gets: `proxyPath = ${HOSTNAME}_agent_metrics`.
 
 Then add the scrape jobs to your `prometheus.yml`:
 
 ```yaml
 --8<-- "PrometheusConfigs.txt:metrics-scrape-config"
 ```
+
+Before 4.7.0, an agent served them only on its metrics port, so it scraped its own port through a path of its own.
+That still works, and suits an agent whose port is on for a reason of its own
+(see [Port or Proxy Path](#port-or-proxy-path)):
+
+```hocon
+agent {
+  metrics.enabled = true
+  pathConfigs: [
+    # ... the agent's targets, plus its own metrics, from its own port:
+    { name: "Agent metrics", path: cluster_a_agent_metrics, url: "http://localhost:8083/metrics" }
+  ]
+}
+```
+
+An [embedded agent](embedded-agent.md) sets the path with its builder's `agentMetricsAt(path)`, or with the
+`metrics-proxy-path` property of the [Spring Boot Starter](spring-boot-starter.md) or the
+[Ktor Plugin](ktor-plugin.md). It serves its own `agent_*` series there, and leaves the JVM's metrics to the app's own
+path (see [The Agent's Own Metrics](embedded-agent.md#the-agents-own-metrics)).
+
+### Port or Proxy Path
+
+An agent serves its metrics on its metrics port, at its proxy path, or both:
+
+|                          | Metrics port                                                                                   | Proxy path                                                                                  |
+|:-------------------------|:-----------------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------|
+| Turned on by             | `agent.metrics.enabled`, `--metrics`, `METRICS_ENABLED`                                        | `agent.metrics.proxyPath`, `--metrics_proxy_path`, `METRICS_PROXY_PATH`                     |
+| Read                     | At `http://agent-host:8083/metrics`, by whatever can reach the agent's host                    | Through the proxy, as the agent's targets are, while the agent is connected                 |
+| Opens a port             | Yes                                                                                            | No                                                                                          |
+| A standalone agent's     | Its `agent_*` metrics, and the [JVM metrics](#jvm-metrics) its `agent.metrics` settings turn on | The same                                                                                    |
+| An embedded agent's      | Everything in its JVM's default registry, the app's metrics too, when they're kept there       | Its own `agent_*` series alone: the app's path carries the JVM's                            |
+
+Prometheus, outside the firewall, can read only the proxy path, so an agent that serves its metrics only to it needs no
+port. The port is for something inside the firewall:
+
+- **A scraper on the agent's own network,** such as a Prometheus, Grafana Alloy, or an OpenTelemetry Collector there,
+  which reads the agent whether or not it reaches the proxy.
+- **An agent that can't reach the proxy.** What the proxy serves of an agent stops when the agent's link does: an
+  agent that never connects, for a wrong endpoint, token, or certificate, one whose registration fails, and every agent
+  while the proxy, or the network between, is down. Prometheus then sees only the path go: its job's `up` goes to 0,
+  and `agent_connected` can't report 0 (see [Agent Metrics](#agent-metrics)). The agent keeps counting,
+  `agent_connect_count_total{type="failure"}` among them, but nothing outside reads it until it reconnects; a scraper
+  inside reads it throughout.
+
+Without such a scraper, leave the port off: nothing outside the firewall can reach it, and the proxy's own metrics and
+[dashboard](web-dashboard.md), and the job's `up`, report an agent that's gone. Both can be on at once, serving the same
+series, so have each scraper read one of them.
 
 ### JVM Metrics
 
@@ -59,7 +115,9 @@ Both components support optional JVM metrics:
 --8<-- "MonitoringExamples.txt:jvm-metrics-config"
 ```
 
-The same options are available under `agent.metrics`.
+The same options are available under `agent.metrics`. An agent serves the groups they turn on on its metrics port, and
+a standalone agent at its proxy path too, with the port off or on (see [Port or Proxy Path](#port-or-proxy-path)). An
+embedded agent's JVM metrics are its app's, so with its port off the options do nothing.
 
 The JVM metrics come from the Prometheus Java client 1.x. Since the move to it, the memory metrics put the unit
 last (`jvm_memory_used_bytes`, not `jvm_memory_bytes_used`; `jvm_memory_pool_used_bytes`, not
@@ -292,7 +350,8 @@ histogram does.
 | `agent_client_cache_size`                        | `launch_id`                        | Number of cached HTTP clients                              |
 
 An agent's metrics reach Prometheus through the proxy unless it scrapes the agent directly, so a disconnected agent
-can't report `agent_connected` as 0: its job's `up` goes to 0 instead.
+can't report `agent_connected` as 0: its job's `up` goes to 0 instead. A scraper on the agent's own network can read
+it from its metrics port throughout (see [Port or Proxy Path](#port-or-proxy-path)).
 
 ---
 
