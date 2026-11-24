@@ -42,11 +42,11 @@ document.addEventListener(
 // the buttons that work and wrap, where GLightbox's own order stepped onto a disabled arrow and then off the box. Once
 // it closes, the focus is back on the screenshot's link.
 
-// A slide's image, named by the caption the slide shows below it
+// A slide's image, unnamed as GLightbox leaves it, named by the caption the slide shows below it
 const nameImage = (slide) => {
-  const image = slide.querySelector("img");
+  const image = slide.querySelector('img:not([alt]), img[alt=""]');
   const caption = slide.querySelector(".gslide-title");
-  if (image && caption && !image.alt) {
+  if (image && caption) {
     image.alt = caption.textContent.trim();
   }
 };
@@ -78,7 +78,7 @@ const stepFocus = (box, back) => {
   const buttons = [...box.querySelectorAll(".gbtn:not(.disabled)")];
   const at = buttons.indexOf(document.activeElement);
   const next = at < 0 ? 0 : (at + (back ? -1 : 1) + buttons.length) % buttons.length;
-  buttons[next].focus();
+  buttons.at(next).focus();
 };
 
 // Run before GLightbox's own Tab handling, which it replaces
