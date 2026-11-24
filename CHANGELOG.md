@@ -341,6 +341,9 @@ All notable changes to this project are documented in this file.
 - The Embedded Agent page shows the builder first, and starting the agent from a config file after it, where the file
   came first. The production checklist links each item to the section that covers it, and draws checkboxes, where it
   drew circles, and the Quick Start says once which places its `proxy-host.example.com` stands for
+- The docs site's lists with a code block in them, a procedure's steps or a demo's scenarios, give their code the
+  column's width, where it was held to the reading measure and scrolled sideways. A card's link underlines only the
+  page's name, and the screenshots' lightbox sets its caption on the dashboard's dark surface, where it was a white bar
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

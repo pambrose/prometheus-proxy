@@ -96,16 +96,15 @@ body {
   font-weight: 640;
 }
 
-.md-typeset h3 {
-  font-weight: 600;
-}
-
 /* The headings' levels in size and space, since the monospace most readers get (Menlo, Consolas, Liberation Mono)
    has only a regular and a bold, so the weights above differ only in Safari's SF Mono. Each level is 4/3 of the one
    below, 32, 24, and 18px over the 16px text, where the theme's 30, 24, and 20 stepped by 1.25 and 1.2. A section's
    h2 gets the most room above and a hairline in the dashboard's line color, which marks a section as its panels do;
    the title sits close over its introduction, and a long heading breaks into even lines. */
-.md-typeset :is(h1, h2, h3, h4) {
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
   text-wrap: balance;
 }
 
@@ -131,6 +130,7 @@ body {
 .md-typeset h3 {
   margin: 1.8em 0 0.5em;
   font-size: 1.125em;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -172,6 +172,19 @@ body {
 .md-typeset > :is(p, ul, ol, dl, blockquote):not(:has(img)),
 .md-typeset .tabbed-block > :is(p, ul, ol, dl):not(:has(img)),
 .md-typeset > .admonition {
+  max-width: 27rem;
+}
+
+/* A list with a code block or a table in it, a procedure's steps or a demo's scenarios, takes the column's width, as
+   code and tables do elsewhere, where its code was held to the reading measure and scrolled sideways; its text keeps
+   the measure. */
+.md-typeset > ul:has(pre, table),
+.md-typeset > ol:has(pre, table) {
+  max-width: none;
+}
+
+.md-typeset > ul:has(pre, table) > li > p,
+.md-typeset > ol:has(pre, table) > li > p {
   max-width: 27rem;
 }
 
@@ -281,6 +294,31 @@ body {
 .md-typeset .pp-status--crit {
   background-color: var(--pp-crit-soft);
   color: var(--pp-crit);
+}
+
+/* A card's link, an arrow and the page it opens: the arrow and the name laid out apart, so the link's underline runs
+   under the name alone, where it ran under the space after the arrow too. */
+.md-typeset .grid.cards a:has(> .twemoji:first-child) {
+  display: inline-flex;
+  gap: 0.3em;
+  align-items: center;
+}
+
+/* The screenshots' lightbox caption, on the dashboard's dark surface in the site's reading face, under the dark
+   overlay, where GLightbox set it black in Arial on a white bar. */
+.glightbox-clean .gslide-description {
+  background: #151a21;
+}
+
+.glightbox-clean .gdesc-inner {
+  padding: 0.7em 1em;
+}
+
+.glightbox-clean .gslide-title {
+  margin-bottom: 0;
+  color: #e7ebf1;
+  font-family: var(--md-text-font-family);
+  font-size: 0.7rem;
 }
 
 /* The screenshots' lightbox is dark in either scheme, so its buttons' focus ring is the dark scheme's accent, 7:1 on
