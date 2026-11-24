@@ -259,6 +259,10 @@ Docker to publish its port, which the demo binds to `127.0.0.1`.
 
 ## The Proxy Goes Away
 
+A health check that restarted the app whenever the proxy was down would turn a proxy outage into an app outage. The
+agent's `/healthcheck` reports the agent itself, not its connection, and the app never waits on its agent, so the shop
+keeps serving and stays healthy while its metrics stop.
+
 `./demo.sh proxy-stop` stops the proxy. The coffee shop keeps serving, and an order still goes through
 (`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach
 the proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown` fires. The agent's

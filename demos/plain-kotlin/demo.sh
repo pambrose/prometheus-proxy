@@ -65,6 +65,8 @@ ON_DEMAND=(--profile misconfigured)
 # The most ovens `scale` runs.
 MAX_OVENS=5
 
+# This demo's page on the docs site, which shows its layout and code
+PAGE_URL="https://prometheus-proxy.com/plain-kotlin-demo/"
 DASHBOARD_URL="http://localhost:${PLAIN_KOTLIN_DEMO_DASHBOARD_PORT:-8694}/dashboard"
 GRAFANA_URL="http://localhost:${PLAIN_KOTLIN_DEMO_GRAFANA_PORT:-3600}"
 PROMETHEUS_URL="http://localhost:${PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT:-9690}"
@@ -148,6 +150,8 @@ print_urls() {
   echo "  Grafana:                $GRAFANA_URL"
   echo "  Prometheus's targets:   $PROMETHEUS_URL/targets"
   echo "  The proxy's discovery:  $PROXY_URL/discovery"
+  echo
+  echo "This demo, explained on the website: $PAGE_URL"
   echo
   echo "Scenarios: $0 sockets | rush | scale 3 | no-proxy ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -851,14 +855,14 @@ cmd_tour() {
   if part 1 "A worker, such as a queue consumer, a scheduler, or a daemon, often has no HTTP server at all, so" \
     "there's nothing for Prometheus to scrape. Here each oven is a plain Kotlin program, with the agent embedded" \
     "in it, which reads the oven's metrics in-process and sends them out to the proxy."; then
-    instruct "What runs in this demo." \
+    instruct "What runs in this demo, as the diagram at the top of its website page draws it: $PAGE_URL" \
       "A bakery's oven, a plain Kotlin program with no framework and no HTTP server, bakes the orders a counter" \
       "pushes onto a Redis queue, about one and a half a second. The prometheus-proxy agent runs inside the oven's" \
-      "JVM. Beside the proxy are Prometheus and Grafana, as on a proxy host. The diagram at the top of" \
-      "demos/plain-kotlin/README.md shows the layout."
+      "JVM. Beside the proxy are Prometheus and Grafana, as on a proxy host."
     step "Look for a port on the oven, and at what its JVM has open." -- sockets
-    instruct "Read the code that does it, main in demos/plain-kotlin/app/src/main/kotlin/bakery/Main.kt." \
-      "fromEnvironment() reads the proxy and the token from PROMETHEUS_PROXY and PROMETHEUS_AGENT_TOKEN." \
+    instruct "Read the code that does it, the oven's main: ${PAGE_URL}#the-workers-code" \
+      "In this checkout it's demos/plain-kotlin/app/src/main/kotlin/bakery/Main.kt. fromEnvironment() reads the" \
+      "proxy and the token from PROMETHEUS_PROXY and PROMETHEUS_AGENT_TOKEN." \
       "source() serves the oven's registry, the Prometheus Java client's default one, and agentMetricsAt() the" \
       "agent's own metrics, each at a path named after the oven's container. startIfConfigured().use { } runs the" \
       "oven whether or not the agent started, and stops the agent after it. On a SIGTERM, the shutdown hook above" \
@@ -871,19 +875,17 @@ cmd_tour() {
     instruct "Open Grafana: $GRAFANA_URL" \
       "It opens on the Bakery dashboard, with no sign-in needed. Its top row is the bakery now: ovens scraped," \
       "agents connected, waiting orders, orders baked a minute, and the bake time. Below it are each oven's orders," \
-      "the backlog against the number of ovens, bake times, and how much of its time each oven spends baking."
+      "the backlog against the number of ovens, bake times, and how much of its time each oven spends baking. The" \
+      "'Prometheus Agents' link at the top opens the dashboard the project ships for its agents, which shows the" \
+      "ovens' embedded agents, the oven-agent job, like any other, so they need no tooling of their own."
     step "Read the oven's metrics and its agent's through the proxy, each at its own path." -- metrics
-    instruct "Open the 'Prometheus Agents' link at the top of the Bakery dashboard." \
-      "It's the dashboard the project ships for its agents, and it shows the ovens' embedded agents, the oven-agent" \
-      "job, like any other agents: their connection to the proxy, and their scrapes."
   fi
 
   if part 3 "One oven bakes about two orders a second, which keeps up with the counter's one and a half. Here a" \
     "rush of 500 orders comes in over 50 seconds, and you watch the backlog climb, then add two ovens and watch" \
     "them clear it."; then
-    instruct "Keep Grafana's Bakery dashboard open." \
-      "You'll watch 'Waiting orders, and ovens' and 'Orders baked / sec, by oven'."
-    step "Start a rush." -- rush
+    step "Keep Grafana's Bakery dashboard open, to watch 'Waiting orders, and ovens' and 'Orders baked / sec, by" \
+      "oven', and start a rush." -- rush
     step "Once the backlog has passed 200, add two ovens." -- scale 3
     instruct "Open Prometheus's targets: $PROMETHEUS_URL/targets" \
       "The oven job lists three ovens now, each a target of its own, found through the proxy's service discovery," \

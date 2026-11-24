@@ -259,6 +259,10 @@ set them again when you need to look. `ADMIN_PORT` moves the port. In code, `set
 
 ### 8. The Proxy Goes Away, and the Shop Keeps Serving
 
+A health check that restarted the app whenever the proxy was down would turn a proxy outage into an app outage. The
+agent's `/healthcheck` reports the agent itself, not its connection, and the app never waits on its agent, so the shop
+keeps serving and stays healthy while its metrics stop.
+
 ```bash
 ./demo.sh proxy-stop
 ./demo.sh order         # an order still goes through

@@ -69,6 +69,8 @@ DEFAULT_AGENT="agent-west-2"
 # The services only a scenario starts, so down and status cover them too.
 ON_DEMAND=(--profile rogue --profile duplicate)
 
+# This demo's page on the docs site, which shows its layout and code
+PAGE_URL="https://prometheus-proxy.com/basics-demo/"
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
@@ -171,6 +173,8 @@ print_urls() {
   echo "  Grafana:          $GRAFANA_URL"
   echo "  Prometheus:       $PROMETHEUS_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
+  echo
+  echo "This demo, explained on the website: $PAGE_URL"
   echo
   echo "Scenarios: $0 outage | slow | discover | agent-freeze | rogue-agent ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -488,6 +492,36 @@ step() {
   AFTER_PAUSE=0
 }
 
+# Puts back what the tour changed, once the presenter presses Enter, so what follows starts as the demo did. It shows
+# nothing new, so it has no number, and prints only each command's headlines, its bold lines, as they come; a command
+# that fails prints all it said, and ends the tour. put_back <what it puts back> <command>...
+put_back() {
+  local what="$1" cmd log
+  shift
+  blank_line
+  pause "Press Enter to $what: ./demo.sh $(join_commands "$@")"
+  log="$(mktemp)"
+  for cmd in "$@"; do
+    if ! (cd "$DEMO_DIR" && ./demo.sh "$cmd" </dev/null 2>&1) | tee "$log" |
+      { grep --line-buffered $'^\033\\[1m' || true; }; then
+      cat "$log"
+      rm -f "$log"
+      die "./demo.sh $cmd failed, which ends the tour"
+    fi
+  done
+  rm -f "$log"
+  echo
+  AFTER_PAUSE=1
+}
+
+# The commands put_back runs, as it prints them: join_commands <command>...
+join_commands() {
+  local first="$1"
+  shift
+  printf '%s' "$first"
+  (($# == 0)) || printf ', then ./demo.sh %s' "$@"
+}
+
 # Checks the part the tour starts from: check_tour_from <argument>
 check_tour_from() {
   TOUR_FROM="${1:-1}"
@@ -580,11 +614,10 @@ cmd_tour() {
       "which the firewall allows because it's outbound. Prometheus scrapes the proxy as if it were each service." \
       "The proxy passes each scrape down the agent's connection, and the agent scrapes the service and sends the" \
       "metrics back the same way."
-    instruct "What runs in this demo." \
+    instruct "What runs in this demo, as the diagram at the top of its website page draws it: $PAGE_URL" \
       "Three agents run behind the firewall. agent-east, in the east data center, scrapes the orders, payments," \
       "inventory, and catalog services. agent-west-1 and agent-west-2, in the west data center, are a redundant" \
-      "pair that both serve the shipping service. Outside the firewall are the proxy, Prometheus, and Grafana. The" \
-      "diagram at the top of demos/basics/README.md shows the same layout."
+      "pair that both serve the shipping service. Outside the firewall are the proxy, Prometheus, and Grafana."
   fi
 
   if part 2 "The proxy's dashboard shows every agent connected to it, the paths each one registered, and the" \
@@ -597,7 +630,8 @@ cmd_tour() {
       "paths it registered, with their labels; and its scrapes as they happen, with each one's status, time, and" \
       "size."
     instruct "Find the scrapes of /catalog_metrics in agent-east's list." \
-      "Each payload is about 480,000 characters, large enough that the agent sends it to the proxy in chunks."
+      "Each payload is about 480,000 characters, large enough that the agent sends it to the proxy in chunks, so" \
+      "however large a service's metrics, no one gRPC message has to hold them."
     instruct "Find /proxy_metrics among agent-east's paths." \
       "These are the proxy's own metrics. They leave the proxy, go through agent-east, and come back through the" \
       "proxy to Prometheus, so the proxy is monitored the same way as everything else."
@@ -611,11 +645,9 @@ cmd_tour() {
 
   if part 3 "Grafana shows what Prometheus collected through the proxy: the health of every target, and the" \
     "services' own metrics."; then
-    instruct "Open Grafana: $GRAFANA_URL" \
-      "It opens on the 'Prometheus Proxy Demo' dashboard, with no sign-in needed."
-    instruct "Look at the section titled 'Through the firewall'." \
-      "It shows the health of every target, the outcome of every scrape, and each path's scrape latency and" \
-      "payload size."
+    instruct "Open Grafana, and look at the section titled 'Through the firewall': $GRAFANA_URL" \
+      "Grafana opens on the 'Prometheus Proxy Demo' dashboard, with no sign-in needed. The section shows the health" \
+      "of every target, the outcome of every scrape, and each path's scrape latency and payload size."
     instruct "Look at the section titled 'Business metrics from behind the firewall'." \
       "It shows orders, payments, inventory, and shipping. These are ordinary application metrics, which" \
       "Prometheus collected through the proxy."
@@ -628,9 +660,8 @@ cmd_tour() {
 
   if part 4 "Here you break two of the services, one at a time, and see that the proxy reports each failure" \
     "clearly while the other services keep answering."; then
-    instruct "Put the proxy dashboard's Paths view and Grafana side by side." \
-      "You'll watch both as the services fail."
-    step "Make the payments service answer every scrape with an error." \
+    step "Put the proxy dashboard's Paths view beside Grafana, then make the payments service answer every scrape" \
+      "with an error." \
       "agent-east scrapes the payments service, at /payments_metrics, so the failure shows on that path in the" \
       "dashboard's Paths view and in agent-east's recent scrapes in its Agents view." -- outage
     step "Once DemoTargetDown has fired, make the inventory service hang, so it never answers." -- slow
@@ -682,7 +713,7 @@ cmd_tour() {
       "It lists what has happened to the agent, newest first. Its entries show the agent connecting to the proxy," \
       "registering /contractor_metrics, and being refused /payments_metrics, with the same reason. Checking Problems" \
       "only leaves just the refusal."
-    step "Stop and remove the contractor's agent." -- rogue-agent-stop
+    put_back "stop and remove the contractor's agent" rogue-agent-stop
     instruct "Open agent-east's dashboard on its Connection view: $EAST_DASHBOARD_URL/connection" \
       "agent-east is connected to proxy:50051, its one proxy endpoint. Below that is its discovery file. The settings" \
       "it resolved are on its Settings view: $EAST_DASHBOARD_URL/settings"
@@ -707,10 +738,9 @@ cmd_tour() {
     step "Restart the proxy with a password for its dashboard." -- login
     instruct "Reload the dashboard: $DASHBOARD_URL" \
       "It shows the login page instead. Sign in as admin, with the password $LOGIN_PASSWORD, and it opens the page" \
-      "you asked for, with the agents reconnected."
-    instruct "Click Log out, the exit icon at the right end of the top bar." \
-      "Your session ends, and the login page comes back."
-    step "Restart the proxy without the password." -- login-off
+      "you asked for, with the agents reconnected. Log out, the exit icon at the right end of the top bar, ends your" \
+      "session and brings the login page back."
+    put_back "restart the proxy without the password" login-off
   fi
 
   wait_after_output "Press Enter to finish the tour"
