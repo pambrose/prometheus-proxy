@@ -13,6 +13,23 @@ instead of running a separate agent process.
 - You want to avoid managing a separate agent process
 - You need tight integration between your app and the agent lifecycle
 
+## Ways to Run It
+
+Each of these runs the same agent from the same settings, the tree a config file holds under `agent` (see
+[Agent Configuration](configuration/agent.md)):
+
+| Your application                        | Start the agent with                                                                        | Its settings come from                                                                                  |
+|:----------------------------------------|:--------------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------|
+| A Spring Boot app                       | The [Spring Boot Starter](spring-boot-starter.md), from a dependency                        | The `prometheus-proxy.agent.*` properties, and a customizer bean                                        |
+| A Ktor app                              | The [Ktor Plugin](ktor-plugin.md), `install(PrometheusProxyAgent)`                          | `prometheus-proxy.agent` in `application.conf` or its YAML, and the install block                       |
+| Any JVM program, its settings in code   | [`embeddedAgent { }`](#configuring-in-code), or `EmbeddedAgentConfig.builder()` from Java   | The builder's methods, [`fromEnvironment()`](#settings-from-the-environment), and `setting()`           |
+| Any JVM program, its settings in a file | [`Agent.startAsyncAgent(file, false)`](#agentstartasyncagent)                               | A HOCON config file or URL, as the standalone agent reads one                                           |
+| Any JVM program, a `Config` it builds   | [`Agent.startAsyncAgent(config)`](#a-config-of-your-own)                                    | A Typesafe `Config`, rooted at `agent`                                                                  |
+
+The starter and the plugin start the agent with the app and stop it as the app stops; with the others, the app stops
+it itself (see [`EmbeddedAgentInfo`](#embeddedagentinfo)). The starter and the plugin set the agent's settings through
+the builder, and [Every Setting, Every Way](#every-setting-every-way) lists each setting's name in all of them.
+
 ## Adding the Dependency
 
 === "Gradle (Kotlin DSL)"
@@ -82,6 +99,7 @@ and keeps the app running if it can't:
 - **The environment variables of single settings still take precedence,** such as `AGENT_TOKEN` or `PROXY_HOSTNAME`,
   as they do over a config file: give your application's own settings other names, as the `PROMETHEUS_` ones
   `fromEnvironment()` reads are, unless you mean the agent to read them. `AGENT_CONFIG` isn't read.
+  [Every Setting, Every Way](#every-setting-every-way) lists each setting's variable.
 
 ### Metrics Served In-Process
 
@@ -137,14 +155,21 @@ The [Agents dashboard](grafana.md#dashboards) the project ships reads the agent'
 scrapes, their latency, and its backlog among them. An embedded agent's metrics port would be no more reachable from
 outside than the app's, so since 4.7.0, `agentMetricsAt(path)` has the agent serve them through the proxy, at a path of
 their own, read in-process as the app's registry is, with no port opened for them. The example above serves them at
-`/worker_agent_metrics`:
+`/worker_agent_metrics`.
+
+`agentMetricsAt(path, labels)` sets `agent.metrics.proxyPath` and `agent.metrics.proxyPathLabels`, the settings a
+standalone agent serves its metrics through the proxy with, so `toConfig()` holds them, and a config file, a `Config`,
+the starter's and the plugin's `metrics-proxy-path`, or `METRICS_PROXY_PATH` in the app's environment sets the same:
 
 - **They're the `agent_*` series, this agent's alone:** another agent in the same JVM serves its own, and the JVM's
-  metrics stay with the app's path, which the dashboard doesn't read them from.
+  metrics stay with the app's path, which the dashboard doesn't read them from. A standalone agent's path serves its
+  JVM's metrics too, since its JVM is its own.
 - **They're kept from the start,** whether or not the agent's metrics port is on (`agentMetrics(port)`,
   `METRICS_ENABLED`), and a source of the default registry leaves them out. The
   [agent's dashboard](agent-dashboard.md) shows them as on in its Settings view, with their path, and their port when
   it's on too.
+- **The path is checked as a `pathConfigs` entry is:** one another path also names, or that has a character the proxy
+  refuses, fails `start()`, and the error names `agent.metrics.proxyPath`.
 - **Give the path a Prometheus job of its own,** since the dashboard tells agents apart by `job`:
 
 ```yaml
@@ -157,6 +182,12 @@ scrape_configs:
 
 The [Embedded Demo](embedded-demo.md) serves its coffee shop's agent's metrics this way, and its Grafana links to the
 dashboard.
+
+The metrics port, `agentMetrics(port)`, is for a scraper on the app's own network, such as a Prometheus inside the
+cluster, which can read the agent while it can't reach the proxy, when nothing reaches its path. The port serves
+everything in the JVM's default registry, the app's metrics too when they're kept there, and the JVM metric groups the
+agent's `agent.metrics` settings turn on. Without such a scraper, the path is all the agent needs (see
+[Port or Proxy Path](monitoring.md#port-or-proxy-path)).
 
 ### Settings From the Environment
 
@@ -242,6 +273,68 @@ Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, Di
 [Embedded Demo](embedded-demo.md) runs an embedded agent on one machine, in a Ktor app, with the
 [Ktor Plugin](ktor-plugin.md). The [Worker Demo](worker-demo.md) runs one in each of a plain Kotlin program's replicas,
 with no framework or HTTP server, scaled out and in.
+
+## Every Setting, Every Way
+
+A setting has a name in each way of giving it. The builder's methods, the starter's properties, and the plugin's keys
+all set the agent's config keys, the ones a config file holds, and the agent reads each key's environment variable
+itself, embedded or not:
+
+| Setting                         | Builder                                             | Config key                                                                 | Starter property, plugin key                       | Environment variable                                   |
+|:--------------------------------|:----------------------------------------------------|:---------------------------------------------------------------------------|:---------------------------------------------------|:-------------------------------------------------------|
+| The proxy                       | `proxy(endpoints…)`                                 | `agent.proxy.endpoints`                                                    | `proxy`                                            | `PROXY_HOSTNAME`                                       |
+| The token                       | `token(token)`                                      | `agent.agentToken`                                                         | `token`                                            | `AGENT_TOKEN`                                          |
+| The proxy's certificate         | `trustCertificatePem(pem, authority)`               | `agent.tls.trustCertCollectionPem`, `agent.tls.overrideAuthority`          | `trust-certificate`, `authority`                   | `TRUST_CERT_COLLECTION_PEM`, `OVERRIDE_AUTHORITY`      |
+| The agent's certificate and key | `clientCertificatePem(certChainPem, privateKeyPem)` | `agent.tls.certChainPem`, `agent.tls.privateKeyPem`                        | `client-certificate`, `client-key`                 | `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`                    |
+| The agent's name                | `name(name)`                                        | `agent.name`                                                               | `name`                                             | `AGENT_NAME`                                           |
+| Consolidated mode               | `consolidated(consolidated)`                        | `agent.consolidated`                                                       | `consolidated`                                     | `CONSOLIDATED`                                         |
+| Its metrics, on a port          | `agentMetrics(port)`                                | `agent.metrics.enabled`, `agent.metrics.port`                              | `metrics-port`                                     | `METRICS_ENABLED`, `METRICS_PORT`                      |
+| Its metrics, through the proxy  | `agentMetricsAt(path, labels)`                      | `agent.metrics.proxyPath`, `agent.metrics.proxyPathLabels`                 | `metrics-proxy-path`, `metrics-proxy-path-labels`  | `METRICS_PROXY_PATH`                                   |
+| Its dashboard                   | `dashboard(port, host)`                             | `agent.dashboard.enabled`, `agent.dashboard.port`, `agent.dashboard.host`  | `dashboard.port`, `dashboard.host`                 | `DASHBOARD_ENABLED`, `DASHBOARD_PORT`, `DASHBOARD_HOST` |
+| Its dashboard's login           | `dashboardLogin(password, username)`                | `agent.dashboard.password`, `agent.dashboard.username`                     | `dashboard.password`, `dashboard.username`         | `DASHBOARD_PASSWORD`, `DASHBOARD_USERNAME`             |
+| A target it scrapes             | `path(…)`, `scrapeSelf(…)`                          | `agent.pathConfigs`                                                        | `paths`                                            |                                                        |
+| The app's own registry          | `source(path, registry)`                            | none: it's code                                                            | `path` and `labels`, with the app's registry       |                                                        |
+| Anything else                   | `setting(key, value)`                               | the key                                                                    | `settings.<key>`                                   | the key's, if it has one                               |
+
+The starter serves the app's `PrometheusRegistry` bean at `path` unless its `source` is `none`, and the plugin serves
+the registry its install block gives. `fromEnvironment()`'s `PROMETHEUS_` variables are the app's, which only it reads
+([Settings From the Environment](#settings-from-the-environment)); the variables above are the agent's own, which it
+reads whether or not the app asks, so keep their names out of the app's environment unless you mean the agent to use
+them.
+
+Where one setting is given more than one way, the first of these that gives it wins:
+
+1. **The agent's own environment variable,** such as `AGENT_TOKEN`, read as the agent starts.
+2. **`setting(key, value)`,** and the starter's and the plugin's `settings.<key>`, which call it.
+3. **A builder method,** its last call; the starter's customizers and the plugin's install block run after the
+   properties or the file, so their calls replace what those set.
+4. **The built-in default** (see [Agent Configuration](configuration/agent.md)).
+
+A config file or a `Config` takes the place of the second and third: its keys, then the defaults.
+
+### Settings Without a Builder Method
+
+`setting(key, value)` sets any other setting by its key under `agent`, as the starter's and the plugin's
+`settings.<key>` do. These are the ones an embedded agent most often needs:
+
+| Config key                             | Default | What it sets                                                                                                           |
+|:---------------------------------------|:--------|:-----------------------------------------------------------------------------------------------------------------------|
+| `agent.scrapeTimeoutSecs`              | 15      | How long the agent waits for a target's answer, in seconds                                                             |
+| `agent.scrapeMaxRetries`               | 0       | How many times it retries a failed scrape                                                                              |
+| `agent.http.maxConcurrentClients`      | 1       | How many scrapes it runs at once; raise it when it scrapes several slow targets                                        |
+| `agent.http.clientTimeoutSecs`         | 90      | Its HTTP client's timeout, in seconds                                                                                  |
+| `agent.http.maxContentLengthMBytes`    | 10      | The largest scrape it takes, in megabytes                                                                              |
+| `agent.http.trustStorePath`            | ""      | A trust store for HTTPS targets signed by a private CA, with `agent.http.trustStorePassword`                           |
+| `agent.transportFilterDisabled`        | false   | Set it, as on the proxy, when [nginx fronts the proxy](advanced.md#nginx-reverse-proxy)                                |
+| `agent.admin.enabled`                  | false   | The admin endpoints, on `agent.admin.port`, and `/debug` with `agent.admin.debugEnabled` ([Admin and Debug Endpoints](#admin-and-debug-endpoints)) |
+| `agent.logLevel`                       | info    | The level of the agent's `io.prometheus` loggers, and no others ([Logging](#logging))                                  |
+| `agent.metrics.standardExportsEnabled` | false   | The process metrics, one of the [JVM metric groups](monitoring.md#jvm-metrics), which the agent's metrics port serves |
+
+An embedded agent's JVM metrics are usually its app's, which its own registry, such as Micrometer's, keeps and serves:
+the agent's JVM metric groups add only to what its metrics port serves, and do nothing with the port off. A list or an
+object, such as `filters` or `discovery`, is clearer in a config file or a `Config` (see
+[A `Config` of Your Own](#a-config-of-your-own)); [Agent Configuration](configuration/agent.md) describes every
+setting.
 
 ## In Ktor
 
@@ -336,7 +429,7 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `fromEnvironment()`                                                | `proxy`, `token`, `trustCertificatePem`'s           | Since 4.7.0, set them from `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and `PROMETHEUS_PROXY_AUTHORITY`, those set ([Settings From the Environment](#settings-from-the-environment)) |
 | `consolidated(consolidated)`                                       | `agent.consolidated`                                | Register the agent's paths in consolidated mode; `consolidated()` alone turns it on                                                       |
 | `agentMetrics(port)`                                               | `agent.metrics.enabled`, `agent.metrics.port`       | Turn on the agent's own metrics endpoint, which is off unless asked for                                                                   |
-| `agentMetricsAt(path, labels)`                                     | none: it's code                                     | Since 4.7.0, serve the agent's own metrics at `path`, read in-process, with no port ([The Agent's Own Metrics](#the-agents-own-metrics)); `labels` is optional |
+| `agentMetricsAt(path, labels)`                                     | `agent.metrics.proxyPath`, `agent.metrics.proxyPathLabels` | Since 4.7.0, serve the agent's own metrics at `path`, read in-process, with no port ([The Agent's Own Metrics](#the-agents-own-metrics)); `labels` is optional |
 | `dashboard(port, host)`                                            | `agent.dashboard.enabled`, `agent.dashboard.port`, `agent.dashboard.host` | Since 4.7.0, turn on the agent's [dashboard](agent-dashboard.md), which is off unless asked for; `host`, such as `127.0.0.1`, is optional |
 | `dashboardLogin(password, username)`                               | `agent.dashboard.password`, `agent.dashboard.username` | Since 4.7.0, require a login to the agent's dashboard; `username` defaults to `admin`                                                  |
 | `scrapeSelf(path, port, username, password, metricsPath, labels)` | `agent.pathConfigs`                                 | Scrape the app at `http://127.0.0.1:<port>/<metricsPath>` (default `metrics`) and serve it at `path`; the rest are optional               |
@@ -358,7 +451,7 @@ path or a port out of range, throws `ConfigLoadException`, as `start()` does for
 |:-------------------------------------|:---------------------|:-------------------------------------------------------------------------------------------------------|
 | `start(logBanner)`                   | `EmbeddedAgentInfo`  | Starts the agent, as `startAsyncAgent(config)` does, and throws as it does; `logBanner` defaults to `true` |
 | `startIfConfigured(logBanner, onFailure)` | `EmbeddedAgentInfo?` | Since 4.7.0, starts the agent where the settings or `PROXY_HOSTNAME` name a proxy, and returns `null` without one, or for a start that fails, which it logs and gives `onFailure`, optional, with why and what was thrown ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
-| `toConfig()`                         | `Config`             | The settings as the tree a config file holds, rooted at `agent`, without the paths `source` and `agentMetricsAt` add |
+| `toConfig()`                         | `Config`             | The settings as the tree a config file holds, rooted at `agent`, without the paths `source` adds, which are code |
 | `toString()`                         | `String`             | The settings, with the token, passwords, and PEMs shown only as set, a path's credentials masked, and a `source` path as `in-process`, so an app can log them |
 
 `MetricsSource.of(registry)`, a static method from Java, is the `MetricsSource` that `source(path, registry)` serves a
@@ -433,8 +526,8 @@ When you call `startAsyncAgent()`:
 
 Your application code runs normally while the agent handles metrics scraping in the background.
 
-With its metrics on (`agent.metrics.enabled`, `agentMetrics(port)`, or `agentMetricsAt(path)` in code), the embedded
-agent's metrics register in the Prometheus Java client 1.x default registry
+With its metrics on, on their port (`agentMetrics(port)`, `agent.metrics.enabled`) or at a proxy path
+(`agentMetricsAt(path)`, `agent.metrics.proxyPath`), the embedded agent's metrics register in the Prometheus Java client 1.x default registry
 (`io.prometheus.metrics.model.registry.PrometheusRegistry.defaultRegistry`). A host that serves its own metrics
 from that registry over HTTP exposes the agent's too, though the agent's `source(path, registry)` of it leaves them out;
 a host still on the 0.x client (`io.prometheus:simpleclient`) does not see them. Every agent in the JVM, two at once or

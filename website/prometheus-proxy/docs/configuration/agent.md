@@ -421,6 +421,30 @@ agent {
 }
 ```
 
+## The Agent's Own Metrics
+
+The agent's own metrics, the `agent_*` series the [Agents dashboard](../grafana.md#dashboards) reads, are off unless
+turned on, on a metrics port of their own, at a path of the proxy's, or both:
+
+```hocon
+agent {
+  metrics {
+    enabled = true                    // The metrics port, METRICS_ENABLED
+    port = 8083
+
+    // Since 4.7.0: served through the proxy at /east_agent_metrics, read in-process, with no port
+    // (--metrics_proxy_path, METRICS_PROXY_PATH)
+    proxyPath = east_agent_metrics
+    proxyPathLabels = "{\"region\": \"east\"}"   // Optional: the path's service discovery labels
+  }
+}
+```
+
+Prometheus, outside the firewall, reaches the agent's metrics only through the proxy, so the proxy path is all most
+agents need. The port suits a scraper on the agent's own network, which can read the agent while it can't reach the
+proxy. A standalone agent serves the same metrics at either, its JVM metrics included (`standardExportsEnabled` and
+the rest). See [Monitoring](../monitoring.md#port-or-proxy-path) for when each fits.
+
 ## Full Example
 
 Here is a real-world config from the `examples/` directory:

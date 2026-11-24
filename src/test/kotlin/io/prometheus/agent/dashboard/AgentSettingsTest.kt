@@ -166,6 +166,13 @@ class AgentSettingsTest : StringSpec() {
       metricsShown {} shouldBe "off"
     }
 
+    // A standalone agent's own metrics, served through the proxy with agent.metrics.proxyPath, show the same way
+    "the settings should show a standalone agent's metrics served at a proxy path from its config" {
+      AgentSettings
+        .of(agent("agent.metrics.proxyPath = /west_agent_metrics"))
+        .value("Metrics", "Metrics") shouldBe "on, in-process, at the proxy's /west_agent_metrics"
+    }
+
     // The view is open to whoever reaches the dashboard, behind a login or not, so a secret never reaches it.
     "no token, password, PEM, or -D value should appear anywhere in the settings" {
       val text = AgentSettings.of(agent(configured, extraArgs = ["-Dagent.agentToken=tok-d-6"])).text()

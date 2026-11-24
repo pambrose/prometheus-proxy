@@ -66,7 +66,7 @@ scrape_configs:
       - targets: ['proxy-host.example.com:8082']
 
   # Scrape each agent's internal metrics through the proxy, one job per agent. The agent
-  # registers its own /metrics as a path (cluster_a_agent_metrics here).
+  # serves them at a path of its own (agent.metrics.proxyPath, cluster_a_agent_metrics here).
   - job_name: 'agent-cluster-a'
     metrics_path: /cluster_a_agent_metrics
     static_configs:

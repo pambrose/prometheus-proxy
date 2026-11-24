@@ -32,7 +32,7 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import java.io.ByteArrayOutputStream
 
 // A registry served in-process, as MetricsSource.of and the builder's source(path, registry) serve it, and the agent's
-// own metrics, as agentMetricsAt serves them: each series served once, at one path.
+// own metrics, as agent.metrics.proxyPath (agentMetricsAt) serves them: each series served once, at one path.
 class RegistryMetricsSourceTest : StringSpec() {
   private val defaultRegistry = PrometheusRegistry.defaultRegistry
   private val openMetrics = mutableListOf<AgentMetrics>()
@@ -170,6 +170,28 @@ class RegistryMetricsSourceTest : StringSpec() {
       source.written(names = setOf("agent_disconnects_total")).second.also {
         it shouldContain """agent_disconnects_total{launch_id="first-launch"} 0.0"""
         it shouldNotContain "agent_connected"
+      }
+    }
+
+    // A standalone agent's JVM is its own, so its path serves the JVM's metrics too, as its metrics port would
+    "a standalone agent's own source serves the rest of the default registry too, with only its own agent series" {
+      val jvm = Gauge.builder().name("jvm_threads_current").help("Threads").register().apply { set(12.0) }
+      try {
+        agentMetrics("first-launch")
+        agentMetrics("second-launch")
+        val source = AgentMetricsSource(standalone = { true }, launchId = { "first-launch" })
+
+        source.written().second.also {
+          it shouldContain "jvm_threads_current 12.0"
+          it shouldContain """agent_connected{launch_id="first-launch"} 0.0"""
+          it shouldNotContain "second-launch"
+        }
+        source.written(names = setOf("jvm_threads_current")).second.also {
+          it shouldContain "jvm_threads_current 12.0"
+          it shouldNotContain "agent_"
+        }
+      } finally {
+        defaultRegistry.unregister(jvm)
       }
     }
 

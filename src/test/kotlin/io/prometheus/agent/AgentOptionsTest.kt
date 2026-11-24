@@ -37,6 +37,7 @@ import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
+import io.prometheus.common.agentOptionsFromConfig
 import io.prometheus.common.shouldBeRejected
 import io.prometheus.common.testConfigVals
 import org.slf4j.LoggerFactory
@@ -225,6 +226,35 @@ class AgentOptionsTest : StringSpec() {
         false,
       )
       options.unaryDeadlineSecs shouldBe 60
+    }
+
+    // ==================== Metrics Proxy Path ====================
+
+    "metricsProxyPath should default to none, with empty labels" {
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
+      options.metricsProxyPath shouldBe ""
+      options.metricsProxyPathLabels shouldBe "{}"
+    }
+
+    "metricsProxyPath and its labels should come from the config, without a leading slash" {
+      val options =
+        agentOptionsFromConfig(
+          """
+          agent.metrics.proxyPath = " /east_agent_metrics "
+          agent.metrics.proxyPathLabels = "{\"job\": \"agent-east\"}"
+          """.trimIndent(),
+        )
+      options.metricsProxyPath shouldBe "east_agent_metrics"
+      options.metricsProxyPathLabels shouldBe """{"job": "agent-east"}"""
+    }
+
+    "metricsProxyPath should be settable via command line, over the config" {
+      val options =
+        agentOptionsFromConfig(
+          "agent.metrics.proxyPath = config_agent_metrics",
+          extraArgs = ["--metrics_proxy_path", "/cli_agent_metrics"],
+        )
+      options.metricsProxyPath shouldBe "cli_agent_metrics"
     }
 
     // ==================== Constructor Variants ====================

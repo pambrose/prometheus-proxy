@@ -67,6 +67,9 @@ internal class FileSettings(
   private fun features(builder: EmbeddedAgentConfig.Builder) {
     boolean("consolidated")?.also { builder.consolidated = it }
     int("metrics-port")?.also { builder.agentMetricsPort = it }
+    string("metrics-proxy-path")?.also {
+      builder.agentMetricsAt(path = it, labels = stringMap("metrics-proxy-path-labels"))
+    }
     int("dashboard.port")?.also { builder.dashboard(port = it, host = string("dashboard.host")) }
     string("dashboard.password")?.also {
       builder.dashboardLogin(password = it, username = string("dashboard.username") ?: "admin")

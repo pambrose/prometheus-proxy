@@ -23,6 +23,7 @@ import com.pambrose.common.concurrent.await
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.pambrose.common.metrics.SystemMetrics
 import com.google.common.util.concurrent.Service
 import com.pambrose.common.service.GenericService
 import com.pambrose.common.servlet.LambdaServlet
@@ -276,10 +277,17 @@ class Agent(
   private val metricsHolder = lazy { AgentMetrics(this) }
   internal val metrics by metricsHolder
 
-  // Whether the agent keeps its metrics: with their port on (isMetricsEnabled), or served at a path of their own,
-  // in-process (EmbeddedAgentConfig.Builder.agentMetricsAt), which opens no port. A getter, as the properties declared
-  // above this one can read it while the agent is built.
-  internal val collectsMetrics: Boolean get() = isMetricsEnabled || options.agentMetricsPath.isNotEmpty()
+  // Whether the agent keeps its metrics: with their port on (isMetricsEnabled), or served at a proxy path of their own,
+  // in-process (agent.metrics.proxyPath, which EmbeddedAgentConfig.Builder.agentMetricsAt sets), which opens no port. A
+  // getter, as the properties declared above this one can read it while the agent is built.
+  internal val collectsMetrics: Boolean get() = isMetricsEnabled || options.metricsProxyPath.isNotEmpty()
+
+  // Whether the agent registers its JVM metric groups itself, as it starts. A standalone agent's proxy path
+  // (agent.metrics.proxyPath) serves the groups its agent.metrics settings turn on, as its port does, but the port's
+  // service registers them only while the port is on. An embedded agent's JVM metrics are its host's, served on the
+  // host's own path. A getter, as isEmbedded is set after the agent is built.
+  private val registersJvmMetrics: Boolean
+    get() = !isMetricsEnabled && !isEmbedded && options.metricsProxyPath.isNotEmpty()
 
   // Null with Zipkin off. One for the agent's life, shared by every channel a reconnect builds, and built on the first
   // call (see scrapeTracingHolder).
@@ -863,6 +871,7 @@ class Agent(
       // Built here, so a registry that rejects them fails startup visibly instead of every connect, forever.
       if (collectsMetrics) {
         val _ = metrics
+        if (registersJvmMetrics) registerJvmMetricGroups(agentConfigVals.metrics)
       }
       super.startUp()
       dashboardService?.startSync()
@@ -1100,3 +1109,20 @@ class Agent(
     }
   }
 }
+
+// Registers the JVM metric groups [metrics] turns on in the default registry, as the metrics port's service does while
+// the port is on; SystemMetrics registers each group once per JVM.
+private fun registerJvmMetricGroups(metrics: ConfigVals.Agent.Metrics) =
+  with(metrics) {
+    SystemMetrics.initialize(
+      enableStandardExports = standardExportsEnabled,
+      enableMemoryPoolsExports = memoryPoolsExportsEnabled,
+      enableGarbageCollectorExports = garbageCollectorExportsEnabled,
+      enableThreadExports = threadExportsEnabled,
+      enableClassLoadingExports = classLoadingExportsEnabled,
+      enableVersionInfoExports = versionInfoExportsEnabled,
+      enableBufferPoolExports = bufferPoolExportsEnabled,
+      enableCompilationExports = compilationExportsEnabled,
+      enableNativeMemoryExports = nativeMemoryExportsEnabled,
+    )
+  }

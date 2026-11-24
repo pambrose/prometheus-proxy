@@ -29,10 +29,11 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
  * its key. An app started with `embeddedServer` and no file has only the block's.
  *
  * The file's section takes the Spring Boot starter's property names: `proxy`, `token`, `trust-certificate`,
- * `authority`, `client-certificate`, `client-key`, `name`, `consolidated`, `metrics-port`, `dashboard.port`,
- * `dashboard.host`, `dashboard.username`, `dashboard.password`, `paths` (a list of targets, each with `path`, `url`,
- * `username`, `password`, and `labels`), and `settings`, any other agent setting by its key; and [enabled], [required],
- * [path], and [labels] here. A blank value counts as unset, as an unset environment variable gives.
+ * `authority`, `client-certificate`, `client-key`, `name`, `consolidated`, `metrics-port`, `metrics-proxy-path`,
+ * `metrics-proxy-path-labels`, `dashboard.port`, `dashboard.host`, `dashboard.username`, `dashboard.password`, `paths`
+ * (a list of targets, each with `path`, `url`, `username`, `password`, and `labels`), and `settings`, any other agent
+ * setting by its key; and [enabled], [required], [path], and [labels] here. A blank value counts as unset, as an unset
+ * environment variable gives.
  */
 class PrometheusProxyAgentConfig internal constructor(
   file: ApplicationConfig,

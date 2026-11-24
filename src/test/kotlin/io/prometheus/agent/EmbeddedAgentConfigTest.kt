@@ -292,6 +292,29 @@ class EmbeddedAgentConfigTest : StringSpec() {
       refused shouldNotContain "pathConfigs"
     }
 
+    // The path agentMetricsAt gives the agent's own metrics is checked with the others, under the setting it sets
+    "an agent metrics path that another path also names, or with a character the proxy refuses, fails the start" {
+      fun startFailure(config: EmbeddedAgentConfig): String =
+        runCatching { config.start(logBanner = false) }
+          .onSuccess { it.shutdown() }
+          .exceptionOrNull()
+          .shouldBeInstanceOf<ConfigLoadException>()
+          .message
+          .orEmpty()
+
+      val duplicate =
+        startFailure(
+          embeddedAgent {
+            source("app_metrics") { _, _, _ -> "" }
+            agentMetricsAt(path = "app_metrics")
+          },
+        )
+      duplicate shouldContain "Path /app_metrics is given by source() and agent.metrics.proxyPath"
+
+      val refused = startFailure(embeddedAgent { agentMetricsAt(path = "agent metrics") })
+      refused shouldContain "Path 'agent metrics', given by agent.metrics.proxyPath, is one the proxy refuses"
+    }
+
     "setting sets any agent setting by its key, ahead of a builder method's" {
       val options =
         embeddedAgent {
@@ -432,15 +455,19 @@ class EmbeddedAgentConfigTest : StringSpec() {
         path.url shouldBe "in-process"
         path.labels shouldBe """{"team":"web"}"""
         path.metricsSource.shouldBeInstanceOf<AgentMetricsSource>()
-        // A startup message names the method that added it
-        path.origin shouldBe "agentMetricsAt()"
+        // A startup message names the setting that added it
+        path.origin shouldBe "agent.metrics.proxyPath"
         agent.collectsMetrics.shouldBeTrue()
         agent.isMetricsEnabled.shouldBeFalse()
       } finally {
         agent.grpcService.shutDown()
         agent.agentHttpService.close()
       }
-      config.toString() shouldContain "agentMetricsAt=my_app_agent_metrics"
+      // It's a setting, so the tree a config file holds carries it, and an agent started from that tree serves it
+      config.toString() shouldContain "proxyPath=my_app_agent_metrics"
+      config.toConfig().getString("agent.metrics.proxyPath") shouldBe "my_app_agent_metrics"
+      config.toConfig().getString("agent.metrics.proxyPathLabels") shouldBe """{"team":"web"}"""
+      AgentOptions(config.toConfig()).metricsProxyPath shouldBe "my_app_agent_metrics"
       config.toConfig().hasPath("agent.pathConfigs").shouldBeFalse()
     }
 
@@ -451,8 +478,8 @@ class EmbeddedAgentConfigTest : StringSpec() {
           agentMetricsAt(path = "second_agent_metrics")
         }
 
-      config.agentOptions().agentMetricsPath shouldBe "second_agent_metrics"
-      config.agentOptions().agentMetricsLabels shouldBe "{}"
+      config.agentOptions().metricsProxyPath shouldBe "second_agent_metrics"
+      config.agentOptions().metricsProxyPathLabels shouldBe "{}"
     }
 
     "source with a registry serves it in-process, with or without labels" {

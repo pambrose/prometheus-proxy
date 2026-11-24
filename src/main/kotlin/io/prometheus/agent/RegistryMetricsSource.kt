@@ -30,7 +30,7 @@ import java.io.OutputStream
 // A PrometheusRegistry served by the agent in-process (MetricsSource.of): each scrape gets the registry's metrics in
 // the text format it accepts, Prometheus's or OpenMetrics, and only the families it names, when it names any. A source
 // of the default registry leaves out the agent metrics while an agent collects them, which puts them there: they're
-// served at the path agentMetricsAt gives them, or on the agent's metrics port, so each series is served once.
+// served at the agent's proxy path (agentMetricsAt), or on its metrics port, so each series is served once.
 internal class RegistryMetricsSource(
   private val registry: PrometheusRegistry,
 ) : MetricsSource {
@@ -52,10 +52,14 @@ internal class RegistryMetricsSource(
   }
 }
 
-// The agent's own metrics, served in-process at the path agentMetricsAt gives them: the agent families in the default
-// registry, with only the series of the agent launched as [launchId], since every agent in the JVM shares them. Not the
-// JVM's metrics, which the app's own path carries.
+// The agent's own metrics, served in-process at the proxy path agent.metrics.proxyPath gives them (agentMetricsAt
+// sets it): the agent families in the default registry, with only the series of the agent launched as [launchId],
+// since every agent in the JVM shares them. An embedded agent's path has nothing else: its JVM's metrics are its
+// host's, which the host's own path carries. A standalone agent's JVM is its own, so its path, while [standalone],
+// serves the rest of the default registry too, as its metrics port does: the JVM metric groups its agent.metrics
+// settings turn on.
 internal class AgentMetricsSource(
+  private val standalone: () -> Boolean = { false },
   private val launchId: () -> String,
 ) : MetricsSource {
   private val formats = ExpositionFormats.init()
@@ -66,10 +70,11 @@ internal class AgentMetricsSource(
     out: OutputStream,
   ): String {
     val launch = launchId()
+    val withJvm = standalone()
     val snapshots =
       PrometheusRegistry.defaultRegistry
-        .scrape { name -> AgentMetrics.isAgentFamily(name) && (names.isEmpty() || name in names) }
-        .mapNotNull { it.seriesOf(launch) }
+        .scrape { name -> (withJvm || AgentMetrics.isAgentFamily(name)) && (names.isEmpty() || name in names) }
+        .mapNotNull { if (AgentMetrics.isAgentFamily(it.metadata.prometheusName)) it.seriesOf(launch) else it }
     return formats.write(accept, out, MetricSnapshots(snapshots))
   }
 

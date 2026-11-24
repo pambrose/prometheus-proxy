@@ -39,6 +39,7 @@ import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_AGE_MINS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_IDLE_MINS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_SIZE
 import io.prometheus.common.EnvVars.MAX_CONCURRENT_CLIENTS
+import io.prometheus.common.EnvVars.METRICS_PROXY_PATH
 import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
 import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
@@ -80,28 +81,20 @@ class AgentOptions internal constructor(
     this(emptyArray(), exitOnMissingConfig = false, parseOnly = false, suppliedConfig = config)
 
   // An embedded agent's options, with the paths its host serves in-process (EmbeddedAgentConfig.Builder.source), which
-  // are code, so no config holds them, and the path it serves its own metrics at, in-process (agentMetricsAt).
+  // are code, so no config holds them.
   internal constructor(
     config: Config,
     metricsSources: List<AgentPathManager.PathConfig>,
-    agentMetricsPath: String = "",
-    agentMetricsLabels: String = "{}",
   ) : this(config) {
     this.metricsSources = metricsSources
-    this.agentMetricsPath = agentMetricsPath
-    this.agentMetricsLabels = agentMetricsLabels
   }
 
   // The paths the agent's host serves in-process, which AgentPathManager registers after the config's pathConfigs.
   internal var metricsSources: List<AgentPathManager.PathConfig> = emptyList()
     private set
 
-  // The path the agent serves its own metrics at, in-process, which AgentPathManager adds to its paths, and its labels
-  // as JSON; empty without one. With one, the agent collects its metrics whether or not their port is on.
-  internal var agentMetricsPath: String = ""
-    private set
-
-  internal var agentMetricsLabels: String = "{}"
+  // The labels of metricsProxyPath, as JSON (agent.metrics.proxyPathLabels), which no CLI option or env var sets.
+  internal var metricsProxyPathLabels: String = "{}"
     private set
 
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
@@ -323,6 +316,18 @@ class AgentOptions internal constructor(
   var unaryDeadlineSecs = -1
     private set
 
+  /**
+   * The Proxy path the Agent serves its own metrics at, read in-process, with no metrics port: Prometheus scrapes them
+   * through the Proxy, as it does the Agent's targets. They're the `agent_*` metrics, and, for a standalone Agent, the
+   * JVM metrics its `agent.metrics` export settings turn on; an embedded Agent's JVM metrics are its host's. With a
+   * path, the Agent keeps its metrics whether or not their port is on. Given without a leading slash, as the Proxy
+   * serves it. Empty (default) serves none. Resolved from CLI → [METRICS_PROXY_PATH] env var →
+   * `agent.metrics.proxyPath` config, which an embedded Agent's `agentMetricsAt(path)` sets.
+   */
+  @Parameter(names = ["--metrics_proxy_path"], description = "Proxy path the agent's own metrics are served at")
+  var metricsProxyPath = ""
+    private set
+
   init {
     parseOptions(parseOnly)
   }
@@ -352,6 +357,7 @@ class AgentOptions internal constructor(
 
     assignHttpClientConfigVals(agentConfigVals.http)
     assignGrpcConfigVals(agentConfigVals.grpc)
+    assignMetricsProxyPath(agentConfigVals.metrics)
 
     with(agentConfigVals) {
       assignCommonOptions(
@@ -428,6 +434,15 @@ class AgentOptions internal constructor(
     val failoverSuffix =
       if (endpoints.size == 1) "" else " (${endpoints.size} failover endpoints, tried in order)"
     logger.info { "proxyHostname: $proxyHostname$failoverSuffix" }
+  }
+
+  // The proxy path the agent serves its own metrics at, in-process, without a leading slash, as the proxy serves it,
+  // and its labels. AgentPathManager adds it to the agent's paths and checks it with them.
+  private fun assignMetricsProxyPath(metrics: ConfigVals.Agent.Metrics) {
+    metricsProxyPath =
+      resolveStringOption(metricsProxyPath, METRICS_PROXY_PATH, metrics.proxyPath).trim().removePrefix("/")
+    metricsProxyPathLabels = metrics.proxyPathLabels
+    logger.info { "metricsProxyPath: ${metricsProxyPath.ifEmpty { "(none)" }}" }
   }
 
   private fun assignScrapeConfigVals(agentConfigVals: ConfigVals.Agent) {

@@ -71,22 +71,18 @@ class EmbeddedAgentConfig private constructor(
   private val config: Config,
   // The paths served in-process (Builder.source), which no Config can hold.
   private val sources: List<AgentPathManager.PathConfig>,
-  // The path the agent's own metrics are served at, in-process (Builder.agentMetricsAt), and its labels as JSON, or
-  // empty without one.
-  private val agentMetricsPath: String,
-  private val agentMetricsLabels: String,
   // The values fromEnvironment set, by the variable each came from, that nothing set after it.
   private val readFromEnvironment: Map<EnvironmentSetting, String>,
 ) {
   /**
    * The settings as the `Config` tree a config file would hold, rooted at `agent`. The paths [source][Builder.source]
-   * and [agentMetricsAt][Builder.agentMetricsAt] add aren't in it, since they're served by code: an agent started from
-   * the tree alone doesn't serve them.
+   * adds aren't in it, since they're served by code: an agent started from the tree alone doesn't serve them. The path
+   * [agentMetricsAt][Builder.agentMetricsAt] gives the agent's own metrics is, as `agent.metrics.proxyPath`.
    */
   fun toConfig(): Config = config
 
   // The options the agent starts with: the tree's settings, and the paths served in-process.
-  internal fun agentOptions(): AgentOptions = AgentOptions(config, sources, agentMetricsPath, agentMetricsLabels)
+  internal fun agentOptions(): AgentOptions = AgentOptions(config, sources)
 
   /**
    * Starts an agent with these settings, as [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]
@@ -182,8 +178,7 @@ class EmbeddedAgentConfig private constructor(
         ""
       else
         sources.joinToString(prefix = ", sources={", postfix = "}") { "${it.path}=${it.url}" }
-    val shownAgentMetrics = if (agentMetricsPath.isEmpty()) "" else ", agentMetricsAt=$agentMetricsPath"
-    return "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())}$shownSources$shownAgentMetrics)"
+    return "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())}$shownSources)"
   }
 
   /**
@@ -202,8 +197,6 @@ class EmbeddedAgentConfig private constructor(
     private val values = linkedMapOf<String, Any>()
     private val paths = mutableListOf<Map<String, String>>()
     private val sources = mutableListOf<AgentPathManager.PathConfig>()
-    private var agentMetricsPath = ""
-    private var agentMetricsLabels = "{}"
     private val readFromEnvironment = linkedMapOf<EnvironmentSetting, String>()
     private val settings = linkedMapOf<String, Any>()
 
@@ -342,10 +335,11 @@ class EmbeddedAgentConfig private constructor(
     /**
      * Has the agent serve its own metrics, the `agent_*` series the project's Agents dashboard reads, to Prometheus at
      * the proxy's [path], read in-process as [source] reads an app's: the agent keeps them without opening their port,
-     * which nothing outside the app could reach. Only this agent's series are served, not those of another agent in the
-     * JVM, nor the JVM's own metrics, which the app's path carries. A [source] of the default registry, where they're
-     * kept, leaves them out, so each series is served once. [labels] are the path's labels in the proxy's service
-     * discovery. Called again, it moves them to the new path.
+     * which nothing outside the app could reach (`agent.metrics.proxyPath` and `agent.metrics.proxyPathLabels`). Only
+     * this agent's series are served, not those of another agent in the JVM, nor the JVM's own metrics, which the app's
+     * path carries. A [source] of the default registry, where they're kept, leaves them out, so each series is served
+     * once. [labels] are the path's labels in the proxy's service discovery. Called again, it moves them to the new
+     * path.
      */
     @JvmOverloads
     fun agentMetricsAt(
@@ -355,8 +349,8 @@ class EmbeddedAgentConfig private constructor(
       apply {
         val normalized = path.removePrefix("/")
         if (normalized.isBlank()) invalid("A path is required")
-        agentMetricsPath = normalized
-        agentMetricsLabels = labelsJson(labels) ?: "{}"
+        put("metrics.proxyPath", normalized)
+        put("metrics.proxyPathLabels", labelsJson(labels) ?: "{}")
       }
 
     /**
@@ -551,13 +545,7 @@ class EmbeddedAgentConfig private constructor(
           ->
           tree.withValue("agent.$key", ConfigValueFactory.fromAnyRef(value))
         }
-      return EmbeddedAgentConfig(
-        config,
-        sources.toList(),
-        agentMetricsPath,
-        agentMetricsLabels,
-        readFromEnvironment.toMap(),
-      )
+      return EmbeddedAgentConfig(config, sources.toList(), readFromEnvironment.toMap())
     }
 
     // A path's labels as the JSON pathConfigs takes, or null for none.

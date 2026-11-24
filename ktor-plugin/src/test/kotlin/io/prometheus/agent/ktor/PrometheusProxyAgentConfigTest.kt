@@ -82,6 +82,8 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
             "client-key" to "KEY",
             "consolidated" to "true",
             "metrics-port" to "9101",
+            "metrics-proxy-path" to "my_app_agent_metrics",
+            "metrics-proxy-path-labels.team" to "agents",
             "dashboard.port" to "9102",
             "dashboard.host" to "127.0.0.1",
             "dashboard.username" to "ops",
@@ -195,6 +197,8 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       client-key = KEY
       consolidated = true
       metrics-port = 9101
+      metrics-proxy-path = my_app_agent_metrics
+      metrics-proxy-path-labels { team = agents }
       dashboard { port = 9102, host = "127.0.0.1", username = ops, password = pw }
       paths = [
         {
@@ -230,6 +234,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
         clientCertificatePem(certChainPem = "CHAIN", privateKeyPem = "KEY")
         consolidated = true
         agentMetricsPort = 9101
+        agentMetricsAt(path = "my_app_agent_metrics", labels = mapOf("team" to "agents"))
         dashboard(port = 9102, host = "127.0.0.1")
         dashboardLogin(password = "pw", username = "ops")
         path(

@@ -254,6 +254,11 @@ The endpoints are **disabled by default**, so their ports refuse connections unt
 no such path: scrape `/metrics` on the metrics port (`8082` proxy, `8083` agent), and `/ping`, `/healthcheck`,
 `/version`, and `/threaddump` on the admin port (`8092` proxy, `8093` agent).
 
+An agent's metrics at a proxy path (`agent.metrics.proxyPath`, or an embedded agent's `agentMetricsAt(path)`) open no
+port: scrape them through the proxy, at `http://<proxy-host>:8080/<path>`, which answers only while the agent is
+connected and has registered the path. A 404 there means it hasn't; the agent's startup log names the path, and
+[Port or Proxy Path](monitoring.md#port-or-proxy-path) says when the port suits instead.
+
 ---
 
 ## Disconnects aren't detected behind Nginx

@@ -53,9 +53,13 @@ All notable changes to this project are documented in this file.
   `onFailure` for the reason. `EmbeddedAgentInfo` is `AutoCloseable`, so `startIfConfigured().use { … }` runs the app
   with its agent or without it. The Ktor plugin and the Spring Boot starter serve their registry and start their agent
   the same way
-- `agentMetricsAt(path)` has an embedded agent serve its own metrics through the proxy, read in-process, with no
-  metrics port; a source of the default registry then leaves them out, so each series is served once. The agent's
-  dashboard shows the path in its Settings view
+- An agent can serve its own metrics through the proxy, at a path of its own, read in-process, with no metrics port:
+  `agent.metrics.proxyPath` (`--metrics_proxy_path`, `METRICS_PROXY_PATH`), with the path's labels in
+  `agent.metrics.proxyPathLabels`. An embedded agent sets them with `agentMetricsAt(path, labels)`, and the Spring Boot
+  starter and the Ktor plugin with `metrics-proxy-path` and `metrics-proxy-path-labels`. A standalone agent's path
+  serves its JVM metrics too, as its port does; an embedded agent's serves its `agent_*` series alone, and a source of
+  the default registry then leaves them out, so each series is served once. The agent's dashboard shows the path in
+  its Settings view
 - A Spring Boot starter, `com.pambrose:prometheus-proxy-spring-boot-starter`, released with the agent at its version:
   with `prometheus-proxy.agent.proxy` set, a Spring Boot 4 app runs an embedded agent that starts and stops with it,
   serves the app's `PrometheusRegistry` bean in-process at `/<spring.application.name>_metrics`, and reports its
@@ -266,6 +270,11 @@ All notable changes to this project are documented in this file.
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering
+- The Embedded Agent page lists each way to run an embedded agent, and each setting's name in every way of giving it,
+  the builder, a config key, the starter and plugin, and an environment variable, with which one wins, and the
+  settings that have no builder method. The Monitoring page compares an agent's metrics port with its proxy path, and
+  says when the port is still worth turning on: for a scraper on the agent's own network, which can read an agent that
+  can't reach the proxy
 - The Embedded Agent page shows, in Kotlin and Java, the shutdown hook a program that runs until it's stopped adds,
   which ends its work on SIGTERM and waits for `main` to return, so `use` stops the agent after the work
   (`EmbeddedAgentShutdownKotlinExample`, `EmbeddedAgentShutdownJavaExample`)
