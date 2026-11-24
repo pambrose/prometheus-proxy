@@ -22,10 +22,10 @@ environment, and the [Spring Boot Demo](spring-boot-demo.md) in a Spring Boot ap
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   G[Grafana :3600] --> P[Prometheus :9690]
   P -->|reads /discovery, scrapes each oven's path| Proxy[Proxy, dashboard :8694]
-  %% The agents connect out to the proxy, so their arrow points back. The invisible link keeps the ovens to the right.
+  %% The agents connect out to the proxy, so their arrow points back. The invisible link keeps the ovens below.
   Proxy ~~~ Agent
   Agent[embedded agent, in each oven] -->|gRPC, with a token, outbound only| Proxy
   Agent -->|reads the registry in-process| Oven[oven: a plain Kotlin program, no port]

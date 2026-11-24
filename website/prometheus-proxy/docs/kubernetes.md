@@ -18,7 +18,7 @@ The two components play different roles, and that determines where each one runs
   port (`50051`), and Prometheus scrapes it on the HTTP port (`8080`).
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph monitoring["Monitoring cluster"]
     prom["Prometheus"]
     proxy["Prometheus Proxy<br/>:8080 HTTP / :50051 gRPC"]
@@ -31,6 +31,9 @@ flowchart LR
     agent -- "scrape in-cluster" --> app
   end
 
+  %% The agent connects out to the proxy, so its arrow points back up. The invisible link keeps the monitoring
+  %% cluster above the target one, as on the other pages.
+  proxy ~~~ agent
   agent -- "outbound gRPC :50051" --> proxy
 ```
 

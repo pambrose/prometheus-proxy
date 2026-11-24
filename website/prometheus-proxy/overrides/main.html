@@ -31,6 +31,10 @@
   <meta name="twitter:description" content="{{ preview_description | e }}">
   <meta name="twitter:image" content="{{ preview_image }}">
   <meta name="twitter:image:alt" content="{{ preview_alt | e }}">
+  {#- The screenshots' lightbox, GLightbox 3.3.1, served from the site (vendor/glightbox, with its MIT license): the
+      theme fetches GLightbox from unpkg as glightbox@3, whichever 3.x is newest, unless the page has loaded it
+      already, and its stylesheet only along with it. See the script tag below. #}
+  <link rel="stylesheet" href="{{ 'vendor/glightbox/glightbox.min.css' | url }}">
 {% endblock %}
 
 {% block scripts %}
@@ -40,6 +44,10 @@
   {#- Ahead of the theme's bundle too, so its listener sees a click on a screenshot before the theme's: it has the
       lightbox show each screenshot no larger than its pixels. See the script's header. #}
   <script src="{{ 'javascripts/screenshots.js' | url }}"></script>
+  {#- Ahead of the theme's bundle, so GLightbox is defined when the bundle looks for it, and it opens this pinned copy
+      rather than fetching the newest 3.x from unpkg. On every page, as instant navigation can bring a reader to a
+      page with screenshots from one without; about 15 KB gzipped. #}
+  <script src="{{ 'vendor/glightbox/glightbox.min.js' | url }}"></script>
   {{ super() }}
   {#- After the theme's bundle, whose document$ it runs on for every page: it gives the reference tables' keys and flags
       a place to break after each dot, underscore, and slash, and nowhere inside a word. See the script's header. #}

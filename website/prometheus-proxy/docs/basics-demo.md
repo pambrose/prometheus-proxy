@@ -11,11 +11,11 @@ screenshot on this page comes from it.
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   G[Grafana :3000] --> P[Prometheus :9090]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8094]
-  %% Each agent connects out to the proxy, so its arrow points back. The invisible links keep the agents to
-  %% the right of the proxy, as on the home page.
+  %% Each agent connects out to the proxy, so its arrow points back. The invisible links keep the agents
+  %% below the proxy, as on the home page.
   Proxy ~~~ East
   Proxy ~~~ West1
   Proxy ~~~ West2

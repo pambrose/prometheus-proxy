@@ -24,9 +24,9 @@ The [Ktor Demo](ktor-demo.md)'s coffee shop shows the rest with an app in Kotlin
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
-  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
+  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app below.
   Proxy ~~~ Agent
   Agent[embedded agent, run by the Spring Boot starter, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
   Agent -->|reads its metrics registry in-process| App[roastery: Spring Boot, Micrometer]

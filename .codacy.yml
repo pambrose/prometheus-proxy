@@ -1,9 +1,11 @@
 ---
 # Codacy uses this file in place of the "Ignored files" list in its UI, so the two files ignored there are
-# listed here: the tscfg-generated ConfigVals.java (`make tsconfig`) and the release skill.
+# listed here: the tscfg-generated ConfigVals.java (`make tsconfig`) and the release skill. The docs site's vendored
+# third-party files (GLightbox's minified build) are someone else's code, served as published.
 exclude_paths:
   - "src/main/java/io/prometheus/common/ConfigVals.java"
   - ".claude/skills/publishing-release/SKILL.md"
+  - "website/prometheus-proxy/docs/vendor/**"
 
 engines:
   # Kotest specs repeat their setup by design, so duplication is measured on main code only.

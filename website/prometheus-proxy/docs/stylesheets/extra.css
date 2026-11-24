@@ -74,6 +74,35 @@ body {
   font-size: 0.8rem;
 }
 
+/* Reading text at about 75 characters a line, the comfortable measure, where the column's full width ran the system
+   sans, narrower than the theme's Inter, to about 95. Code, tables, diagrams, screenshots, and cards keep the full
+   width, which they use. 27rem is 34em of the reading text's 0.8rem, so it scales with the text. */
+.md-typeset > :is(p, ul, ol, dl, blockquote):not(:has(img)),
+.md-typeset .tabbed-block > :is(p, ul, ol, dl):not(:has(img)),
+.md-typeset > .admonition {
+  max-width: 27rem;
+}
+
+/* A code block's Copy and Select buttons sat over the end of its first line on a half-clear ground, which the text
+   showed through. Their ground is the block's own color, so a long line runs cleanly under them, and where there's a
+   pointer they show only while it's over the block, or one of them has focus. A touch screen, with no hover, keeps
+   them in view. */
+.md-typeset .md-code__nav {
+  background-color: var(--md-code-bg-color);
+}
+
+@media (hover: hover) {
+  .md-typeset .md-code__nav {
+    opacity: 0;
+    transition: opacity 125ms;
+  }
+
+  .md-typeset pre:hover > .md-code__nav,
+  .md-typeset .md-code__nav:focus-within {
+    opacity: 1;
+  }
+}
+
 /* Callouts carry the cautions a reader most needs, which the theme set a step under the text around them, at 12.8px. */
 .md-typeset .admonition,
 .md-typeset details {

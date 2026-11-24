@@ -1,5 +1,5 @@
 {
-  "usage": "The rules below are off for the Kotlin sources, where they flagged a shape the code is meant to have rather than a problem: a gRPC wrapper whose proto fields are strings, a public builder whose settings are strings, and named, defaulted arguments that make a longer parameter list safe, which detekt's LongParameterList still bounds (12). Primitive Obsession and String Heavy Function Arguments are ratios over a whole file, so one new function that takes strings tripped them however it was written, and splitting a function to stay under four arguments duplicated it. Global Conditionals counted the conditionals in an expression-bodied function as code outside functions. The function-level rules (Complex Method, Bumpy Road Ahead, Complex Conditional, Deep, Nested Complexity, Large Method) stay on. The Spring Boot starter's PrometheusProxyAgentProperties is the agent's settings as Spring Boot binds them, a JavaBean with a setter for each, so its primitive and string arguments are its shape too.",
+  "usage": "The rules below are off for the Kotlin sources, where they flagged a shape the code is meant to have rather than a problem: a gRPC wrapper whose proto fields are strings, a public builder whose settings are strings, and named, defaulted arguments that make a longer parameter list safe, which detekt's LongParameterList still bounds (12). Primitive Obsession and String Heavy Function Arguments are ratios over a whole file, so one new function that takes strings tripped them however it was written, and splitting a function to stay under four arguments duplicated it. Global Conditionals counted the conditionals in an expression-bodied function as code outside functions. The function-level rules (Complex Method, Bumpy Road Ahead, Complex Conditional, Deep, Nested Complexity, Large Method) stay on. The Spring Boot starter's PrometheusProxyAgentProperties is the agent's settings as Spring Boot binds them, a JavaBean with a setter for each, so its primitive and string arguments are its shape too. The docs site's vendored third-party builds (website/prometheus-proxy/docs/vendor, GLightbox's minified script) are someone else's code, served as published, so no rule grades them.",
   "rule_sets": [
     {
       "matching_content_path": "**/*.kt",
@@ -31,6 +31,67 @@
         },
         {
           "name": "String Heavy Function Arguments",
+          "weight": 0.0
+        }
+      ]
+    },
+    {
+      "matching_content_path": "website/prometheus-proxy/docs/vendor/**",
+      "rules": [
+        {
+          "name": "Complex Method",
+          "weight": 0.0
+        },
+        {
+          "name": "Complex Conditional",
+          "weight": 0.0
+        },
+        {
+          "name": "Bumpy Road Ahead",
+          "weight": 0.0
+        },
+        {
+          "name": "Deep, Nested Complexity",
+          "weight": 0.0
+        },
+        {
+          "name": "Excess Number of Function Arguments",
+          "weight": 0.0
+        },
+        {
+          "name": "Overall Code Complexity",
+          "weight": 0.0
+        },
+        {
+          "name": "Large Method",
+          "weight": 0.0
+        },
+        {
+          "name": "Code Duplication",
+          "weight": 0.0
+        },
+        {
+          "name": "Lines of Code in a Single File",
+          "weight": 0.0
+        },
+        {
+          "name": "Low Cohesion",
+          "weight": 0.0
+        },
+        {
+          "name": "Brain Method",
+          "weight": 0.0
+        },
+        {
+          "name": "Primitive Obsession",
+          "weight": 0.0
+        },
+        {
+          "name": "String Heavy Function Arguments",
+          "weight": 0.0
+        },
+        {
+          "name": "Global Conditionals",
           "weight": 0.0
         }
       ]

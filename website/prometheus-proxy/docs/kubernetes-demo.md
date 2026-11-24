@@ -15,10 +15,10 @@ as Docker: see [What you need](#what-you-need).
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   P[Prometheus :9290] -->|discovery and scrapes| Proxy[prometheus-proxy chart, dashboard :8294]
   %% The agent connects out, across Docker's kind network, so its arrow points back. The invisible link keeps the
-  %% target cluster to the right of the monitoring one.
+  %% target cluster below the monitoring one.
   Proxy ~~~ Agent
   Agent[prometheus-agent chart, dashboard :8295 by kubectl port-forward] -->|outbound gRPC, to a NodePort| Proxy
   Agent -->|HTTP fetch| Svc[orders, payments, shipping, search]
