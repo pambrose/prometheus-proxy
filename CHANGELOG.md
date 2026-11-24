@@ -298,6 +298,11 @@ All notable changes to this project are documented in this file.
   releases. Its Verify step shows what the agent logs once it's connected, and what the proxy's 404 and 503 mean, and
   the TLS page shows how to confirm TLS is on, in the agent's log and with `openssl s_client`. The pages' literal
   ` -- ` are em dashes
+- The docs site's screenshot lightbox is a dialog a keyboard and a screen reader can use: it hides the page behind
+  it from a screen reader, names each screenshot by its caption, takes the focus when it opens, keeps Tab among its
+  buttons, and gives the focus back to the screenshot when it closes, where the focus stayed on the page behind it.
+  The pages' cards use the sidebar's icons, each the icon of the page it opens, where they used two other icon sets,
+  and the Embedded Agent page's upgrade notes are a page of their own, Upgrading an Embedded Agent
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

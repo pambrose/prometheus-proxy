@@ -94,28 +94,28 @@ For the complete configuration schema, see the reference file:
 
 <div class="grid cards" markdown>
 
--   :material-robot:{ .lg .middle } __Agent Configuration__
+-   :lucide-cable:{ .lg .middle } __Agent Configuration__
 
     ---
 
     Path configs, HTTP client, and scrape settings
 
-    [:octicons-arrow-right-24: Agent Configuration](agent.md)
+    [:lucide-arrow-right: Agent Configuration](agent.md)
 
--   :material-server:{ .lg .middle } __Proxy Configuration__
+-   :lucide-server:{ .lg .middle } __Proxy Configuration__
 
     ---
 
     HTTP service, gRPC, and service discovery settings
 
-    [:octicons-arrow-right-24: Proxy Configuration](proxy.md)
+    [:lucide-arrow-right: Proxy Configuration](proxy.md)
 
--   :material-console:{ .lg .middle } __CLI Reference__
+-   :lucide-terminal:{ .lg .middle } __CLI Reference__
 
     ---
 
     All CLI options and environment variables
 
-    [:octicons-arrow-right-24: CLI Reference](../cli-reference.md)
+    [:lucide-arrow-right: CLI Reference](../cli-reference.md)
 
 </div>
