@@ -14,13 +14,13 @@ same setup.
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   P[Prometheus :9590] -->|discovery and scrapes| Proxy[Proxy, dashboard :8594]
   Browser[Browser] -->|dashboard :8590| Nginx
   Nginx[nginx: TLS on 443] -->|gRPC, plaintext| Proxy
   Nginx -->|HTTP| Proxy
-  %% Each agent connects out, to nginx, so its arrows point back. The invisible links keep nginx and the agents to the
-  %% right of the proxy, as on the other demo pages.
+  %% Each agent connects out, to nginx, so its arrows point back. The invisible links keep nginx and the agents
+  %% below the proxy, as on the other demo pages.
   Proxy ~~~ Nginx
   Nginx ~~~ Current
   Nginx ~~~ Legacy

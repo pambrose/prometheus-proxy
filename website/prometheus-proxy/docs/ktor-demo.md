@@ -11,10 +11,10 @@ Azure Container Apps and the proxy on another host, run on one machine.
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   G[Grafana :3300] --> P[Prometheus :9390]
   P -->|scrapes /coffee_shop_metrics| Proxy[Proxy, dashboard :8394]
-  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
+  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app below.
   Proxy ~~~ Agent
   Agent[embedded agent, dashboard :8395] -->|gRPC over TLS, with a token| Proxy
   Agent -->|reads its registry| App[coffee shop: Ktor]

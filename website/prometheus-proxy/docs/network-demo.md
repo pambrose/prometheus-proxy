@@ -16,12 +16,12 @@ of each failure: the endpoint it's trying, the error it got from each, and what 
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   G[Grafana :3100] --> P[Prometheus :9190]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8194]
   P -->|discovery and scrapes| Standby[Standby proxy, dashboard :8195]
   %% Each agent connects out, through the WAN, so its arrows point back. The invisible links keep the WAN and the
-  %% agents to the right of the proxies, as on the Basics Demo page.
+  %% agents below the proxies, as on the Basics Demo page.
   Proxy ~~~ WAN
   Standby ~~~ WAN
   WAN ~~~ HQ

@@ -303,6 +303,13 @@ All notable changes to this project are documented in this file.
   buttons, and gives the focus back to the screenshot when it closes, where the focus stayed on the page behind it.
   The pages' cards use the sidebar's icons, each the icon of the page it opens, where they used two other icon sets,
   and the Embedded Agent page's upgrade notes are a page of their own, Upgrading an Embedded Agent
+- The docs site's diagrams are drawn top to bottom, outside the firewall above inside it, where drawn left to right
+  they were scaled to a third or a half of their size to fit the page, and their labels to 5 to 9 pixels; they draw
+  at full size now, and the Architecture page's sequence diagram at about 13. The reading text runs about 75
+  characters a line, where it ran about 95, while code, tables, and screenshots keep the column's width. A code
+  block's Copy and Select buttons show while the pointer is over it, on its own color, where the end of its first line
+  showed through them, and the screenshots' lightbox is GLightbox 3.3.1 served from the site, where the theme fetched
+  whichever 3.x was newest from unpkg
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

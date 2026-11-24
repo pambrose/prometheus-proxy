@@ -35,6 +35,8 @@ code health finding that's new or worse outside `src/test/`. Both read `.codesce
 off, for every Kotlin source, the rules that flagged the code's intended shape rather than a problem (Primitive
 Obsession, String Heavy Function Arguments, Excess Number of Function Arguments, Global Conditionals); the
 function-level rules stay on, so split a function CodeScene rates complex or bumpy rather than working around a rule.
+It turns every rule off for the docs site's vendored third-party builds (`website/prometheus-proxy/docs/vendor`),
+which `.codacy.yml` excludes too.
 
 Always run lint and build before completing tasks:
 `./gradlew detekt && ./gradlew lintKotlinMain && ./gradlew build -x test`

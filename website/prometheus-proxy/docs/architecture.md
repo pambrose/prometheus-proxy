@@ -27,6 +27,7 @@ The Agent runs inside the firewall with the monitored services. It provides:
 ## Request Flow
 
 ``` mermaid
+%%{init: {'sequence': {'actorMargin': 16, 'width': 130, 'wrap': true}}}%%
 sequenceDiagram
     participant P as Prometheus
     participant Proxy as Proxy :8080
@@ -37,7 +38,7 @@ sequenceDiagram
     Note over Agent, gRPC: Agent connects on startup (outbound)
     Agent->>gRPC: connectAgent()
     Agent->>gRPC: registerAgent()
-    Agent->>gRPC: registerPath("/app_metrics")
+    Agent->>gRPC: registerPath<br/>("/app_metrics")
 
     Note over P, Proxy: Prometheus scrapes as normal
     P->>Proxy: GET /app_metrics

@@ -15,10 +15,10 @@ gRPC connection initiated from inside the firewall, preserving Prometheus's nati
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph LR
+graph TB
   P[Prometheus] -->|HTTP scrape| Proxy
   %% The agent initiates the outbound gRPC connection, so the arrow points back to the proxy. The
-  %% invisible link pins Proxy left of Agent -- mermaid has no single reverse arrow to do it directly,
+  %% invisible link pins Proxy above Agent -- mermaid has no single reverse arrow to do it directly,
   %% and curve:linear (above) keeps the resulting back-edge as straight as it can be drawn.
   Proxy ~~~ Agent
   Agent -->|gRPC stream| Proxy
