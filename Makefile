@@ -1,8 +1,8 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests medium-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
         lincheck-tests tla-checks tla-checks-full check-rules helm-lint zizmor codescene \
-        container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check embedded-demo-check \
-        worker-demo-check demos-up demos-up-local demos-down \
+        container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check ktor-demo-check \
+        plain-kotlin-demo-check demos-up demos-up-local demos-down \
         _publish-consumer-check regen-certs \
         docker-build docker-scan docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
@@ -55,11 +55,11 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md \
 	demos/basics/README.md demos/network/README.md demos/nginx/README.md demos/kubernetes/README.md \
-	demos/embedded/README.md demos/spring-boot/README.md demos/spring-boot/app/pom.xml demos/worker/README.md \
+	demos/ktor/README.md demos/spring-boot/README.md demos/spring-boot/app/pom.xml demos/plain-kotlin/README.md \
 	website/prometheus-proxy/docs/basics-demo.md website/prometheus-proxy/docs/network-demo.md \
 	website/prometheus-proxy/docs/nginx-demo.md website/prometheus-proxy/docs/kubernetes-demo.md \
-	website/prometheus-proxy/docs/embedded-demo.md website/prometheus-proxy/docs/spring-boot-demo.md \
-	website/prometheus-proxy/docs/worker-demo.md
+	website/prometheus-proxy/docs/ktor-demo.md website/prometheus-proxy/docs/spring-boot-demo.md \
+	website/prometheus-proxy/docs/plain-kotlin-demo.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests (all-tests, which takes in the container suite and
 # the full TLA+ checks) and the distro build, so these are what cover the coverage floors, the alerting rules, the Helm
@@ -89,12 +89,12 @@ BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
 NGINX_DEMO_DIR := demos/nginx
 KUBERNETES_DEMO_DIR := demos/kubernetes
-EMBEDDED_DEMO_DIR := demos/embedded
+KTOR_DEMO_DIR := demos/ktor
 SPRING_BOOT_DEMO_DIR := demos/spring-boot
-WORKER_DEMO_DIR := demos/worker
+PLAIN_KOTLIN_DEMO_DIR := demos/plain-kotlin
 # The demos demos-up, demos-up-local, and demos-down run, in that order: the Kubernetes demo, which needs kind, kubectl,
 # and Helm too, last.
-DEMOS := basics network nginx embedded spring-boot worker kubernetes
+DEMOS := basics network nginx ktor spring-boot plain-kotlin kubernetes
 
 # Runs a target of every demo's own Makefile, one after another: $(call run_demos,<target>). A demo that fails doesn't
 # stop the rest; the failed ones are listed at the end.
@@ -137,8 +137,8 @@ CHARTS := prometheus-proxy prometheus-agent
 
 # The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; build-site is its docs-site
 # job, and ci-build its build job. Keep the list, and ci-build's steps, in step with that workflow.
-CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check spring-boot-demo-check embedded-demo-check \
-	worker-demo-check ci-build
+CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check spring-boot-demo-check ktor-demo-check \
+	plain-kotlin-demo-check ci-build
 
 # The version consumer-check publishes to the local Maven repository and builds against. Never a released version,
 # which the local repository may already hold from Maven Central, so the check always reads what this checkout builds.
@@ -275,7 +275,7 @@ tla-checks-full: tla-checks  ## The quick TLA+ checks and the slower reconnect c
 
 # Each demo's Prometheus config is checked as the demo's Prometheus sees it, with the rule files the demo mounts where
 # its rule_files glob looks, so promtool also checks the demo's alerting rules and that the config loads them. The
-# nginx, Kubernetes, Spring Boot, and worker demos' have no rules.
+# nginx, Kubernetes, Spring Boot, and plain Kotlin demos' have no rules.
 check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each demo's Prometheus config and rules, with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
 	docker run --rm -v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
@@ -289,13 +289,13 @@ check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each dem
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(KUBERNETES_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
-	docker run --rm -v "$(CURDIR)/$(EMBEDDED_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
-		-v "$(CURDIR)/$(EMBEDDED_DEMO_DIR)/prometheus/embedded-alerts.yml:/etc/prometheus/rules/embedded-alerts.yml:ro" \
+	docker run --rm -v "$(CURDIR)/$(KTOR_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		-v "$(CURDIR)/$(KTOR_DEMO_DIR)/prometheus/ktor-alerts.yml:/etc/prometheus/rules/ktor-alerts.yml:ro" \
 		-v "$(CURDIR)/grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(SPRING_BOOT_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
-	docker run --rm -v "$(CURDIR)/$(WORKER_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+	docker run --rm -v "$(CURDIR)/$(PLAIN_KOTLIN_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 
 helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs Docker)
@@ -397,17 +397,17 @@ spring-boot-demo-check: _publish-consumer-check  ## Build and test the Spring Bo
 _publish-consumer-check: _require-version
 	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
 
-# Also in CI's consumer-check job: builds the embedded demo's coffee shop (demos/embedded/app), a Gradle project of its
+# Also in CI's consumer-check job: builds the Ktor demo's coffee shop (demos/ktor/app), a Gradle project of its
 # own that embeds the agent through the Ktor plugin, against this checkout (a composite build, which lints it too), so
 # a change to the plugin or to EmbeddedAgentConfig that breaks the demo fails here.
-embedded-demo-check:  ## Build the embedded demo's coffee shop against this checkout
-	$(GRADLE) -p demos/embedded/app -PlocalProxy build
+ktor-demo-check:  ## Build the Ktor demo's coffee shop against this checkout
+	$(GRADLE) -p demos/ktor/app -PlocalProxy build
 
-# Also in CI's consumer-check job: builds the worker demo's oven (demos/worker/app), a Gradle project of its own that
-# embeds the agent in a plain Kotlin program, against this checkout (a composite build, which lints it too), so a change
-# to EmbeddedAgentConfig, MetricsSource, or EmbeddedAgentInfo that breaks the demo fails here.
-worker-demo-check:  ## Build the worker demo's oven against this checkout
-	$(GRADLE) -p $(WORKER_DEMO_DIR)/app -PlocalProxy build
+# Also in CI's consumer-check job: builds the plain Kotlin demo's oven (demos/plain-kotlin/app), a Gradle project of its
+# own that embeds the agent in a plain Kotlin program, against this checkout (a composite build, which lints it too), so
+# a change to EmbeddedAgentConfig, MetricsSource, or EmbeddedAgentInfo that breaks the demo fails here.
+plain-kotlin-demo-check:  ## Build the plain Kotlin demo's oven against this checkout
+	$(GRADLE) -p $(PLAIN_KOTLIN_DEMO_DIR)/app -PlocalProxy build
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache

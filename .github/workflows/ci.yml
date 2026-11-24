@@ -162,12 +162,12 @@ jobs:
   # site's Ktor plugin examples compile (etc/consumer-check/check.sh). make spring-boot-demo-check then builds the
   # Spring Boot demo's roastery (demos/spring-boot/app) against the same artifact, at the versions Spring Boot's
   # dependency management sets, and runs its RoasteryAgentTest, which starts the agent against a proxy. make
-  # embedded-demo-check builds the embedded demo's coffee shop (demos/embedded/app), a Gradle project of its own that
+  # ktor-demo-check builds the Ktor demo's coffee shop (demos/ktor/app), a Gradle project of its own that
   # embeds the agent through the Ktor plugin, against this checkout, so a change to the plugin or to
-  # EmbeddedAgentConfig that breaks the demo fails here, and make worker-demo-check builds the worker demo's oven
-  # (demos/worker/app), which embeds the agent in a plain Kotlin program, the same way. make -k runs every check even
-  # when one fails, so each reports. The runner's Maven builds the Maven projects; setup-java caches what they
-  # download, keyed on their poms and the version catalog.
+  # EmbeddedAgentConfig that breaks the demo fails here, and make plain-kotlin-demo-check builds the plain Kotlin demo's
+  # oven (demos/plain-kotlin/app), which embeds the agent in a plain Kotlin program, the same way. make -k runs every
+  # check even when one fails, so each reports. The runner's Maven builds the Maven projects; setup-java caches what
+  # they download, keyed on their poms and the version catalog.
   consumer-check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -188,5 +188,5 @@ jobs:
             demos/spring-boot/app/pom.xml
             gradle/libs.versions.toml
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - name: Build the projects that embed the agent, the Spring Boot, embedded, and worker demos' among them
-        run: make -k consumer-check spring-boot-demo-check embedded-demo-check worker-demo-check
+      - name: Build the projects that embed the agent, the Spring Boot, Ktor, and plain Kotlin demos' among them
+        run: make -k consumer-check spring-boot-demo-check ktor-demo-check plain-kotlin-demo-check

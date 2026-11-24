@@ -539,7 +539,7 @@ cmd_tour() {
   echo
   bold "The other demos:"
   echo "An app with the agent embedded under load, in Grafana, with alerts, a deploy that hands its path to the new"
-  echo "version, the proxy going away, and its secrets, is the coffee shop in the embedded demo, in demos/embedded."
+  echo "version, the proxy going away, and its secrets, is the coffee shop in the Ktor demo, in demos/ktor."
   echo "Standalone agents behind a firewall, with the proxy's dashboard, are in the basics demo, in demos/basics."
   echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
   echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."

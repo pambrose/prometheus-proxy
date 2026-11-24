@@ -108,7 +108,7 @@ Since 4.7.0, an app with a metrics registry can hand it to the agent instead of 
 `PrometheusMeterRegistry` gives with `getPrometheusRegistry()`, and the agent reads it on each scrape, in-process. The
 app then needs no metrics endpoint, port, or credentials for the agent, and the agent opens no connection to it. A
 program with no HTTP server at all, such as a worker that consumes a queue, is scraped as a web app is, as the
-[Worker Demo](worker-demo.md)'s ovens are:
+[Plain Kotlin Demo](plain-kotlin-demo.md)'s ovens are:
 
 === "Kotlin"
 
@@ -171,8 +171,8 @@ the starter's and the plugin's `metrics-proxy-path`, or `METRICS_PROXY_PATH` in 
   it's on too.
 - **The path is checked as a `pathConfigs` entry is:** one another path also names, or that has a character the proxy
   refuses, fails `start()`, and the error names `agent.metrics.proxyPath`.
-- **Give each of the app's replicas a path of its own,** as the [Worker Demo](worker-demo.md) names its replicas'
-  after their host names: replicas sharing one would have the proxy serve only one of them there.
+- **Give each of the app's replicas a path of its own,** as the [Plain Kotlin Demo](plain-kotlin-demo.md) names its
+  replicas' after their host names: replicas sharing one would have the proxy serve only one of them there.
 - **Give the path a Prometheus job of its own,** since the dashboard tells agents apart by `job`:
 
 ```yaml
@@ -183,7 +183,7 @@ scrape_configs:
       - targets: [ 'proxy-host:8080' ]
 ```
 
-The [Embedded Demo](embedded-demo.md) serves its coffee shop's agent's metrics this way, and its Grafana links to the
+The [Ktor Demo](ktor-demo.md) serves its coffee shop's agent's metrics this way, and its Grafana links to the
 dashboard.
 
 The metrics port, `agentMetrics(port)`, is for a scraper on the app's own network, such as a Prometheus inside the
@@ -195,7 +195,7 @@ agent's `agent.metrics` settings turn on. Without such a scraper, the path is al
 ### Settings From the Environment
 
 Since 4.7.0, `fromEnvironment()` reads the proxy, and how to reach it, from the app's environment, under names apart from
-the agent's own, which the [Embedded Demo](embedded-demo.md), the [Spring Boot Demo](spring-boot-demo.md), and
+the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spring-boot-demo.md), and
 [Cloud Platforms](cloud-platforms.md) use:
 
 | Variable                     | Sets                                                                                                                              |
@@ -273,9 +273,9 @@ config file is, so a `${?ENV_VAR}` substitution in it works.
 
 [Cloud Platforms](cloud-platforms.md) builds on this to run an embedded agent in an app on ECS on Fargate, Cloud Run,
 Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and the
-[Embedded Demo](embedded-demo.md) runs an embedded agent on one machine, in a Ktor app, with the
-[Ktor Plugin](ktor-plugin.md). The [Worker Demo](worker-demo.md) runs one in each of a plain Kotlin program's replicas,
-with no framework or HTTP server, scaled out and in.
+[Ktor Demo](ktor-demo.md) runs an embedded agent on one machine, in a Ktor app, with the
+[Ktor Plugin](ktor-plugin.md). The [Plain Kotlin Demo](plain-kotlin-demo.md) runs one in each of a plain Kotlin
+program's replicas, with no framework or HTTP server, scaled out and in.
 
 ## Every Setting, Every Way
 
@@ -486,7 +486,7 @@ app.
 
 On SIGTERM, the JVM runs its shutdown hooks and exits without returning from `main()`. So a program that runs until
 it's stopped, as a queue consumer does, adds a hook of its own that ends its work and waits for `main()` to return, by
-which time `use` has stopped the agent, as the [Worker Demo](worker-demo.md)'s ovens do:
+which time `use` has stopped the agent, as the [Plain Kotlin Demo](plain-kotlin-demo.md)'s ovens do:
 
 === "Kotlin"
 
@@ -595,7 +595,7 @@ connection: [`EmbeddedAgentInfo`](#embeddedagentinfo)'s `isConnected` and `proxy
 Turn them off once the agent works. The admin port answers on every interface, without authentication, and
 `/threaddump` shows your application's threads too, so while they're on, keep the port on an internal network, as for a
 standalone agent (see [Production](production.md)). It must be one your application doesn't use: a port in use makes
-`start()` throw `IllegalStateException`. The [Embedded Demo](embedded-demo.md#debugging-the-agent)'s coffee shop turns
+`start()` throw `IllegalStateException`. The [Ktor Demo](ktor-demo.md#debugging-the-agent)'s coffee shop turns
 them on, and its tour shows each one.
 
 ### The Agent's Dashboard
@@ -640,7 +640,7 @@ agent's own metrics, which `agentMetricsAt(path)` serves through the proxy, with
     ```
 
 Then give the path a Prometheus job of its own, since the dashboard tells agents apart by `job`. The
-[Embedded Demo](embedded-demo.md) does this for its coffee shop's agent, and its Grafana links to the dashboard.
+[Ktor Demo](ktor-demo.md) does this for its coffee shop's agent, and its Grafana links to the dashboard.
 
 ### The Proxy's View
 

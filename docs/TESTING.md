@@ -54,8 +54,8 @@ make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make
 make consumer-check   # Publish to the local Maven repository at a throwaway -consumer-check-SNAPSHOT
                       #   version, then build etc/consumer-check, a Maven project that embeds the agent
                       #   (see below); needs mvn
-make embedded-demo-check  # Build the embedded demo's coffee shop against this checkout (CI's consumer-check job)
-make worker-demo-check    # Build the worker demo's oven against this checkout (CI's consumer-check job)
+make ktor-demo-check  # Build the Ktor demo's coffee shop against this checkout (CI's consumer-check job)
+make plain-kotlin-demo-check    # Build the plain Kotlin demo's oven against this checkout (CI's consumer-check job)
 make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, the docs
                       #   site (`make build-site`), the consumer check and the demos built against it, and the
                       #   build job (`make ci-build`: MINI tests + coverage floors); needs Docker
@@ -183,14 +183,13 @@ Embedded Agent page, and **EmbeddedAgentConfigKotlinExample** and **EmbeddedAgen
 start an agent from an in-memory config, on that page and the Cloud Platforms page, compiled with the tests so that a
 change to `Agent.startAsyncAgent()` that breaks them fails the build. **EmbeddedAgentSourceKotlinExample** and
 **EmbeddedAgentSourceJavaExample** are a worker that has the agent serve a registry and the agent's own metrics
-in-process, on the Embedded Agent page; `MetricsSourceTest` runs both. **WorkerDemoJavaExample** is the worker demo's
-oven's `main` in Java, the Worker Demo page's Java tab, which is compiled, not run: its oven and queue are stand-ins.
-**EmbeddedAgentShutdownKotlinExample** and **EmbeddedAgentShutdownJavaExample** are a program that runs until it's
-stopped, with the shutdown hook that ends its work before `use` stops the agent, on the Embedded Agent page; they're
-compiled, not run, since a test can't send its JVM a SIGTERM, and their worker is a stand-in.
-**KtorHostExample**, in `src/test/kotlin/hosts/`,
-is the Cloud Platforms page's Ktor module that starts and stops the agent; it lives outside `website/` because it needs
-a Ktor server, which the build below doesn't give a host.
+in-process, on the Embedded Agent page; `MetricsSourceTest` runs both. **PlainKotlinDemoJavaExample** is the plain
+Kotlin demo's oven's `main` in Java, the Plain Kotlin Demo page's Java tab, which is compiled, not run: its oven and
+queue are stand-ins. **EmbeddedAgentShutdownKotlinExample** and **EmbeddedAgentShutdownJavaExample** are a program that
+runs until it's stopped, with the shutdown hook that ends its work before `use` stops the agent, on the Embedded Agent
+page; they're compiled, not run, since a test can't send its JVM a SIGTERM, and their worker is a stand-in.
+**KtorHostExample**, in `src/test/kotlin/hosts/`, is the Cloud Platforms page's Ktor module that starts and stops the
+agent; it lives outside `website/` because it needs a Ktor server, which the build below doesn't give a host.
 
 The tests compile those examples against the project's own classpath, which a build that embeds the agent doesn't
 get: it gets what the published POM gives it, resolved by its own build tool. `make consumer-check`, which CI's

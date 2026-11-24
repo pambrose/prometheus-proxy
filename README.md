@@ -62,14 +62,14 @@ it one step at a time: what to open, what to look for, and how each step does wh
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down, each also seen from the agent's own dashboard. | 7 parts, about 24 minutes |
 | [nginx](demos/nginx) | The same proxy and agents behind nginx, which ends the agents' TLS. An agent from before the stream keepalives is cut off every minute by nginx's timeouts, a reload of nginx never reaches an agent that's connected until `worker_shutdown_timeout` is set, a load balancer's shorter timeout calls for a shorter keepalive, and the dashboard's live updates need nginx to pass its WebSocket on. | 4 parts, about 19 minutes |
 | [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't, with the agent's own dashboard reached through `kubectl port-forward`. Needs kind, `kubectl`, and Helm as well as Docker. | 5 parts, about 15 minutes |
-| [Embedded (Ktor)](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, the agent's own dashboard runs inside the app, and every secret comes from the environment. | 9 parts, about 23 minutes |
+| [Ktor](demos/ktor) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, the agent's own dashboard runs inside the app, and every secret comes from the environment. | 9 parts, about 23 minutes |
 | [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded by the project's Spring Boot starter. The agent starts and stops with the app, reports its connection in Actuator's health, reads the app's metrics in-process, with no `/actuator/prometheus`, runs with the versions of its libraries Spring Boot picks, serves its own dashboard from inside the app, and goes first in a graceful shutdown. | 5 parts, about 11 minutes |
-| [Worker](demos/worker) | A bakery whose ovens are plain Kotlin programs, with no framework or HTTP server, each with the agent embedded in a few lines of its `main`. An oven listens on no port and is scraped through the proxy all the same, a rush builds a backlog that two more ovens clear, each its own Prometheus target through the proxy's service discovery with no config change, a scale-in stops ovens cleanly, and ovens with no proxy, a bad certificate, or a wrong token bake all the same. | 5 parts, about 12 minutes |
+| [Plain Kotlin](demos/plain-kotlin) | A bakery whose ovens are plain Kotlin programs, with no framework or HTTP server, each with the agent embedded in a few lines of its `main`. An oven listens on no port and is scraped through the proxy all the same, a rush builds a backlog that two more ovens clear, each its own Prometheus target through the proxy's service discovery with no config change, a scale-in stops ovens cleanly, and ovens with no proxy, a bad certificate, or a wrong token bake all the same. | 5 parts, about 12 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
-on macOS or Linux, the basics, network, nginx, embedded, Spring Boot, and worker demos need only
+on macOS or Linux, the basics, network, nginx, Ktor, Spring Boot, and plain Kotlin demos need only
 [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, `make`, `curl`, and a browser; the
-embedded, Spring Boot, and worker demos build their apps inside Docker. The Kubernetes demo runs two Kubernetes clusters in Docker, so it also
+Ktor, Spring Boot, and plain Kotlin demos build their apps inside Docker. The Kubernetes demo runs two Kubernetes clusters in Docker, so it also
 needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and
 [Helm](https://helm.sh/) 3 or 4. From the repository's root, `make demos-up` (or `make demos-up-local`, to build them
 from the checkout) starts every demo, one after another, and `make demos-down` stops them all; together they take a lot
@@ -89,9 +89,9 @@ script, and the website's
 [Network Demo](https://prometheus-proxy.com/network-demo/),
 [nginx Demo](https://prometheus-proxy.com/nginx-demo/),
 [Kubernetes Demo](https://prometheus-proxy.com/kubernetes-demo/),
-[Embedded Demo](https://prometheus-proxy.com/embedded-demo/),
+[Ktor Demo](https://prometheus-proxy.com/ktor-demo/),
 [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/), and
-[Worker Demo](https://prometheus-proxy.com/worker-demo/) pages walk through the same
+[Plain Kotlin Demo](https://prometheus-proxy.com/plain-kotlin-demo/) pages walk through the same
 scenarios.
 
 ## ✨ New Features
@@ -508,7 +508,7 @@ agent. This approach eliminates the need for a separate agent process when your 
 
 > 📖 **Docs site:** [Embedded Agent guide](https://prometheus-proxy.com/embedded-agent/) for the full API surface and lifecycle details.
 
-> 🎬 **See it running:** the [embedded demo](demos/embedded) runs the agent inside a Ktor coffee shop, installed with the Ktor plugin (`install(PrometheusProxyAgent)`), and the [Spring Boot demo](demos/spring-boot) inside a Spring Boot roastery written in Java, run by the Spring Boot starter, and the [worker demo](demos/worker) inside a plain Kotlin program with no HTTP server, started in its `main`. Each starts with one command, and the website's [Embedded Demo](https://prometheus-proxy.com/embedded-demo/), [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/), and [Worker Demo](https://prometheus-proxy.com/worker-demo/) pages walk through them.
+> 🎬 **See it running:** the [Ktor demo](demos/ktor) runs the agent inside a Ktor coffee shop, installed with the Ktor plugin (`install(PrometheusProxyAgent)`), and the [Spring Boot demo](demos/spring-boot) inside a Spring Boot roastery written in Java, run by the Spring Boot starter, and the [plain Kotlin demo](demos/plain-kotlin) inside a plain Kotlin program with no HTTP server, started in its `main`. Each starts with one command, and the website's [Ktor Demo](https://prometheus-proxy.com/ktor-demo/), [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/), and [Plain Kotlin Demo](https://prometheus-proxy.com/plain-kotlin-demo/) pages walk through them.
 
 In Kotlin:
 
@@ -584,7 +584,7 @@ scrapes; `/healthcheck` stays healthy while the agent can't reach a proxy, which
 reports. Turn them off once the agent works, and keep the admin port on an internal network while they're on, since it
 has no authentication. The docs site's [Debugging](https://prometheus-proxy.com/embedded-agent/#debugging) section lists
 every endpoint, and puts the agent on the project's Grafana Agents dashboard (`METRICS_ENABLED=true`), and the
-[embedded demo](demos/embedded)'s tour shows both.
+[Ktor demo](demos/ktor)'s tour shows both.
 
 ### Service Discovery
 

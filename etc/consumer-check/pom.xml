@@ -10,7 +10,7 @@
   a Maven embedder gets.
 
   The sources are the docs site's embedded-agent examples, compiled in place rather than copied, so the examples on
-  the Embedded Agent, Cloud Platforms, and Worker Demo pages are the ones checked. check.sh passes the versions below; the build writes under the
+  the Embedded Agent, Cloud Platforms, and Plain Kotlin Demo pages are the ones checked. check.sh passes the versions below; the build writes under the
   repo's build/consumer-check, beside check.sh's resolution reports.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"

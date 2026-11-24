@@ -73,7 +73,7 @@ All notable changes to this project are documented in this file.
   `EmbeddedAgentInfo` is `application.prometheusProxyAgent`
 - The spring-boot demo's roastery runs its agent with the starter, from `application.yml`, in place of its own
   lifecycle, settings, health, and Spring Security classes, and no longer exposes `/actuator/prometheus`
-- The embedded demo's coffee shop runs its agent with the Ktor plugin, which reads its Micrometer registry in-process,
+- The Ktor demo's coffee shop runs its agent with the Ktor plugin, which reads its Micrometer registry in-process,
   in place of its own lifecycle code, and no longer serves `/metrics`, its Basic Auth, or `METRICS_USER` and
   `METRICS_PASSWORD`; `./demo.sh peek` shows the app has no `/metrics`. It reads its proxy's settings with
   `fromEnvironment()` and serves the agent's own metrics with `agentMetricsAt`, without `METRICS_ENABLED` or port 8083
@@ -99,7 +99,7 @@ All notable changes to this project are documented in this file.
 - The agents' Grafana dashboard has panels for them (connected and failover, heartbeats, retries and filter fail-open,
   Paths & Discovery, queue wait, and the dashboard's logins), `grafana/alerts.yml` adds AgentDisconnected,
   AgentDiscoveryFailing, and AgentNotOnPrimary, the network demo's dashboard shows agents off their primary and its
-  alerts add NetworkAgentNotOnPrimary, and the embedded demo's dashboard shows whether the coffee shop's agent is
+  alerts add NetworkAgentNotOnPrimary, and the Ktor demo's dashboard shows whether the coffee shop's agent is
   connected
 - The project has a logo, a suspension bridge in Prometheus orange (`website/prometheus-proxy/docs/images/logo.svg`,
   and `favicon.svg`, its cut for 16px): in the README's title, the docs site's header and tab icon, and both
@@ -128,13 +128,13 @@ All notable changes to this project are documented in this file.
   (`nginx-shutdown-timeout`), changes the proxy's keepalive interval (`keepalive`), and fronts the dashboard with
   nginx, without and with what its WebSocket needs (`dashboard-stock`, `dashboard-upgrade`, `dashboard-host`). Its
   ports are 500 above the basics demo's
-- A worker demo, in `demos/worker`: a bakery whose ovens are plain Kotlin programs with no framework or HTTP server,
-  taking orders from a Redis queue, each with the agent embedded in its `main`, beside the proxy, Prometheus, and
-  Grafana. Each oven is a Prometheus target of its own through the proxy's service discovery. `./demo.sh` shows an
-  oven listening on no port (`sockets`), its metrics and its agent's at their own paths (`metrics`), a rush (`rush`)
-  that more ovens clear (`scale`), and ovens with no proxy, a bad certificate, or a wrong token that bake all the same
-  (`no-proxy`, `bad-cert`, `wrong-token`). `make worker-demo-check`, in CI's `consumer-check` job, builds it against
-  the checkout. Its ports are 600 above the basics demo's
+- A plain Kotlin demo, in `demos/plain-kotlin`: a bakery whose ovens are plain Kotlin programs with no framework or
+  HTTP server, taking orders from a Redis queue, each with the agent embedded in its `main`, beside the proxy,
+  Prometheus, and Grafana. Each oven is a Prometheus target of its own through the proxy's service discovery.
+  `./demo.sh` shows an oven listening on no port (`sockets`), its metrics and its agent's at their own paths
+  (`metrics`), a rush (`rush`) that more ovens clear (`scale`), and ovens with no proxy, a bad certificate, or a wrong
+  token that bake all the same (`no-proxy`, `bad-cert`, `wrong-token`). `make plain-kotlin-demo-check`, in CI's
+  `consumer-check` job, builds it against the checkout. Its ports are 600 above the basics demo's
 - The proxy's and the agent's dashboards can require a login: set `proxy.dashboard.password` or
   `agent.dashboard.password` (`DASHBOARD_PASSWORD`) and a browser gets a login page, styled after Grafana's, with the
   logo and "Prometheus Proxy" over the dashboard's name, and the username `proxy.dashboard.username` or
@@ -208,6 +208,9 @@ All notable changes to this project are documented in this file.
   agent keeps its hook
 - The proxy and agent log less at INFO as they start and stop (common-utils 5.3.0): their services' setup steps and
   their starting and stopping transitions log at DEBUG, and the shutdown hook's two lines go to the log, not stderr
+- The embedded demo is the Ktor demo, in `demos/ktor`, since the Spring Boot and plain Kotlin demos embed the agent
+  too: its page is Ktor Demo, whose old address sends the reader there, its port variables are `KTOR_DEMO_*`, its
+  alerting rules `prometheus/ktor-alerts.yml`, and its build check `make ktor-demo-check`
 
 ### Build & Tooling
 
@@ -218,8 +221,8 @@ All notable changes to this project are documented in this file.
 - The tests take less than half as long: `make tests` reruns only the tests rather than every task, the harness
   profile defaults to MINI, as in CI (`make medium-tests` replaces `make mini-tests`), and specs that waited out fixed
   timeouts or sleeps, or built the Docker images while skipped, no longer do
-- CI's build job is one Gradle invocation, and builds the embedded demo in the `consumer-check` job instead
-  (`make embedded-demo-check`, also in `make ci`)
+- CI's build job is one Gradle invocation, and builds the Ktor demo in the `consumer-check` job instead
+  (`make ktor-demo-check`, also in `make ci`)
 - With BuildConfig the same for every build of a commit, main isn't recompiled on each Gradle invocation, and compiled
   classes and test results can come from the build cache; the harness profile is a test input, and a run of the
   container specs always runs
@@ -262,7 +265,7 @@ All notable changes to this project are documented in this file.
   passed and the browser's `Host` header, or its address in `proxy.dashboard.allowedOrigins`
 - The Embedded Agent page has a Debugging section: the agent's admin endpoints and `/debug`, turned on with
   `ADMIN_ENABLED` and `DEBUG_ENABLED` (or `setting()` in code), what each shows, its logs, the proxy's view, and its
-  metrics on the Agents dashboard with `agentMetricsAt`. The embedded demo turns them on from the
+  metrics on the Agents dashboard with `agentMetricsAt`. The Ktor demo turns them on from the
   coffee shop's environment, publishes the admin port on `127.0.0.1:8393`, and adds `./demo.sh debug` and a tour part
   that walks through them
 - The pages that said the dashboard has no authentication say how to set its login, and that it needs TLS in front
