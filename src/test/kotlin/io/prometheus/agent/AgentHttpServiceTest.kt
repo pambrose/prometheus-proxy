@@ -69,6 +69,7 @@ import io.prometheus.common.captureLogs
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.common.startAndAwaitReady
+import io.prometheus.common.TestPorts.AGENT_HTTP_REFUSED_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.proxy.ProxyUtils.unzip
 import io.prometheus.common.ScrapeResults
@@ -81,7 +82,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
-import java.net.ServerSocket
 import java.util.zip.GZIPInputStream
 import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.atomics.AtomicInt
@@ -1059,10 +1059,9 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "fetchScrapeUrl should count a refused connection as a failure" {
-      val closedPort = ServerSocket(0).use { it.localPort }
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
-      mockAgent.pathManager.registerPath("metrics", "http://localhost:$closedPort/metrics")
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$AGENT_HTTP_REFUSED_PORT/metrics")
 
       service.fetchScrapeUrl(scrapeRequest { path = "metrics" })
 
@@ -1100,11 +1099,10 @@ class AgentHttpServiceTest : StringSpec() {
     // isn't timed: the agent_scrape_* metrics count only Prometheus's scrapes, whose rates they report. Its results are
     // marked, so the result the agent sends isn't counted either. The same scrape from Prometheus is counted and timed.
     "fetchScrapeUrl should count a scrape the dashboard asked for only as a dashboard scrape, and not time it" {
-      val closedPort = ServerSocket(0).use { it.localPort }
       val mockAgent = createMockAgentWithPaths()
       every { mockAgent.collectsMetrics } returns true
       val service = AgentHttpService(mockAgent)
-      mockAgent.pathManager.registerPath("metrics", "http://localhost:$closedPort/metrics")
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$AGENT_HTTP_REFUSED_PORT/metrics")
 
       val dashboardScrapes =
         listOf("unknown", "metrics").map { pathVal ->

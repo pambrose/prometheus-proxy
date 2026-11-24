@@ -23,10 +23,12 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.prometheus.Agent
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts.HARNESS_AGENT_ADMIN_PORT
 import io.prometheus.common.TestPorts.HARNESS_AGENT_METRICS_PORT
+import io.prometheus.common.TestPorts.HARNESS_HELPERS_FREE_PORT
 import io.prometheus.common.TestPorts.HARNESS_HELPERS_HTTP_PORT
 import io.prometheus.common.TestPorts.HARNESS_PROXY_ADMIN_PORT
 import io.prometheus.common.TestPorts.HARNESS_PROXY_AGENT_PORT
@@ -35,6 +37,7 @@ import io.prometheus.harness.HarnessConstants
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.TestUtils.stopAll
+import java.net.BindException
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -45,10 +48,10 @@ import kotlin.time.Duration.Companion.seconds
 // on to fail at bind time, and a missing test config was silently fetched from GitHub master. Both now fail at once,
 // naming the port or file.
 class HarnessHelpersTest : StringSpec() {
-  // Runs [block] with a port nothing listens on, held by a socket bound to it but not listening: a connection to it is
-  // refused, and nothing else can listen on it until [block] returns. A port taken from ServerSocket(0) and closed is
-  // free only until something else binds it, which another test JVM on the same machine did, so a check that nothing
-  // listened there found a listener.
+  // Runs [block] with a port nothing listens on, held by a socket bound to it but not listening: nothing answers a
+  // connection to it -- Linux refuses one, and macOS drops it, so it times out -- and nothing else can listen on it
+  // until [block] returns. A port taken from ServerSocket(0) and closed is free only until something else binds it,
+  // which another test JVM on the same machine did, so a check that nothing listened there found a listener.
   private inline fun <T> withPortNothingListensOn(block: (Int) -> T): T =
     Socket().use { holder ->
       holder.bind(InetSocketAddress(0))
@@ -56,15 +59,19 @@ class HarnessHelpersTest : StringSpec() {
     }
 
   init {
+    // A port of its own, not one taken from ServerSocket(0) and closed: that one is free only until another process
+    // binds it, which one did, failing the spec.
     "awaitPortFree should return once the port is free" {
-      val port = ServerSocket(0).use { it.localPort }
-      awaitPortFree(port, maxAttempts = 3, delayMs = 10)
+      awaitPortFree(HARNESS_HELPERS_FREE_PORT, maxAttempts = 3, delayMs = 10)
     }
 
+    // The failure carries the last bind's exception, so it shows why the port couldn't be bound, not only that it
+    // wasn't.
     "awaitPortFree should fail when the port stays taken" {
       ServerSocket(0).use { taken ->
         val e = shouldThrow<IllegalStateException> { awaitPortFree(taken.localPort, maxAttempts = 2, delayMs = 10) }
         e.message shouldContain "${taken.localPort}"
+        e.cause.shouldBeInstanceOf<BindException>()
       }
     }
 
