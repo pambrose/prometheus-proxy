@@ -290,6 +290,9 @@ All notable changes to this project are documented in this file.
   demos, what each shows, and what it needs, where the home page listed them before its introduction
 - The docs site no longer loads Context7's chat widget, added in 4.4.2: its button covered the screenshots' lightbox
   and the narrow-screen menu, and screen readers couldn't reach it. The README no longer mentions it
+- A link to a docs site page, pasted into a chat or a social post, previews with the page's heading, the site's
+  description, and a card of its own (OpenGraph and Twitter tags, `images/social-card.png`), where it showed a bare
+  URL. The site's header stays in place as the page scrolls, so search and the color toggle are always at hand
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

@@ -103,6 +103,7 @@ font = false
 # The header's repository link shows GitHub's mark, not a generic one.
 icon.repo = "fontawesome/brands/github"
 
+# No header.autohide: the header stays as the page scrolls, so search and the color toggle are always at hand.
 features = [
     "content.action.edit",
     "content.action.view",
@@ -111,7 +112,6 @@ features = [
     "content.footnote.tooltips",
     "content.tabs.link",
     "content.tooltips",
-    "header.autohide",
     "navigation.footer",
     "navigation.indexes",
     "navigation.instant",
