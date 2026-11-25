@@ -296,13 +296,15 @@ class ProxyWebDashboardTest : StringSpec() {
         val url = "$base/dashboard/agents/1"
 
         // A browser reload sends no HX-Request header -> the full document, shell and all.
-        val full = client.get(url).bodyAsText()
+        val fullResponse = client.get(url)
+        val full = fullResponse.bodyAsText()
         full shouldContain "<body"
         full shouldContain "id=\"agent-list\""
         full shouldContain "hx-ws:connect"
 
         // htmx's row click sends HX-Request -> just the detail pane, no shell.
-        val fragment = client.get(url) { header(HX_REQUEST_HEADER, "true") }.bodyAsText()
+        val fragmentResponse = client.get(url) { header(HX_REQUEST_HEADER, "true") }
+        val fragment = fragmentResponse.bodyAsText()
         fragment shouldNotContain "<body"
         fragment shouldNotContain "hx-ws:connect"
         fragment shouldContain "id=\"detail\""
@@ -314,6 +316,12 @@ class ProxyWebDashboardTest : StringSpec() {
             header("HX-History-Restore-Request", "true")
           }.bodyAsText()
         restore shouldContain "<body"
+
+        // Neither may be framed by a page on another site, which could steer a viewer's clicks.
+        listOf(fullResponse, fragmentResponse).forEach {
+          it.headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
+          it.headers["X-Frame-Options"] shouldBe "DENY"
+        }
       }
     }
 
@@ -726,6 +734,7 @@ class ProxyWebDashboardTest : StringSpec() {
 
           scrapeNow().apply {
             status shouldBe HttpStatusCode.OK
+            headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
             bodyAsText().apply {
               this shouldContain """<span class="pill ok">200</span>"""
               this shouldContain "2 families · 2 samples"

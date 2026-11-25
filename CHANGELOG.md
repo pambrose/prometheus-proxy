@@ -204,6 +204,15 @@ All notable changes to this project are documented in this file.
 - A collect that threw ended a dashboard's push loop for good, printed to stderr, so no page was pushed to again until a
   restart while each still showed **live**. It's now logged at ERROR, once for a run of failures, and the loop pushes
   at its next change or tick
+- A dashboard's pages, its login page aside, could be framed by another site's page, which could steer a viewer's
+  clicks onto Scrape now or Log out, and with a login set, a page behind it could stay in the browser's cache after Log
+  out. Every dashboard response now refuses framing (`Content-Security-Policy: frame-ancestors 'none'` and
+  `X-Frame-Options: DENY`), so no page can embed a dashboard, and with a login set, every response but the versioned
+  scripts and icons carries `Cache-Control: no-store`
+- A dashboard logged every request it refused for its `Origin` or `Host` header at INFO, with the header whole and
+  unescaped, so anyone who could reach its port, with no login, could write terminal escape sequences into the proxy's
+  or agent's log as fast as they sent requests. It now logs the header cut to 270 characters with its control
+  characters escaped, at INFO at most once a minute for each address, and at DEBUG otherwise
 - The discovery entries the agent skips, which its debug page and dashboard read from other threads, are now published
   to them safely
 - An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a
