@@ -1,6 +1,8 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — all open (8 medium, 64 low, no high); #25 and #39 are partly fixed.
+**Status:** 72 issues — 3 fixed, 69 open (8 medium, 64 low, no high); #25 and #39 are partly fixed.
+
+**Progress:** Wave A: step 2 in #550.
 
 **Date:** 2026-11-23; rechecked twice on 2026-11-24
 
@@ -27,7 +29,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 5  | A dashboard bind failure leaves the agent's admin and metrics servers running, and `/ping` healthy   | Agent      | medium   | ⬜      |
 | 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ⬜      |
 | 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ⬜      |
-| 8  | The starter's agent dies with a `NoSuchMethodError` on Spring Boot 4.0.x and 4.1.0                   | Embedding  | medium   | ⬜      |
+| 8  | The starter's agent dies with a `NoSuchMethodError` on Spring Boot 4.0.x and 4.1.0                   | Embedding  | medium   | ✅      |
 | 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ⬜      |
 | 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ⬜      |
 | 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ⬜      |
@@ -43,14 +45,14 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ⬜      |
 | 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ⬜      |
 | 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ⬜      |
-| 24 | The starter's `Target.toString` shows URL query values such as an `api_key`                          | Security   | low      | ⬜      |
+| 24 | The starter's `Target.toString` shows URL query values such as an `api_key`                          | Security   | low      | ✅      |
 | 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ⬜      |
 | 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ⬜      |
 | 27 | The quick-start compose file publishes the agent, scrape, and admin ports on every interface         | CI/build   | low      | ⬜      |
 | 28 | `--tests=<spec>` runs the whole suite unfiltered, and `unitTest --tests X` fails                     | CI/build   | low      | ⬜      |
 | 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ⬜      |
 | 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ⬜      |
-| 31 | The starter page's YAML sets no `authority`, so the docs' own certificate fails the handshake        | Docs       | medium   | ⬜      |
+| 31 | The starter page's YAML sets no `authority`, so the docs' own certificate fails the handshake        | Docs       | medium   | ✅      |
 | 32 | The upgrade notes miss that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`               | Docs       | low      | ⬜      |
 | 33 | The Embedded Agent page gives `agent.logLevel` a default an embedded agent doesn't use               | Docs       | low      | ⬜      |
 | 34 | The docs say a refused `PROMETHEUS_*` value is never shown, but an endpoint is                       | Docs       | low      | ⬜      |
@@ -145,7 +147,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | Step | Status | Issues                       | PR theme                                                              | Touches                                                                                                                       | Why here                                                                                                                                                                                         |
 |------|--------|------------------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | 1    | ⬜      | #25, #30, #61, #62, #67      | Release checks that miss nothing, and demos that pull a published release | `demos/*/demo.sh`, the demo READMEs, `bin/docker-*.sh`, `Makefile` (`release-check`, `_check-demos-pull-release`, `SITE_VERSION_SOURCES`, `release`), `docs/RELEASE.md`, the publishing-release skill, a new `misc/` spec | No longer blocks the 4.7.0 tag: #537's `_check-demos-pull-release` refuses a release until the demos are lowered. A gate on whether the release's images exist drops that release-day edit and keeps `master`'s `make up` right between the bump and the publish. For 4.7.0 itself, set both changelogs' date in the release's last change (#62). #67 is the demos' links to a site that, between releases, is the last release's. |
-| 2    | ⬜      | #8, #24, #31                 | A Spring Boot starter that runs on the Spring Boot it names           | `agent/AgentMetrics.kt`, `Agent.kt` (`connectOutcome`), `spring-boot-starter/` (`PrometheusProxyAgentProperties`, the website YAML), `spring-boot-starter.md`, `embedded-agent.md` | The starter is new in 4.7.0; fixing it before the tag means no release ships it broken. A starter test at Spring Boot 4.0's or 4.1.0's Prometheus client pins #8.                                 |
+| 2    | ✅ #550 | #8, #24, #31                 | A Spring Boot starter that runs on the Spring Boot it names           | `agent/AgentMetrics.kt`, `Agent.kt` (`connectOutcome`), `spring-boot-starter/` (`PrometheusProxyAgentProperties`, the website YAML), `spring-boot-starter.md`, `embedded-agent.md` | The starter is new in 4.7.0; fixing it before the tag means no release ships it broken. A starter test at Spring Boot 4.0's or 4.1.0's Prometheus client pins #8.                                 |
 | 3    | ⬜      | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
 | 4    | ⬜      | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
 | 5    | ⬜      | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
@@ -635,7 +637,7 @@ failed three times: the next `connectAgent` succeeds without waiting out a backo
 
 ## 🔌 Embedding: the API, the Spring Boot starter, and the Ktor plugin
 
-### 8. ⬜ Under Spring Boot 4.0.x and 4.1.0, which the starter's docs support, the agent dies at its first connection with a `NoSuchMethodError`
+### 8. ✅ Under Spring Boot 4.0.x and 4.1.0, which the starter's docs support, the agent dies at its first connection with a `NoSuchMethodError`
 
 **Severity:** medium · **Confidence:** confirmed by trace and a bytecode check. Each `io/prometheus/metrics/*` member
 the published 4.7.0 jar references (`4.7.0-consumer-check-SNAPSHOT` in `~/.m2`) was resolved against the Prometheus
@@ -712,6 +714,20 @@ The same applies to any Maven embedder whose own dependency management sets the 
   scrape.
 - A unit test that an agent with metrics off connects, registers, and serves with `prometheus-metrics-model` 1.4.3
   first on the classpath.
+
+**Resolution:** Fixed in #550. The gap was wider than this finding says. Spring Boot 4.1.1 to 4.1.3, whose Prometheus
+client is 1.7.0, failed too: Spring Boot 4.0 and 4.1 set kotlinx-coroutines to 1.10.2, and the agent's `run()` and
+Ktor 3.6 call `runBlockingK`, new in 1.11. Nor can Prometheus client 1.4.3 be supported by building `FAMILY_NAMES`
+without the 1.7 API: it refuses the gauge name `agent_build_info`. So:
+
+- The starter's docs say Spring Boot 4.2 or later, or 4.0 or 4.1 with `kotlin-coroutines.version` set to 1.11.0 and
+  `prometheus-client.version` to 1.10.0, as do the Embedded Agent page and the Spring Boot demo's docs, whose
+  `./demo.sh versions` gains a Prometheus client row.
+- An embedded agent checks both libraries before it starts (`RuntimeLibraries`, from `Agent.startEmbedded`), and
+  refuses with an `IllegalStateException` that names each property to set.
+- `connectOutcome` moved out of `AgentMetrics`' companion.
+- `oldestSpringBootTest` runs the starter's tests under Spring Boot 4.0.10 with the two set; without them, the
+  integration test failed with the `NoSuchMethodError`.
 
 ### 9. ⬜ The starter puts Logback on every embedder's classpath, so a Spring Boot app that logs with Log4j2 breaks: it fails to start, or loses its Log4j2 configuration
 
@@ -1250,7 +1266,7 @@ HTML response once a login is set. Name framing in the Exposure section.
 **Tests:** in `ProxyWebDashboardTest` and `AgentWebDashboardTest`, a page, a detail fragment, and a Scrape now response
 each carry `frame-ancestors 'none'`; with a login set, a page carries `no-store`.
 
-### 24. ⬜ The Spring Boot starter's `Target.toString` masks a URL's user info but not its query values, so a logged property set shows an `api_key`
+### 24. ✅ The Spring Boot starter's `Target.toString` masks a URL's user info but not its query values, so a logged property set shows an `api_key`
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1274,6 +1290,11 @@ query value replaced by `***`, keeping the keys. Or render `Target` through a sm
 
 **Tests:** in `PrometheusProxyAgentAutoConfigurationTest` (or a new properties test), `Target.toString` of
 `https://u:p@h/metrics?api_key=s&x=1` contains neither `p` nor `s`, and keeps `api_key=` and `x=`.
+
+**Resolution:** Fixed in #550. `Target.toString` masks the URL with `shownUrl`, the agent's `sanitizeUrl` rules in
+Java: the user info up to the first `@`, and each query value, keeping the keys. A new
+`PrometheusProxyAgentAutoConfigurationTest` test binds `https://u:pw@grinder:9100/metrics?api_key=k3y&x=1#top` and
+finds none of its secrets in the properties' `toString`.
 
 ---
 
@@ -1655,7 +1676,7 @@ leaving `unitTest` at its 1g; say "16g for the harness JVM" in `docs/TESTING.md`
 
 ## 📚 Documentation
 
-### 31. ⬜ The Spring Boot Starter page's YAML reads `PROMETHEUS_PROXY_CERT` with no `authority`, so with the certificate the docs make for the proxy the agent's TLS handshake fails
+### 31. ✅ The Spring Boot Starter page's YAML reads `PROMETHEUS_PROXY_CERT` with no `authority`, so with the certificate the docs make for the proxy the agent's TLS handshake fails
 
 **Severity:** medium · **Confidence:** confirmed by trace. It needs a certificate issued to a name other than the host
 the agent dials, which is the certificate Cloud Platforms makes, on the page that sends Spring Boot readers here.
@@ -1681,6 +1702,10 @@ name the proxy's certificate is issued to, as `fromEnvironment()` defaults it.
 
 **Tests:** `StarterExamplesTest` binds the snippet; have it assert that the bound properties give the same
 `agent.tls.overrideAuthority` as `fromEnvironment()` given the same variables.
+
+**Resolution:** Fixed in #550. The snippet sets `authority: ${PROMETHEUS_PROXY_AUTHORITY:prometheus-proxy}`, with a
+comment saying why. `StarterExamplesTest` binds it with `PROMETHEUS_PROXY_CERT` set, and finds
+`overrideAuthority=prometheus-proxy`, or the name `PROMETHEUS_PROXY_AUTHORITY` gives.
 
 ### 32. ⬜ The upgrade notes don't say that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`, which a 4.6.0 agent ignored
 
