@@ -98,7 +98,6 @@ class PathHistoryTest : StringSpec() {
     pathSource: String = "",
   ) = AgentContextInfo(
     isConsolidated = false,
-    labels = "{}",
     agentContexts = [mockk<AgentContext> { every { agentName } returns name }],
     targetUrl = targetUrl,
     pathSource = pathSource,

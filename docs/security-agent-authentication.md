@@ -39,7 +39,9 @@ deployment.
    to an identity by comparing SHA-256 digests with `MessageDigest.isEqual`. A missing or unknown token is rejected
    with `UNAUTHENTICATED` before the call runs, and token values are never logged.
 2. **Path authorization.** `registerPath` rejects a path that matches none of the caller identity's glob patterns.
-   An identity with an empty `paths` list — and the legacy shared token — may register any path.
+   An identity with an empty `paths` list — and the legacy shared token — may register any path. However many paths
+   its globs match, an identity's agents may hold at most `proxy.internal.maxPathsPerIdentity` (100,000) together, and
+   each connection at most `maxPathsPerAgent` (20,000).
 3. **Binding calls to the agent they name.** Agent calls carry a caller-supplied `agentId`, and agentIds are
    sequential, so the proxy checks that the caller is the agent it names:
    - **Transport filter enabled (the default).** `ProxyServerTransportFilter` assigns an agentId to each connection
@@ -79,6 +81,11 @@ context.
   its last call, and meanwhile that identity's other agents can't reconnect. The limit bounds the proxy's memory,
   which a peer could otherwise exhaust, and other identities are unaffected; but with agent auth off, or on the
   legacy token, every agent has one identity, so such a peer keeps every agent from reconnecting.
+- **One identity's path limit is shared by its agents.** `proxy.internal.maxPathsPerIdentity` bounds the paths an
+  identity's agents hold together, however many connections they open, so one of them can register paths until the
+  identity's other agents are refused new ones, until it gives them up or disconnects. Other identities are
+  unaffected; but with agent auth off, or on the legacy token, every agent has one identity, so such a peer fills the
+  whole fleet's limit. The limit is a ceiling on the proxy's memory, not a share of it.
 - **Path takeover within one identity.** A non-consolidated registration still replaces a live owner that
   connected with the same identity, which keeps redeploys working. Unauthenticated agents, and every holder of the
   legacy token, share one identity, so any of them can still take over another's path. See remediation item 4.
@@ -211,9 +218,9 @@ In rough priority order:
   agent of another identity may join only once no valid agent still serves it, closing the last way one identity
   could put its metrics on another's path.
 - **Per-agent path limits** (finding #14 of `docs/archive/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — `proxy.internal.maxPathsPerAgent`
-  (20,000), `maxPathLength` (512), and `maxLabelsSizeBytes` (8 KiB) bound what one agent connection can register, so
-  an identity limited to a few path patterns can no longer add unlimited paths, service-discovery targets, and metric
-  series.
+  (20,000), `maxPathLength` (512), and `maxLabelsSizeBytes` (8 KiB) bound what one agent connection can register. On
+  their own they didn't bound an identity, which could open any number of connections, each with a fresh quota; see
+  the paths-per-identity limit below.
 - **No pre-auth agents** (finding #15) — the transport filter still assigns every connection an `agentId`, but its
   context stays pending until the connection's first authenticated call: until then it isn't logged at INFO,
   counted in `proxy_agent_map_size`, listed on the dashboard or health checks, or announced as `AgentConnected`.
@@ -256,6 +263,16 @@ In rough priority order:
   lasted until its stream ended or it was evicted, with no limit. `proxy.internal.maxAgentsPerIdentity` (10,000)
   now bounds the contexts each identity holds, and a connect past it is refused with `RESOURCE_EXHAUSTED`, which the
   agent retries.
+- **Labels bounded, and paths per identity** (finding #20 of `docs/CODE_REVIEW_NOVEMBER_23_2026.md`) — within
+  `maxLabelsSizeBytes`, 8 KiB of one-character labels kept about 130 KiB a path once parsed, beside the labels as
+  sent, so a few thousand registrations on one connection, a fraction of its quota, could exhaust the Helm chart's
+  proxy heap. A path's labels are now parsed once, and kept only parsed, and `proxy.internal.maxLabelsPerPath` (64)
+  refuses more labels than that as `INVALID_PATH`, which bounds what a path keeps to about 28 KiB at the defaults.
+  `proxy.internal.maxPathsPerIdentity` (100,000) bounds the paths an identity's agents hold together, whether or not
+  the transport filter is on, and refuses more as `PATH_LIMIT_REACHED`; with agent auth off, or on the legacy token,
+  every agent shares one identity, so the limit is a total. The defaults are set above normal use, not to fit a small
+  heap: a connection at `maxPathsPerAgent` with paths at every other limit still holds about 400 MiB, more than the
+  chart's 384 MiB heap, so on a heap that small lower the path limits too.
 
 ## References
 

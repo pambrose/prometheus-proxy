@@ -400,7 +400,7 @@ What the proxy did with its agents and their paths, newest first:
 | `registered` / `unregistered` | an agent added a path, or removed one; re-registering a path it already serves isn't news |
 | `taken over` | an agent took a path another agent of the same identity was serving, as a redeploy does |
 | `scraped now` | a browser scraped a path with [Scrape now](#scrape-now), with the result and the browser's address |
-| `rejected` | the proxy refused a path, with its reason: one its identity may not register, a malformed or overlong path, a path another identity holds, a consolidated agent and a path that isn't (or the reverse), or one past the agent's `maxPathsPerAgent` |
+| `rejected` | the proxy refused a path, with its reason: one its identity may not register, a malformed or overlong path, a path another identity holds, a consolidated agent and a path that isn't (or the reverse), one with more than `maxLabelsPerPath` labels, or one past the agent's `maxPathsPerAgent` or its identity's `maxPathsPerIdentity` |
 | `refused` | an identity was already at `proxy.internal.maxAgentsPerIdentity`, so a connect was turned away |
 | `bad token` | a call came with no agent token or an unknown one, naming the host it came from |
 

@@ -498,7 +498,11 @@ Three support helpers also live here (not test classes themselves):
   with more than one segment among them, and an unregistration; removing an agent returns how many paths it served;
   a path whose last agent unregisters it or disconnects is recorded as departed, with the agent, identity, target, and
   source its entry showed, a consolidated path only once its last agent goes, and a registration forgets it; a path
-  the scrape port serves itself is refused, the blitz path also when it was configured with leading slashes
+  the scrape port serves itself is refused, the blitz path also when it was configured with leading slashes; a path
+  with more than `maxLabelsPerPath` labels is refused, and an accepted one keeps a single, parsed copy of its labels;
+  the agents of one identity are refused past `maxPathsPerIdentity` together, agents with no identity sharing one
+  limit, the count follows each way a path leaves, a redeploy at the limit still takes over its own paths, and the
+  80% warning comes once until the count falls below 70%
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, reclaims,
   unregistration, and agent removal race on the real code the TLA+ `ProxyRegistry` spec models, among agents of
   several launches, one of them reconnected and one predating path notices; no reclaim takes a path from a live agent

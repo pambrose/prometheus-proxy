@@ -53,7 +53,6 @@ class ScrapeNowTest : StringSpec() {
   private fun info(valid: Boolean = true) =
     AgentContextInfo(
       isConsolidated = false,
-      labels = "{}",
       agentContexts = [
         AgentContext("10.0.1.14:5555").apply {
           assignProperties(registerAgentRequest { agentName = "agent-east" })

@@ -246,18 +246,32 @@ variable: set them in the config file, or with `-D`, as `-Dproxy.internal.maxAge
 | `proxy.internal.scrapeRequestMapUnhealthySize`     | 0       | Scrapes in flight that mark the proxy unhealthy (0 = 80% of `proxy.internal.maxInFlightScrapeRequests`) |
 | `proxy.internal.chunkContextMapUnhealthySize`      | 0       | Chunked transfers in progress that mark the proxy unhealthy (0 = 80% of the same)                       |
 | `proxy.internal.maxPathsPerAgent`                  | 20000   | Max paths one agent connection may register; more are refused (0 = unlimited)                           |
+| `proxy.internal.maxPathsPerIdentity`               | 100000  | Max paths the agents of one auth identity may register together; more are refused (0 = unlimited)       |
 | `proxy.internal.maxPathLength`                     | 512     | Max characters in a registered path (0 = unlimited)                                                     |
 | `proxy.internal.maxLabelsSizeBytes`                | 8192    | Max size of a path's labels JSON, in bytes (0 = unlimited)                                              |
+| `proxy.internal.maxLabelsPerPath`                  | 64      | Max labels in a path's labels JSON object (0 = unlimited)                                               |
 | `proxy.internal.maxAgentFieldLength`               | 256     | Max characters of an agent's name, host, launch ID, or endpoint (0 = unlimited)                         |
 | `proxy.internal.maxAgentProxyEndpoints`            | 16      | Max entries of an agent's proxy endpoint list (0 = unlimited)                                           |
 | `proxy.internal.maxTargetUrlLength`                | 2048    | Max characters of a path's target URL, as the agent reports it (0 = unlimited)                          |
 | `proxy.internal.maxAgentsPerIdentity`              | 10000   | Max agents connected as one identity with `transportFilterDisabled` (0 = unlimited)                     |
 | `proxy.internal.streamKeepAliveSecs`               | 30      | Seconds a stream to or from an agent goes quiet before a keepalive, both ways (0 = off)                 |
 
-The three path limits are safety nets against a runaway or misbehaving agent, set well above normal use. A path
+The five path limits are safety nets against a runaway or misbehaving agent, set well above normal use. A path
 over a limit is refused at registration, and the agent logs the rejection once without retrying it. A path too long,
 or with labels too large, is refused before it is checked against the agent's
-[identity patterns](#per-agent-identities). The proxy warns when an agent reaches 80% of `maxPathsPerAgent`.
+[identity patterns](#per-agent-identities); one with too many labels, or past a path count, after. The proxy warns
+when an agent reaches 80% of `maxPathsPerAgent`, and when an identity's agents reach 80% of `maxPathsPerIdentity`.
+
+`maxPathsPerAgent` counts one connection's paths, and an agent may open any number of connections, so
+`maxPathsPerIdentity` counts the paths of every agent of an [identity](#per-agent-identities) together, whether or not
+the transport filter is on. With agent auth off, or every agent on the legacy `agentToken`, all agents share one
+identity, and the limit counts the paths of the whole fleet. An agent that takes over a path from another agent of its
+identity leaves the count as it was, so a redeploy at the limit still registers, but an agent that joins a consolidated
+path adds to it, and one that rejoins before the proxy has dropped its old connection counts twice until the proxy does.
+
+What the proxy keeps of a path is what these limits bound: a path with no labels costs at most about 3 KiB, with
+`maxPathLength` and `maxTargetUrlLength` at their defaults, and one with 64 labels filling `maxLabelsSizeBytes` about
+20 KiB, or 28 KiB with non-Latin text. Lower `maxPathsPerIdentity` to keep one identity's paths within your heap.
 
 The agent limits bound what an agent reports about itself and its targets. The proxy only displays these values, in
 its logs, service discovery labels, dashboard, and `/debug` page, but it keeps them, and repeats some of them for

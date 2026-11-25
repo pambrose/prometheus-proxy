@@ -18,7 +18,6 @@ package io.prometheus.proxy.dashboard
 
 import com.pambrose.common.util.hostInfo
 import io.prometheus.Proxy
-import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.SettingsGroup
 import io.prometheus.proxy.ActivityEntry
@@ -44,6 +43,8 @@ import kotlin.time.Instant
  * @param targetUrl the URL the path's agent scrapes; for a departed path, the one it scraped as it left
  * @param agentNames the names of the agents backing the path; for a departed path, the agent its departure names, or
  *   none, when the proxy kept only its scrapes
+ * @param labels the labels the path registered with, as the proxy keeps them (see [Proxy.pathLabels]); none for a
+ *   departed path, whose labels went with its entry
  * @param history the path's recent scrapes, newest first, at most `proxy.dashboard.pathHistorySize` of them
  * @param identity the auth identity of the path's first registrant, which any agent joining it must share; empty with
  *   agent auth off. A departed path keeps the identity it left with, or failing that its last scrape's
@@ -51,7 +52,7 @@ import kotlin.time.Instant
 internal data class PathView(
   val path: String,
   val agentIds: List<String>,
-  val labels: String,
+  val labels: JsonObject,
   val targetUrl: String = "",
   val pathSource: String = "",
   val isDeparted: Boolean = false,
@@ -94,13 +95,11 @@ internal data class PathView(
 
   /**
    * The labels the path registered with, by name, which fill a dashboard link's `{label.<name>}` placeholders (see
-   * [PathLink]); none for a departed path, whose labels went with its entry. Read tolerantly, since an agent supplied
-   * them: [labels] that aren't a JSON object give none, and a label whose value is null, an object, or an array is left
-   * out. Parsed only when a link uses a label.
+   * [PathLink]); none for a departed path. Read from [labels], which the proxy parsed once, as the path registered:
+   * each collect once parsed every path's labels again. Built only when a link uses a label.
    */
   val labelValues: Map<String, String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-    val parsed = runCatching { labels.toJsonElement() }.getOrNull() as? JsonObject
-    parsed.orEmpty()
+    labels
       .mapNotNull { (name, value) ->
         (value as? JsonPrimitive)?.takeUnless { it is JsonNull }?.let { name to it.content }
       }.toMap()
@@ -295,7 +294,7 @@ internal data class ProxySnapshot(
       return PathView(
         path = path,
         agentIds = emptyList(),
-        labels = "",
+        labels = Proxy.NO_LABELS,
         targetUrl = departure?.targetUrl.orEmpty(),
         pathSource = departure?.pathSource.orEmpty(),
         isDeparted = true,

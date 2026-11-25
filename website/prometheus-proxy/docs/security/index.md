@@ -116,6 +116,13 @@ than one segment, or has whitespace, a control character, `?`, or `#` in it is r
 patterns. A `*` matches any run of characters, line breaks included, so this check is what keeps an agent from
 registering a path that would forge lines in the proxy's log.
 
+However many paths its patterns match, an identity's agents may hold at most `proxy.internal.maxPathsPerIdentity`
+(100,000) paths together, and each connection at most `maxPathsPerAgent` (20,000), so an identity can't register
+without limit by opening more connections. A path past either limit, or with more than `maxLabelsPerPath` (64)
+labels, is refused once the patterns have passed it. With agent auth off, or only the legacy `agentToken`, every
+agent shares one identity, and the limit counts them all; see
+[Internal Settings](../configuration/proxy.md#internal-settings).
+
 A path also belongs to the identity whose agent serves it: while a live agent serves a path in
 [consolidated mode](../advanced.md#consolidated-mode) (multiple agents serving one path), only an agent of the same
 identity may join it, so agents that share a consolidated path must present one identity. Another identity's

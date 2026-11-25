@@ -337,7 +337,7 @@ internal object ProxyDashboardHtml {
         div("kv") {
           span("k") { +"/${path.path}" }
           span("v") {
-            +if (path.agentIds.size > 1) "shared with ${path.agentIds.size - 1} other agent(s)" else path.labels
+            +if (path.agentIds.size > 1) "shared with ${path.agentIds.size - 1} other agent(s)" else "${path.labels}"
           }
         }
       }
