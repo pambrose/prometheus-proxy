@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -280,6 +281,27 @@ public class PrometheusProxyAgentProperties {
     return secret == null || secret.isBlank() ? "(none)" : "(set)";
   }
 
+  // A URL as toString shows it, masked as the agent's logs mask one: its user info, up to the first @, and each query
+  // value, whose key is kept, since a credential such as an api_key can be either
+  static String shownUrl(String url) {
+    if (url == null) {
+      return null;
+    }
+    String masked = url.replaceAll("(://)[^@/?#]+@", "$1***@");
+    int query = masked.indexOf('?');
+    if (query < 0) {
+      return masked;
+    }
+    int fragment = masked.indexOf('#', query);
+    int end = fragment < 0 ? masked.length() : fragment;
+    StringJoiner params = new StringJoiner("&");
+    for (String param : masked.substring(query + 1, end).split("&", -1)) {
+      int equals = param.indexOf('=');
+      params.add(equals < 0 ? param : param.substring(0, equals) + "=***");
+    }
+    return masked.substring(0, query + 1) + params + masked.substring(end);
+  }
+
   /** The agent's dashboard: its connection, each path and why the proxy refused one, its activity and settings. */
   public static class Dashboard {
     /** The port the dashboard listens on; it's off without one. */
@@ -392,9 +414,7 @@ public class PrometheusProxyAgentProperties {
 
     @Override
     public String toString() {
-      // A URL's own credentials masked, as the agent's logs mask them
-      String shownUrl = url == null ? null : url.replaceFirst("://[^/@]*@", "://***@");
-      return "Target[path=" + path + ", url=" + shownUrl + ", username=" + username + ", password="
+      return "Target[path=" + path + ", url=" + shownUrl(url) + ", username=" + username + ", password="
           + shown(password) + ", labels=" + labels + "]";
     }
   }

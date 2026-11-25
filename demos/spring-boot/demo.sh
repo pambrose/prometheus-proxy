@@ -417,14 +417,16 @@ cmd_versions() {
   row "Netty" "$(catalog_version netty)" "$(lib_version "$libs" netty-handler)"
   row "netty-tcnative" "$(catalog_version tcnative)" "$(lib_version "$libs" netty-tcnative-classes)"
   row "Kotlin" "$(catalog_version kotlin)" "$(lib_version "$libs" kotlin-stdlib)"
+  row "Prometheus client" "$(catalog_version prometheus)" "$(lib_version "$libs" prometheus-metrics-model)"
   how_it_works "Spring Boot's dependency management, which the roastery's pom takes from spring-boot-starter-parent," \
     "sets the version of every library it knows, the agent's dependencies among them, whatever version the agent" \
     "asks for, so some run older than the agent's own. The agent runs with these, as the roastery shows here and its" \
     "RoasteryAgentTest checks on every pull request. Were one to break it, the pom sets that library to the agent's" \
-    "version with the property Spring Boot names it by, such as grpc-java.version or netty.version, which Spring" \
-    "Boot's Version Properties appendix lists for every library it manages. netty-tcnative has none, since Netty's" \
-    "BOM sets it: the pom would pin netty-tcnative-classes and netty-tcnative-boringssl-static, with each native's" \
-    "classifier, in its own dependencyManagement."
+    "version with the property Spring Boot names it by, such as prometheus-client.version, grpc-java.version, or" \
+    "netty.version, which Spring Boot's Version Properties appendix lists for every library it manages. An app on" \
+    "Spring Boot 4.0 or 4.1 sets two of them, as the Spring Boot Starter page says. netty-tcnative has none, since" \
+    "Netty's BOM sets it: the pom would pin netty-tcnative-classes and netty-tcnative-boringssl-static, with each" \
+    "native's classifier, in its own dependencyManagement."
   watch_for
   point "Each row ends with how the roastery's version compares with the agent's: older, the same, or newer."
   point "The roastery's image holds its dependencies as jars in /app/lib, the layout Spring Boot's own extract" \

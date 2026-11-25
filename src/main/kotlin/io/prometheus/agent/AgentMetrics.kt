@@ -38,6 +38,20 @@ import io.prometheus.metrics.core.metrics.MetricWithFixedMetadata
 import io.prometheus.metrics.core.metrics.StatefulMetric
 
 /**
+ * A connect attempt's outcome, from how registering the agent ended: [AgentMetrics.SUCCESS] for no [failure],
+ * [AgentMetrics.REJECTED] for the proxy refusing the registration, and [AgentMetrics.FAILURE] for anything else.
+ *
+ * Outside [AgentMetrics]' companion, whose collectors an agent that collects no metrics leaves unbuilt: every connect
+ * calls this.
+ */
+internal fun connectOutcome(failure: Throwable?): String =
+  when (failure) {
+    null -> AgentMetrics.SUCCESS
+    is RequestFailureException -> AgentMetrics.REJECTED
+    else -> AgentMetrics.FAILURE
+  }
+
+/**
  * An agent's handle on the agent metrics, which every agent in the JVM shares (see [SharedCollectors]); each series
  * carries the agent's `launch_id`. Creating one adds the agent to them, registering them if it is the first, and
  * [close] removes the agent and every series with its `launch_id`.
@@ -104,17 +118,6 @@ internal class AgentMetrics(
     const val RESULT_GZIPPED = "gzipped"
     const val RESULT_CHUNKED = "chunked"
     const val RESULT_DROPPED = "dropped"
-
-    /**
-     * A connect attempt's outcome, from how registering the agent ended: [SUCCESS] for no [failure], [REJECTED] for
-     * the proxy refusing the registration, and [FAILURE] for anything else.
-     */
-    fun connectOutcome(failure: Throwable?): String =
-      when (failure) {
-        null -> SUCCESS
-        is RequestFailureException -> REJECTED
-        else -> FAILURE
-      }
 
     // The values of a label each agent starts at zero, as PerLaunch takes them.
     private fun each(values: List<String>) = values.map { listOf(it) }

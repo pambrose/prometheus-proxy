@@ -21,6 +21,13 @@ java {
   toolchain { languageVersion = JavaLanguageVersion.of(libs.versions.jvm.get()) }
 }
 
+// The Spring Boot whose dependency management the tests run under, which the tests' classpaths take from these, rather
+// than from testImplementation, so the same tests can run under two
+val springBootTestPlatform = configurations.dependencyScope("springBootTestPlatform")
+val oldestSpringBootTestPlatform = configurations.dependencyScope("oldestSpringBootTestPlatform")
+configurations.testCompileClasspath { extendsFrom(springBootTestPlatform.get()) }
+configurations.testRuntimeClasspath { extendsFrom(springBootTestPlatform.get()) }
+
 dependencies {
   // In the POM: the agent, at this version, which serves the app's PrometheusRegistry in-process, its API naming the
   // type; and Micrometer's Prometheus registry, which has Spring Boot put the app's meters in a PrometheusRegistry bean.
@@ -41,8 +48,10 @@ dependencies {
 
   // The tests run at Spring Boot's versions, those it picks for the agent's libraries included, which are older than
   // the agent's own. Enforced, as Spring Boot's Maven parent and its Gradle dependency management do for an app, not
-  // only recommended, so the agent runs with them as it would in the app.
-  testImplementation(enforcedPlatform(libs.spring.boot.dependencies))
+  // only recommended, so the agent runs with them as it would in the app. Twice: test runs them at the Spring Boot the
+  // starter compiles against, and oldestSpringBootTest at the oldest it supports (below).
+  springBootTestPlatform(enforcedPlatform(libs.spring.boot.dependencies))
+  oldestSpringBootTestPlatform(enforcedPlatform(libs.spring.boot.oldest))
   testImplementation("org.springframework.boot:spring-boot-starter-test")
   testImplementation("org.springframework.boot:spring-boot-starter-actuator")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -81,6 +90,65 @@ tasks.test {
     exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
   }
 }
+
+// The tests again, under the oldest Spring Boot the starter supports (spring-boot-oldest in libs.versions.toml), whose
+// dependency management sets the agent's libraries furthest behind its own: the Spring Boot an app has may be any
+// release from it on. The test classes are the ones test runs, on a classpath resolved as the tests' own is, for a JVM
+// runtime at the toolchain's Java version, with that release's platform in place of the other.
+//
+// That Spring Boot sets two of the agent's libraries below the versions it can run on, and the starter page tells an
+// app on it to set them, with Spring Boot's kotlin-coroutines.version and prometheus-client.version properties, to the
+// agent's: kotlinx-coroutines at the version Ktor brings the agent, whose minimum RuntimeLibraries checks, and the
+// Prometheus client at the catalog's. The run sets them as such an app does, so it fails when the agent needs a third.
+val olderSpringBootVersions =
+  mapOf(
+    "org.jetbrains.kotlinx:kotlinx-coroutines" to "1.11.0",
+    "io.prometheus:prometheus-metrics" to libs.versions.prometheus.get(),
+  )
+
+val oldestSpringBootTestRuntimeClasspath =
+  configurations.resolvable("oldestSpringBootTestRuntimeClasspath") {
+    extendsFrom(configurations.testImplementation.get(), configurations.testRuntimeOnly.get())
+    extendsFrom(oldestSpringBootTestPlatform.get())
+    val testRuntime = configurations.testRuntimeClasspath.get().attributes
+    attributes { testRuntime.keySet().forEach { copyAttribute(testRuntime, it) } }
+    resolutionStrategy.eachDependency {
+      olderSpringBootVersions.forEach { (modules, version) ->
+        if ("${requested.group}:${requested.name}".startsWith(modules)) useVersion(version)
+      }
+    }
+  }
+
+@Suppress("UNCHECKED_CAST")
+fun AttributeContainer.copyAttribute(
+  from: AttributeContainer,
+  key: Attribute<*>,
+) {
+  val typed = key as Attribute<Any>
+  attribute(typed, from.getAttribute(typed)!!)
+}
+
+val oldestSpringBootTest =
+  tasks.register<Test>("oldestSpringBootTest") {
+    description = "Runs the starter's tests under the oldest Spring Boot it supports."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().output + sourceSets.main.get().output + oldestSpringBootTestRuntimeClasspath.get()
+    useJUnitPlatform()
+    javaLauncher = tasks.test.flatMap { it.javaLauncher }
+    testLogging {
+      events("passed", "skipped", "failed")
+      exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+  }
+
+// test runs both, so build and check do, and a run that excludes test with -x test runs neither. A run that names
+// tests with --tests, which filter test alone, leaves the other out; name it to run it.
+val testsNamed =
+  gradle.startParameter.taskRequests.any { request ->
+    request.args.any { it == "--tests" || it.startsWith("--tests=") }
+  }
+if (!testsNamed) tasks.test { dependsOn(oldestSpringBootTest) }
 
 mavenPublishing {
   configure(JavaLibrary(javadocJar = JavadocJar.Javadoc(), sourcesJar = SourcesJar.Sources()))

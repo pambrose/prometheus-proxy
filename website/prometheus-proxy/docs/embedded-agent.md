@@ -366,11 +366,13 @@ wire the agent yourself, run it from a bean, so it starts and stops with the app
   environment, as `${PROMETHEUS_AGENT_TOKEN:}` does. Give it a `toString` that leaves the secrets out, so the app can
   log it.
 - **Spring Boot's dependency management** sets the versions of the libraries it knows, some of the agent's among them,
-  and some of those run older than the agent's own. The agent runs with them, and the demo's roastery runs it at
-  Spring Boot's versions on every pull request
-  ([Spring Boot's versions](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries)). Were a Spring Boot
-  release to break it, the app's pom sets that library to the agent's version with the property Spring Boot names it
-  by, such as `grpc-java.version` or `netty.version`, which Spring Boot's
+  and some of those run older than the agent's own. The agent runs with Spring Boot 4.2's, and the demo's roastery
+  runs it at those versions on every pull request
+  ([Spring Boot's versions](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries)). Spring Boot 4.0 and
+  4.1 set kotlinx-coroutines and the Prometheus Java client below the versions the agent runs on: set
+  `kotlin-coroutines.version` to `1.11.0` and `prometheus-client.version` to `1.10.0`, or the agent doesn't start, and
+  says so. Were a Spring Boot release to break it, the app's pom sets that library to the agent's version with the
+  property Spring Boot names it by, such as `grpc-java.version` or `netty.version`, which Spring Boot's
   [Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
   library it manages. netty-tcnative has none, since Netty's BOM sets it: pin `netty-tcnative-classes` and
   `netty-tcnative-boringssl-static`, with each native's classifier, in the pom's own `dependencyManagement`.
@@ -418,7 +420,10 @@ with credentials, as a Typesafe `ConfigException`'s does for a value read from a
 `ConfigLoadException` with the redacted message and the original stack trace.
 
 `IllegalStateException` when the agent fails to start (for example, its admin or metrics port is already in
-use), with the startup failure as its cause. A failed start releases everything the agent had opened.
+use), with the startup failure as its cause. A failed start releases everything the agent had opened. Also, before the
+agent is built, when the app's dependency management sets kotlinx-coroutines below 1.11.0 or the Prometheus Java client
+below 1.7.0, as Spring Boot 4.0 and 4.1 do ([In Spring Boot](#in-spring-boot)): its message names the Spring Boot
+property that sets each.
 
 ### `EmbeddedAgentConfig`
 

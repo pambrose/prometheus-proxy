@@ -235,7 +235,7 @@ In rough priority order:
 - **Service-discovery labels limited** (finding #12 of `docs/archive/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — agent labels can no
   longer set `__`-prefixed keys, and `proxy.service.discovery.reserveJobAndInstanceLabels` keeps them from setting `job`
   and `instance`, so an identity can't pass its targets off as another identity's.
-- **Path metadata and scrape results bounded** (finding #12 of `docs/CODE_REVIEW_NOVEMBER_11_2026.md`) — a path's
+- **Path metadata and scrape results bounded** (finding #12 of `docs/archive/CODE_REVIEW_NOVEMBER_11_2026.md`) — a path's
   target URL is redacted and then cut to `proxy.internal.maxTargetUrlLength` (2048), and its source to
   `maxAgentFieldLength`, so ~100 registrations of 4 MiB values can no longer exhaust the proxy's heap. A scrape's
   failure reason, URL, and content type are cut to 4,096 characters, as a chunked transfer's header already was, before

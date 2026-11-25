@@ -347,9 +347,9 @@ class AgentMetricsTest : StringSpec() {
 
     // What agent_connect_count_total counts an attempt as, from how registering the agent ended.
     "a connect attempt should count as a success once registered, rejected when refused, and a failure otherwise" {
-      AgentMetrics.connectOutcome(null) shouldBe "success"
-      AgentMetrics.connectOutcome(RequestFailureException.fromProxy("registerAgent", "refused")) shouldBe "rejected"
-      AgentMetrics.connectOutcome(IllegalStateException("UNAVAILABLE")) shouldBe "failure"
+      connectOutcome(null) shouldBe "success"
+      connectOutcome(RequestFailureException.fromProxy("registerAgent", "refused")) shouldBe "rejected"
+      connectOutcome(IllegalStateException("UNAVAILABLE")) shouldBe "failure"
     }
 
     "the sampled gauges should report the agent's connection, endpoint, paths by source, and dashboard pages" {

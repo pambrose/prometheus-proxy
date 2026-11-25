@@ -64,6 +64,28 @@ class StarterExamplesTest {
         });
   }
 
+  // With PROMETHEUS_PROXY_CERT, the page's YAML checks the proxy's certificate against the name fromEnvironment()
+  // does: PROMETHEUS_PROXY_AUTHORITY, or without it prometheus-proxy, the name Cloud Platforms issues it to, rather than
+  // the host the agent dials
+  @Test
+  void thePagesYamlChecksTheCertificateAgainstTheNameFromEnvironmentDoes() throws IOException {
+    PropertySource<?> yaml =
+        new YamlPropertySourceLoader().load("page", new ClassPathResource("website/application.yml")).get(0);
+    ApplicationContextRunner withYaml =
+        runner.withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(yaml));
+    String proxy = "PROMETHEUS_PROXY=localhost:" + freePort();
+    String cert = "PROMETHEUS_PROXY_CERT=" + PEM;
+
+    withYaml
+        .withSystemProperties(proxy, cert)
+        .run(context -> assertThat(context.getBean(PrometheusProxyAgent.class).config().toString())
+            .contains("tls={overrideAuthority=prometheus-proxy, trustCertCollectionPem=(set)}"));
+    withYaml
+        .withSystemProperties(proxy, cert, "PROMETHEUS_PROXY_AUTHORITY=proxy.example.com")
+        .run(context -> assertThat(context.getBean(PrometheusProxyAgent.class).config().toString())
+            .contains("tls={overrideAuthority=proxy.example.com, trustCertCollectionPem=(set)}"));
+  }
+
   @Test
   void thePagesCustomizerSetsTheCertificateAndServesASecondRegistry() {
     runner

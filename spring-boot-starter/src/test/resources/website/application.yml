@@ -10,5 +10,8 @@ prometheus-proxy:
     # Unset, as on a developer's machine, the agent stays off
     proxy: ${PROMETHEUS_PROXY:}
     token: ${PROMETHEUS_AGENT_TOKEN:}
+    # The certificate the proxy's is signed with, and the name the proxy's certificate was issued to: without
+    # PROMETHEUS_PROXY_AUTHORITY, prometheus-proxy, as fromEnvironment() has it, the name Cloud Platforms issues it to
     trust-certificate: ${PROMETHEUS_PROXY_CERT:}
+    authority: ${PROMETHEUS_PROXY_AUTHORITY:prometheus-proxy}
 # --8<-- [end:starter-yaml]
