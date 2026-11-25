@@ -1347,10 +1347,10 @@ support file that isn't named in this document.
   property has a description, and the defaults are the fields' initial values. An incremental compile drops the
   descriptions, so the build compiles the starter in full.
 - **StarterExamplesTest** — the Spring Boot Starter page's examples: `website/application.yml`, in the test resources,
-  reads the agent's settings from the environment, and with `PROMETHEUS_PROXY_CERT` checks the proxy's certificate
-  against the name `fromEnvironment()` does, `PROMETHEUS_PROXY_AUTHORITY` or `prometheus-proxy`; and
-  **AgentCustomizations** (`website.AgentCustomizations`), with its stand-ins **SecretStore** and **BatchJobs**, sets
-  the certificate and serves a second registry.
+  reads the agent's settings from the environment, with its stop timeout, and with `PROMETHEUS_PROXY_CERT` checks the
+  proxy's certificate against the name `fromEnvironment()` does, `PROMETHEUS_PROXY_AUTHORITY` or `prometheus-proxy`;
+  and **AgentCustomizations** (`website.AgentCustomizations`), with its stand-ins **SecretStore**, **BatchJobs**, and
+  **Alerts**, sets the certificate, serves a second registry, and alerts why an agent couldn't start.
 
 ### Ktor Plugin Tests (`ktor-plugin/`)
 

@@ -37,6 +37,7 @@ import io.prometheus.common.captureLogs
 import java.io.IOException
 import java.net.BindException
 import java.net.ServerSocket
+import kotlin.time.Duration.Companion.seconds
 
 // startIfConfigured, which keeps an app running without its agent: off without a proxy, and a failed start logged and
 // reported, with no token, password, or PEM in why.
@@ -135,6 +136,91 @@ class StartIfConfiguredTest : StringSpec() {
         listOf(Level.ERROR to "The Prometheus agent could not start, so it stays off: $reason")
       failures.single().reason shouldBe reason
       failures.single().thrown shouldBeSameInstanceAs thrown
+    }
+
+    // The builder's handlers, which a Ktor install block or a Spring customizer adds, and then the call's own
+    "a start that fails tells each of the builder's onFailure handlers, in turn, then the call's" {
+      val heard = mutableListOf<String>()
+      val thrown = IllegalStateException("bad certificate")
+
+      embeddedAgent {
+        proxy = "proxy.example.com"
+        onFailure { reason, e ->
+          e shouldBeSameInstanceAs thrown
+          heard += "first: $reason"
+        }
+        onFailure { reason, _ -> heard += "second: $reason" }
+      }.startIfConfigured(onFailure = { reason, _ -> heard += "the call's: $reason" }, env = { null }) {
+        throw thrown
+      }.shouldBeNull()
+
+      heard shouldBe listOf("first: bad certificate", "second: bad certificate", "the call's: bad certificate")
+    }
+
+    // A handler runs inside the start, which mustn't fail for it: startIfConfigured returns null whatever it meets
+    "an onFailure handler that throws is logged, and the next still runs" {
+      val heard = mutableListOf<String>()
+
+      val events =
+        captureLogs<EmbeddedAgentConfig>(Level.DEBUG) {
+          embeddedAgent {
+            proxy = "proxy.example.com"
+            onFailure { _, _ -> error("the chat channel is down") }
+          }.startIfConfigured(onFailure = { reason, _ -> heard += reason }, env = { null }) {
+            error("bad certificate")
+          }.shouldBeNull()
+        }
+
+      heard shouldBe listOf("bad certificate")
+      events.map { it.level to it.formattedMessage } shouldBe
+        listOf(
+          Level.ERROR to "The Prometheus agent could not start, so it stays off: bad certificate",
+          Level.WARN to "An onFailure handler threw, given: bad certificate",
+        )
+    }
+
+    // For a host that makes the settings from its own configuration, then from the app's code, which adds the handlers:
+    // a value of the host's that a builder method rejects, or the app's code throwing, fails before the agent can
+    // start, so the host runs the rest of the app's code, then reports it, as startIfConfigured does a failed start
+    "reportFailure logs a failure that came before the start, and tells each handler, with why and what was thrown" {
+      val heard = mutableListOf<String>()
+      val thrown =
+        ConfigLoadException(
+          "The URL for path app_metrics has no scheme",
+          IllegalArgumentException("https://user:s3cret@example.com/metrics"),
+        )
+      val builder =
+        EmbeddedAgentConfig.builder()
+          .onFailure { reason, e ->
+            e shouldBeSameInstanceAs thrown
+            heard += "first: $reason"
+          }.onFailure { _, _ -> error("the chat channel is down") }
+          .onFailure { reason, _ -> heard += "third: $reason" }
+
+      val events = captureLogs<EmbeddedAgentConfig>(Level.DEBUG) { builder.reportFailure(thrown) }
+
+      // Its causes, as a failed start's, with a URL's credentials masked
+      val reason = "The URL for path app_metrics has no scheme: https://***@example.com/metrics"
+      heard shouldBe listOf("first: $reason", "third: $reason")
+      events.map { it.level to it.formattedMessage } shouldBe
+        listOf(
+          Level.ERROR to "The Prometheus agent could not start, so it stays off: $reason",
+          Level.WARN to "An onFailure handler threw, given: $reason",
+        )
+    }
+
+    // A proxy nothing listens on: the agent starts, and keeps trying to connect until it's stopped
+    "a started agent's handle stops it within the builder's stop timeout" {
+      val agent =
+        embeddedAgent {
+          proxy = "localhost:1"
+          stopTimeout = 5.seconds
+        }.start(logBanner = false)
+      try {
+        agent.stopTimeout shouldBe 5.seconds
+      } finally {
+        agent.shutdown()
+      }
     }
 
     // Kotlin can throw a checked exception undeclared, so the start's catch takes any Exception

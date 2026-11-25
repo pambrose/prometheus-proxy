@@ -17,7 +17,7 @@
 package website;
 
 // The docs site's Spring Boot Starter page shows this class, from here to its end marker; StarterExamplesTest runs it.
-// SecretStore and BatchJobs stand in for the app's own beans.
+// SecretStore, BatchJobs, and Alerts stand in for the app's own beans.
 // --8<-- [start:starter-customizer]
 import io.prometheus.agent.spring.PrometheusProxyAgentCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -25,14 +25,16 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 public class AgentCustomizations {
-  // What properties can't hold: the proxy's certificate, read from the app's secret store as the agent starts, and a
-  // registry of the app's own, which isn't a bean, served at a path of its own
+  // What properties can't hold: the proxy's certificate, read from the app's secret store as the agent starts, a
+  // registry of the app's own, which isn't a bean, served at a path of its own, and who hears why an agent couldn't
+  // start, which stays off while the app runs on
   @Bean
-  PrometheusProxyAgentCustomizer agentCustomizer(SecretStore secrets, BatchJobs batchJobs) {
+  PrometheusProxyAgentCustomizer agentCustomizer(SecretStore secrets, BatchJobs batchJobs, Alerts alerts) {
     return builder ->
         builder
             .trustCertificatePem(secrets.read("prometheus-proxy-ca"), "prometheus-proxy")
-            .source("batch_jobs_metrics", batchJobs.registry());
+            .source("batch_jobs_metrics", batchJobs.registry())
+            .onFailure((reason, e) -> alerts.send("No metrics from this app: " + reason));
   }
 }
 // --8<-- [end:starter-customizer]

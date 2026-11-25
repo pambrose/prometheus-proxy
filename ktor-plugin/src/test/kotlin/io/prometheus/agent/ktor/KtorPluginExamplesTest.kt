@@ -18,6 +18,7 @@ package io.prometheus.agent.ktor
 
 import com.typesafe.config.ConfigFactory
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -30,6 +31,7 @@ import io.ktor.server.testing.testApplication
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import website.agentHealth
 import website.module
+import website.moduleWithFailureAlerts
 import website.moduleWithFileSettings
 
 // The docs site's Ktor Plugin page shows website/KtorPluginExample.kt and website/application.conf: they do what the
@@ -82,6 +84,32 @@ class KtorPluginExamplesTest : StringSpec() {
       shown shouldContain "name=my-app"
       shown shouldContain "sources={my_app_metrics=in-process}"
       config.labels shouldBe mapOf("team" to "web")
+    }
+
+    // A proxy the agent can't parse fails its start before it dials anything
+    "the page's failure alert tells why an agent that can't start stays off" {
+      val alerts = mutableListOf<String>()
+      testApplication {
+        environment { config = pageConfig("PROMETHEUS_PROXY" to "proxy.example.com:not-a-port") }
+        application { moduleWithFailureAlerts { alerts += it } }
+        startApplication()
+
+        application.prometheusProxyAgent.shouldBeNull()
+      }
+
+      alerts.single() shouldContain "The Prometheus agent could not start: "
+      alerts.single() shouldContain "not-a-port"
+    }
+
+    "the page's failure alert stays quiet without PROMETHEUS_PROXY, which leaves the agent off on purpose" {
+      val alerts = mutableListOf<String>()
+      testApplication {
+        environment { config = pageConfig() }
+        application { moduleWithFailureAlerts { alerts += it } }
+        startApplication()
+      }
+
+      alerts.shouldBeEmpty()
     }
   }
 

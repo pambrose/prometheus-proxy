@@ -16,7 +16,13 @@
 
 package io.prometheus.agent
 
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import com.google.common.util.concurrent.Service
+import com.google.common.util.concurrent.Uninterruptibles
 import io.prometheus.Agent
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
+import kotlin.time.Duration
 
 /**
  * Lifecycle handle for an [Agent] started in the background of a host JVM.
@@ -30,7 +36,9 @@ import io.prometheus.Agent
  * The handle is a Kotlin `data class` purely to inherit value-equality and `toString()`; do not
  * `copy()` or destructure it. The `private val agent` is the canonical owner of the running Agent,
  * and holding multiple `EmbeddedAgentInfo` instances pointing at the same Agent is supported but
- * not idiomatic.
+ * not idiomatic. Equality is the agent's alone: a handle with a
+ * [stopTimeout][EmbeddedAgentConfig.Builder.stopTimeout] equals one without it for the same agent, and `copy()` gives
+ * one without it.
  *
  * ## Example
  *
@@ -63,6 +71,18 @@ import io.prometheus.Agent
 data class EmbeddedAgentInfo(
   private val agent: Agent,
 ) : AutoCloseable {
+  // How long shutdown waits for the agent to stop: the builder's stopTimeout, or, null, as long as the agent's stop()
+  // does, 30 seconds. Outside the constructor, so it isn't part of the handle's equality, and set only by the internal
+  // constructor, before the handle is shared; volatile all the same, as a host may stop it from another thread.
+  @Volatile
+  internal var stopTimeout: Duration? = null
+    private set
+
+  // A handle whose shutdown waits at most [stopTimeout] for the agent to stop
+  internal constructor(agent: Agent, stopTimeout: Duration?) : this(agent) {
+    this.stopTimeout = stopTimeout
+  }
+
   /** See class-level KDoc. */
   val launchId: String get() = agent.launchId
 
@@ -88,14 +108,91 @@ data class EmbeddedAgentInfo(
    * `GenericService` level — calling twice is safe but only the first invocation does work. Also safe on an
    * agent that has failed: a failed agent has already released what it held, so there is nothing to stop.
    *
-   * Blocks the calling thread until the Agent has finished shutting down. An embedded Agent registers no JVM shutdown
-   * hook of its own, so call this where the host stops its own services, or from a shutdown hook of the host's, to
-   * avoid leaking the gRPC connection and background scrape coroutines past process exit.
+   * Blocks the calling thread until the Agent has finished shutting down, or, for an agent whose settings give a
+   * [stopTimeout][EmbeddedAgentConfig.Builder.stopTimeout], until that's up: the agent then goes on stopping on a
+   * daemon thread of its own, with a warning in the log, so a host's shutdown fits the window its platform gives it. A
+   * stop that fails within the timeout throws here, as one without a timeout does. Without one, it waits 30 seconds at
+   * most, then throws a `java.util.concurrent.TimeoutException`, and the agent goes on stopping. Either way, an
+   * interrupt doesn't end the wait; the calling thread keeps it. An embedded Agent registers no JVM
+   * shutdown hook of its own, so call this where the host stops its own services, or from a shutdown hook of the
+   * host's, to avoid leaking the gRPC connection and background scrape coroutines past process exit.
    */
   fun shutdown() {
-    agent.stop()
+    val timeout = stopTimeout
+    if (timeout == null) agent.stop() else stopWithin(timeout)
   }
+
+  // Stops the agent on a thread of its own, waiting for it at most [timeout], through an interrupt, as stop() waits, so
+  // a caller that's been interrupted keeps the flag, not an InterruptedException. The thread stops the agent without
+  // stop()'s 30-second limit, which would otherwise end a longer wait with a TimeoutException. A failure that comes
+  // before this stops waiting is thrown here, as the stop's own would be, Error included; one that comes after is
+  // logged, since nothing else can be told. The lock decides which, so none is lost between the two, and whether the
+  // stop finished, which the thread's being alive can't tell: it's alive for a moment after the stop returns.
+  @Suppress("TooGenericExceptionCaught")
+  private fun stopWithin(timeout: Duration) {
+    val lock = Any()
+    var failure: Throwable? = null
+    var finished = false
+    var abandoned = false
+    val stopping =
+      thread(name = STOP_THREAD_NAME, isDaemon = true) {
+        val thrown =
+          try {
+            stopWithoutLimit()
+            null
+          } catch (e: Throwable) {
+            e
+          }
+        synchronized(lock) {
+          finished = true
+          if (!abandoned)
+            failure = thrown
+          else if (thrown != null)
+            logger.warn(thrown) { "The Prometheus agent $agentName failed as it went on stopping: ${thrown.message}" }
+        }
+      }
+    // Duration.INFINITE is Long.MAX_VALUE nanoseconds, which Guava's join takes: its deadline wraps, as
+    // System.nanoTime() does
+    Uninterruptibles.joinUninterruptibly(stopping, timeout.inWholeNanoseconds, TimeUnit.NANOSECONDS)
+    val failed =
+      synchronized(lock) {
+        abandoned = !finished
+        failure
+      }
+    when {
+      failed != null -> {
+        throw failed
+      }
+
+      abandoned -> {
+        logger.warn {
+          "The Prometheus agent $agentName was still stopping after $timeout, and goes on stopping on its own"
+        }
+      }
+    }
+  }
+
+  // The agent's stop, as Agent.stop() makes it, a failed agent's included, which has nothing to stop, but waiting for
+  // as long as it takes: stop()'s stopSync() gives up at 30 seconds by throwing, which would end a longer stop timeout
+  // early, and this one's thread is abandoned once the timeout is up. awaitTerminated() waits uninterruptibly, as
+  // stopSync() does.
+  private fun stopWithoutLimit() {
+    if (agent.state() == Service.State.FAILED)
+      return
+    agent.stopAsync().awaitTerminated()
+  }
+
+  // This agent's handle, with [timeout] as its stop timeout
+  internal fun withStopTimeout(timeout: Duration?): EmbeddedAgentInfo =
+    if (timeout == null) this else EmbeddedAgentInfo(agent, timeout)
 
   /** Stops the agent, as [shutdown] does, for Kotlin's `use` and Java's try-with-resources. */
   override fun close() = shutdown()
+
+  private companion object {
+    private val logger = logger {}
+
+    // The handle's stop thread, named apart from the Ktor plugin's, which calls shutdown on a thread of its own
+    const val STOP_THREAD_NAME = "prometheus-agent-shutdown"
+  }
 }

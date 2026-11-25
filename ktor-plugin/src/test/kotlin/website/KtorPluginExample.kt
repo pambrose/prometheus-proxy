@@ -27,6 +27,7 @@ import io.micrometer.prometheusmetrics.PrometheusConfig
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry
 import io.prometheus.agent.ktor.PrometheusProxyAgent
 import io.prometheus.agent.ktor.prometheusProxyAgent
+import kotlin.time.Duration.Companion.seconds
 
 // The docs site's Ktor Plugin page shows these, each from its start marker to its end marker. KtorPluginExamplesTest
 // runs them, and make consumer-check compiles them against the published POM.
@@ -66,6 +67,24 @@ fun Application.moduleWithFileSettings() {
   }
 }
 // --8<-- [end:install-file]
+
+// --8<-- [start:on-failure]
+fun Application.moduleWithFailureAlerts(alert: (String) -> Unit) {
+  val meterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
+  install(MicrometerMetrics) { registry = meterRegistry }
+
+  // The rest comes from prometheus-proxy.agent in application.conf
+  install(PrometheusProxyAgent) {
+    registry = meterRegistry.prometheusRegistry
+    agent {
+      // Inside the platform's shutdown window, such as Cloud Run's 10 seconds after SIGTERM
+      stopTimeout = 5.seconds
+      // An agent that can't start stays off, and the app runs on without it: this tells someone why
+      onFailure { reason, _ -> alert("The Prometheus agent could not start: $reason") }
+    }
+  }
+}
+// --8<-- [end:on-failure]
 
 // --8<-- [start:health]
 // The agent's connection, for a dashboard or a person; always 200, since a proxy that's away shouldn't take the app

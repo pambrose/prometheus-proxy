@@ -19,6 +19,7 @@ package website
 // --8<-- [start:embedded-kotlin-config]
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.embeddedAgent
+import kotlin.time.Duration.Companion.seconds
 
 // Starts the agent from the app's own settings, in memory, so no config file holds the token or the password. Returns
 // null when the agent is off, without PROMETHEUS_PROXY, or can't start, which it logs: the app's metrics aren't worth
@@ -39,6 +40,9 @@ fun startPrometheusAgent(
       username = env("METRICS_USER"),
       password = env("METRICS_PASSWORD"),
     )
+    // How long the agent's stop may hold up the app's shutdown: inside the platform's window after SIGTERM, such as
+    // Cloud Run's 10 seconds
+    stopTimeout = 8.seconds
   }.startIfConfigured(logBanner = false)
 
 private fun env(name: String) = System.getenv(name).orEmpty().trim()

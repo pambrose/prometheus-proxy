@@ -20,6 +20,11 @@ import io.ktor.server.config.ApplicationConfig
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import kotlin.time.Duration.Companion.seconds
+
+// How long the app's disposal waits for the agent's stop unless the file or an agent block says otherwise: as long as
+// Spring waits for a lifecycle phase to stop, and the Spring Boot starter's default
+private const val DEFAULT_STOP_TIMEOUT_SECONDS = 30
 
 /**
  * The [PrometheusProxyAgent] plugin's settings. Each starts from the `prometheus-proxy.agent` section of the app's
@@ -31,9 +36,10 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
  * The file's section takes the Spring Boot starter's property names: `proxy`, `token`, `trust-certificate`,
  * `authority`, `client-certificate`, `client-key`, `name`, `consolidated`, `metrics-port`, `metrics-proxy-path`,
  * `metrics-proxy-path-labels`, `dashboard.port`, `dashboard.host`, `dashboard.username`, `dashboard.password`, `paths`
- * (a list of targets, each with `path`, `url`, `username`, `password`, and `labels`), and `settings`, any other agent
- * setting by its key; and [enabled], [required], [path], and [labels] here. A blank value counts as unset, as an unset
- * environment variable gives.
+ * (a list of targets, each with `path`, `url`, `username`, `password`, and `labels`), `stop-timeout` (the builder's
+ * `stopTimeout`, a number of seconds or a duration such as `10s` or `PT10S`, 30 seconds unless the file or an [agent]
+ * block sets another), and `settings`, any other agent setting by its key; and [enabled], [required], [path], and
+ * [labels] here. A blank value counts as unset, as an unset environment variable gives.
  */
 class PrometheusProxyAgentConfig internal constructor(
   file: ApplicationConfig,
@@ -80,18 +86,41 @@ class PrometheusProxyAgentConfig internal constructor(
     agentBlocks += block
   }
 
-  // The settings the agent starts with: the file's, then the registry at its path, then each agent block. Read as the
-  // agent starts, so a file value that isn't valid fails the start, as a setting the agent rejects does.
-  internal fun builder(): EmbeddedAgentConfig.Builder {
-    val builder = EmbeddedAgentConfig.builder()
-    fileSettings.applyTo(builder)
-    registry?.also { registry ->
-      val servedAt = path
-      if (servedAt.isNullOrBlank())
-        throw ConfigLoadException("prometheus-proxy.agent.path is required to serve a registry")
-      builder.source(path = servedAt, labels = labels, registry = registry)
+  // The settings the agent starts with, as applyTo makes them
+  internal fun builder(): EmbeddedAgentConfig.Builder = EmbeddedAgentConfig.builder().also(::applyTo)
+
+  // Makes the settings the agent starts with in [builder]: the plugin's stop timeout, the file's, then the registry at
+  // its path, then each agent block. Read as the agent starts, so a file value that isn't valid fails the start, as a
+  // setting the agent rejects does. The blocks add the app's onFailure handlers, so each one runs even after a step
+  // that failed, the file's or a block's, and the first failure is thrown once they all have, for the plugin to tell
+  // them of it (EmbeddedAgentConfig.Builder.reportFailure).
+  internal fun applyTo(builder: EmbeddedAgentConfig.Builder) {
+    var failure =
+      attempt {
+        builder.stopTimeout = DEFAULT_STOP_TIMEOUT_SECONDS.seconds
+        fileSettings.applyTo(builder)
+        registry?.also { registry ->
+          val servedAt = path
+          if (servedAt.isNullOrBlank())
+            throw ConfigLoadException("prometheus-proxy.agent.path is required to serve a registry")
+          builder.source(path = servedAt, labels = labels, registry = registry)
+        }
+      }
+    agentBlocks.forEach { block ->
+      val thrown = attempt { builder.block() }
+      if (failure == null) failure = thrown
     }
-    agentBlocks.forEach { builder.it() }
-    return builder
+    failure?.also { throw it }
   }
+
+  // What [step] threw, or null. Kotlin can throw a checked exception undeclared, so Exception is caught, not only
+  // RuntimeException.
+  @Suppress("TooGenericExceptionCaught")
+  private fun attempt(step: () -> Unit): Exception? =
+    try {
+      step()
+      null
+    } catch (e: Exception) {
+      e
+    }
 }

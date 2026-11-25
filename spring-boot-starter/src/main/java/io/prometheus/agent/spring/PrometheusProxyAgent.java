@@ -18,7 +18,9 @@ package io.prometheus.agent.spring;
 
 import io.prometheus.agent.EmbeddedAgentConfig;
 import io.prometheus.agent.EmbeddedAgentInfo;
+import io.prometheus.common.ConfigLoadException;
 import io.prometheus.metrics.model.registry.PrometheusRegistry;
+import java.time.Duration;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,16 +67,18 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     if (agent != null) {
       return;
     }
+    EmbeddedAgentConfig.Builder builder = EmbeddedAgentConfig.builder();
     try {
-      launch();
+      launch(builder);
     } catch (RuntimeException e) {
-      // A key the agent's config can't hold, or a customizer's own failure, or, for a required agent, no proxy, a
-      // setting the agent rejects (ConfigLoadException), or its failure to start, its start timing out included
-      // (IllegalStateException). Any other agent's start logs its own failure.
-      failed(e, e);
+      // A property the builder rejects, a key the agent's config can't hold, or a customizer's own failure, or, for a
+      // required agent, no proxy, a setting the agent rejects (ConfigLoadException), or its failure to start, its start
+      // timing out included (IllegalStateException). Any other agent's start logs its own failure and tells the
+      // handlers.
+      failed(builder, e, e);
     } catch (Exception e) {
       // A checked exception, which Kotlin code, such as a customizer written in Kotlin, can throw undeclared
-      failed(e, new IllegalStateException("The Prometheus agent could not start", e));
+      failed(builder, e, new IllegalStateException("The Prometheus agent could not start", e));
     }
   }
 
@@ -89,8 +93,8 @@ public class PrometheusProxyAgent implements SmartLifecycle {
   // Decided once the customizers have made the settings, by the agent's own rule, which startIfConfigured() follows
   // too. A required agent then starts with start(), whose failure fails the app, and any other with
   // startIfConfigured(), which logs a failure, with why, and leaves the agent off.
-  private void launch() {
-    EmbeddedAgentConfig config = config();
+  private void launch(EmbeddedAgentConfig.Builder builder) throws Exception {
+    EmbeddedAgentConfig config = config(builder);
     if (!config.namesProxy()) {
       withoutAProxy();
       return;
@@ -106,13 +110,14 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     logger.info("Prometheus agent {} started", started.getAgentName());
   }
 
-  // A start that threw e: a required agent fails the app with thrown, and any other stays off, logging why
-  private void failed(Exception e, RuntimeException thrown) {
+  // A start that threw e: a required agent fails the app with thrown, telling no handler, as start() tells none. Any
+  // other stays off, and the builder logs why and tells the onFailure handlers the customizers added, which config()
+  // ran whatever failed: its settings weren't complete, or startIfConfigured() would have told them itself.
+  private void failed(EmbeddedAgentConfig.Builder builder, Exception e, RuntimeException thrown) {
     if (properties.isRequired()) {
       throw thrown;
     }
-    String reason = e.getMessage() == null ? e.getClass().getName() : e.getMessage();
-    logger.error("The Prometheus agent could not start, so it stays off: {}", reason);
+    builder.reportFailure(e);
   }
 
   @Override
@@ -140,15 +145,44 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     return Optional.ofNullable(agent);
   }
 
-  // The settings the agent starts with: the properties, then the customizers
-  EmbeddedAgentConfig config() {
-    EmbeddedAgentConfig.Builder builder = EmbeddedAgentConfig.builder();
-    connection(builder);
-    features(builder);
-    paths(builder);
-    properties.getSettings().forEach(builder::setting);
-    context.getBeanProvider(PrometheusProxyAgentCustomizer.class).orderedStream().forEach(c -> c.customize(builder));
+  // The settings the agent starts with, as config(builder) makes them
+  EmbeddedAgentConfig config() throws Exception {
+    return config(EmbeddedAgentConfig.builder());
+  }
+
+  // The settings the agent starts with, made in builder: the properties, then the customizers. The customizers add the
+  // app's onFailure handlers, so each one runs even after a step that failed, the properties' or a customizer's, and the
+  // first failure is thrown once they all have, for start() to tell them of it (EmbeddedAgentConfig.Builder's
+  // reportFailure).
+  private EmbeddedAgentConfig config(EmbeddedAgentConfig.Builder builder) throws Exception {
+    Exception failure = attempt(() -> {
+      connection(builder);
+      features(builder);
+      paths(builder);
+      properties.getSettings().forEach(builder::setting);
+    });
+    for (PrometheusProxyAgentCustomizer customizer :
+        context.getBeanProvider(PrometheusProxyAgentCustomizer.class).orderedStream().toList()) {
+      Exception thrown = attempt(() -> customizer.customize(builder));
+      if (failure == null) {
+        failure = thrown;
+      }
+    }
+    if (failure != null) {
+      throw failure;
+    }
     return builder.build();
+  }
+
+  // What step threw, or null. Kotlin code, such as a customizer written in Kotlin, can throw a checked exception
+  // undeclared, so Exception is caught, not only RuntimeException.
+  private static Exception attempt(Runnable step) {
+    try {
+      step.run();
+      return null;
+    } catch (Exception e) {
+      return e;
+    }
   }
 
   // Who the agent is, and how it reaches the proxy
@@ -171,8 +205,9 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     }
   }
 
-  // What the agent serves of its own: consolidated mode, its metrics, and its dashboard
+  // What the agent serves of its own: consolidated mode, its metrics, and its dashboard; and how long its stop may take
   private void features(EmbeddedAgentConfig.Builder builder) {
+    stopTimeout(builder);
     if (properties.isConsolidated()) {
       builder.consolidated(true);
     }
@@ -192,6 +227,17 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     if (!isBlank(dashboard.getPassword())) {
       builder.dashboardLogin(dashboard.getPassword(), orEmpty(dashboard.getUsername()));
     }
+  }
+
+  // How long the agent's stop may take, checked here, so a value of zero or less names the property, not only the
+  // builder's setting
+  private void stopTimeout(EmbeddedAgentConfig.Builder builder) {
+    Duration stopTimeout = properties.getStopTimeout();
+    if (stopTimeout != null && stopTimeout.compareTo(Duration.ZERO) <= 0) {
+      throw new ConfigLoadException(
+          "prometheus-proxy.agent.stop-timeout must be more than zero: " + stopTimeout, null);
+    }
+    builder.stopTimeout(stopTimeout);
   }
 
   // The targets it scrapes, then the app's registry

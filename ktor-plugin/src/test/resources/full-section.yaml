@@ -34,3 +34,4 @@ prometheus-proxy:
     path: my_app_metrics
     labels:
       team: web
+    stop-timeout: 5s

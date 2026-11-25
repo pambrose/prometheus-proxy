@@ -14,4 +14,7 @@ prometheus-proxy:
     # PROMETHEUS_PROXY_AUTHORITY, prometheus-proxy, as fromEnvironment() has it, the name Cloud Platforms issues it to
     trust-certificate: ${PROMETHEUS_PROXY_CERT:}
     authority: ${PROMETHEUS_PROXY_AUTHORITY:prometheus-proxy}
+    # How long the agent's stop may hold up the app's shutdown: inside the platform's window after SIGTERM, such as
+    # Cloud Run's 10 seconds
+    stop-timeout: 8s
 # --8<-- [end:starter-yaml]

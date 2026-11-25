@@ -35,6 +35,7 @@ import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration.Companion.seconds
 
 class PrometheusProxyAgentConfigTest : StringSpec() {
   init {
@@ -45,6 +46,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       config.required shouldBe false
       config.path.shouldBeNull()
       config.labels.shouldBeEmpty()
+      config.builder().stopTimeout shouldBe 30.seconds
       config.builder().build().toConfig() shouldBe EmbeddedAgentConfig.builder().build().toConfig()
     }
 
@@ -55,6 +57,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       config.required shouldBe true
       config.path shouldBe "my_app_metrics"
       config.labels shouldBe mapOf("team" to "web")
+      config.builder().stopTimeout shouldBe 5.seconds
       config.builder().build().toConfig() shouldBe expectedTree(timeout = 5, clientTimeout = 10)
     }
 
@@ -64,6 +67,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       config.required shouldBe true
       config.path shouldBe "my_app_metrics"
       config.labels shouldBe mapOf("team" to "web")
+      config.builder().stopTimeout shouldBe 5.seconds
       config.builder().build().toConfig() shouldBe expectedTree(timeout = "5", clientTimeout = "10")
     }
 
@@ -153,6 +157,41 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       }.message shouldBe "prometheus-proxy.agent.enabled must be true or false: yes"
     }
 
+    // The builder's stopTimeout, in Kotlin's duration format, or ISO 8601's
+    "the file's stop-timeout sets how long the app's disposal waits for the agent's stop" {
+      PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to "1m 30s")).builder().stopTimeout shouldBe
+        90.seconds
+      PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to "PT5S")).builder().stopTimeout shouldBe
+        5.seconds
+    }
+
+    // As the Spring Boot starter's stop-timeout property reads one
+    "a stop-timeout of a number alone is in seconds" {
+      PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to "10")).builder().stopTimeout shouldBe
+        10.seconds
+    }
+
+    // A zero timeout would give up on every stop at once
+    "a stop-timeout that isn't a duration of more than zero fails the settings" {
+      listOf("ten", "0", "0s", "-5s").forEach { value ->
+        shouldThrow<ConfigLoadException> {
+          PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to value)).builder()
+        }.message shouldBe
+          "prometheus-proxy.agent.stop-timeout must be a duration of more than zero, such as 10s: $value"
+      }
+    }
+
+    "an agent block's stop timeout takes precedence over the file's, and null leaves it to the agent's stop" {
+      val config = PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to "10s"))
+      config.agent { stopTimeout = 5.seconds }
+
+      config.builder().stopTimeout shouldBe 5.seconds
+
+      config.agent { stopTimeout = null }
+
+      config.builder().stopTimeout shouldBe null
+    }
+
     "a port that isn't a number fails the settings" {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig("metrics-port" to "ninety"))
 
@@ -188,6 +227,20 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       builder.proxy shouldBe "from-code:50051"
       builder.build().toString() shouldContain "code_path=in-process"
       builder.build().toString() shouldNotContain "file_path"
+    }
+
+    // So each block's onFailure handler is added whatever failed, for the plugin to tell them of the failure
+    "every agent block runs after a step that fails, and the first failure is then thrown" {
+      val config = PrometheusProxyAgentConfig(MapApplicationConfig("metrics-port" to "ninety"))
+      config.agent { name = "first" }
+      config.agent { error("the secret store is down") }
+      config.agent { token = "s3cret" }
+      val builder = EmbeddedAgentConfig.builder()
+
+      shouldThrow<ConfigLoadException> { config.applyTo(builder) }.message shouldBe
+        "prometheus-proxy.agent.metrics-port must be a number: ninety"
+      builder.name shouldBe "first"
+      builder.token shouldBe "s3cret"
     }
 
     "every agent block runs, in turn" {
@@ -232,6 +285,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       settings { scrapeTimeoutSecs = 5, http.clientTimeoutSecs = 10 }
       path = my_app_metrics
       labels { team = web }
+      stop-timeout = 5s
       """.trimIndent()
 
     fun hocon(section: String): ApplicationConfig = HoconApplicationConfig(ConfigFactory.parseString(section))

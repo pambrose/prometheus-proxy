@@ -49,12 +49,17 @@ import io.prometheus.agent.EmbeddedAgentInfo
  * install block's, a `settings` key of one, or the agent's own `PROXY_HOSTNAME` environment variable. Without one it
  * logs a line and stays off, as on a developer's machine. An agent that can't start, such as one given a certificate it
  * can't read, is logged and stays off too, and the app runs without it, unless
- * [required][PrometheusProxyAgentConfig.required] is set. It starts before the server binds its port, but its thread
- * doesn't keep the JVM running, so an app whose port is taken still exits, and Ktor's shutdown hook stops the agent;
- * the servers of its own metrics and admin ports, when they're on, do keep the JVM running.
+ * [required][PrometheusProxyAgentConfig.required] is set; the agent block's
+ * [onFailure][io.prometheus.agent.EmbeddedAgentConfig.Builder.onFailure] has the app told why, to report it elsewhere
+ * too, a value in the file the plugin can't read, or an agent block that throws, included. It starts before the server
+ * binds its port, but its thread doesn't keep the JVM running, so an app whose port is taken still exits, and Ktor's
+ * shutdown hook stops the agent; the servers of its own metrics and admin ports, when they're on, do keep the JVM
+ * running.
  *
  * It begins stopping as soon as the server does, before the server drains the requests in flight, so the proxy drops
- * the app's paths and no scrape reaches an app that's going away; the app's disposal waits for it to finish. While it
+ * the app's paths and no scrape reaches an app that's going away; the app's disposal waits for it to finish, up to the
+ * settings' [stopTimeout][io.prometheus.agent.EmbeddedAgentConfig.Builder.stopTimeout], 30 seconds unless the file's
+ * `stop-timeout` or the agent block sets another. While it
  * runs, [prometheusProxyAgent] is its handle, with its connection to the proxy, for a health check.
  */
 val PrometheusProxyAgent: ApplicationPlugin<PrometheusProxyAgentConfig> =

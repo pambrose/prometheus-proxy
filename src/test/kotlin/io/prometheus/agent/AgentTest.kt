@@ -259,6 +259,9 @@ class AgentTest : StringSpec() {
             }
           }.exceptionOrNull()
         val stopFailure = runCatching { agent.stop() }.exceptionOrNull()
+        // A handle with a stop timeout stops it on a thread of its own
+        val timedStopFailure =
+          runCatching { EmbeddedAgentInfo(agent, stopTimeout = 5.seconds).shutdown() }.exceptionOrNull()
 
         assertSoftly {
           state shouldBe Service.State.FAILED
@@ -266,6 +269,7 @@ class AgentTest : StringSpec() {
           agent.metricsService.isRunning.shouldBeFalse()
           cacheFailure?.message.orEmpty() shouldContain "closed"
           stopFailure.shouldBeNull()
+          timedStopFailure.shouldBeNull()
         }
       }
     }
@@ -393,6 +397,31 @@ class AgentTest : StringSpec() {
         info.shutdown()
 
         agent.isRunning.shouldBeFalse()
+      } finally {
+        try {
+          if (agent.isRunning) agent.stopSync()
+        } catch (_: Exception) {
+        }
+      }
+    }
+
+    // A handle with a stop timeout stops the agent on a thread of its own, without stop()'s 30-second limit, which must
+    // drive the same lifecycle as stop()
+    "EmbeddedAgentInfo.shutdown() with a stop timeout should terminate the agent service too" {
+      val agent =
+        Agent(
+          options = agentOptions(["--proxy", "localhost:$PROXY_AGENT_PORT"], exitOnMissingConfig = false),
+          inProcessServerName = "embedded-stop-timeout-test-${System.nanoTime()}",
+          testMode = true,
+        ) { startAsync() }
+      val info = EmbeddedAgentInfo(agent, stopTimeout = 10.seconds)
+
+      try {
+        eventually(5.seconds) { agent.isRunning.shouldBeTrue() }
+
+        info.shutdown()
+
+        agent.state() shouldBe Service.State.TERMINATED
       } finally {
         try {
           if (agent.isRunning) agent.stopSync()

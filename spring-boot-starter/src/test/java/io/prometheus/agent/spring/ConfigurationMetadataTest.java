@@ -43,6 +43,7 @@ class ConfigurationMetadataTest {
     assertThat(defaultOf(metadata, "prometheus-proxy.agent.enabled")).containsExactly(true);
     assertThat(defaultOf(metadata, "prometheus-proxy.agent.source")).containsExactly("registry");
     assertThat(defaultOf(metadata, "prometheus-proxy.agent.dashboard.username")).containsExactly("admin");
+    assertThat(defaultOf(metadata, "prometheus-proxy.agent.stop-timeout")).containsExactly("30s");
   }
 
   private static DocumentContext metadata() throws IOException {

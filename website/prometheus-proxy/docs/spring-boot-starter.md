@@ -49,7 +49,9 @@ With that, the app gets:
 
 - **An agent that starts and stops with the app.** It starts once the app is up, in the last lifecycle phase, and stops
   first on shutdown, before a graceful shutdown drains the web server: the agent disconnects, the proxy drops its
-  paths, and no scrape reaches an app that's going away. Its thread doesn't keep the JVM running, so an app with no
+  paths, and no scrape reaches an app that's going away. The shutdown waits for that up to `stop-timeout`, 30 seconds
+  by default: Spring's own phase timeout doesn't cut it short, since the stop runs in the agent bean's `stop()`. Its
+  thread doesn't keep the JVM running, so an app with no
   web server or other thread to hold it, such as a batch job, exits once `main` returns, and the context's shutdown
   stops the agent; one that should keep running sets `spring.main.keep-alive: true`.
 - **Its metrics at the proxy's `/roastery_metrics`,** the app's name followed by `_metrics`, read from the app's
@@ -63,7 +65,8 @@ With that, the app gets:
   out of a load balancer or have it restarted. `management.health.prometheusagent.enabled: false` leaves it out.
 - **An app that runs without an agent that can't start.** The agent logs why and stays off: a setting it rejects,
   such as an unreadable certificate, doesn't stop the app. Set `required: true` to have the app fail to start instead,
-  then without a proxy too.
+  then without a proxy too, or have a customizer add an `onFailure` handler, which is told why
+  ([below](#customizing-in-code)).
 
 Each property can also come straight from the environment, by Spring Boot's rules: `PROMETHEUSPROXY_AGENT_PROXY` sets
 `prometheus-proxy.agent.proxy`. As with any embedded agent, the agent's own environment variables, such as
@@ -94,6 +97,7 @@ Each is under `prometheus-proxy.agent`, and an IDE completes and describes them 
 | `dashboard.port`, `.host`  |                                  | The [agent's dashboard](agent-dashboard.md), off without a port, listening on every interface unless `host` names one, such as `127.0.0.1`                                    |
 | `dashboard.password`       |                                  | Requires a login to the dashboard, as `dashboard.username` (`admin` by default)                                                                                               |
 | `required`                 | `false`                          | Whether the app fails to start when the agent can't, or has no proxy                                                                                                          |
+| `stop-timeout`             | `30s`                            | How long the app's shutdown waits for the agent's stop, more than zero, as a number of seconds or a duration such as `10s` or `PT10S`; once it's up, the app stops anyway, and the agent goes on stopping |
 | `settings.<key>`           |                                  | Any other [agent setting](configuration/agent.md), by its key under `agent`, such as `settings.scrapeTimeoutSecs: 20`. It takes precedence over the properties above        |
 | `enabled`                  | `true`                           | Whether to run the agent at all                                                                                                                                               |
 
@@ -108,7 +112,11 @@ bean, a `PrometheusProxyAgentCustomizer` bean is given the agent's
 the agent starts. Several run in their `@Order`, each after the one before. A builder method a customizer calls
 replaces what a property set, but not a `settings.<key>` property, which takes precedence over the builder's methods,
 as anything `setting()` sets does: change one of those with `setting()` and its key. The starter decides whether to
-start the agent once they've run, so a customizer can give it its proxy, as `fromEnvironment()` does.
+start the agent once they've run, so a customizer can give it its proxy, as `fromEnvironment()` does. A customizer can
+also add an `onFailure` handler, such as `builder.onFailure((reason, e) -> alerts.send(reason))`, which is told why an
+agent that isn't `required` couldn't start, as the log gives it, to report it somewhere else too. That includes a
+property the builder can't take, such as a `stop-timeout` of zero, and a customizer that throws: the starter runs every
+customizer whatever failed, so each one's handler is added, then tells them.
 
 ```java
 --8<-- "spring-boot-starter/src/test/java/website/AgentCustomizations.java:starter-customizer"

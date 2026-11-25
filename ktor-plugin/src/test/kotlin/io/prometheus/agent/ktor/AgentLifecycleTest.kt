@@ -44,6 +44,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 // The lifecycle's events raised by hand on an app's monitor, with the agent's start replaced: whether the agent starts,
 // what a failure does, and that it stops once, whichever events come.
@@ -166,6 +169,53 @@ class AgentLifecycleTest : StringSpec() {
       thrown.cause?.message shouldBe "unreachable"
     }
 
+    // The blocks add the handlers, after the file's settings, so a value in the file the plugin can't read fails before
+    // they're added: the blocks still run, and their handlers are told, as of a start that fails
+    "a value in the file the plugin can't read leaves the agent off, and tells the blocks' onFailure handlers" {
+      val app = TestApp()
+      val heard = mutableListOf<String>()
+      val launches =
+        app.lifecycle(proxy = "localhost:50051", file = mapOf("metrics-port" to "ninety")) {
+          agent { onFailure { reason, _ -> heard += reason } }
+        }
+
+      app.started()
+
+      launches.shouldBeEmpty()
+      app.application.prometheusProxyAgent.shouldBeNull()
+      heard shouldBe listOf("prometheus-proxy.agent.metrics-port must be a number: ninety")
+    }
+
+    "an agent block that throws leaves the agent off, and tells the handlers of the blocks before and after it" {
+      val app = TestApp()
+      val heard = mutableListOf<String>()
+      val launches =
+        app.lifecycle(proxy = "localhost:50051") {
+          agent { onFailure { reason, _ -> heard += "before: $reason" } }
+          agent { error("the secret store is down") }
+          agent { onFailure { reason, _ -> heard += "after: $reason" } }
+        }
+
+      app.started()
+
+      launches.shouldBeEmpty()
+      heard shouldBe listOf("before: the secret store is down", "after: the secret store is down")
+    }
+
+    // As start() tells no handler: the app's start fails with why instead
+    "a required agent whose settings fail fails the app's start, and tells no handler" {
+      val app = TestApp()
+      val heard = mutableListOf<String>()
+      app.lifecycle(proxy = "localhost:50051", file = mapOf("metrics-port" to "ninety")) {
+        required = true
+        agent { onFailure { reason, _ -> heard += reason } }
+      }
+
+      shouldThrow<ConfigLoadException> { app.started() }.message shouldBe
+        "prometheus-proxy.agent.metrics-port must be a number: ninety"
+      heard.shouldBeEmpty()
+    }
+
     "the engine's stop begins the agent's without waiting for it, and the app's disposal doesn't stop it again" {
       val app = TestApp()
       val stopping = CountDownLatch(1)
@@ -236,7 +286,7 @@ class AgentLifecycleTest : StringSpec() {
       val app = TestApp()
       val release = CountDownLatch(1)
       every { app.agent.shutdown() } answers { release.await() }
-      app.lifecycle(proxy = "localhost:50051", stopTimeoutMillis = 50)
+      app.lifecycle(proxy = "localhost:50051", stopTimeout = 50.milliseconds)
       app.started()
 
       app.events.raise(ApplicationStopping, app.application)
@@ -244,6 +294,18 @@ class AgentLifecycleTest : StringSpec() {
       // Returned while the agent's stop still blocks
       release.count shouldBe 1
       release.countDown()
+    }
+
+    // Duration.INFINITE waits for as long as the stop takes, as the handle's shutdown does: the second the disposal
+    // adds to it mustn't overflow its wait
+    "an infinite stop timeout doesn't fail the app's disposal" {
+      val app = TestApp()
+      app.lifecycle(proxy = "localhost:50051", stopTimeout = Duration.INFINITE)
+      app.started()
+
+      app.events.raise(ApplicationStopping, app.application)
+
+      verify(exactly = 1) { app.agent.shutdown() }
     }
 
     "stopping an agent that never started does nothing" {
@@ -305,7 +367,8 @@ class AgentLifecycleTest : StringSpec() {
       proxy: String?,
       failure: Exception? = null,
       started: Boolean = true,
-      stopTimeoutMillis: Long = 5_000,
+      // The agent block's, shorter than the plugin's default, so a spec whose agent never stops doesn't wait 30 seconds
+      stopTimeout: Duration = 5.seconds,
       // The file's prometheus-proxy.agent section, by its keys
       file: Map<String, String> = emptyMap(),
       configure: PrometheusProxyAgentConfig.() -> Unit = {},
@@ -313,10 +376,11 @@ class AgentLifecycleTest : StringSpec() {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig(*file.toList().toTypedArray())).apply {
         proxy?.also { agent { this.proxy = it } }
       }
+      config.agent { this.stopTimeout = stopTimeout }
       config.configure()
       // The settings of each launch, a failed one's included
       val launches = mutableListOf<EmbeddedAgentConfig>()
-      AgentLifecycle(application = application, config = config, stopTimeoutMillis = stopTimeoutMillis) { settings ->
+      AgentLifecycle(application = application, config = config) { settings ->
         launches += settings
         failure?.also { throw it }
         agent.takeIf { started }
