@@ -221,7 +221,7 @@ Agents are listed on the left. Selecting one shows, on the right:
 | | |
 |---|---|
 | **Identity** | agent name, remote address, host name, the [auth identity](security/index.md) it connected as, launch ID, consolidated flag |
-| **Liveness** | uptime, idle time, scrape backlog depth, seconds until stale-agent eviction |
+| **Liveness** | uptime, idle time, scrape backlog depth, and, while the [stale-agent check](configuration/proxy.md#internal-settings) runs, seconds until it evicts the agent |
 | **Paths** | every path this agent has registered, and whether a path is shared with other agents |
 | **Recent scrapes** | this agent's latest 25 scrapes across its paths, newest first, with status, duration and payload size |
 
@@ -236,9 +236,9 @@ reverse proxy, not the agent. Before 4.3.0 it read `Unknown` for every agent.
 Selection lives in the URL, so a view of one agent is a link you can bookmark or share.
 
 The page updates **live over a WebSocket** — an agent connecting, disconnecting, or registering a path
-appears without a refresh. If the agent you are looking at disconnects, the panel says so explicitly
-rather than silently freezing on stale data. (The top-bar **live** indicator that reflects the
-connection itself is described under [The status bar](#the-status-bar).)
+appears without a refresh. If the agent you are looking at disconnects, the panel says so explicitly,
+naming the agent as the other views do, rather than silently freezing on stale data. (The top-bar **live**
+indicator that reflects the connection itself is described under [The status bar](#the-status-bar).)
 
 ## The Paths Layout
 
@@ -268,9 +268,10 @@ URL's user info and query values before sending it to the proxy, so a URL that c
 
 ### Searching and Filtering
 
-A search box above the table keeps only the rows whose path, agent, target URL or identity contains what you type,
-ignoring case, so `team-a` shows one team's paths. **Problems only** keeps the paths whose last scrape failed or whose
-agent has gone. Both apply as you type, and while either is on, the table says how many of the paths it is showing.
+A search box above the table keeps only the rows whose path, agent, target URL or identity contains what you type, as
+the row shows it, ignoring case, so `team-a` shows one team's paths, and `/payments_metrics`, copied from Prometheus,
+finds that path. **Problems only** keeps the paths whose last scrape failed or whose agent has gone. Both apply as you
+type, and while either is on, the table says how many of the paths it is showing.
 
 The search goes into the page's URL, as `/dashboard/paths?q=team-a&problems=1`, so a filtered view is a link you can
 bookmark or send. Pressing Enter in the box does the same as typing, and the form works as a plain link without the

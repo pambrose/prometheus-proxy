@@ -17,7 +17,9 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.RowFilter.Companion.pathAsShown
 import io.prometheus.proxy.ActivityEntry
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 
 /**
  * Whether the Paths view shows [path]: its path, its agents' names, its target URL, and its identity are what it
@@ -31,10 +33,13 @@ internal fun RowFilter.matches(path: PathView): Boolean = matches(path.isProblem
  */
 internal fun RowFilter.matches(entry: ActivityEntry): Boolean = matches(entry.kind.isProblem) { entry.searchFields() }
 
-// What the row shows: an identity as its label reads, and the agent the row names (servingAgent): the first of
-// agentNames, or for a departed path with none, the one its last scrape names.
+// What the row shows, as it shows it: a path with its slash, an agent and an identity as their labels read, and the
+// agent the row names (servingAgent), the first of agentNames, or for a departed path with none, the one its last
+// scrape names.
 private fun PathView.searchFields(): List<String> =
-  listOfNotNull(path, targetUrl, servingAgent, identityLabel(identity)) + agentNames
+  listOfNotNull(pathAsShown(path), targetUrl, servingAgent?.let(::agentLabel), identityLabel(identity)) +
+    agentNames.map(::agentLabel)
 
 private fun ActivityEntry.searchFields(): List<String> =
-  listOfNotNull(kind.label, agentName, identityLabel(identity), detail) + paths
+  listOfNotNull(kind.label, agentName.ifEmpty { null }?.let(::agentLabel), identityLabel(identity), detail) +
+    paths.map(::pathAsShown)

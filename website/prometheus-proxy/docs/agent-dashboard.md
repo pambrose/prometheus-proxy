@@ -179,8 +179,8 @@ Like events in a burst share a line, such as the agent registering its paths as 
 first few paths. The same event again, such as failing over on every retry through a long outage, adds to the line
 it repeats. An error shows as the first line of its message, up to 200 characters, here and in the other views; the
 agent's log has all of it. The view keeps `activityLogSize` lines (500), in memory, so a restart empties it. The
-search filters by event, path, or detail, and **Problems only** keeps the red lines. The view updates as each line is
-added.
+search filters by event, path, with its slash or without, or detail, and **Problems only** keeps the red lines. The
+view updates as each line is added.
 
 ## The Settings View
 

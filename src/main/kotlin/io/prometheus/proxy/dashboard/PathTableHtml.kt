@@ -244,7 +244,7 @@ internal object PathTableHtml {
     scrapeNow: Boolean,
   ) {
     td {
-      +"/${path.path}"
+      +RowFilter.pathAsShown(path.path)
       if (!path.isDeparted) {
         copyButton("$COPY_PROXY_ID_PREFIX${path.path}", "proxy URL", path) {
           attributes[PROXY_PATH_ATTR] = "/${path.path}"
