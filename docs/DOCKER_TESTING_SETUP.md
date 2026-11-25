@@ -34,7 +34,7 @@ presets run**.
 
 | Workload | Make target(s) | Docker VM memory |
 |----------|----------------|------------------|
-| Default suite (1–2 agents per scenario) | `make container-tests`, `make all-tests` | **8 GB** (the Docker Desktop default) is fine |
+| Default suite (1–2 agents per scenario, three specs at a time) | `make container-tests`, `make all-tests` | **8 GB** (the Docker Desktop default) is fine |
 | Connection / fan-out stress (40+ agents) | `make scaling-agents`, `make scaling-soak`, `make all-scaling` | **16 GB recommended** |
 | Everything, comfortably | all of the above | **16 GB** |
 
@@ -107,7 +107,8 @@ only thing the host must provide is enough total RAM; the test sizes the per-con
 - [ ] Docker VM memory set to **16 GB** for the heavy scaling presets (see above); 8 GB is fine for the
       default `make container-tests`.
 - [ ] `docker info` succeeds (the Makefile auto-detects `DOCKER_HOST` from the active Docker context).
-- [ ] The fat JARs build (`make container-tests` / `make scaling-tests` build them first via the `jars` target).
+- [ ] The fat JARs build (`make container-tests` / `make scaling-tests` build them first: with `RUN_CONTAINER_TESTS`
+      set, the test task depends on `agentJar` and `proxyJar`, which `make jars` runs).
 
 Then:
 

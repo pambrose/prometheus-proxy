@@ -17,9 +17,9 @@ A release that changed nothing an embedding app sees isn't listed; the
   none, and no logs, so add Logback to it (see [Logging](embedded-agent.md#logging)).
 - The agent reads `DASHBOARD_ENABLED`, `DASHBOARD_PORT`, `DASHBOARD_PATH`, `DASHBOARD_HOST`, `DASHBOARD_USERNAME`,
   `DASHBOARD_PASSWORD`, and `METRICS_PROXY_PATH` from your application's environment, which through 4.6.0 only the
-  proxy read, or nothing did. If your application sets any of them for its own use, the agent now opens its dashboard
-  on port 8095 or serves its metrics at that path, and a value it can't parse, such as an empty `DASHBOARD_PORT`, fails
-  its start.
+  proxy read, or nothing did. If your application sets any of them for its own use, the agent now opens its dashboard,
+  on port 8095 unless `DASHBOARD_PORT` names another, or serves its metrics at that path, and a value it can't parse,
+  such as an empty `DASHBOARD_PORT`, or a dashboard port that's taken, fails its start.
 - An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` registers no JVM shutdown hook. Through 4.6.0 it
   did, and on SIGTERM it stopped at the same time as your application's own hooks, in no set order. Stop it with
   `shutdown()` or `close()` where your application stops its own services (see
@@ -27,8 +27,17 @@ A release that changed nothing an embedding app sees isn't listed; the
   in flight.
 - An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` runs on a daemon thread, so it no longer keeps the
   JVM running. Through 4.6.0 its thread did: an application that failed after starting the agent never exited, and a
-  program whose `main()` only started the agent kept running. That program now exits at once, so keep `main()` running
-  for as long as the agent is needed, or start the agent as the standalone agent does, with `startSyncAgent()`.
+  program whose `main()` only started the agent kept running. That program now exits at once, unless the agent's admin
+  or metrics port is on, whose servers' threads keep the JVM running until the agent stops. Keep `main()` running for
+  as long as the agent is needed, or start the agent as the standalone agent does, with `startSyncAgent()`.
+- In an application on Spring Boot 4.0 or 4.1, set `kotlin-coroutines.version` to `1.11.0` and
+  `prometheus-client.version` to `1.10.0`: Spring Boot's dependency management sets kotlinx-coroutines and the
+  Prometheus Java client below the versions the agent runs on. The agent now checks both as it starts, and refuses to
+  start with either too old, naming the property to set, where it failed once it ran. Spring Boot 4.2 needs neither
+  (see [Spring Boot Starter](spring-boot-starter.md)).
+- A JVM `Error`, such as an `OutOfMemoryError`, in the agent's connection to the proxy stops the agent, as one in a
+  scrape already did, and the app runs on without it, with `isConnected` false. Through 4.6.0 it ended only the
+  connection, and the agent reconnected and ran on in whatever state the `Error` left it in.
 
 ## Upgrading from 4.4.x
 

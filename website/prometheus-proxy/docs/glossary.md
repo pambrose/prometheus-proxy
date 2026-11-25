@@ -115,8 +115,9 @@ The proxy's periodic eviction of agents that have been inactive longer than
 
 ### Embedded Agent
 
-An agent run inside another JVM application via `startAsyncAgent()` rather than as a
-standalone process. See [Embedded Agent](embedded-agent.md).
+An agent run inside another JVM application rather than as a standalone process, started with
+`embeddedAgent { }` or `startAsyncAgent()`, or by the [Spring Boot Starter](spring-boot-starter.md) or the
+[Ktor Plugin](ktor-plugin.md). See [Embedded Agent](embedded-agent.md).
 
 ### Agent Token
 

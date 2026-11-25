@@ -108,7 +108,9 @@ They must be a JSON object whose keys are label names that every Prometheus vers
 (`[a-zA-Z_][a-zA-Z0-9_]*`) and whose values are strings. Prometheus decodes the labels as a map
 of string to string, and one entry that isn't fails its whole discovery response, so the proxy
 leaves such entries out. The proxy logs a warning naming them when the path registers, and the
-agent logs one at startup for a `pathConfigs` entry. The path itself still registers.
+agent logs one at startup for a `pathConfigs` entry. The path itself still registers. A path with more
+than `proxy.internal.maxLabelsPerPath` labels (64), or labels larger than `maxLabelsSizeBytes` (8 KiB), is
+refused instead (see [Internal Settings](configuration/proxy.md#internal-settings)).
 
 A path can't be the discovery path (with service discovery on), `favicon.ico`, or the Blitz
 verification path (`proxy.internal.blitz.path`, with `proxy.internal.blitz.enabled` on: the file the

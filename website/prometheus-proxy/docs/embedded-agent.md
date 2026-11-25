@@ -495,11 +495,11 @@ stopped. A host's health check can report it, though without failing the app's o
 take the app down.
 
 Call `shutdown()` wherever your application stops its own services, or from a shutdown hook of its own. It closes the
-connection to the proxy, drains the scrapes in flight, and releases the admin and metrics ports, so the agent's
-connection and background work don't outlive your application. Since 4.7.0, the agent registers no JVM shutdown hook,
-so it stops when your application stops it, after the work that needs it, not at the same time as your application's
-own hooks; the [Ktor Plugin](ktor-plugin.md) and the [Spring Boot Starter](spring-boot-starter.md) stop it with the
-app.
+connection to the proxy, drains the scrapes in flight, and releases its admin, metrics, and dashboard ports, so the
+agent's connection and background work don't outlive your application. Since 4.7.0, the agent registers no JVM shutdown
+hook, so it stops when your application stops it, after the work that needs it, not at the same time as your
+application's own hooks; the [Ktor Plugin](ktor-plugin.md) and the [Spring Boot Starter](spring-boot-starter.md) stop
+it with the app.
 
 Since 4.7.0, too, the agent runs on a daemon thread, so it doesn't keep the JVM running: your application's own threads
 do. An application that fails after starting the agent, without stopping it, still exits. So does a program whose
@@ -549,7 +549,7 @@ to start, with the failure as its cause. It waits up to 30 seconds for the agent
 When you call `startAsyncAgent()`:
 
 1. The agent reads the configuration file, or the config you passed
-2. Starts its admin and metrics servers, if enabled, and waits for them to come up
+2. Starts its admin, metrics, and dashboard servers, if enabled, and waits for them to come up
 3. Returns with agent metadata, without waiting for a proxy connection
 4. Connects to the proxy and registers paths in the background
 5. Keeps running in the background, processing scrape requests

@@ -50,7 +50,9 @@ On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/g
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the roastery inside Docker with Maven,
 against the latest release's library, from Maven Central, so it needs no JDK or Maven. `make up-local` builds the
-library, the proxy, and the roastery from the checkout, which takes a JDK 17 or later and Maven 3.9 or later.
+library, the proxy, and the roastery from the checkout, which takes a JDK 17 or later and Maven 3.9 or later. Until a
+release with everything the demo shows is on Docker Hub, `make up` builds from the checkout too, as `make up-local`
+does.
 
 From a clone of the release, so the scripts match the images:
 

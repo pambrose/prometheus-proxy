@@ -53,14 +53,16 @@ Two consequences of that position are also differentiators:
 **Deployment.** Two long-running services. The proxy runs outside the firewall alongside Prometheus
 (HTTP scrape port default `8080`, admin `8092`); the agent runs inside, next to the monitored
 services (admin `8093`). Both ship as standalone JARs (`agentJar` / `proxyJar`), Docker images
-(`pambrose/prometheus-proxy`, `pambrose/prometheus-agent`), and a Maven Central artifact
-(`com.pambrose:prometheus-proxy`) for embedded use. Java 17+.
+(`pambrose/prometheus-proxy`, `pambrose/prometheus-agent`), and Maven Central artifacts for embedded use
+(`com.pambrose:prometheus-proxy`, and its Ktor plugin and Spring Boot starter, `prometheus-proxy-ktor` and
+`prometheus-proxy-spring-boot-starter`). Java 17+.
 
 **Configuration.** Typesafe Config (HOCON). Precedence: CLI args → env vars → config file → built-in
 defaults. The everyday settings are reachable from all four, because deployment environments differ in
 which one they can control (a Kubernetes ConfigMap, a systemd unit, a `docker run` line). Not every
-setting is: `agent.discovery` and the `internal` tuning have no CLI flag or env var (a `-D` override sets
-them), and the lists of objects, `proxy.auth`, `proxy.dashboard.links`, `agent.pathConfigs`, and
+setting is: the dashboards' login and the TLS PEMs have an env var but no CLI flag; `agent.discovery`, the `internal`
+tuning, and the rest of the tuning, such as the dashboards' beyond their port, path, and host, have neither (a `-D`
+override sets them); and the lists of objects, `proxy.auth`, `proxy.dashboard.links`, `agent.pathConfigs`, and
 `agent.filters`, are set in the config file only.
 
 **Surfaces in scope for design work:**
@@ -94,7 +96,10 @@ Explicitly **out of scope** for now: the Zensical documentation site at
 - Chunked responses for large payloads (above ~32KB), heartbeat every 5s during inactivity.
 - Stale-agent eviction after `maxAgentInactivitySecs` (default 60s).
 - Consolidated mode: several agents register the same path for redundancy.
-- Embedded agent — runs inside another JVM app via `Agent.startAsyncAgent()`.
+- Embedded agent — runs inside another JVM app, set up in code with `embeddedAgent { }` (`EmbeddedAgentConfig`) or
+  from a config with `Agent.startAsyncAgent()`, and can serve the app's metrics registry in-process rather than
+  scrape an endpoint; the Ktor plugin (`install(PrometheusProxyAgent)`) and the Spring Boot starter start and stop
+  one with a Ktor or Spring Boot app.
 - Proxy failover across an ordered `agent.proxy.endpoints` list.
 - Dynamic target discovery: the agent watches a file and reconciles paths without restarting;
   `STATIC` entries are never touched by discovery.

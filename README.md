@@ -543,7 +543,8 @@ store that can't be loaded), the embedded `startAsyncAgent` / `startSyncAgent` e
 reason and exit with code 1. If the agent then fails to start (for example, its admin or metrics port is already in
 use), `startAsyncAgent` throws `IllegalStateException` with the startup failure as its cause, after releasing everything
 the agent had opened. The agent runs on a daemon thread, so it doesn't keep the JVM running: your application's own
-threads do, and a `main()` that only starts the agent and returns ends it.
+threads do, and a `main()` that only starts the agent and returns ends it. With its admin or metrics port on, those
+ports' servers do keep the JVM running, until the agent stops.
 
 An application that holds the agent's settings itself, such as a token, the proxy's certificate, or credentials for
 its own `/metrics`, can build them in code instead of in a file, with `embeddedAgent { }` (or
@@ -844,7 +845,8 @@ Keeping the port internal does not stop a web page from reaching the dashboard t
 someone who can. The dashboard refuses a WebSocket from a foreign site; behind a reverse proxy that
 rewrites the Host header, list the public origin in `proxy.dashboard.allowedOrigins`. It answers to any
 host name by default, which leaves it open to DNS rebinding (a page pointing its own DNS name at the
-dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. See
+dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. Every response
+it sends forbids framing, so no page, on any site, can show it in a frame and steer a viewer's clicks. See
 [Dashboard exposure](https://prometheus-proxy.com/web-dashboard/#exposure).
 
 Accessibility: text clears the WCAG AA contrast threshold of 4.5:1 with a measured floor of 4.59:1,
@@ -1061,6 +1063,11 @@ A path also belongs to the identity whose agent serves it: while a live agent se
 identity may take it over or, in consolidated mode (multiple agents serving one path), join it, so agents that share a
 consolidated path must present one identity. Another identity's registration is refused, and retried, until the path's
 agents are gone. With agent auth off, or only the shared `agentToken`, every agent has the same identity.
+
+However many paths its patterns match, an identity's agents may hold at most `proxy.internal.maxPathsPerIdentity`
+(100,000) paths together, and each connection at most `maxPathsPerAgent` (20,000); a path may carry at most
+`maxLabelsPerPath` (64) labels. With agent auth off, or only the shared `agentToken`, the identity limit counts the
+whole fleet, which shares one identity.
 
 `proxy.auth` is a list of objects, so it is set in the config file only — there is no equivalent CLI flag or environment
 variable. Identity names must be unique, tokens non-empty and distinct, from each other and from `proxy.agentToken`,

@@ -434,7 +434,7 @@ what it runs with without reading its startup log:
 | Agent authentication | off, a shared token, or how many identities; each identity's name and the path globs it may register; reflection; and the transport filter |
 | TLS | plaintext, TLS, or mutual TLS, and where each certificate and key comes from |
 | Scrapes | the scrape timeout, how many scrapes may be in flight, and the sizes and thresholds that turn the healthcheck unhealthy |
-| Agent limits | the stale-agent check, and the limits on what one agent may register and report |
+| Agent limits | the stale-agent check, and the limits on what one agent, or one identity's agents, may register and report |
 | gRPC server | handshake, keepalive, and connection age settings, with gRPC's default named where one is left unset |
 | Service discovery | the endpoint's path and target, and whether agents' `job` and `instance` labels are kept |
 | Dashboard | where it listens, its login's username, its limits, what it keeps, and its links |

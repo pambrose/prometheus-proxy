@@ -13,6 +13,7 @@ import org.gradle.api.file.ArchiveOperations
 import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
+import org.gradle.api.specs.Spec
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
@@ -887,6 +888,11 @@ fun Project.configureVersions() {
       commitHash.matches(candidate.version) ||
         (isNonStable(candidate.version) && !isNonStable(currentVersion))
     }
+
+    // The starter's oldestSpringBootTest classpath holds what the oldest Spring Boot it supports sets, below the
+    // catalog on purpose, and was listed as behind (micrometer-registry-prometheus 1.16.9 -> 1.18.0, with the catalog
+    // at 1.18.0 already). Every other classpath resolves the catalog's versions.
+    filterConfigurations = Spec { !it.name.startsWith("oldestSpringBoot") }
 
     // Prints only what is behind, and what could not be checked. The plugin's own report, which `make versions-all`
     // asks for with --output-formatter=plain, first lists every dependency already up to date.

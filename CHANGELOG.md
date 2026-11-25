@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [4.7.0] - 2026-11-23
+## [4.7.0] - 2026-11-24
 
 ### New Features
 
@@ -285,8 +285,9 @@ All notable changes to this project are documented in this file.
   own, and `agent.logLevel` sets a level only through Logback, warning otherwise
 - The agent reads `DASHBOARD_ENABLED`, `DASHBOARD_PORT`, `DASHBOARD_PATH`, `DASHBOARD_HOST`, `DASHBOARD_USERNAME`,
   `DASHBOARD_PASSWORD`, and `METRICS_PROXY_PATH`, which through 4.6.0 only the proxy read, or nothing did. An agent
-  whose environment sets them, such as one sharing the proxy's, now opens its dashboard on port 8095 or serves its
-  metrics at that path, and a value it can't parse, such as an empty `DASHBOARD_PORT`, fails its start
+  whose environment sets them, such as one sharing the proxy's, now opens its dashboard, on port 8095 unless
+  `DASHBOARD_PORT` names another, or serves its metrics at that path, and a value it can't parse, such as an empty
+  `DASHBOARD_PORT`, or a dashboard port that's taken, fails its start
 - `sendHeartBeat` calls are no longer traced
 - A JVM `Error`, such as an `OutOfMemoryError`, in an agent's connection to the proxy (its streams, heartbeat, path
   registrations, or discovery) stops the agent, as one in a scrape already did. It ended only the connection, and the
@@ -339,10 +340,10 @@ All notable changes to this project are documented in this file.
   (4.6.0 in every demo), and `make release-check` refuses a release while any demo's value isn't below the version,
   or can't be read
 - `make release-check` requires both changelogs' sections for the version to be dated the day it runs, and its
-  stale-version check now catches the Quick Start's JAR release links and the Spring Boot demo's
-  `prometheus-proxy.version`. Its checks of the checkout are targets of their own (`_check-changelogs`,
-  `_check-version-files`, `_check-demos-pull-release`), which `ReleaseCheckTest` runs, and `DemoReleaseGateTest` runs
-  each demo's choice with a stubbed `docker`
+  stale-version check now catches the docs' `raw.githubusercontent.com` links at the previous release's tag, the Quick
+  Start's JAR release links, and the Spring Boot demo's `prometheus-proxy.version`. Its checks of the checkout are
+  targets of their own (`_check-changelogs`, `_check-version-files`, `_check-demos-pull-release`), which
+  `ReleaseCheckTest` runs, and `DemoReleaseGateTest` runs each demo's choice with a stubbed `docker`
 - `make release` creates the GitHub release itself (`make github-release`), with the JARs and `RELEASE_NOTES.md`'s
   section as its notes (`make github-release-notes` prints them), before it deploys the docs site, so the Quick Start's
   JAR downloads work as soon as the site shows the release
@@ -375,6 +376,9 @@ All notable changes to this project are documented in this file.
 - `TestPortsTest` fails on a port a spec binds that a demo publishes on the host (a compose port, a kind `hostPort`,
   or a `demo.sh` port default), since a spec run while that demo was up reached the demo's container. The admin-path
   specs and `HarnessHelpersTest` move off the basics and network demos' ports (8098, 8099, 9511)
+- `HarnessHelpersTest`'s free-port spec and `AgentHttpServiceTest`'s refused-target specs use `TestPorts` ports of
+  their own, where they took one from a closed `ServerSocket(0)`, in the ephemeral range, which another process could
+  bind before the check; `awaitPortFree`'s failure carries the last bind's exception as its cause
 - The XXLARGE harness profile (`make xxl-tests`) runs with a 16g heap for the harness specs' JVM (the other specs' keeps
   1g), 1,000 concurrent clients, and 100 parallel queries against 30 HTTP servers, and XLARGE with 500 concurrent
   clients
@@ -397,14 +401,17 @@ All notable changes to this project are documented in this file.
 - The files the specs read are test inputs, so an edit to a workflow, the `Makefile`, `docs/TESTING.md`, a docs page,
   or a demo reruns the unit specs rather than passing on the last run's result, and an edit to a test config or
   certificate reruns every partition
-- The docs guards see more: `TestingGuideTest` and `TestPortsTest` read the Ktor plugin's and the Spring Boot starter's
-  tests; `ConfigFileKeysTest` checks the keys `setting()` calls give and every HOCON block in the docs, the snippets they
-  include among them; the new `CliReferenceTest` checks the CLI Reference's options, variables, and anchors against the
-  code, and the configuration pages' rows and every link to it against the CLI Reference; `WebsiteConfigKeysTest`
-  checks the defaults of the settings left to gRPC against gRPC's own; and `DemoTourTablesTest` checks each README's
-  Guided Tour headings and the page sections `demo.sh` links to
+- The docs guards see more: `TestingGuideTest` and `TestPortsTest` read the Ktor plugin's and the Spring Boot
+  starter's tests; `ConfigFileKeysTest` checks the keys `setting()` calls give and every HOCON block in the docs, the
+  snippets they include among them; the new `CliReferenceTest` checks the CLI Reference's options, variables, and
+  anchors against the code, and the configuration pages' rows and every link to it against the CLI Reference;
+  `WebsiteConfigKeysTest` checks the defaults of the settings left to gRPC against gRPC's own; the new
+  `DemoTourTablesTest` checks each demo's What This Demo Shows table against its tour's parts, its README's Guided Tour
+  headings, and the page sections `demo.sh` links to; and the new `DocsCodeBlocksTest` fails on a docs HOCON block
+  that scrapes `localhost:8083` without turning the port on, and on a diagram description that breaks a word at its
+  hyphen
 - Update the GitHub Actions the workflows pin by commit SHA: `actions/setup-java` 6.2.0 → 6.3.0 and
-  `anthropics/claude-code-action` 1.0.275 → 1.0.278 (#477, #521)
+  `anthropics/claude-code-action` 1.0.275 → 1.0.280 (#477, #521, #554)
 - `ProxyRegistry.tla` drops an orphaned connection's unread path notices as the code does, where it let the dead
   connection deliver them, checks that no invalidated connection holds any (`InvalidatedHasNoNotices`), and sends a
   refused reclaim the notice the proxy sends it
@@ -578,6 +585,7 @@ All notable changes to this project are documented in this file.
 - Update common-utils 5.2.0 → 5.3.0, which embedders get transitively
 - Update Netty 4.2.20.Final → 4.2.21.Final, which embedders get through the published POM (#522)
 - Update the images' `gcr.io/distroless/base-nossl-debian13` base to its latest digest, `3a2dbf1` → `f21fdfe` (#504)
+- Update the docs site's Zensical 0.1.1 → 0.1.2, with platformdirs 4.14.5 → 4.14.7, in `website/uv.lock`
 
 ## [4.6.0] - 2026-11-20
 

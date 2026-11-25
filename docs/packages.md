@@ -85,7 +85,7 @@ are all `internal` and not surfaced here.
 
 # Package io.prometheus.agent
 
-Agent-side configuration and embedded-lifecycle handle. The Agent's gRPC client service, HTTP
+Agent-side configuration and the embedded agent's API. The Agent's gRPC client service, HTTP
 scrape executor, path manager, HTTP-client cache, TLS helpers, and gRPC interceptors are all
 `internal` and not surfaced here.
 
@@ -103,6 +103,12 @@ scrape executor, path manager, HTTP-client cache, TLS helpers, and gRPC intercep
   where [namesProxy][io.prometheus.agent.EmbeddedAgentConfig.namesProxy] says the settings name a
   proxy; its builder is the receiver of [embeddedAgent][io.prometheus.agent.embeddedAgent], the
   Kotlin DSL.
+- [MetricsSource][io.prometheus.agent.MetricsSource] is a host's metrics, which an embedded agent
+  reads in-process for a path the builder's
+  [source][io.prometheus.agent.EmbeddedAgentConfig.Builder.source] adds, in place of scraping a URL:
+  its `write` is called for each scrape of the path, on a thread it can block, within the agent's
+  size limit and the path's filter. [MetricsSource.of][io.prometheus.agent.MetricsSource.Companion.of]
+  gives one for a `PrometheusRegistry`, leaving out the agent's own metrics.
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] is the return value of
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], carrying the
   `launchId` and `agentName` of the started agent, its connection to the proxy (`isConnected`,

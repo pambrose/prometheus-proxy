@@ -88,7 +88,7 @@ class TestPortsTest : StringSpec() {
     }
 
     // The subprojects' tests can't use the root project's test sources, so each spells out the ports it binds, which
-    // TestPorts lists so that no root spec binds them (STARTER_PROXY_* and KTOR_PLUGIN_PROXY_*). They run while the
+    // TestPorts lists so that no root spec binds them (STARTER_PROXY_* and KTOR_PLUGIN_*). They run while the
     // root project's tests do, in build, so a port a subproject binds must be one TestPorts reserves for it: listed,
     // and used by no root test source, as a harness port is.
     "every port a subproject's test binds should be one TestPorts reserves for it" {
