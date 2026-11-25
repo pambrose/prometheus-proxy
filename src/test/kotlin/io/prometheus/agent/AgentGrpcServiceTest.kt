@@ -2451,7 +2451,7 @@ class AgentGrpcServiceTest : StringSpec() {
   private fun Agent.countsDroppedResults(): Agent =
     also { every { it.updateScrapeResultCounter(any(), any()) } answers { callOriginal() } }
 
-  // A connection context that counts a result it can't send as dropped, as Agent.newConnectionContext builds one.
+  // A connection context that counts a result it can't send as dropped, as newConnectionContext builds one.
   private fun countingConnectionContext(agent: Agent): AgentConnectionContext =
     AgentConnectionContext(128) { agent.updateScrapeResultCounter(it, AgentMetrics.RESULT_DROPPED) }
 

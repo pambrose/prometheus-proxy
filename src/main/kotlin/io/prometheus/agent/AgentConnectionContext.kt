@@ -18,6 +18,7 @@ package io.prometheus.agent
 
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.prometheus.Agent
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlin.time.Clock
@@ -43,7 +44,7 @@ internal class AgentConnectionContext(
   // No default: the sole production caller derives this from config, and a default would silently
   // diverge if a future call site forgot to pass it (finding 31).
   val backlogCapacity: Int,
-  // The agent counts each one as dropped (Agent.newConnectionContext). Tests leave it out.
+  // The agent counts each one as dropped (newConnectionContext). Tests leave it out.
   onUndeliveredResult: (ScrapeResults) -> Unit = {},
 ) {
   /** When the connection began, for the agent's dashboard. */
@@ -134,3 +135,14 @@ internal class AgentConnectionContext(
     private val logger = logger {}
   }
 }
+
+// The connection's scrape-request channel is sized at 2x the backlog-unhealthy threshold so the
+// health check can fire (backlog >= threshold) before the channel actually blocks senders (finding 28).
+private const val BACKLOG_CAPACITY_MULTIPLIER = 2
+
+/** A connection's channels for this agent, which count a result the connection can't send as dropped (November #6). */
+internal fun Agent.newConnectionContext() =
+  AgentConnectionContext(
+    backlogCapacity = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER,
+    onUndeliveredResult = { updateScrapeResultCounter(it, AgentMetrics.RESULT_DROPPED) },
+  )

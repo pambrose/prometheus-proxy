@@ -40,6 +40,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
 import io.prometheus.agent.AgentConnectionContext
+import io.prometheus.agent.newConnectionContext
 import io.prometheus.agent.AgentGrpcService
 import io.prometheus.agent.AgentHttpService
 import io.prometheus.agent.AgentMetrics
@@ -480,13 +481,6 @@ class Agent(
     }
     return connectionContext.endedBy
   }
-
-  // A connection's channels, which count a result the connection can't send as dropped (November #6).
-  internal fun newConnectionContext() =
-    AgentConnectionContext(
-      backlogCapacity = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER,
-      onUndeliveredResult = { updateScrapeResultCounter(it, AgentMetrics.RESULT_DROPPED) },
-    )
 
   // Each task runs for the connection's lifetime; on completion launchConnectionTask closes the shared
   // connectionContext and adjusts the backlog. Ends on disconnect/shutdown.
@@ -998,10 +992,6 @@ class Agent(
     // every heartbeat fails; a small threshold keeps a transient blip from reconnecting while still
     // detecting a truly dead connection within a few heartbeat cycles (finding 2).
     private const val MAX_HEARTBEAT_FAILURES = 3
-
-    // The connection's scrape-request channel is sized at 2x the backlog-unhealthy threshold so the
-    // health check can fire (backlog >= threshold) before the channel actually blocks senders (finding 28).
-    private const val BACKLOG_CAPACITY_MULTIPLIER = 2
 
     // How long startAsyncAgent and EmbeddedAgentConfig.start wait for the agent to start, startSync()'s default.
     private val EMBEDDED_START_TIMEOUT = 30.seconds
