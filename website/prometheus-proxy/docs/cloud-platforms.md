@@ -82,9 +82,9 @@ a bean of your own.
 
 The platform stops the app with `SIGTERM`, then kills it once its shutdown window is up: 10 seconds on Cloud Run. Set
 the builder's [`stopTimeout`](embedded-agent.md#embeddedagentinfo) inside that window, as the example above does, so the
-rest of the app's shutdown isn't left waiting on the agent: once it's up, `shutdown()` returns, with a warning, and the agent goes on stopping on
-its own. The [Ktor Plugin](ktor-plugin.md#a-failed-start-and-the-stop) and the Spring Boot Starter take it as their
-`stop-timeout`, 30 seconds by default, longer than Cloud Run's window.
+rest of the app's shutdown isn't left waiting on the agent: once it's up, `shutdown()` returns, with a warning, and the
+agent goes on stopping on its own. The [Ktor Plugin](ktor-plugin.md#a-failed-start-and-the-stop) and the Spring Boot
+Starter take it as their `stop-timeout`, 30 seconds by default, longer than Cloud Run's window.
 
 Keep the agent out of the health check the platform restarts the app on. The app serves without its agent, which
 reconnects by itself once the proxy is back, so a failed check would only restart a working app. To see whether the

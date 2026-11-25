@@ -5,7 +5,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.7.0")
+  implementation("com.pambrose:prometheus-proxy:4.7.1")
 }
 // --8<-- [end:gradle-dependency]
 
@@ -15,7 +15,7 @@ dependencies {
   <dependency>
     <groupId>com.pambrose</groupId>
     <artifactId>prometheus-proxy</artifactId>
-    <version>4.7.0</version>
+    <version>4.7.1</version>
   </dependency>
 </dependencies>
 <!-- --8<-- [end:maven-dependency] -->
@@ -26,7 +26,7 @@ dependencies {
   <dependency>
     <groupId>com.pambrose</groupId>
     <artifactId>prometheus-proxy-spring-boot-starter</artifactId>
-    <version>4.7.0</version>
+    <version>4.7.1</version>
   </dependency>
   <dependency>
     <groupId>org.springframework.boot</groupId>
@@ -38,7 +38,7 @@ dependencies {
 // --8<-- [start:starter-gradle-dependency]
 // build.gradle.kts, with Spring Boot's dependency management (the io.spring.dependency-management plugin)
 dependencies {
-  implementation("com.pambrose:prometheus-proxy-spring-boot-starter:4.7.0")
+  implementation("com.pambrose:prometheus-proxy-spring-boot-starter:4.7.1")
   implementation("org.springframework.boot:spring-boot-starter-actuator")
 }
 // --8<-- [end:starter-gradle-dependency]
@@ -49,7 +49,7 @@ dependencies {
   <dependency>
     <groupId>com.pambrose</groupId>
     <artifactId>prometheus-proxy-ktor</artifactId>
-    <version>4.7.0</version>
+    <version>4.7.1</version>
   </dependency>
   <dependency>
     <groupId>io.ktor</groupId>
@@ -67,7 +67,7 @@ dependencies {
 // --8<-- [start:ktor-gradle-dependency]
 // build.gradle.kts: the plugin, and Micrometer for the app's metrics registry
 dependencies {
-  implementation("com.pambrose:prometheus-proxy-ktor:4.7.0")
+  implementation("com.pambrose:prometheus-proxy-ktor:4.7.1")
   implementation("io.ktor:ktor-server-metrics-micrometer:$ktorVersion")
   implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
 }

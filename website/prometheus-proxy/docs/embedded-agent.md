@@ -72,8 +72,8 @@ and keeps the app running if it can't:
   into the scrape URL, whatever their characters; the agent sends them as Basic Auth and leaves them out of its logs.
   An app with a metrics registry needn't serve it at all: the agent reads it
   [in-process](#metrics-served-in-process).
-- **`stopTimeout` caps how long the agent's stop holds up the app's shutdown,** inside the window the platform gives
-  the app after `SIGTERM`; once it's up, `shutdown()` returns, and the agent goes on stopping on its own
+- **`stopTimeout`, since 4.7.1, caps how long the agent's stop holds up the app's shutdown,** inside the window the
+  platform gives the app after `SIGTERM`; once it's up, `shutdown()` returns, and the agent goes on stopping on its own
   ([`EmbeddedAgentInfo`](#embeddedagentinfo)).
 - **The settings fall back to the built-in defaults,** as a config file's do, and a setting the agent can't use throws
   `ConfigLoadException` from `start()`; `startIfConfigured()` logs it and returns `null`.
@@ -212,16 +212,16 @@ the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spr
   `No proxy is set, so the Prometheus agent stays off`, and returns `null`. `namesProxy()` tells whether the settings
   name one, for an app that decides for itself, as the [Ktor Plugin](ktor-plugin.md) and the
   [Spring Boot Starter](spring-boot-starter.md) do.
-- **A start that fails,** for a setting the agent rejects or for anything else, such as its admin port being in use
-  or its start taking over 30 seconds, is logged at ERROR, `The Prometheus agent could not start, so it stays off:`
-  and why, which holds no token, password, or PEM, and it returns `null`, so the app runs on. To report the failure
-  elsewhere, as to a chat channel, add a handler with the builder's `onFailure`, which is given why, as the log line
-  has it, and what was thrown. Each handler added runs, in turn, and one that throws is logged, without failing the
-  start, so a [Ktor](ktor-plugin.md) `agent { }` block or a [Spring Boot](spring-boot-starter.md) customizer can add
-  one beside the app's own. `startIfConfigured(onFailure)` still takes one too, which runs after them. `start()`
-  tells none of them: it throws, for its caller to handle. A host that makes the settings from its own configuration
-  before the app's code adds its handlers, as those two do, tells them of a value there that a builder method rejects
-  with the builder's `reportFailure(cause)`, which logs it as a failed start is logged.
+- **A start that fails,** for a setting the agent rejects or for anything else, such as its admin port being in use or
+  its start taking over 30 seconds, is logged at ERROR, `The Prometheus agent could not start, so it stays off:` and
+  why, which holds no token, password, or PEM, and it returns `null`, so the app runs on. Since 4.7.1, to report the
+  failure elsewhere, as to a chat channel, add a handler with the builder's `onFailure`, which is given why, as the log
+  line has it, and what was thrown. Each handler added runs, in turn, and one that throws is logged, without failing the
+  start, so a [Ktor](ktor-plugin.md) `agent { }` block or a [Spring Boot](spring-boot-starter.md) customizer can add one
+  beside the app's own. `startIfConfigured(onFailure)` still takes one too, which runs after them. `start()` tells none
+  of them: it throws, for its caller to handle. A host that makes the settings from its own configuration before the
+  app's code adds its handlers, as those two do, tells them of a value there that a builder method rejects with the
+  builder's `reportFailure(cause)`, which logs it as a failed start is logged.
 - **The handle is `AutoCloseable`,** and Kotlin's `use` and Java's try-with-resources both take a `null` one, so a
   program that runs while its agent does reads as `startIfConfigured().use { worker.run() }`: the worker runs whether
   or not the agent started, and the agent stops after it. Write `.use`, not `?.use`, which skips the block for `null`.
@@ -464,15 +464,15 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `source(path, registry)`, `source(path, labels, registry)`         | none: it's code                                     | Since 4.7.0, serve the `PrometheusRegistry` at `path`, read in-process ([Metrics Served In-Process](#metrics-served-in-process)), with the path's labels or none |
 | `source(path, source)`, `source(path, labels, source)`             | none: it's code                                     | Since 4.7.0, serve what the `MetricsSource` writes at `path`, read in-process, with the path's labels or none                            |
 | `setting(key, value)`                                              | the key, under `agent`                              | Any other setting, such as `http.clientTimeoutSecs`; it takes precedence over a method that sets the same key                             |
-| `onFailure(handler)`                                               | none: it's code                                     | Add a handler `startIfConfigured()` tells of a start that fails, with why and what was thrown ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
-| `reportFailure(cause)`                                             | none: it's an action                                | Log a failure that came while the settings were being made, before the agent could start, and tell the `onFailure` handlers, as a failed start does, for a host that makes the settings from its own configuration ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
-| `stopTimeout(timeout)`                                             | none: it's the handle's                             | How long the handle's `shutdown()` waits for the agent to stop, more than zero, or `Duration.INFINITE` for as long as it takes; `null`, the default, leaves the wait to the agent's own stop, 30 seconds ([`EmbeddedAgentInfo`](#embeddedagentinfo)) |
+| `onFailure(handler)`                                               | none: it's code                                     | Since 4.7.1, add a handler `startIfConfigured()` tells of a start that fails, with why and what was thrown ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
+| `reportFailure(cause)`                                             | none: it's an action                                | Since 4.7.1, log a failure that came while the settings were being made, before the agent could start, and tell the `onFailure` handlers, as a failed start does, for a host that makes the settings from its own configuration ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
+| `stopTimeout(timeout)`                                             | none: it's the handle's                             | Since 4.7.1, how long the handle's `shutdown()` waits for the agent to stop, more than zero, or `Duration.INFINITE` for as long as it takes; `null`, the default, leaves the wait to the agent's own stop, 30 seconds ([`EmbeddedAgentInfo`](#embeddedagentinfo)) |
 
 In `embeddedAgent { }`, `name`, `proxy`, `token`, `consolidated`, `agentMetricsPort`, `dashboardPort`, and `stopTimeout`
 are properties too, so `name = "my-app"` does what `name("my-app")` does; `proxy` takes several endpoints separated by
-commas, as `PROXY_HOSTNAME` does, `stopTimeout` takes a Kotlin `Duration`, where its method takes a `java.time.Duration`,
-and `null` takes `name`, `proxy`, `token`, `agentMetricsPort`, `dashboardPort`, or `stopTimeout` out. Java sees only the
-methods.
+commas, as `PROXY_HOSTNAME` does, `stopTimeout` takes a Kotlin `Duration`, where its method takes a
+`java.time.Duration`, and `null` takes `name`, `proxy`, `token`, `agentMetricsPort`, `dashboardPort`, or `stopTimeout`
+out. Java sees only the methods.
 
 A username and password are percent-encoded into the URL and sent as Basic Auth; both empty, as unset environment
 variables give, means none. Labels are a map of names to values. A value the builder can tell is wrong, such as a blank
@@ -508,15 +508,14 @@ take the app down.
 
 Call `shutdown()` wherever your application stops its own services, or from a shutdown hook of its own. It closes the
 connection to the proxy, drains the scrapes in flight, and releases its admin, metrics, and dashboard ports, so the
-agent's connection and background work don't outlive your application. It waits up to the builder's `stopTimeout`:
-once that's up, `shutdown()` returns, with a warning in the log, and the agent goes on stopping on a daemon thread of
-its own, so your application's shutdown fits the window its platform gives it, such as the 30 seconds Kubernetes gives
-a pod, or Cloud Run's 10. A stop that fails within it throws. Without a `stopTimeout`, it waits 30 seconds at most,
-then throws a `java.util.concurrent.TimeoutException`, and the agent goes on stopping. An interrupt ends neither wait.
-Since 4.7.0, the agent registers no JVM shutdown
-hook, so it stops when your application stops it, after the work that needs it, not at the same time as your
-application's own hooks; the [Ktor Plugin](ktor-plugin.md) and the [Spring Boot Starter](spring-boot-starter.md) stop
-it with the app.
+agent's connection and background work don't outlive your application. It waits up to the builder's `stopTimeout` (since
+4.7.1): once that's up, `shutdown()` returns, with a warning in the log, and the agent goes on stopping on a daemon
+thread of its own, so your application's shutdown fits the window its platform gives it, such as the 30 seconds
+Kubernetes gives a pod, or Cloud Run's 10. A stop that fails within it throws. Without a `stopTimeout`, it waits 30
+seconds at most, then throws a `java.util.concurrent.TimeoutException`, and the agent goes on stopping. An interrupt
+ends neither wait. Since 4.7.0, the agent registers no JVM shutdown hook, so it stops when your application stops it,
+after the work that needs it, not at the same time as your application's own hooks; the [Ktor Plugin](ktor-plugin.md)
+and the [Spring Boot Starter](spring-boot-starter.md) stop it with the app.
 
 Since 4.7.0, too, the agent runs on a daemon thread, so it doesn't keep the JVM running: your application's own threads
 do. An application that fails after starting the agent, without stopping it, still exits. So does a program whose

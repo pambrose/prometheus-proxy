@@ -7,14 +7,14 @@ java -jar prometheus-proxy.jar
 # Start the agent (runs inside the firewall with your services):
 java -jar prometheus-agent.jar \
   -Dagent.proxy.hostname=proxy-host.example.com \
-  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/myapps.conf
 ; --8<-- [end:cli-agent-start]
 
 ; --8<-- [start:cli-agent-with-proxy-flag]
 # Or use the --proxy shorthand:
 java -jar prometheus-agent.jar \
   --proxy proxy-host.example.com \
-  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/myapps.conf
 ; --8<-- [end:cli-agent-with-proxy-flag]
 
 ; --8<-- [start:build-jars]

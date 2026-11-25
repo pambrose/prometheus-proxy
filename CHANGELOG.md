@@ -4,9 +4,9 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Unreleased]
+## [4.7.1]
 
-### Added
+### New Features
 
 - `EmbeddedAgentConfig.Builder.onFailure(handler)`, a `BiConsumer<String, Exception>`: a handler `startIfConfigured()`
   tells of a start that fails, once it has logged it, with the same reason and what the start threw. Each call adds
@@ -32,16 +32,21 @@ All notable changes to this project are documented in this file.
   4.7.0 the starter's stop waited the agent's own 30 seconds, then threw out of `stop()`: Spring's phase timeout
   doesn't cut short a `stop()` that waits
 
-### Changed
+### Behavior Changes
 
 - `startIfConfigured(onFailure)` guards its `onFailure` as it does the builder's handlers: one that throws is logged,
   and the start still returns null, where it threw out of the call
 
+### Build & Tooling
+
+- `make release` ends by printing the GitHub release's link and the one step left, the Homebrew tap, where it asked
+  the releaser to do steps it had already done
+
 ### Documentation
 
 - The Embedded Agent page's builder table and `EmbeddedAgentInfo` section give `onFailure`, `reportFailure`, and
-  `stopTimeout`, its
-  failure example adds the handler to the builder, and its shutdown examples set a stop timeout inside the hook's wait.
+  `stopTimeout`, its failure example adds the handler to the builder, and its shutdown examples set a stop timeout
+  inside the hook's wait.
   The Ktor Plugin page has a new A Failed Start, and the Stop section, with an example the examples spec runs, and the
   Spring Boot Starter page the `stop-timeout` property and a customizer's `onFailure`. The Production page's Shutdown
   section and checklist, and the Cloud Platforms page, set the stop timeout inside a platform's shutdown window, such as

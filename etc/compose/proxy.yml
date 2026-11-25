@@ -12,7 +12,7 @@
 
 services:
   proxy:
-    image: pambrose/prometheus-proxy:4.7.0
+    image: pambrose/prometheus-proxy:4.7.1
     ports:
       - "127.0.0.1:8080:8080"  # Scrape port, for Prometheus and curl
       - "127.0.0.1:8082:8082"  # Proxy metrics
@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
 
   agent:
-    image: pambrose/prometheus-agent:4.7.0
+    image: pambrose/prometheus-agent:4.7.1
     ports:
       - "127.0.0.1:8083:8083"  # Agent metrics
       - "127.0.0.1:8093:8093"  # Admin endpoints

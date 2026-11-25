@@ -135,7 +135,7 @@ Agent:
 ; --8<-- [start:config-from-url]
 # Load configuration from a URL:
 java -jar prometheus-agent.jar \
-  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/simple.conf
 
 # Or from a local file:
 java -jar prometheus-agent.jar --config /etc/prometheus-proxy/agent.conf

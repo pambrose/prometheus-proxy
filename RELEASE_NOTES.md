@@ -2,11 +2,15 @@
 
 ---
 
-## Unreleased
+## 4.7.1
 
 _Not yet released_
 
-### Added
+4.7.1 is for apps that embed the agent, by hand, with the Ktor plugin, or with the Spring Boot starter: an app can now
+be told why its agent couldn't start, to report it wherever someone will see it, and can cap how long the agent's stop
+holds up its shutdown, to fit the window its platform gives it, such as Cloud Run's 10 seconds.
+
+### New Features
 
 - **An app can be told when its agent can't start.** `startIfConfigured()` logs a failed start and leaves the agent off,
   so the app runs on; the builder's new `onFailure(handler)` now hands the app the same reason too, to send wherever
@@ -21,6 +25,11 @@ _Not yet released_
   `stop-timeout` key, and the Spring Boot starter from its new `prometheus-proxy.agent.stop-timeout` property, each as
   a number of seconds or a duration such as `10s`; both default to 30 seconds, which the plugin waited already, and
   after which the starter's stop now returns with a warning, where it threw.
+
+### Behavior Changes
+
+- **A failure handler that throws no longer escapes `startIfConfigured()`.** The `onFailure` it's given is guarded as
+  the builder's handlers are: one that throws is logged, and the call still returns `null`.
 
 ### Documentation
 

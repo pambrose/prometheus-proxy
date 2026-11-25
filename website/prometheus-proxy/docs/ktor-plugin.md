@@ -40,10 +40,10 @@ app's environment, with [`fromEnvironment()`](embedded-agent.md#settings-from-th
 With that, the app gets:
 
 - **An agent that starts and stops with the app.** It starts once every module of the app has loaded, and begins
-  stopping as soon as the server does, before the server drains the requests in flight: the agent disconnects, the
-  proxy drops its paths, and no scrape reaches an app that's going away. The app's shutdown waits for it, up to the
-  agent's `stopTimeout`, 30 seconds by default, without taking that time from the server's grace period. In development mode, a reload stops the old app's
-  agent and starts the new one's.
+  stopping as soon as the server does, before the server drains the requests in flight: the agent disconnects, the proxy
+  drops its paths, and no scrape reaches an app that's going away. The app's shutdown waits for it, up to the agent's
+  `stopTimeout`, 30 seconds by default, without taking that time from the server's grace period. In development mode, a
+  reload stops the old app's agent and starts the new one's.
 - **Its metrics at the proxy's `/my_app_metrics`,** read from the registry for each scrape, in the format Prometheus
   asks for, and with the agent's limits and the path's filter, as
   [Metrics Served In-Process](embedded-agent.md#metrics-served-in-process) describes. Micrometer's
@@ -67,8 +67,8 @@ precedence over its settings, and `PROXY_HOSTNAME` alone starts it, so give the 
 
 ## A Failed Start, and the Stop
 
-Both are the agent's own settings, the builder's, so they go in the `agent { }` block, as for any
-[embedded agent](embedded-agent.md#embeddedagentconfig).
+Since 4.7.1, the `agent { }` block can add a failure handler and set a stop timeout. Both are the agent's own
+settings, the builder's, so they go there, as for any [embedded agent](embedded-agent.md#embeddedagentconfig).
 
 An agent that can't start stays off while the app runs on, and the plugin logs why. A handler the block adds with
 `onFailure { reason, cause -> }` is told too, with the reason the log gives, which holds no token, password, or PEM,
@@ -126,7 +126,7 @@ environment variable gives:
 | `dashboard.port`, `.host`  |                            | The [agent's dashboard](agent-dashboard.md), off without a port, listening on every interface unless `host` names one, such as `127.0.0.1`                                    |
 | `dashboard.password`       |                            | Requires a login to the dashboard, as `dashboard.username` (`admin` by default)                                                                                               |
 | `required`                 | `false`                    | Whether the app fails to start when the agent can't, or has no proxy                                                                                                          |
-| `stop-timeout`             | `30s`                      | The agent's `stopTimeout`: how long the app's shutdown waits for its stop, more than zero, as a number of seconds or a duration such as `10s` or `PT10S`                      |
+| `stop-timeout`             | `30s`                      | Since 4.7.1, the agent's `stopTimeout`: how long the app's shutdown waits for its stop, more than zero, as a number of seconds or a duration such as `10s` or `PT10S`                      |
 | `settings.<key>`           |                            | Any other [agent setting](configuration/agent.md), by its key under `agent`, such as `settings.scrapeTimeoutSecs = 20`. It takes precedence over the keys above              |
 | `enabled`                  | `true`                     | Whether to run the agent at all                                                                                                                                               |
 

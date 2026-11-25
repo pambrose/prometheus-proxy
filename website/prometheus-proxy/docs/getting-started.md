@@ -13,11 +13,11 @@ Pick a tab: the same choice opens the same tab in each step below.
 === "JAR"
 
     Download the proxy's and the agent's JARs from the
-    [4.7.0 release](https://github.com/pambrose/prometheus-proxy/releases/tag/4.7.0):
+    [4.7.1 release](https://github.com/pambrose/prometheus-proxy/releases/tag/4.7.1):
 
     ```bash
-    curl -fLO https://github.com/pambrose/prometheus-proxy/releases/download/4.7.0/prometheus-proxy.jar
-    curl -fLO https://github.com/pambrose/prometheus-proxy/releases/download/4.7.0/prometheus-agent.jar
+    curl -fLO https://github.com/pambrose/prometheus-proxy/releases/download/4.7.1/prometheus-proxy.jar
+    curl -fLO https://github.com/pambrose/prometheus-proxy/releases/download/4.7.1/prometheus-agent.jar
     ```
 
     Or build them from source, into `build/libs/prometheus-proxy.jar` and `build/libs/prometheus-agent.jar`:
@@ -43,8 +43,8 @@ Pick a tab: the same choice opens the same tab in each step below.
     Multi-platform images (amd64, arm64, s390x, ppc64le) are available on Docker Hub:
 
     ```bash
-    docker pull pambrose/prometheus-proxy:4.7.0
-    docker pull pambrose/prometheus-agent:4.7.0
+    docker pull pambrose/prometheus-proxy:4.7.1
+    docker pull pambrose/prometheus-agent:4.7.1
     ```
 
 === "Helm"
@@ -54,7 +54,7 @@ Pick a tab: the same choice opens the same tab in each step below.
     Docker Hub images; clone the repository at the release whose images they run to use them:
 
     ```bash
-    git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
+    git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
     cd prometheus-proxy
     ```
 
@@ -130,7 +130,7 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
     ```bash
     docker run --rm -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:4.7.0
+      pambrose/prometheus-proxy:4.7.1
     ```
 
     **In the background**, `--detach` starts the container and returns, and
@@ -140,7 +140,7 @@ The proxy runs outside the firewall alongside your Prometheus server.
     ```bash
     docker run --detach --name prometheus-proxy --restart unless-stopped \
       -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:4.7.0
+      pambrose/prometheus-proxy:4.7.1
 
     docker logs --follow prometheus-proxy   # follow its log
     docker restart prometheus-proxy         # restart it
@@ -273,7 +273,7 @@ Each entry in `pathConfigs` maps:
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
-      pambrose/prometheus-agent:4.7.0
+      pambrose/prometheus-agent:4.7.1
     ```
 
     **In the background**, `--detach` starts the container and returns, and
@@ -285,7 +285,7 @@ Each entry in `pathConfigs` maps:
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
-      pambrose/prometheus-agent:4.7.0
+      pambrose/prometheus-agent:4.7.1
 
     docker logs --follow prometheus-agent   # follow its log
     docker restart prometheus-agent         # pick up an edited agent.conf
