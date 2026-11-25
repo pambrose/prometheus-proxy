@@ -383,6 +383,9 @@ application's logging config.
   dropped; the settings it's given, and only whether a token is set; no discovery while it is off;
   with the dashboard on, each path's recorded scrapes, newest first, its strip's runs, and the history's size; and
   with it off, no history, and Scrape now as its setting says
+- **AgentDashboardServiceTest** (`dashboard/`) — the agent dashboard's site as the push loop reads it, from an agent
+  built but never started: a write to the activity feed one of its changes, which wake the loop, and the feed's count
+  at the start not one
 - **AgentDashboardHtmlTest** (`dashboard/`) — the agent dashboard's markup: a path, a reason, and a URL escaped; a
   refused path's reason and "not until the agent reconnects"; a retry's wait as a countdown, and one already due as the
   next retry; an en dash for missing labels; the empty and gone detail panes; a failing connection's endpoints, each
@@ -724,13 +727,21 @@ One support helper also lives here (not a test class itself):
   port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host, `allowedOrigins`, foreign
   or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS rebinding; and changes waking the
   push loop at once, then at most once an interval, with the latest
+- **DashboardPushTest** (`dashboard/`) — `DashboardServer`'s push loop over real sockets, serving a site the spec
+  stands in for, with no proxy or agent, and ticking once an hour, so a frame comes only from the wake each case tests,
+  within 5 seconds: a change pushing a fresh snapshot to every page at once; a collect that throws logged once at ERROR,
+  the loop pushing at its next wake; a Log out naming no session, 100 of them, collecting and pushing nothing, and one
+  naming a session closing its page (`VIOLATED_POLICY`) and no other; a page whose socket never reads, after a frame
+  larger than every buffer, holding up no other page's pushes when Log out or the push loop (its login past its age)
+  closes it; and, on a 50 ms tick, such a page closed once its buffer is full, giving up its `maxSessions` slot
 - **DashboardServiceTest** (`dashboard/`) — a dashboard's service lifecycle over a mocked `DashboardServer`: a
   server that fails to start stopped, so Ktor's shutdown hook and application don't outlive it, with a stop that
   fails attached to the start's failure; and a server that starts stopped only when the service stops
 - **DashboardSessionsTest** (`dashboard/`) — a dashboard's login-page sessions: a new one valid and a token never
   issued, null, or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request,
   which a request restarts, and a check that isn't a request doesn't; 7 days after it began however recently used;
-  ended by removal; the least recently used dropped past the cap; and an expired one forgotten
+  ended by removal, which says whether there was one; the least recently used dropped past the cap; and an expired one
+  forgotten
 - **DashboardThemeTest** (`dashboard/`) — the dashboards' theme: a dark rule written for the system's dark preference
   unless the page is set to light and for a page set to dark, with a selector or at `:root`; the tokens' dark colours
   under both, and the browser's own widgets following the choice; the head's script applying only a stored light or

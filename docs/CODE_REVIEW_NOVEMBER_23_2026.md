@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 28 fixed, 44 open (8 medium, 64 low, no high); #25 is partly fixed.
+**Status:** 72 issues — 33 fixed, 39 open (8 medium, 64 low, no high); #25 is partly fixed.
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
 
@@ -34,11 +34,11 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ⬜      |
 | 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ⬜      |
 | 12 | A start that times out keeps starting, with no handle to stop it                                     | Embedding  | low      | ✅      |
-| 13 | An anonymous `POST /logout` forces a collect and a push to every open page, once per request         | Dashboards | medium   | ⬜      |
-| 14 | Ending a session whose socket has stopped reading freezes every open page                            | Dashboards | medium   | ⬜      |
-| 15 | A session that stops reading stays open, holding a `maxSessions` slot                                | Dashboards | low      | ⬜      |
+| 13 | An anonymous `POST /logout` forces a collect and a push to every open page, once per request         | Dashboards | medium   | ✅      |
+| 14 | Ending a session whose socket has stopped reading freezes every open page                            | Dashboards | medium   | ✅      |
+| 15 | A session that stops reading stays open, holding a `maxSessions` slot                                | Dashboards | low      | ✅      |
 | 16 | The tables' search doesn't match a path as its row shows it, or an agent by its label                | Dashboards | low      | ⬜      |
-| 17 | A collect that throws ends the push loop for good, logged only to stderr                             | Dashboards | low      | ⬜      |
+| 17 | A collect that throws ends the push loop for good, logged only to stderr                             | Dashboards | low      | ✅      |
 | 18 | A gone agent's detail pane names it by its raw `agentId`                                             | Dashboards | low      | ⬜      |
 | 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ⬜      |
 | 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ⬜      |
@@ -71,7 +71,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ⬜      |
 | 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
 | 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ⬜      |
-| 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ⬜      |
+| 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ✅      |
 | 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ⬜      |
 | 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ✅      |
 | 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ✅      |
@@ -151,7 +151,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 3    | ✅ #551 | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
 | 4    | ✅ #557 | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
 | 5    | ⬜      | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
-| 6    | ⬜      | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
+| 6    | ✅ #558 | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
 | 7    | ⬜      | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
 | 8    | ⬜      | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
 | 9    | ⬜      | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
@@ -921,7 +921,7 @@ shortly after.
 
 ## 🖥️ Dashboards
 
-### 13. ⬜ An anonymous `POST /logout` wakes the push loop, so anyone who can reach a login-protected dashboard can make it collect a snapshot and push every open page once per request
+### 13. ✅ An anonymous `POST /logout` wakes the push loop, so anyone who can reach a login-protected dashboard can make it collect a snapshot and push every open page once per request
 
 **Severity:** medium · **Confidence:** reproduced with a scratch spec (since deleted): a `DashboardServer` with a login,
 a 2 s refresh, a site that counted its collects, and one logged-in WebSocket reader. Idle for 4 s it collected 2
@@ -959,7 +959,9 @@ needs no collect at all, and leave the push loop to the site's changes and the t
 **Tests:** in a `DashboardServer` spec with a counting site, a login, and one open session: 100 `POST /logout`
 without a cookie add no collects beyond the tick's; one with the open session's cookie closes that session's socket.
 
-### 14. ⬜ Ending a session whose socket has stopped reading blocks the shared push loop until that TCP connection dies, so every open page freezes while still showing "live"
+**Resolution:** Fixed in #558, by the better-still option. `DashboardSessions.remove` returns whether it ended a session, and Log out, through `endLogin`, closes only that login's open pages and never wakes the loop, so one naming no session costs a lookup. `DashboardPushTest` sends 100 such logouts and sees no collect and no push; the old code collected 102 times.
+
+### 14. ✅ Ending a session whose socket has stopped reading blocks the shared push loop until that TCP connection dies, so every open page freezes while still showing "live"
 
 **Severity:** medium · **Confidence:** reproduced with a scratch spec (since deleted): a `DashboardServer` with a login
 and a 200 ms refresh, one logged-in WebSocket client that read, and one raw socket that completed the handshake with
@@ -999,7 +1001,9 @@ once, then close it on its own scope with a bound, for example
 handshake and never reads; `POST /logout` with the raw socket's cookie; the reader keeps receiving frames at the tick
 rate.
 
-### 15. ⬜ A session that stops reading isn't reliably closed: once its outgoing buffer overflows, Ktor's pinger exits silently, and the session stays open, counted against `maxSessions` and rendered for on every push
+**Resolution:** Fixed in #558. Every close goes through `end()`, which takes the session out of the pushes at once and closes its socket on a coroutine of its own: a close frame, waited for at most 5 seconds, then the socket's handler cancelled. `DashboardPushTest` ends the login of a raw socket that never reads a 16 MiB frame, by Log out and by expiry, and another page keeps getting frames; both froze on the old code.
+
+### 15. ✅ A session that stops reading isn't reliably closed: once its outgoing buffer overflows, Ktor's pinger exits silently, and the session stays open, counted against `maxSessions` and rendered for on every push
 
 **Severity:** low · **Confidence:** reproduced with a scratch spec (since deleted): with a 200 ms refresh and 256 KiB
 frames, a raw socket that completed the handshake and then never read was still among `sessionsOpen` at 10, 20, 30,
@@ -1030,6 +1034,8 @@ session whose last send failed.
 **Tests:** a raw socket that never reads, with a short refresh and large frames: `sessionsOpen` drops back within a
 few seconds of its first failed send.
 
+**Resolution:** Fixed in #558. A failed send ends its session at once, freeing its `maxSessions` slot, and an ended session isn't rendered for again; `DashboardPushTest` sees a stalled page leave within about 2 seconds and a new one connect. One correction: once the buffer overflows, Ktor's pinger fails with an uncaught `ChannelOverflowException`, logged at ERROR, rather than stopping silently; the session stayed open all the same.
+
 ### 16. ⬜ The tables' search doesn't match a path as its row shows it: typing `/payments` finds nothing
 
 **Severity:** low · **Confidence:** confirmed by trace.
@@ -1052,7 +1058,7 @@ comparing with a path), and agent names through `agentLabel`.
 `AgentDashboardHtmlTest`: `/foo` matches an entry naming path `foo`; `registering` matches a path served by an
 `Unassigned` agent.
 
-### 17. ⬜ A collect that throws ends the push loop for good, with nothing logged through the logger
+### 17. ✅ A collect that throws ends the push loop for good, with nothing logged through the logger
 
 **Severity:** low · **Confidence:** confirmed by trace; no collect was found that throws today.
 
@@ -1069,6 +1075,8 @@ next wake or tick; give `scope` a `CoroutineExceptionHandler` that logs through 
 
 **Tests:** a site whose first collect throws: an open session still gets a frame on the next tick, and one ERROR is
 logged.
+
+**Resolution:** Fixed in #558. `collectForPush` logs a run of failed collects at ERROR once, then DEBUG, and the loop carries on at its next wake or tick; the server's scope logs its tasks' failures through the logger. `DashboardPushTest` sees one ERROR for two failures and a push on the next change.
 
 ### 18. ⬜ The detail pane of an agent that has gone names it by its raw numeric `agentId`, which no other view shows
 
@@ -2471,7 +2479,7 @@ The spec's header says it checks `ProxyRegistry.tla`'s invariants on the real co
 
 **Tests:** The extended spec fails with `reclaimRejection`'s holder check removed (`make lincheck-tests`).
 
-### 50. ⬜ A change no longer waking the dashboards' push loop fails no test: every push spec runs on a 1-second tick and waits 10 seconds or more
+### 50. ✅ A change no longer waking the dashboards' push loop fails no test: every push spec runs on a 1-second tick and waits 10 seconds or more
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2513,6 +2521,8 @@ The agent has no counterpart to the proxy's "a page GET after a topology change 
 Add a unit check that the agent's `DashboardSite.changes` emits on `activityLog.record`.
 
 **Tests:** Each of these fails under the matching change above.
+
+**Resolution:** Fixed in #558, with a unit spec rather than a 60-second refresh in the harness specs. `DashboardPushTest` runs `DashboardServer` against a stand-in site with a one-hour tick, so a frame comes only from the wake under test, and a case fails within 5 seconds; removing the change wake fails five of its six cases, and removing Log out's close fails that case. A new `AgentDashboardServiceTest` case, through the now internal `site`, fails when the agent's `changes` is `emptyFlow()`.
 
 ### 51. ⬜ The proxy's `scrape` and `forward` spans have no unit test: one successful single-agent harness scrape is all that covers them, and nothing pins that a client's trace headers are ignored
 

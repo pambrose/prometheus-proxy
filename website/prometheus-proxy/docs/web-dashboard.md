@@ -119,8 +119,9 @@ login from that address, or from any, with a 429, the right password included, u
 is a minute old. So a guesser can't try passwords in parallel. Behind a reverse proxy every login comes from the
 proxy's address, so the first limit is everyone's, and during an attack the real users wait out the minute too.
 
-A page left open when its session ends, by Log out in another tab, by expiring, or by a proxy restart, stops getting
-updates within a couple of seconds, and goes to the login page.
+A page left open when its session ends goes to the login page: at once after Log out in another tab, within one
+refresh interval (`proxy.dashboard.refreshIntervalSecs`, 2 seconds by default) after the session expires, and once the
+proxy is back after a restart.
 
 The proxy logs the username and that a password is set, never the password. It logs a wrong login at WARN, with the
 address it came from, at most once a minute for each address, and logs reaching the limit. It refuses to start with an
@@ -540,8 +541,9 @@ another site can't add without the proxy's permission, so a link or form elsewhe
 A login doesn't replace either guard, so the dashboard keeps both with a login set, and checks the Origin of the login
 and Log out forms as well.
 
-Open pages, one WebSocket each, are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that
-stops reading or sends an oversized message is disconnected. Neither list stops someone who can reach the port
+Open pages, one WebSocket each, are also capped at `proxy.dashboard.maxSessions` (default 50). A client that sends an
+oversized message is disconnected, and so is one that stops reading, once 32 updates are waiting for it, which frees its
+place under the cap; no one client can hold up the others' updates. Neither list stops someone who can reach the port
 directly; a login does. Both are lists, so set them in a config file; see
 [Dashboard configuration](configuration/proxy.md#dashboard).
 

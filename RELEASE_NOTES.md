@@ -122,6 +122,16 @@ _Released 2026-11-23_
   failed, and `startIfConfigured()` said the agent stays off, but it went on starting and then connected, with
   nothing able to stop it, and kept your app from exiting. It now stops as soon as its startup ends, without
   connecting.
+- **Log out can't be used to overload a dashboard.** With a login set, anyone who could reach the dashboard's port could
+  post Log out in a loop, with no session, and make the proxy or agent read its state and update every open page once
+  per request. A Log out with no session now does nothing, and one with a session closes that session's open pages at
+  once.
+- **One stalled browser can't freeze a dashboard.** Closing a page whose browser had stopped reading, by Log out or
+  its session expiring, stopped every other open page's updates, each still showing live, until that browser's
+  connection died. Such a page is now closed without holding up the others, and a page that stops reading is
+  disconnected once 32 updates are waiting for it, giving up its place under `maxSessions`.
+- **A dashboard keeps updating after a failure reading its state.** One failure stopped every page's updates until a
+  restart, with the error printed only to stderr; it's now logged, and the next update goes out as usual.
 
 ### Behavior Changes
 

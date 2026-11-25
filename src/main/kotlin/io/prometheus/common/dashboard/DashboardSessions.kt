@@ -90,11 +90,12 @@ internal class DashboardSessions(
     }
   }
 
-  /** Ends [token]'s session, if there is one. */
-  fun remove(token: String?) {
-    if (!token.isNullOrEmpty())
-      synchronized(sessions) { sessions.remove(keyOf(token)) }
-  }
+  /**
+   * Ends [token]'s session, if there is one, and returns whether there was: false for a token it never issued, one
+   * already ended, or none, which anyone may send, so the caller can do nothing more for those.
+   */
+  fun remove(token: String?): Boolean =
+    !token.isNullOrEmpty() && synchronized(sessions) { sessions.remove(keyOf(token)) != null }
 
   companion object {
     /** A session's longest life, 7 days, which the cookie's `Max-Age` gives too. */

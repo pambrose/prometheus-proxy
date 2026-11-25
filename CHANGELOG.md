@@ -184,6 +184,19 @@ All notable changes to this project are documented in this file.
   demos, the Helm charts, the cloud-proxy example, and the Homebrew formula follow it
 - A hovered row in a dashboard's list of agents or paths showed its address line at 4.18:1 (light) and 4.30:1 (dark)
   against the hover's ground, under WCAG AA's 4.5:1; it now steps up to the secondary ink, at 6.14:1 and 6.28:1
+- A dashboard with a login woke its push loop on every Log out, which needs no login, whether or not it named a
+  session, so anyone who could reach the port could make it collect a snapshot and push to every open page once per
+  request. Log out now closes its own session's pages itself, and one naming no session does nothing
+- Closing a dashboard page whose browser had stopped reading, at Log out or as its session expired, waited for that
+  connection in the shared push loop, so every other page stopped updating while still showing **live**. A page is now
+  closed without waiting, and given up on, freeing its `maxSessions` slot, if it hasn't taken the close within 5
+  seconds
+- A dashboard page that stopped reading stayed open once its 32-frame outgoing buffer overflowed, since Ktor's pinger
+  then stops without closing it, holding a `maxSessions` slot and rendered for on every push. It's now closed at the
+  first push that fails
+- A collect that threw ended a dashboard's push loop for good, printed to stderr, so no page was pushed to again until a
+  restart while each still showed **live**. It's now logged at ERROR, once for a run of failures, and the loop pushes
+  at its next change or tick
 - The discovery entries the agent skips, which its debug page and dashboard read from other threads, are now published
   to them safely
 - An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a

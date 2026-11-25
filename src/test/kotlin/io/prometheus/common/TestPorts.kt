@@ -290,6 +290,14 @@ object TestPorts {
   const val AGENT_START_TIMEOUT_ADMIN_PORT = 9709
   const val AGENT_START_TIMEOUT_DASHBOARD_PORT = 9762
 
+  // DashboardPushTest: a DashboardServer per case, serving a site the spec stands in for, with no proxy or agent.
+  const val DASHBOARD_PUSH_CHANGE_PORT = 11410
+  const val DASHBOARD_PUSH_COLLECT_FAILURE_PORT = 11411
+  const val DASHBOARD_PUSH_LOGOUT_PORT = 11412
+  const val DASHBOARD_PUSH_STALLED_LOGOUT_PORT = 11413
+  const val DASHBOARD_PUSH_STALLED_EXPIRY_PORT = 11414
+  const val DASHBOARD_PUSH_OVERFLOW_PORT = 11415
+
   // InProcessZipkinTest: the HTTP port of each case's proxy, and a Zipkin port nothing listens on, which the reporter
   // fails to send to without holding up startup, a scrape, or shutdown.
   const val ZIPKIN_UNREACHABLE_PORT = 9710
