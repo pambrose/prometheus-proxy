@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 57 fixed, 15 open (8 medium, 64 low, no high).
+**Status:** 72 issues — 61 fixed, 11 open (8 medium, 64 low, no high).
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
 #555–#561).
@@ -28,8 +28,8 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 3  | The 80% path and identity limit warnings repeat each time the count climbs back to the threshold     | Proxy      | low      | ✅      |
 | 4  | The proto and AGENTS.md misdescribe the path-notices stream's keepalives                             | Proxy      | low      | ✅      |
 | 5  | A dashboard bind failure leaves the agent's admin and metrics servers running, and `/ping` healthy   | Agent      | medium   | ✅      |
-| 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ⬜      |
-| 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ⬜      |
+| 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ✅      |
+| 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ✅      |
 | 8  | The starter's agent dies with a `NoSuchMethodError` on Spring Boot 4.0.x and 4.1.0                   | Embedding  | medium   | ✅      |
 | 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ✅      |
 | 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ✅      |
@@ -68,7 +68,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 43 | `docs/packages.md`, `ConfigLoadException`'s KDoc, and `KDOC_SUMMARY.md` describe 4.6.0               | Docs       | low      | ⬜      |
 | 44 | AGENTS.md and `docs/TESTING.md` name a deploy check that's gone, and misdescribe `make all-tests`    | Docs       | low      | ⬜      |
 | 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ⬜      |
-| 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ⬜      |
+| 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ✅      |
 | 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ✅      |
 | 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
 | 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ✅      |
@@ -82,7 +82,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ✅      |
 | 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ⬜      |
 | 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ⬜      |
-| 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ⬜      |
+| 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ✅      |
 | 61 | `release-check`'s stale-version check misses the Quick Start's JAR download links                    | CI/build   | low      | ✅      |
 | 62 | Both changelogs date 4.7.0 2026-11-23, and `release-check` accepts any date                          | CI/build   | low      | ✅      |
 | 63 | The basics demo promises an alert that a late thaw never fires                                       | CI/build   | low      | ✅      |
@@ -158,7 +158,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 9    | ✅ #560 | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
 | 10   | ✅ #565 | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
 | 11   | ✅ #559 | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
-| 12   | ⬜      | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
+| 12   | ✅ #566 | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
 | 13   | ✅ #555 | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
 | 14   | ⬜      | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
 | 15   | ✅ #556 | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
@@ -486,7 +486,7 @@ should check the same through `startAsyncAgent(Config)`.
 
 **Resolution:** Fixed in #557. `Agent.startUp()` starts in two parts: a failure in `super.startUp()` runs the release steps, and a dashboard that fails after it returned runs them and `super.shutDown()` too, stopping the admin, metrics, and Zipkin services and removing the shutdown hook, as `Proxy.startUp()` does; what the release throws is attached as suppressed, and a FAILED dashboard isn't stopped again. The fix also closes a second leak: Ktor's `start()` leaves its shutdown hook and application behind when the bind fails, so `DashboardService.startUp()` stops the server. On the shipped jar, an agent with its dashboard port held now exits with status 1 in about 1.3 s; it ran on with `/ping` answering 200. `AgentStartupTest` and `DashboardServiceTest` pin both.
 
-### 6. ⬜ Results still queued in the connection's results channel when a writer stream fails are never counted, as sent or as dropped
+### 6. ✅ Results still queued in the connection's results channel when a writer stream fails are never counted, as sent or as dropped
 
 **Severity:** low · **Confidence:** confirmed by trace, including kotlinx-coroutines 1.11.0's channel source. Not
 reproduced.
@@ -537,7 +537,9 @@ exists to show, and its sum stops matching `agent_scrape_request_count_total`.
 A second case, where the chunked writer is the one that fails, should check that no ERROR is logged for
 `processScrapeResults`.
 
-### 7. ⬜ Connection tasks, stream writers, heartbeats, and discovery catch JVM `Error`s, so an `OutOfMemoryError` there ends only the connection, and the agent reconnects
+**Resolution:** Fixed in #566. The connection's results channel now hands a result it can't deliver to a callback that counts it as `dropped` (`Agent.newConnectionContext`), and the producer's `finally` ends the connection and drops what it left queued (`AgentConnectionContext.dropUnsentResults`). The callback also covers a result the producer takes just as it's cancelled, which the coroutine library would otherwise lose, while a result offered after the close is still counted by its scrape, since `trySend` calls no `onUndeliveredElement`. The producer returns on a `ClosedSendChannelException`, so another writer's failure no longer logs an ERROR. Two `AgentGrpcServiceTest` cases hold the producer after its first forward until the failed writer has closed the connection: before the fix they counted 2 of 3 results and logged the ERROR. `AgentConnectionContextTest` and `AgentTest` pin the callback and its wiring.
+
+### 7. ✅ Connection tasks, stream writers, heartbeats, and discovery catch JVM `Error`s, so an `OutOfMemoryError` there ends only the connection, and the agent reconnects
 
 **Severity:** low · **Confidence:** confirmed by trace. `runCatchingCancellable` is `runCatching` plus a rethrow of
 `CancellationException` (common-utils 5.3.0 `ExceptionUtils.kt:34-38`), so it catches `Error`.
@@ -581,7 +583,9 @@ shared `runCatchingNonFatal` helper next to `failureKey` that rethrows `Error` a
 - A `PathDiscoveryServiceTest` case whose source throws `StackOverflowError` expects it to propagate from
   `reconcileOnce`.
 
-### 60. ⬜ The demo pages say a single-endpoint agent retries the proxy every 3 seconds and reconnects within a few seconds of its return, but gRPC paces the real attempts on an exponential backoff, so after a 110-second outage the agent took 34 seconds to reconnect
+**Resolution:** Fixed in #566. `launchConnectionTask`, `runStreamTask`, `sendHeartBeat`, `PathDiscoveryService.reconcileOnce`, and the path manager's four per-path calls now catch with `runCatchingNonFatal` (`common/NonFatal.kt`), which rethrows a JVM `Error` as well as a `CancellationException`, and `connectAgent`'s own check moved into it. An `Error` there fails the connection's scope, and `handleConnectionFailure` rethrows it, so the agent ends `FAILED`, as it already did for a scrape's. Ten tests across `AgentTest`, `AgentGrpcServiceTest`, `AgentPathManagerTest`, and `PathDiscoveryServiceTest` fail when the helper stops rethrowing `Error`. The proxy's handlers and `HttpClientCache`'s sweeper still catch one, as they aren't part of the agent's connection.
+
+### 60. ✅ The demo pages say a single-endpoint agent retries the proxy every 3 seconds and reconnects within a few seconds of its return, but gRPC paces the real attempts on an exponential backoff, so after a 110-second outage the agent took 34 seconds to reconnect
 
 **Severity:** low · **Confidence:** reproduced: an agent and a proxy from the demos' `prometheus-proxy-demo/*:local`
 images (version 4.7.0, built from this code), on a Docker network of their own, one `pathConfigs` entry and no other
@@ -643,6 +647,8 @@ holds there.
 
 **Tests:** for the first fix, an `AgentGrpcService` unit spec with an in-process server started after the channel has
 failed three times: the next `connectAgent` succeeds without waiting out a backoff. For the second, none; it's prose.
+
+**Resolution:** Fixed in #566. `connectAgent` calls `channel.resetConnectBackoff()` after a failed connect, so the channel looks up the proxy's name again and dials at each attempt, with gRPC's own backoff starting over in between. A failover list's channels are rebuilt per attempt and have nothing to reset, so `EndpointFailover` and `AgentFailover.tla` are unchanged. The attempt that resets usually still fails, since gRPC keeps the channel failed until a dial succeeds, and the reconnect comes on the next one. With the fat JARs over Netty on loopback, a 90-second outage took 22.4 s to reconnect before and 4.6 s after, and a 60-second one 10.3 s and 1.3 s. An `AgentGrpcServiceTest` case with an in-process proxy started after three failed connects, and one that checks when the reset happens, fail without it. The demos' and the config's "3 seconds" now hold, and the security page's restart step, which described the growing backoff, is corrected.
 
 ---
 
@@ -2349,7 +2355,7 @@ and say nothing keeps it.
 
 ## 🧪 Tests
 
-### 46. ⬜ No test covers `receiveCatchingWithin`, the AGENTS.md rule against losing an element, and the loss it prevents can be reproduced deterministically
+### 46. ✅ No test covers `receiveCatchingWithin`, the AGENTS.md rule against losing an element, and the loss it prevents can be reproduced deterministically
 
 **Severity:** low · **Confidence:** confirmed by grep; the loss reproduced with a scratch program against
 kotlinx-coroutines 1.11.0
@@ -2402,6 +2408,8 @@ empty afterwards. Also add one test at each caller's level:
 Change `waitingNotices` to call `context.awaitPathNotices(200.milliseconds)`.
 
 **Tests:** The three tests above. Each fails once its subject is rewritten as `withTimeoutOrNull { receiveCatching() }`.
+
+**Resolution:** Fixed in #566. `ChannelsTest` pins `receiveCatchingWithin` with a new support helper, `lateArrival`, which follows this finding's recipe: on `runBlocking`'s single thread the wait suspends, the element arrives while the thread is held, and the thread stays held past the timeout. Two `AgentContextTest` cases do the same through `readScrapeRequest` and `awaitPathNotices`. With the helper rewritten as `withTimeoutOrNull { receiveCatching() }`, all three fail, as does the case for an element already queued with a zero timeout. `ProxyPathManagerTest.waitingNotices` now calls `awaitPathNotices(200.milliseconds)`.
 
 ### 47. ✅ The starter's required-agent tests all fail before `launch()` picks `start()`, so a required agent started with `startIfConfigured()` passes them
 
