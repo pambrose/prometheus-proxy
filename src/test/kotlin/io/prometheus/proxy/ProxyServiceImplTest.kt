@@ -18,6 +18,8 @@
 
 package io.prometheus.proxy
 
+import brave.Span
+import brave.handler.MutableSpan
 import ch.qos.logback.classic.Level
 import com.google.protobuf.ByteString
 import io.grpc.Context
@@ -30,6 +32,8 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -50,6 +54,8 @@ import io.prometheus.Proxy
 import io.prometheus.metrics.core.datapoints.CounterDataPoint
 import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.ScrapeTracing
+import io.prometheus.common.collectingScrapeTracing
 import io.prometheus.common.awaitOnDaemonThread
 import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.captureLogs
@@ -83,6 +89,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.zip.CRC32
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -215,6 +222,21 @@ class ProxyServiceImplTest : StringSpec() {
     every { proxy.agentContextManager.getAgentContext(agentContext.agentId) } returns agentContext
     return proxy to agentContext
   }
+
+  // A scrape request for [context]'s agent whose forward span is [span], queued for the agent's stream.
+  private suspend fun forwardedRequest(
+    context: AgentContext,
+    span: Span,
+  ): ScrapeRequestWrapper =
+    ScrapeRequestWrapper(
+      agentContext = context,
+      pathVal = "metrics",
+      encodedQueryParamsVal = "",
+      authHeaderVal = "",
+      acceptVal = null,
+      debugEnabledVal = false,
+      traceSpan = span,
+    ).also { context.writeScrapeRequest(it) }
 
   // A real activity feed for this mock proxy, which it returns.
   private fun Proxy.withActivityLog() = ActivityLog(100).also { every { activityLog } returns it }
@@ -1429,6 +1451,70 @@ class ProxyServiceImplTest : StringSpec() {
       ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = testAgentId }).collect { emitted.add(it) }
 
       emitted shouldBe [awaitedRequest]
+    }
+
+    // Sending a request suspends while gRPC's flow control holds an agent that stopped reading, and the scrape can time
+    // out meanwhile, which finishes its forward span: whatever is written to the span afterwards is lost. The span was
+    // tagged with the request's queue wait only after the send, so a timed-out forward span had no sign that its
+    // request waited, or was sent at all.
+    "a forward span should keep its queue wait when its scrape ends while the send waits" {
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      collectingScrapeTracing(spans).use { tracing ->
+        val (proxy, context) = proxyWithRealAgentContext()
+        val span = tracing.newTrace(ScrapeTracing.FORWARD_SPAN)
+        val wrapper = forwardedRequest(context, span)
+        var ended = false
+        every { proxy.scrapeRequestManager.containsScrapeRequest(wrapper.scrapeId) } answers { !ended }
+
+        ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = context.agentId }).collect {
+          // What a scrape that times out while the send waits does: stops tracking the request, and finishes the span.
+          ended = true
+          span.finish()
+          context.invalidate()
+        }
+
+        spans.single().apply {
+          tags().keys shouldContain ScrapeTracing.TAG_QUEUE_WAIT
+          annotations().map { it.value } shouldNotContain ScrapeTracing.SENT_TO_AGENT
+        }
+      }
+    }
+
+    "a forward span should be annotated as sent once the agent's stream takes its request" {
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      collectingScrapeTracing(spans).use { tracing ->
+        val (proxy, context) = proxyWithRealAgentContext()
+        val span = tracing.newTrace(ScrapeTracing.FORWARD_SPAN)
+        forwardedRequest(context, span)
+
+        ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = context.agentId }).collect {
+          context.invalidate()
+        }
+        span.finish()
+
+        spans.single().apply {
+          tags().keys shouldContain ScrapeTracing.TAG_QUEUE_WAIT
+          annotations().map { it.value } shouldContain ScrapeTracing.SENT_TO_AGENT
+        }
+      }
+    }
+
+    // A span is finished once its scrape stops awaiting the result, and Brave drops, without a word, what is written to
+    // it after, so the annotation is written only while the scrape still awaits it.
+    "a forward span should not be annotated once its scrape has stopped awaiting the result" {
+      val (proxy, context) = proxyWithRealAgentContext()
+      val span = mockk<Span>(relaxed = true)
+      val wrapper = forwardedRequest(context, span)
+      var ended = false
+      every { proxy.scrapeRequestManager.containsScrapeRequest(wrapper.scrapeId) } answers { !ended }
+
+      ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = context.agentId }).collect {
+        ended = true
+        context.invalidate()
+      }
+
+      verify(exactly = 1) { span.tag(ScrapeTracing.TAG_QUEUE_WAIT, any()) }
+      verify(exactly = 0) { span.annotate(any<String>()) }
     }
 
     "readRequestsFromProxy should throw NOT_FOUND when agent context is missing" {

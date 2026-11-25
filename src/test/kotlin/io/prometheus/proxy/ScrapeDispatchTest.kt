@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import brave.handler.MutableSpan
 import ch.qos.logback.classic.Level
 import com.google.protobuf.ByteString
 import com.pambrose.common.util.zip
@@ -26,12 +27,16 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.ints.shouldBeLessThan
+import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -41,16 +46,24 @@ import io.mockk.mockk
 import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.ScrapeTracing.Companion.FETCH_SPAN
+import io.prometheus.common.ScrapeTracing.Companion.FORWARD_SPAN
+import io.prometheus.common.ScrapeTracing.Companion.SCRAPE_SPAN
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.captureLogs
+import io.prometheus.common.collectingScrapeTracing
 import io.prometheus.common.proxyOptions
+import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.chunkData
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
+import io.prometheus.grpc.registerAgentRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
@@ -59,6 +72,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.zip.CRC32
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
@@ -161,6 +175,18 @@ class ScrapeDispatchTest : StringSpec() {
       handlerDone.complete(Unit)
       stream.join()
       Triple(result, openDuring, openAfter)
+    }
+
+  // Plays [agentContext]'s agent for one scrape, answering it with a small plain-text body, and returns the scrape
+  // request it was sent.
+  private fun CoroutineScope.answerOne(
+    proxy: Proxy,
+    agentContext: AgentContext,
+  ): Deferred<ScrapeRequest> =
+    async {
+      val wrapper = agentContext.readScrapeRequest()!!
+      proxy.scrapeRequestManager.assignScrapeResults(plainResults(agentContext, wrapper, "metric 1")) { true }
+      wrapper.scrapeRequest
     }
 
   // A successful plain-text result for [wrapper]'s scrape, as [agentContext]'s agent would send it.
@@ -1319,6 +1345,103 @@ class ScrapeDispatchTest : StringSpec() {
         map { "${it.path}?${it.encodedQueryParams} ${it.accept}" } shouldBe List(2) { "metrics?a=1 text/plain" }
         map { it.scrapeTimeoutMillis } shouldBe [2_000L, 2_000L]
         map { it.dashboardScrape } shouldBe [false, true]
+      }
+    }
+
+    // ==================== Forward spans ====================
+
+    // Each agent of a consolidated path gets a forward span of its own under the scrape's, and its request carries that
+    // span's trace, so the agent's fetch joins the span of its own request.
+    "each agent of a consolidated path should get a forward span under the scrape's, carried in its own request" {
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      collectingScrapeTracing(spans).use { tracing ->
+        val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+        every { proxy.tracing } returns tracing
+        val agents = [AgentContext("first-remote"), AgentContext("second-remote")]
+        val info = ProxyPathManager.AgentContextInfo(isConsolidated = true, agentContexts = agents)
+        val sent = agents.map { agent -> answerOne(proxy, agent) }
+        val scrape = tracing.newTrace(SCRAPE_SPAN)
+
+        ScrapeDispatch.submitScrapeRequests(info, proxy, ScrapeSpec("metrics", trace = scrape.context()))
+          .map { it.updateMsg } shouldBe ["success", "success"]
+
+        val forwards = spans.filter { it.name() == FORWARD_SPAN }
+        forwards.map { it.traceId() to it.parentId() } shouldBe
+          List(2) { scrape.context().traceIdString() to scrape.context().spanIdString() }
+        forwards.map { it.tag("agentId") } shouldContainExactlyInAnyOrder agents.map { it.agentId }
+        sent.awaitAll().zip(agents).forEach { (request, agent) ->
+          val fetch = tracing.joined(request.traceContextMap, FETCH_SPAN).also { it.abandon() }
+          fetch.context().parentIdString() shouldBe forwards.single { it.tag("agentId") == agent.agentId }.id()
+        }
+      }
+    }
+
+    // A failed forward is tagged with how it failed, as the scrape counters label it, and as an error, which Zipkin
+    // shows in red.
+    "a forward span should end as an error tagged with its failure: timed out, or the agent gone" {
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      collectingScrapeTracing(spans).use { tracing ->
+        val proxy = createSpyProxyForSubmit()
+        every { proxy.tracing } returns tracing
+        val silent = AgentContext("silent-remote")
+        val gone = AgentContext("gone-remote").apply { invalidate() }
+        val trace = tracing.newTrace(SCRAPE_SPAN).context()
+
+        listOf(silent, gone).forEach { agent ->
+          ScrapeDispatch.submitScrapeRequest(
+            agent,
+            proxy,
+            ScrapeSpec("metrics", timeout = 200.milliseconds, trace = trace),
+          )
+        }
+
+        spans.map { it.tags().filterKeys { key -> key != "agentId" && key != "agentName" } } shouldBe
+          listOf(ScrapeDispatch.PROXY_TIMEOUT_LABEL, ProxyFailure.AGENT_DISCONNECTED.label).map { label ->
+            mapOf("outcome" to label, "http.status_code" to "503", "error" to label)
+          }
+      }
+    }
+
+    // A dashboard's scrape-now has no trace, so it records no span, and its request carries no trace to the agent.
+    "a scrape that isn't traced should have no forward span, and send no trace to the agent" {
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      collectingScrapeTracing(spans).use { tracing ->
+        val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+        every { proxy.tracing } returns tracing
+        val agent = AgentContext("test-remote")
+        val sent = answerOne(proxy, agent)
+
+        ScrapeDispatch.submitScrapeRequest(agent, proxy, ScrapeSpec("metrics", origin = ScrapeOrigin.DASHBOARD))
+          .updateMsg shouldBe "success"
+
+        sent.await().traceContextMap.shouldBeEmpty()
+        spans.shouldBeEmpty()
+      }
+    }
+
+    // The agent's name is its own to report, so its forward span shows it cut and escaped, as a log line does: a line
+    // break in it can't split what Zipkin shows.
+    "a forward span should show the agent's name cut and escaped" {
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      collectingScrapeTracing(spans).use { tracing ->
+        val proxy = createSpyProxyForSubmit()
+        every { proxy.tracing } returns tracing
+        val name = "evil\nname-" + "x".repeat(100)
+        val agent = AgentContext("test-remote").apply { assignProperties(registerAgentRequest { agentName = name }) }
+        val trace = tracing.newTrace(SCRAPE_SPAN).context()
+
+        ScrapeDispatch.submitScrapeRequest(
+          agent,
+          proxy,
+          ScrapeSpec("metrics", timeout = 50.milliseconds, trace = trace),
+        )
+
+        spans.single().apply {
+          tag("agentName") shouldBe shownValue(name)
+          tag("agentName").orEmpty() shouldNotContain "\n"
+          tag("agentName").orEmpty() shouldStartWith "evil\\nname-"
+          tag("agentId") shouldBe agent.agentId
+        }
       }
     }
 

@@ -455,7 +455,9 @@ Three support helpers also live here (not test classes themselves):
   or not, marks the agent that sent it active (with the transport filter disabled, only when sent as the identity the
   agent connected as), and a late result doesn't count as a completed request; with the transport filter disabled, a
   scrape-request stream that names an agentId before it is assigned neither streams nor removes the context another identity then
-  connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents
+  connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents; a forward
+  span is tagged with its request's queue wait before the send, so a scrape that ends while the send waits keeps it,
+  and is annotated as sent only while its scrape still awaits the result
 - **ProxyServiceMessages** — what an agent sends `ProxyServiceImpl`, for the specs that call its RPCs directly:
   `resultFrom`, `chunkedHeaderFrom`, `chunkFor`, `transferFrom` (a header, one chunk, and a summary), and
   `onConnection`, which runs a call on the connection the transport filter assigned an agentId to
@@ -484,7 +486,8 @@ Three support helpers also live here (not test classes themselves):
   per-path metrics, and shown on `/debug` and the dashboard under the path's registered key, with its query unchanged,
   and the blitz, favicon, and unknown-path answers see it with one slash; a blitz path configured with a leading slash is answered at `/path`
   and `//path` and can't be registered; the route logs a client's path and query cut and escaped; a scrape that
-  throws counts as `internal_error`; and the defaults of `ResponseResults`, the route's answer
+  throws counts as `internal_error`; a scrape's span begins a trace of its own at the proxy's sample rate, whatever B3
+  or `traceparent` headers the request carries; and the defaults of `ResponseResults`, the route's answer
 - **ScrapeDispatchTest** — sending a scrape to a path's agents and merging their answers, which the scrape route and
   the dashboard's scrape-now share: each outcome `submitScrapeRequest` labels (the agent disconnecting before or during
   the scrape, the proxy's timeout or one it is given, the in-flight limit, the agent's backlog cap, the proxy stopping,
@@ -496,7 +499,9 @@ Three support helpers also live here (not test classes themselves):
   its `ScrapeSpec`'s query, headers, and origin (Prometheus or the dashboard) to the agent; an Authorization header
   sent without TLS is warned about once; `ScrapeHeaders` reads Prometheus's scrape timeout; and `mergeResponseResults`
   and `mergeContentTexts` pick the merged status and content type, keep one `# EOF` at the end, and add no blank line
-  for a failed agent
+  for a failed agent; each agent of a consolidated path gets a forward span under the scrape's, carried in its own
+  request, a forward that timed out or found its agent gone ends as an error tagged with how, a scrape without a trace
+  gets none and sends none, and a forward span shows the agent's name cut and escaped
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
@@ -506,8 +511,12 @@ Three support helpers also live here (not test classes themselves):
   the scrape port serves itself is refused, the blitz path also when it was configured with leading slashes; a path
   with more than `maxLabelsPerPath` labels is refused, and an accepted one keeps a single, parsed copy of its labels;
   the agents of one identity are refused past `maxPathsPerIdentity` together, agents with no identity sharing one
-  limit, the count follows each way a path leaves, a redeploy at the limit still takes over its own paths, and the
-  80% warning comes once until the count falls below 70%
+  limit, the count follows each way a path leaves, and a redeploy at the limit still takes over its own paths; and the
+  80% warnings of `maxPathsPerAgent` and `maxPathsPerIdentity` come once until the count falls below 70%, an agent
+  that leaves starting over
+- **NearLimitWarningsTest** — when the proxy warns that a count nears its limit: as it reaches 80%, and again only
+  once it has fallen below 70%, for each key on its own; the first whole count past 80% of a small limit, never for a
+  limit of 0, and without overflow near `Int.MAX_VALUE`
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, reclaims,
   unregistration, and agent removal race on the real code the TLA+ `ProxyRegistry` spec models, among agents of
   several launches, one of them reconnected and one predating path notices; no reclaim takes a path from a live agent
@@ -525,7 +534,7 @@ Three support helpers also live here (not test classes themselves):
 - **AgentContextManagerTest** — Proxy's AgentContextManager: add/remove contexts, chunked context management, concurrent
   access; a conditional removal takes only the context it is given; concurrent adds never pass an identity's
   agent limit, a removal frees a slot, and a refused add logs a WARN, and goes in the activity feed, at most once a
-  minute for each identity
+  minute for each identity; and an identity's 80% warning comes once until its count falls below 70%
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs);
   an eviction that finds the context already removed isn't counted
 - **RemovalReasonTest** — why the proxy removed an agent's context: each reason logs as its string always did, only an
@@ -813,7 +822,10 @@ One support helper also lives here (not a test class itself):
 - **ScrapeTracingTest** — a scrape's spans, the proxy's scrape and forward spans and the agent's fetch span, form one
   trace, the fetch joining it through the context the proxy sends; at a sample rate of 0 none is kept, the agent's
   included; a context that carries no trace begins one at the agent's rate; a rate keeps exactly its share; a heartbeat
-  is never sampled and every other gRPC call is at the rate; a span's outcome, status, and error tags; `traced`
+  is never sampled and every other gRPC call is at the rate; a call served, over an in-process server, is sampled at the
+  serving side's rate whatever its metadata's trace says (sampled, not sampled, or debug, a heartbeat included), and
+  still joins the caller's trace; an extracted trace loses its decision and keeps its IDs and extra fields; a span's
+  outcome, status, and error tags; `traced`
   finishing its span with what the block returned, a cancellation, or the error it threw, and running the block alone
   without a span; and closing closes the process's tracing
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
@@ -860,8 +872,9 @@ These support helpers also live here (not test classes themselves):
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 - **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,
   optionally at a lower level, restoring the logger's appenders and level afterward
-- **TracingMocks** — `collectInto(spans)`, a span handler that keeps each span a Tracing finishes, for the specs that
-  read what was traced
+- **TracingMocks** — `collectInto(spans)`, a span handler that keeps a copy of each span a Tracing finishes, as it was
+  when it finished, for the specs that read what was traced, and `collectingScrapeTracing(spans)`, a `ScrapeTracing`
+  whose spans land there
 - **MetricsMocks** — `mockProxyForMetrics()` / `mockAgentForMetrics()`, mocks that stub only what `ProxyMetrics`
   and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`;
   and `CountingProxyMetrics`, a relaxed `ProxyMetrics` whose counters are real, unregistered collectors, so a spec reads

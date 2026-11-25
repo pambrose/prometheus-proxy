@@ -126,6 +126,11 @@ message AgentInfo {
 // What the proxy tells an agent about a path it took from it: that another agent holds it now, or, with both held_by
 // fields empty, that no agent serves it any more. A notice is the path's current state, not an event, so a later one
 // for the same path replaces an earlier one the agent hasn't read yet.
+//
+// A notice with no path is a keepalive, which the agent ignores: the proxy sends one after
+// proxy.internal.streamKeepAliveSecs with no notice (none when that is 0), so a reverse proxy's idle timeout doesn't
+// close the stream. Unlike the other streams' keepalives, they wait for no flag at registration: every agent that reads
+// this stream ignores them, since the stream and its keepalives came in the same release.
 message PathNotice {
   // The path, without its leading slash.
   string path = 1;
@@ -252,8 +257,9 @@ service ProxyService {
   rpc sendHeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {
   }
 
-  // The notices about paths another agent took from this one, for the connection's lifetime. Only an agent that sent
-  // path_notices at registration calls it; a proxy predating it answers UNIMPLEMENTED.
+  // The notices about paths another agent took from this one, for the connection's lifetime, with a keepalive, a notice
+  // with no path, after a while with none (see PathNotice). Only an agent that sent path_notices at registration calls
+  // it; a proxy predating it answers UNIMPLEMENTED.
   rpc readPathNoticesFromProxy (AgentInfo) returns (stream PathNotice) {
   }
 }

@@ -161,6 +161,15 @@ All notable changes to this project are documented in this file.
   one connection, a fraction of its quota, could exhaust the Helm chart's proxy heap. The entry keeps them once,
   parsed, at most `maxLabelsPerPath` of them, about 28 KiB a path at worst with the defaults, and the dashboard's links
   read them without parsing every path's labels again on each collect
+- A gRPC call whose trace headers said sampled or debug was traced by the proxy whatever
+  `proxy.internal.zipkin.sampleRate` said, 0 included, so any caller could have every call it made traced, heartbeats
+  too. The proxy now decides each call it serves by its own rate, and still joins the caller's trace
+- A `forward` span whose scrape timed out while the proxy was sending the request, to an agent that had stopped
+  reading, lost its `queue.wait_ms` tag. The proxy now tags the span before the send, and annotates `sent to agent`
+  only while the scrape still waits for its result
+- The proxy's warnings that an agent nears `maxPathsPerAgent`, or an identity `maxAgentsPerIdentity`, came again each
+  time the count climbed back to 80%, as when an agent's discovery file churns or a fleet's agents reconnect one at a
+  time. Each now comes once, and again only after the count falls below 70%, as `maxPathsPerIdentity`'s does
 - An embedded agent whose app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java
   client below 1.7.0, as Spring Boot 4.0 and 4.1 do, failed once it ran, with a `NoSuchMethodError` or an
   `ExceptionInInitializerError`, and the app ran on with an agent that never served. It now refuses to start, with a
@@ -382,6 +391,9 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
+- The gRPC service definition says that a `PathNotice` with no path is a keepalive, which the agent ignores, sent to
+  every agent that reads the notices stream, and AGENTS.md no longer says that every stream's keepalives wait for the
+  other side to say at registration that it takes them
 - The nginx example (`nginx/docker/nginx.conf`) raises `grpc_read_timeout` and `client_body_timeout`, and the README
   and the Advanced Topics, Troubleshooting, and Kubernetes pages say to: nginx closes a gRPC stream that's quiet for
   60 seconds, so with its defaults an agent reconnected every minute and was briefly without its paths, even while it

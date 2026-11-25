@@ -18,18 +18,23 @@
 
 package io.prometheus.proxy
 
+import brave.handler.MutableSpan
 import com.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.pambrose.common.util.ensureLeadingSlash
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeLessThan
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -49,8 +54,10 @@ import io.prometheus.Proxy
 import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.ScrapeTracing
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.captureLogs
+import io.prometheus.common.collectingScrapeTracing
 import io.prometheus.common.proxyOptions
 import ch.qos.logback.classic.Level
 import io.prometheus.grpc.ScrapeRequest
@@ -59,6 +66,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import java.net.Socket
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource.Monotonic
@@ -692,6 +700,52 @@ class ProxyHttpRoutesTest : StringSpec() {
       verify(exactly = 2) { bus.emit(ProxyEvent.ScrapeCompleted(agentContext.agentId, "test-metrics", true)) }
       // The dashboard's record of each, which its path history keys and shows by path.
       verify(exactly = 2) { proxy.recordScrape(match { it.path == "test-metrics" }) }
+    }
+
+    // The scrape port takes requests from anyone, so a scrape's span begins a trace of its own, decided at the proxy's
+    // sample rate, and never joins one a request's propagation headers name: a client that marked its trace sampled
+    // could otherwise make the proxy keep every one, and put the proxy's spans in a trace of its choosing.
+    "a scrape's span should begin a trace of its own, whatever trace headers the request carries" {
+      val clientTraceId = "463ac35c9f6413ad48485a3953bb6124"
+      val clientSpanId = "a2fb4a1d1a96d312"
+      val traceHeaders =
+        mapOf(
+          "X-B3-TraceId" to clientTraceId,
+          "X-B3-SpanId" to clientSpanId,
+          "X-B3-Sampled" to "1",
+          "X-B3-Flags" to "1",
+          "b3" to "$clientTraceId-$clientSpanId-d",
+          "traceparent" to "00-$clientTraceId-$clientSpanId-01",
+        )
+
+      // The spans one scrape sent with [traceHeaders] leaves, with the proxy sampling at [sampleRate].
+      suspend fun spansOfScrape(sampleRate: Double): List<MutableSpan> {
+        val spans = CopyOnWriteArrayList<MutableSpan>()
+        collectingScrapeTracing(spans, sampleRate).use { tracing ->
+          val proxy = createSpyProxyForRoutes()
+          every { proxy.tracing } returns tracing
+          val agentContext = AgentContext("test-remote")
+          proxy.pathManager.addPath("test-metrics", "", agentContext)
+          val sent = answerScrapes(proxy, agentContext, 1)
+          withScrapeRoutes(proxy) { port, client ->
+            client.get("http://localhost:$port/test-metrics") {
+              traceHeaders.forEach { (name, value) -> header(name, value) }
+            }.status shouldBe HttpStatusCode.OK
+          }
+          sent.await().single().traceContextMap.values.joinToString() shouldNotContain clientTraceId
+        }
+        return spans
+      }
+
+      val spans = spansOfScrape(sampleRate = 1.0)
+      val scrape = spans.single { it.name() == ScrapeTracing.SCRAPE_SPAN }
+      scrape.parentId().shouldBeNull()
+      scrape.traceId() shouldNotBe clientTraceId
+      scrape.debug() shouldBe false
+      spans.single { it.name() == ScrapeTracing.FORWARD_SPAN }.parentId() shouldBe scrape.id()
+
+      // Sampled by the proxy's rate alone.
+      spansOfScrape(sampleRate = 0.0).shouldBeEmpty()
     }
 
     // The route's own answers compare the path as well, so they see it without its extra slashes too: "//blitz-test" is

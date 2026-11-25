@@ -182,7 +182,7 @@ When promoting a type from `internal` to `public`, also add a cross-reference to
 ### gRPC Service Definition
 
 Defined in `src/main/proto/proxy_service.proto` — read it for the current RPC set. Note the defaults that
-aren't in the proto: a scrape result is sent in chunks once its gzipped size reaches `chunkContentSizeKbs` (32 KB), the heartbeat fires every 5s during inactivity, and each stream sends a keepalive after `proxy.internal.streamKeepAliveSecs` (30s) of quiet, so a reverse proxy's idle timeout doesn't close it; the proxy tells the agent the interval for its response streams at registration (`RegisterAgentResponse.stream_keepalive_millis`). A side sends keepalives only once the other said at registration that it takes them (the agent's `stream_keepalives`, a nonzero interval from the proxy), since one predating them would take a keepalive for a scrape request or a result. Every wait that ends in a keepalive goes through `receiveCatchingWithin` (`common/Channels.kt`), a `select` with `onTimeout`, never a receive inside `withTimeoutOrNull`, which can take a channel's element as it times out and lose it.
+aren't in the proto: a scrape result is sent in chunks once its gzipped size reaches `chunkContentSizeKbs` (32 KB), the heartbeat fires every 5s during inactivity, and each stream sends a keepalive after `proxy.internal.streamKeepAliveSecs` (30s) of quiet, so a reverse proxy's idle timeout doesn't close it; the proxy tells the agent the interval for its response streams at registration (`RegisterAgentResponse.stream_keepalive_millis`). On `readRequestsFromProxy` and the two response streams, a side sends keepalives only once the other said at registration that it takes them (the agent's `stream_keepalives`, a nonzero interval from the proxy), since one predating them would take a keepalive for a scrape request or a result. `readPathNoticesFromProxy` sends its keepalive, a `PathNotice` with no path, to every reader, ungated, since every agent that reads that stream ignores one (`AgentPathManager.notePathNotice`). Every wait that ends in a keepalive goes through `receiveCatchingWithin` (`common/Channels.kt`), a `select` with `onTimeout`, never a receive inside `withTimeoutOrNull`, which can take a channel's element as it times out and lose it.
 
 ### Key Mechanisms
 
@@ -217,7 +217,10 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   gRPC TLS context from either with `GrpcSslContexts`. Never log a PEM value, only whether it's set.
 - **Tracing**: `ScrapeTracing` (common) is each process's Brave tracing, owned by `Proxy.tracing` / `Agent.tracing`
   and built on first use (the reporter is assigned after the gRPC server and channel are built). It samples gRPC calls
-  with an `RpcRuleSampler` that never samples `sendHeartBeat`, and traces each scrape: the proxy's `scrape` span
+  with an `RpcRuleSampler` that never samples `sendHeartBeat` or `readPathNoticesFromProxy`, and samples each call it
+  serves itself: its gRPC propagation (`ServerSampledPropagation`) drops the sampling decision a call's metadata
+  carries and keeps its trace IDs, since Brave's server handler otherwise keeps a caller's `sampled` or debug flag,
+  which let any caller have the proxy trace every call. It traces each scrape: the proxy's `scrape` span
   (`ProxyHttpRoutes`) and a `forward` span per agent (`ScrapeDispatch`), whose context rides `ScrapeRequest`'s
   `trace_context` to the agent's `fetch` span (`AgentHttpService`). Each span's lifecycle goes through
   `ScrapeTracing.traced`, which tags how its block ended and finishes it. Pass spans explicitly, never put them in

@@ -1388,6 +1388,33 @@ class ProxyPathManagerTest : StringSpec() {
       warnings.single() shouldContain "4 of 5"
     }
 
+    // An agent whose discovery file churns unregisters a path and registers another, and each such swap at the
+    // threshold warned again. It warns again only once the count has fallen below 70%, and an agent that leaves starts
+    // over.
+    "an agent's 80% warning for maxPathsPerAgent should come once, until its count falls below 70%" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 10), isTestMode = true)
+      val agent = createMockAgentContext()
+
+      val warnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          (1..8).forEach { manager.addPath("p$it", "{}", agent) }
+          // Down to 7 and back to 8: still warned of.
+          manager.removePath("p8", agent.agentId)
+          manager.addPath("p9", "{}", agent)
+          // Down to 6, below 70%, and back to 8: warned again.
+          manager.removePath("p9", agent.agentId)
+          manager.removePath("p7", agent.agentId)
+          manager.addPath("p7", "{}", agent)
+          manager.addPath("p8", "{}", agent)
+          // Gone, and back with 8: warned again.
+          manager.removeFromPathManager(agent.agentId, RemovalReason.TERMINATION)
+          (1..8).forEach { manager.addPath("p$it", "{}", agent) }
+        }.map { it.formattedMessage }.filter { "maxPathsPerAgent" in it }
+
+      warnings shouldHaveSize 3
+      warnings.forEach { it shouldContain "serves 8 of 10" }
+    }
+
     "a path longer than maxPathLength should be rejected as an invalid path" {
       val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 8), isTestMode = true)
       val context = createMockAgentContext()

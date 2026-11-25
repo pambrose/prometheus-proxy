@@ -146,9 +146,10 @@ internal class ProxyPathManager(
   private val countedIdentities = HashMap<String, String>()
   private val identityPathCounts = HashMap<String, Int>()
 
-  // The identities warned that their agents near maxPathsPerIdentity, each until its count falls below 70% of it, so a
-  // count that hovers at 80% isn't warned of on every registration; guarded by pathMap.
-  private val identitiesNearPathLimit = HashSet<String>()
+  // When to warn that an agent nears maxPathsPerAgent, and the agents of an identity maxPathsPerIdentity: told of each
+  // change to the counts, in countPaths, so the warnings change under pathMap too.
+  private val agentsNearPathLimit = NearLimitWarnings<String>()
+  private val identitiesNearPathLimit = NearLimitWarnings<String>()
 
   // Adds [delta] to the paths [agentId] serves, and to its identity's: [identity], the identity of the registration,
   // when the agent serves none yet. Callers MUST hold pathMap.
@@ -158,11 +159,19 @@ internal class ProxyPathManager(
     identity: String = "",
   ) {
     val counted = countedIdentities[agentId] ?: identity
-    if (pathCounts.addTo(agentId, delta) > 0)
+    val agentCount = pathCounts.addTo(agentId, delta)
+    if (agentCount > 0)
       countedIdentities[agentId] = counted
     else
       countedIdentities.remove(agentId)
-    warnNearIdentityPathLimit(counted, identityPathCounts.addTo(counted, delta))
+    val identityCount = identityPathCounts.addTo(counted, delta)
+    if (delta > 0) {
+      warnNearPathLimit(agentId, agentCount)
+      warnNearIdentityPathLimit(counted, identityCount)
+    } else {
+      agentsNearPathLimit.fell(agentId, agentCount)
+      identitiesNearPathLimit.fell(counted, identityCount)
+    }
   }
 
   // The number of paths [agentId] serves. Callers that already hold pathMap take it again, which the JVM allows.
@@ -388,15 +397,15 @@ internal class ProxyPathManager(
     return rejectPath(agentContext, path, reason, PATH_LIMIT_REACHED)
   }
 
-  // Warns once as an agent's path count reaches 80% of maxPathsPerAgent, so an operator hears about it before its
-  // registrations start failing. Callers MUST hold pathMap.
-  private fun warnNearPathLimit(agentContext: AgentContext) {
+  // Warns as [agentId], now serving [count] paths, reaches 80% of maxPathsPerAgent, so an operator hears about it
+  // before its registrations start failing; once, until the count falls below 70%. Callers MUST hold pathMap.
+  private fun warnNearPathLimit(
+    agentId: String,
+    count: Int,
+  ) {
     val max = proxy.maxPathsPerAgent
-    val count = pathCountFor(agentContext.agentId)
-    if (max > 0 && count == (max * 4 + 4) / 5)
-      logger.warn {
-        "Agent ${agentContext.agentId} serves $count of $max paths allowed by proxy.internal.maxPathsPerAgent"
-      }
+    if (agentsNearPathLimit.rose(agentId, count, max))
+      logger.warn { "Agent $agentId serves $count of $max paths allowed by proxy.internal.maxPathsPerAgent" }
   }
 
   // Rejects a path [agentContext] doesn't serve yet once the agents of [identity], the identity its paths count
@@ -425,12 +434,8 @@ internal class ProxyPathManager(
     identity: String,
     count: Int,
   ) {
-    val max = proxy.maxPathsPerIdentity.toLong()
-    if (max <= 0)
-      return
-    if (count * 10L < max * 7)
-      identitiesNearPathLimit.remove(identity)
-    else if (count * 5L >= max * 4 && identitiesNearPathLimit.add(identity))
+    val max = proxy.maxPathsPerIdentity
+    if (identitiesNearPathLimit.rose(identity, count, max))
       logger.warn {
         "The agents ${identityDesc(identity)} serve $count of $max paths allowed by proxy.internal.maxPathsPerIdentity"
       }
@@ -726,10 +731,8 @@ internal class ProxyPathManager(
     alreadyServes: Boolean,
     displaced: AgentContext?,
   ) {
-    if (!alreadyServes) {
+    if (!alreadyServes)
       countPaths(agentContext.agentId, 1, identity)
-      warnNearPathLimit(agentContext)
-    }
     proxy.activityLog?.also { log ->
       when {
         displaced != null -> log.record(ActivityKind.PATH_TAKEN_OVER, agentContext, path, "From ${displaced.agentName}")
