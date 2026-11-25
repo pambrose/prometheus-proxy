@@ -1,9 +1,9 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 68 fixed, 4 open (8 medium, 64 low, no high).
+**Status:** 72 issues — 72 fixed, 0 open (8 medium, 64 low, no high).
 
-**Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
-#555–#561).
+**Progress:** all 17 steps: Wave A (steps 2, 3, and 16, in #550–#552), Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
+#555–#561), Wave C (steps 5, 7, 8, 10, 12, and 14, in #562–#567), and Wave D (step 17, in #568).
 
 **Date:** 2026-11-23; rechecked twice on 2026-11-24
 
@@ -65,9 +65,9 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 40 | A check order, a `make up` claim, and an unnamed size limit on the deployment and security pages     | Docs       | low      | ✅      |
 | 41 | The README and `llms.txt` miss `PROMETHEUS_PROXY_AUTHORITY` and misstate `-D` precedence             | Docs       | low      | ✅      |
 | 42 | The metrics docs' counter count, alert list, and chunk threshold are wrong                           | Docs       | low      | ✅      |
-| 43 | `docs/packages.md`, `ConfigLoadException`'s KDoc, and `KDOC_SUMMARY.md` describe 4.6.0               | Docs       | low      | ⬜      |
-| 44 | AGENTS.md and `docs/TESTING.md` name a deploy check that's gone, and misdescribe `make all-tests`    | Docs       | low      | ⬜      |
-| 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ⬜      |
+| 43 | `docs/packages.md`, `ConfigLoadException`'s KDoc, and `KDOC_SUMMARY.md` describe 4.6.0               | Docs       | low      | ✅      |
+| 44 | AGENTS.md and `docs/TESTING.md` name a deploy check that's gone, and misdescribe `make all-tests`    | Docs       | low      | ✅      |
+| 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ✅      |
 | 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ✅      |
 | 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ✅      |
 | 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
@@ -92,7 +92,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 67 | On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have     | CI/build   | low      | ✅      |
 | 68 | `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap                           | CI/build   | low      | ✅      |
 | 69 | The changelogs describe the home page #546 replaced, and miss four commits' changes                  | Docs       | low      | ✅      |
-| 70 | The release skill still lists `index.md`, and a design-check exemption covers a deleted class        | Docs       | low      | ⬜      |
+| 70 | The release skill still lists `index.md`, and a design-check exemption covers a deleted class        | Docs       | low      | ✅      |
 | 71 | The Kubernetes demo's docs say its agent dashboard port is set once, but nothing keeps it            | Docs       | low      | ✅      |
 | 72 | `DemoTourTablesTest` misses a stale README heading and `demo.sh`'s page anchors                      | Tests      | low      | ✅      |
 
@@ -163,7 +163,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 14   | ✅ #567 | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
 | 15   | ✅ #556 | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
 | 16   | ✅ #552 | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
-| 17   | ⬜      | #43, #44, #45, #70           | Maintainer docs that describe what shipped                            | `docs/packages.md`, `docs/KDOC_SUMMARY.md`, `ConfigLoadException`'s KDoc, AGENTS.md, `docs/TESTING.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, the publishing-release skill, `.impeccable/config.json`, `extra.css` | No behavior change. Last, so they describe what the earlier steps settle.                                                                                                                        |
+| 17   | ✅ #568 | #43, #44, #45, #70           | Maintainer docs that describe what shipped                            | `docs/packages.md`, `docs/KDOC_SUMMARY.md`, `ConfigLoadException`'s KDoc, AGENTS.md, `docs/TESTING.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, the publishing-release skill, `.impeccable/config.json`, `extra.css` | No behavior change. Last, so they describe what the earlier steps settle.                                                                                                                        |
 
 ### What can run in parallel
 
@@ -181,9 +181,9 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 | Wave | Status | Steps                       | Waits for                                    |
 |------|--------|-----------------------------|----------------------------------------------|
 | A    | ✅      | 2, 3, 16                    | nothing; all before the 4.7.0 tag            |
-| B    | ⬜      | 1, 4, 6, 9, 11, 13, 15      | 4 on 2                                       |
-| C    | ⬜      | 5, 7, 8, 10, 12, 14         | 5 and 12 on 4; 7 on 6; 8 and 10 on 9; 14 on 3 |
-| D    | ⬜      | 17                          | the code steps (2–12)                        |
+| B    | ✅      | 1, 4, 6, 9, 11, 13, 15      | 4 on 2                                       |
+| C    | ✅      | 5, 7, 8, 10, 12, 14         | 5 and 12 on 4; 7 on 6; 8 and 10 on 9; 14 on 3 |
+| D    | ✅      | 17                          | the code steps (2–12)                        |
 
 Seven files, or sets of files, are edited across tracks, in separate places, so they merge cleanly, though the later
 PR rebases:
@@ -2096,7 +2096,7 @@ Content Size Limits, which now says which limit fails a scrape with which status
 **Resolution:** Fixed in #552: three `agent_filter_*` counters, the full alert list, and the chunk threshold as a gzipped body that
 reaches `chunkContentSizeKbs`. The alert list stays descriptive, so no names test was added.
 
-### 43. ⬜ The API summaries for maintainers describe 4.6.0: `docs/packages.md`, `ConfigLoadException`'s KDoc, and `docs/KDOC_SUMMARY.md`
+### 43. ✅ The API summaries for maintainers describe 4.6.0: `docs/packages.md`, `ConfigLoadException`'s KDoc, and `docs/KDOC_SUMMARY.md`
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2119,7 +2119,9 @@ reaches `chunkContentSizeKbs`. The alert list stays descriptive, so no names tes
 
 **Tests:** none; prose.
 
-### 44. ⬜ `AGENTS.md` and `docs/TESTING.md` name a docs.yml deploy check that's gone, and describe `make all-tests` without its TLA+ checks
+**Resolution:** Fixed in #568. `docs/KDOC_SUMMARY.md` covers the 4.7.0 builder (`dashboardPort`, `fromEnvironment()`, `source()`, `agentMetricsAt()`, `dashboard()`, `dashboardLogin()`, `startIfConfigured()`), `MetricsSource`, and `EmbeddedAgentInfo.close()`, and describes the packages as `packages.md` does. `ConfigLoadException`'s KDoc and `packages.md` name every place it comes from, the builder's methods, `EmbeddedAgentConfig.start()`, and the Ktor plugin among them, and every setting it's thrown for, a malformed endpoint, a refused path character, and unusable PEM included; `EnvVars` is the variables the proxy and agent read themselves. The fix found that the API reference had never shown `packages.md`: inside `fun Project.configureDokka()`, `displayName` is `Project.displayName`, so the module was `root project 'prometheus-proxy'`, not the file's `# Module Prometheus Proxy`, and the file was a publication's `includes`, which Dokka reads only for a multi-module page. The module name is its own value, and the file is the source set's `includes`; the regenerated site shows each package's description.
+
+### 44. ✅ `AGENTS.md` and `docs/TESTING.md` name a docs.yml deploy check that's gone, and describe `make all-tests` without its TLA+ checks
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2138,7 +2140,9 @@ reaches `chunkContentSizeKbs`. The alert list stays descriptive, so no names tes
 **Tests:** `TestingGuideTest` could check that each `make` target `docs/TESTING.md` lists exists and that every target in
 `CI_JOBS` is named there.
 
-### 45. ⬜ `docs/DESIGN.md` and `docs/PRODUCT.md`, the dashboard's design and product contracts, no longer match what shipped
+**Resolution:** Fixed in #568. `AGENTS.md` says the demos' `make up` and `bin/docker-*.sh` read `make site-version`, and `docs/TESTING.md` names `make all-tests`' `tla-checks-full`, `spring-boot-demo-check`, and `check-rules` and `helm-lint`, which `make ci` runs too. `TestingGuideTest` checks that every `make` target the guide names exists (in every demo's Makefile, for a demo's own), that every `CI_JOBS` job is named, and that the `make all-tests` entry names every target it runs; against the old guide the second failed on three jobs and the third on `tla-checks-full`.
+
+### 45. ✅ `docs/DESIGN.md` and `docs/PRODUCT.md`, the dashboard's design and product contracts, no longer match what shipped
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2158,6 +2162,8 @@ reaches `chunkContentSizeKbs`. The alert list stays descriptive, so no names tes
   1052` say). Fix: update each.
 
 **Tests:** none; prose.
+
+**Resolution:** Fixed in #568. `docs/DESIGN.md` names the Links column's hover ring, an inset hairline with no offset or blur, and the `3px` corners of Log out and the Theme Picker as the exceptions to its no-shadow and square-or-circle rules, everywhere it states them, with a `bar-end` token; the CSS is unchanged. `docs/PRODUCT.md` has the proxy's four layouts, the logo and the brand mark beside `Proxy: host:port` or `Agent: name`, the seven demos, and the settings with no CLI flag or variable.
 
 ### 64. ✅ The Agent Configuration page lists `--proxy` and `PROXY_HOSTNAME` under `agent.proxy.hostname`, "used when `endpoints` is empty", but both replace `endpoints`
 
@@ -2281,7 +2287,7 @@ tagged, so all of it can still be fixed before it's published.
 **Resolution:** Fixed in #552, with the wording this finding gives: the home-page entry and sentence, the login part, three new
 CHANGELOG entries, and a release-notes bullet for the demos' tours.
 
-### 70. ⬜ #546 removed the home page's version and flow line, but two configs still name them: the publishing-release skill lists `index.md` as a version file, and `.impeccable/config.json` exempts all of `extra.css` for `.pp-flow__wall`
+### 70. ✅ #546 removed the home page's version and flow line, but two configs still name them: the publishing-release skill lists `index.md` as a version file, and `.impeccable/config.json` exempts all of `extra.css` for `.pp-flow__wall`
 
 **Severity:** low (the skill's part found by all three third-pass reviews) · **Confidence:** confirmed from the files.
 
@@ -2314,6 +2320,8 @@ today, but it would hide a real side-tab accent added to `extra.css` later.
 **Tests:** a `misc/` spec that expands the website paths the skill and step 2 name and compares them with
 `RELEASE_VERSION_FILES` as `make -s` prints it, the way `SiteVersionTest` runs `make site-version`. It fails today on
 `index.md`.
+
+**Resolution:** Fixed in #568. The skill lists `{getting-started,docker}.md` and `grafana.md` alone, the `.impeccable/config.json` exemption is gone, and so is the orphaned comment in `extra.css`. `ReleaseCheckTest` compares the website pages the skill and `docs/RELEASE.md`'s step 2 name with `RELEASE_VERSION_FILES` as `make` prints it; it failed with the old skill, and with `index.md` put back in step 2.
 
 ### 71. ✅ The Kubernetes demo's page and README put `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` under "set its variable for the `make up` that creates the clusters … You set it once", but nothing reads it there or keeps it
 

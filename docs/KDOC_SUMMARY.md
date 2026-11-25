@@ -7,11 +7,13 @@ This document summarizes the KDoc documentation in the Prometheus Proxy codebase
 ### Documented Classes
 
 KDoc documentation exists on the two top-level public classes, `Agent` and `Proxy`, and on the embedded agent's
-public API, `EmbeddedAgentConfig` and `EmbeddedAgentInfo` (below them):
+public API, `EmbeddedAgentConfig`, `MetricsSource`, and `EmbeddedAgentInfo` (below them). The other public types,
+`AgentOptions`, `ProxyOptions`, `BaseOptions`, `EnvVars`, and `ConfigLoadException`, carry KDoc too, and
+[`docs/packages.md`](packages.md) describes each:
 
 #### `Agent` (`src/main/kotlin/io/prometheus/Agent.kt`)
 
-Comprehensive KDoc (~78 lines) covering:
+Comprehensive KDoc (~87 lines) covering:
 
 - **Class Purpose**: Prometheus Agent for firewall-crossing metrics collection
 - **Architecture**: Connection management, path registration, scrape processing, concurrent scraping, heartbeat, metrics
@@ -25,7 +27,7 @@ Comprehensive KDoc (~78 lines) covering:
 
 #### `Proxy` (`src/main/kotlin/io/prometheus/Proxy.kt`)
 
-Comprehensive KDoc (~85 lines) covering:
+Comprehensive KDoc (~94 lines) covering:
 
 - **Class Purpose**: Prometheus Proxy for metrics collection across firewalls
 - **Architecture**: HTTP service, gRPC service, request routing, service discovery, agent management, health monitoring
@@ -40,25 +42,47 @@ Comprehensive KDoc (~85 lines) covering:
 
 #### `EmbeddedAgentConfig` (`src/main/kotlin/io/prometheus/agent/EmbeddedAgentConfig.kt`)
 
-KDoc on the class, its `Builder`, and every builder method and property (24 blocks), covering:
+KDoc on the class and each of its members, its `Builder` and every builder method and property, and
+`embeddedAgent`, covering:
 
 - **Class Purpose**: an embedded agent's settings, built in code with a typed method for each and held in memory,
   started with `start()`, which behaves as `Agent.startAsyncAgent(config)` does: built-in defaults, single settings'
-  environment variables first, and `ConfigLoadException` on a setting the agent can't use; `toConfig()` gives the tree
-- **Usage Example**: `embeddedAgent { }` from Kotlin, with `builder()` named for Java
-- **Builder**: the `name`, `proxy`, `token`, `consolidated`, and `agentMetricsPort` properties, TLS from PEM
-  (`trustCertificatePem`, `clientCertificatePem`), `path` and `scrapeSelf` (credentials percent-encoded into the URL),
-  and `setting(key, value)` and its precedence
+  environment variables first, and `ConfigLoadException` on a setting the agent can't use. `startIfConfigured()`
+  starts it only where `namesProxy()` finds a proxy, and returns null, logging why, when there's none or it can't
+  start; `toConfig()` gives the tree, and `toString()` the settings with their secrets masked
+- **Usage Examples**: `embeddedAgent { }` from Kotlin, with `builder()` named for Java, and a worker that reads its
+  proxy from the environment and serves its registry and the agent's own metrics in-process
+- **Builder**: the `name`, `proxy`, `token`, `consolidated`, `agentMetricsPort`, and `dashboardPort` properties; TLS
+  from PEM (`trustCertificatePem`, `clientCertificatePem`); the proxy, token, and certificate from the app's
+  environment with `fromEnvironment()` (`PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and
+  `PROMETHEUS_PROXY_AUTHORITY`); paths scraped with `path` and `scrapeSelf` (credentials percent-encoded into the
+  URL) or served in-process with `source` (a `MetricsSource` or a `PrometheusRegistry`); the agent's own metrics on a
+  port with `agentMetrics(port)` or at a path in-process with `agentMetricsAt(path)`; its dashboard with `dashboard()`
+  and `dashboardLogin()`; `setting(key, value)` and its precedence; and the values the builder refuses as they're
+  given, with `ConfigLoadException`
+
+#### `MetricsSource` (`src/main/kotlin/io/prometheus/agent/MetricsSource.kt`)
+
+KDoc on the interface, `write`, and `of`, covering:
+
+- **Purpose**: a host's metrics, read in-process for a path in place of a URL, given to the builder's `source()`
+- **Contract**: called for each scrape, and each dashboard's Scrape now, on a thread it can block and from several at
+  once, within the agent's size limit and the path's filter; interrupted at the scrape timeout; whatever it throws,
+  short of a `VirtualMachineError`, fails only that scrape
+- **write**: its `accept` and `names` (`name[]`) parameters, the content type it returns, and its `IOException` and
+  `InterruptedException`
+- **of**: a source of a `PrometheusRegistry`, which leaves out the agent's own metrics
 
 #### `EmbeddedAgentInfo` (`src/main/kotlin/io/prometheus/agent/EmbeddedAgentInfo.kt`)
 
 KDoc on the class and each member, covering:
 
-- **Class Purpose**: the handle `Agent.startAsyncAgent` returns, the supported surface for an agent the host didn't
-  construct
-- **Usage Example**: starting, logging its identity, and `shutdown()`
+- **Class Purpose**: the handle `Agent.startAsyncAgent`, `EmbeddedAgentConfig.start()`, and `startIfConfigured()`
+  return, the supported surface for an agent the host didn't construct
+- **Usage Examples**: starting, logging its identity, and `shutdown()`; and `use { }` on what `startIfConfigured()`
+  returns, as it's `AutoCloseable`
 - **Members**: `launchId`, `agentName`, `isConnected` and `proxyEndpoint` (its connection, read live for a health
-  check), and `shutdown()`
+  check), `shutdown()`, and `close()`, which calls it
 - **@property**: `launchId`, `agentName`
 
 ### Documented Internal Classes
@@ -178,12 +202,15 @@ Coverage excludes generated code (see `configureCoverage()` in `build.gradle.kts
 Package-level documentation is provided in [`docs/packages.md`](packages.md) using Dokka's
 `# Module` / `# Package` format. The following packages are documented:
 
-| Package                | Description                                                  |
-|:-----------------------|:-------------------------------------------------------------|
-| `io.prometheus`        | Top-level entry points: Agent and Proxy                      |
-| `io.prometheus.proxy`  | Proxy-side services, managers, and data models               |
-| `io.prometheus.agent`  | Agent-side services for gRPC communication and HTTP scraping |
-| `io.prometheus.common` | Shared utilities, configuration, and data models             |
+| Package                | Description                                                                                                                        |
+|:-----------------------|:-----------------------------------------------------------------------------------------------------------------------------------|
+| `io.prometheus`        | Top-level entry points: `Agent` and `Proxy`                                                                                        |
+| `io.prometheus.proxy`  | Proxy-side configuration: `ProxyOptions`                                                                                           |
+| `io.prometheus.agent`  | Agent-side configuration, `AgentOptions`, and the embedded agent's `EmbeddedAgentConfig`, `MetricsSource`, and `EmbeddedAgentInfo` |
+| `io.prometheus.common` | Shared configuration types: `BaseOptions`, `EnvVars`, and `ConfigLoadException`                                                    |
+
+Each package's services, managers, and utilities are `internal`, as `packages.md` says of each: documented in source,
+but not in the generated site.
 
 ## Dokka Integration
 

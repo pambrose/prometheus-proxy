@@ -80,6 +80,7 @@ typography:
 rounded:
   none: "0"
   tab: "6px 6px 0 0"
+  bar-end: "3px"
   pill: "20px"
   dot: "50%"
 spacing:
@@ -231,18 +232,19 @@ entire job is telling an operator whether something is broken. Every visual deci
 that: if the dashboard is ever wrong, or ever *looks* wrong, it has failed at the one thing it exists
 to do.
 
-The system's discipline shows most in what it refuses. There are no shadows, anywhere. There are no
-transitions, anywhere — hover, selection, and live swaps all land instantly, which is itself a claim
-about latency the interface then has to keep. The accent color has exactly two jobs on the entire
-surface: focus, and the current item. The only thing that moves is a 7px dot reporting whether the socket is alive. This is
-a system built by subtraction, and the remaining elements are load-bearing.
+The system's discipline shows most in what it refuses. There are no shadows, anywhere: the one `box-shadow` draws a
+hairline, not depth. There are no transitions, anywhere — hover, selection, and live swaps all land instantly, which is
+itself a claim about latency the interface then has to keep. The accent color has exactly two jobs on the entire
+surface: focus, and the current item. The only thing that moves is a 7px dot reporting whether the socket is alive. This
+is a system built by subtraction, and the remaining elements are load-bearing.
 
 **Key Characteristics:**
 
 - One typeface — monospace — at 12.5px base, for every role from title to micro-label.
-- Zero shadows. Depth is four tonal planes plus two hairline weights.
-- Two radii: `0` and fully round. Rectangles hold content; circles report status. The one exception is the top
-  corners of the folder tabs.
+- Zero shadows. Depth is four tonal planes plus two hairline weights. The one `box-shadow`, the Links column's hover
+  ring, is a hairline.
+- Two radii: `0` and fully round. Rectangles hold content; circles report status. The exceptions are the top corners
+  of the folder tabs and the `3px` corners of the bar's end, the Theme Picker and Log out.
 - The accent is used twice: focus rings and the current item's edge. It never fills a surface.
 - No CSS transitions. The only animation in the system is the connection beacon.
 - Full-bleed layout — no centered container, no max-width, no page margins.
@@ -444,8 +446,10 @@ scroller before it ships.
 
 ## Elevation & Depth
 
-**There are no shadows in this system.** Not one `box-shadow` declaration exists. Depth is built
-entirely from two mechanisms: four tonal planes and two hairline weights.
+**There are no shadows in this system.** Depth is built entirely from two mechanisms: four tonal planes and two
+hairline weights. The one `box-shadow` declaration is no exception to that: the Links column's hover ring
+(`inset 0 0 0 1px` in `ink-3`, see Row Links) has no offset and no blur, so it draws a `1px` hairline inside a mark's
+round target without changing the target's size.
 
 The tonal planes do not form a simple light-to-dark ramp. `surface` is the **reading plane**;
 `surface-2` and `surface-3` step *away* from it in the direction of contrast — darker in light mode,
@@ -459,7 +463,9 @@ structure before it resolves content — you see the panes, then the rows, then 
 ### Named Rules
 
 **The No-Shadow Rule.** Zero shadows. Not for hover, not for panels, not for the "elevated" state of
-anything. If an element needs to separate from its neighbor, it gets a hairline or a tonal step.
+anything. If an element needs to separate from its neighbor, it gets a hairline or a tonal step. A `box-shadow` that
+draws only a hairline, inset, with no offset or blur, as the Links column's hover ring does, is a hairline, not a
+shadow; anything softer is a shadow.
 
 **The Reading Plane Rule.** `surface` is where content is read. `surface-2` and `surface-3` are always
 *away* from it in contrast, never toward it. When adding a plane, ask which direction from the reading
@@ -473,14 +479,16 @@ The form language is **two radii and nothing between them.**
   table. No rounded corners on any container, with one exception, below.
 - **`6px` on the top corners of the folder tabs, and only there.** A tab is a handle on the layout below
   it, not a container, and its rounded top is what reads as a folder tab rather than a box on the bar.
+- **`3px` on the bar's end: the Theme Picker's group and the Log out button.** The corners of their quiet `line`
+  border. They're controls, neither a container nor a report of state.
 - **Fully round (`20px` on short elements, `50%` on dots) — everything that reports state.** Status
   pills, tags, LEDs, the connection beacon.
 
 The split is semantic, not decorative: **rectangles hold content, round things report status.** A
 7px circle is a lamp. A 20px-radius capsule is a badge. Neither shape is ever used for a container,
-and no container is ever softened toward them. Apart from the tabs' top corners there is no `4px`, no
-`6px`, no `8px` radius in the system, and introducing one would blur a distinction that currently does
-real work.
+and no container is ever softened toward them. Apart from the tabs' top corners and the bar's end, there is no
+`4px`, no `6px`, no `8px` radius in the system (the Login Page, its one deliberate exception, aside), and introducing
+one would blur a distinction that currently does real work.
 
 Borders carry the remaining form language: 1px hairlines for structure, among them the tabs' `line` outlines,
 and the current-item edges in `accent`, the only borders in the system thicker than a hairline: the row item's
@@ -490,8 +498,8 @@ transparent at rest, under a transparent 2px top that keeps its glyph centred.
 ### Named Rules
 
 **The Square-or-Circle Rule.** Radius is `0` or fully round. Nothing in between ships, but for the
-folder tabs' top corners. If a new element feels like it wants `6px`, it is a container and it wants
-`0`.
+folder tabs' top corners and the bar's end's `3px`. If a new element feels like it wants `6px`, it is a container
+and it wants `0`.
 
 ## Components
 
@@ -834,9 +842,9 @@ carries `white-space: nowrap` so a narrow viewport wraps between stats rather th
 
 ### Theme Picker
 
-At the bar's end, before Log out, in Log out's quiet border: three icon buttons in one group, light (a sun),
-dark (a moon), and auto (a half-filled circle), in the order the system's own appearance settings list them, so
-each theme is one press away and none is passed through on the way to another. Auto follows the system's
+At the bar's end, before Log out, in Log out's quiet border (`1px` `line`, `3px` corners): three icon buttons in one
+group, light (a sun), dark (a moon), and auto (a half-filled circle), in the order the system's own appearance settings
+list them, so each theme is one press away and none is passed through on the way to another. Auto follows the system's
 preference and is the default.
 
 - **Size:** each button is a `24px`-tall target, the minimum size, `44px` square under a coarse pointer. It
@@ -980,9 +988,10 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
 - **Don't** drift toward a consumer SaaS dashboard — no gradient hero cards, no `rounded-2xl`, no soft
   drop shadows, no illustrated empty states, no sparkline that decorates rather than informs. *(User-confirmed
   anti-reference.)*
-- **Don't** add a `box-shadow`. There are zero in the system and that is the elevation strategy, not
-  an oversight.
-- **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`.
+- **Don't** add a `box-shadow`. There are no shadows in the system and that is the elevation strategy, not
+  an oversight; the one declaration, the Links column's hover ring, draws a hairline, not a shadow.
+- **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`. The folder tabs' top corners and
+  the bar's end's `3px` are the only ones.
 - **Don't** fill anything with the accent. It draws focus rings and the current item's edge; that is the
   complete list.
 - **Don't** use a soft status color as a region or row background. Soft colors back pills and tags only.

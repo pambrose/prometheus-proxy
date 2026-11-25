@@ -27,7 +27,8 @@ import io.kotest.matchers.string.shouldNotContain
 import java.io.File
 
 // docs/TESTING.md names every spec and support file and says what each one pins. Kept by hand, that list fell behind
-// the suite more than once, so a file added without an entry fails here, next to the change that added it.
+// the suite more than once, so a file added without an entry fails here, next to the change that added it. Its make
+// commands fell behind the Makefile the same way (November 23 #44), so they're checked against it too.
 class TestingGuideTest : StringSpec() {
   // The guide without its fenced code blocks, whose "# ..." shell comments would read as headings.
   private val guide by lazy { File(TESTING_GUIDE).readText().replace(FENCED_BLOCK, "") }
@@ -46,6 +47,38 @@ class TestingGuideTest : StringSpec() {
   }
 
   private fun String.isSpec() = endsWith("Test.kt") || endsWith("Test.java")
+
+  private val makefile by lazy { File(MAKEFILE).readText() }
+
+  // The targets the guide runs with make: on a line of a fenced block that starts with make, or in backticks in its
+  // prose and in a block's comments.
+  private val guideMakeTargets by lazy {
+    val text = File(TESTING_GUIDE).readText()
+    val lines = FENCED_BLOCK.findAll(text).flatMap { MAKE_LINE.findAll(it.value) }
+    (lines + MAKE_INLINE.findAll(text)).map { it.groupValues[1] }.toSortedSet()
+  }
+
+  // The targets a Makefile's rules name, the .PHONY line among them.
+  private fun targets(text: String) = RULE.findAll(text).flatMap { it.groupValues[1].split(WHITESPACE) }.toSet()
+
+  // The targets every demo's own Makefile has, such as up and tour, which the guide names as a demo's.
+  private val demoTargets by lazy {
+    File(DEMOS)
+      .listFiles()
+      .orEmpty()
+      .map { File(it, MAKEFILE) }
+      .filter { it.isFile }
+      .map { targets(it.readText()) }
+      .reduce { common, next -> common intersect next }
+  }
+
+  // A Makefile variable's words, from its := assignment and the lines it continues onto.
+  private fun makeVariable(name: String): List<String> =
+    requireNotNull(Regex("""(?m)^$name := ((?:[^\n]*\\\n)*[^\n]*)""").find(makefile)) { "no $name in the Makefile" }
+      .groupValues[1]
+      .replace("\\\n", " ")
+      .trim()
+      .split(WHITESPACE)
 
   init {
     // Two packages have specs of the same name (agent/ and proxy/ each have an AgentContextTest), so a spec under
@@ -91,6 +124,30 @@ class TestingGuideTest : StringSpec() {
         .map { it.invariantSeparatorsPath } shouldBe emptyList()
     }
 
+    // A target the Makefile no longer has sends a reader to a command that fails.
+    "every make target docs/TESTING.md names should be in the Makefile, or in every demo's for a demo's own" {
+      guideMakeTargets.size shouldBeGreaterThan 20
+      val known = targets(makefile) + demoTargets
+      guideMakeTargets.filterNot { it in known } shouldBe emptyList()
+    }
+
+    // make ci runs CI's jobs, CI_JOBS, and the guide says what each one checks; a job added to CI without a word here
+    // left the guide's account of CI short (spring-boot-demo-check).
+    "every job make ci runs should be named in docs/TESTING.md" {
+      val jobs = makeVariable("CI_JOBS")
+      jobs.size shouldBeGreaterThan 5
+      jobs.filterNot { it in guideMakeTargets } shouldBe emptyList()
+    }
+
+    // make all-tests is the whole suite, so its entry names every target it runs; it left out the full TLA+ checks.
+    "docs/TESTING.md's entry for make all-tests should name every target it runs" {
+      val rule = requireNotNull(ALL_TESTS_RULE.find(makefile)) { "no all-tests rule" }
+      val runs = rule.groupValues[1].trim().split(WHITESPACE)
+      runs.size shouldBeGreaterThan 2
+      val entry = requireNotNull(ALL_TESTS_ENTRY.find(File(TESTING_GUIDE).readText())) { "no make all-tests entry" }
+      runs.filterNot { "`make $it`" in entry.value } shouldBe emptyList()
+    }
+
     // The checks above are only as good as the sections they find: a heading that names a subproject, with its hyphens,
     // must be found as one, and a section must stop at the next heading of its level.
     "the guide's sections should be found by their directories, a subproject's among them" {
@@ -106,6 +163,18 @@ class TestingGuideTest : StringSpec() {
     private const val TEST_SOURCES = "src/test/kotlin"
     private const val PACKAGE_ROOT = "src/test/kotlin/io/prometheus"
     private const val SETTINGS = "settings.gradle.kts"
+    private const val MAKEFILE = "Makefile"
+    private const val DEMOS = "demos"
+    private val WHITESPACE = Regex("""\s+""")
+    private val MAKE_LINE = Regex("""^[ \t]*make ([a-z_][a-z0-9_-]*)""", RegexOption.MULTILINE)
+    private val MAKE_INLINE = Regex("""`make ([a-z_][a-z0-9_-]*)""")
+
+    // A rule's targets, before its colon; not a variable's := or ::=.
+    private val RULE = Regex("""^([A-Za-z0-9_.-]+(?:[ \t]+[A-Za-z0-9_.-]+)*)[ \t]*:(?![:=])""", RegexOption.MULTILINE)
+    private val ALL_TESTS_RULE = Regex("""^all-tests:([^#\n]*)""", RegexOption.MULTILINE)
+
+    // The guide's make all-tests line and the comment lines that continue it.
+    private val ALL_TESTS_ENTRY = Regex("""^make all-tests[^\n]*(?:\n[ \t]+#[^\n]*)*""", RegexOption.MULTILINE)
     private val INCLUDE = Regex("""^include\("([^"]+)"\)""", RegexOption.MULTILINE)
     private val FENCED_BLOCK =
       Regex("""^[ \t]*```.*?^[ \t]*```""", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))

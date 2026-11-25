@@ -70,16 +70,20 @@ make tla-checks       # Model-check the TLA+ specs in specs/tla with their quick
 make tla-checks-full  # The quick TLA+ checks plus the slower reconnect config
 make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
-make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests`
-                      #   (container-tests already includes ContainersScalingTest's default table)
+make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests` +
+                      #   `make tla-checks-full` (container-tests already includes ContainersScalingTest's
+                      #   default table)
 make consumer-check   # Publish to the local Maven repository at a throwaway -consumer-check-SNAPSHOT
                       #   version, then build etc/consumer-check, a Maven project that embeds the agent
                       #   (see below); needs mvn
+make spring-boot-demo-check     # Build and test the Spring Boot demo's roastery against the same artifact,
+                                #   at Spring Boot's versions (CI's consumer-check job); needs mvn
 make ktor-demo-check  # Build the Ktor demo's coffee shop against this checkout (CI's consumer-check job)
 make plain-kotlin-demo-check    # Build the plain Kotlin demo's oven against this checkout (CI's consumer-check job)
-make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, the docs
-                      #   site (`make build-site`), the consumer check and the demos built against it, and the
-                      #   build job (`make ci-build`: MINI tests + coverage floors); needs Docker
+make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules (`make check-rules`), Helm
+                      #   charts (`make helm-lint`), the docs site (`make build-site`), the consumer check and
+                      #   the demos built against it, and the build job (`make ci-build`: MINI tests +
+                      #   coverage floors); needs Docker
 ```
 
 The suite builds its proxy and agent images under stable tags, so runs reuse them and a clean run now
@@ -1021,7 +1025,8 @@ These support helpers also live here (not test classes themselves):
   the day both changelogs date a release, and names the date a changelog gives; and `_check-demos-pull-release`
   refuses a release at or below a demo's `NEEDS_RELEASE_AFTER`, or a demo whose value it can't read (in a temporary
   copy of the demos). `make github-release-notes` gives a release's `RELEASE_NOTES.md` section with each paragraph and
-  list item on one line, its headings a level up, and the full changelog's link last
+  list item on one line, its headings a level up, and the full changelog's link last. Step 2 of `docs/RELEASE.md` and
+  the publishing-release skill name the website pages `RELEASE_VERSION_FILES` lists, no more and no fewer
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here
   instead of only in the container suite
@@ -1033,7 +1038,9 @@ These support helpers also live here (not test classes themselves):
   stubbed `docker`, say so when Docker Hub has no image of it rather than leave it to `docker run`
 - **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
   document, every spec of a subproject that `settings.gradle.kts` includes (`ktor-plugin`, `spring-boot-starter`) in
-  its subproject's section, and every support file under `src/test`, the subprojects' included, somewhere in it
+  its subproject's section, and every support file under `src/test`, the subprojects' included, somewhere in it.
+  Every `make` target it names is in the `Makefile`, or, for a demo's own (`make up`), in every demo's; every job
+  `make ci` runs (`CI_JOBS`) is named here, and `make all-tests`' entry names every target it runs
 - **WebsiteConfigKeysTest** — every `proxy.` and `agent.` config key the website's pages name is in
   `config/config.conf`, since HOCON ignores a key it doesn't know; and the default the pages' tables give for a key is
   the number, boolean, or string `config/config.conf` declares, or a tscfg spec's default (`double | 1.0`), and, for a

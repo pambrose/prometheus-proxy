@@ -17,16 +17,30 @@
 package io.prometheus.common
 
 /**
- * Thrown when an Agent's startup cannot complete — a configuration file or URL cannot be loaded/parsed, the
- * command-line options fail to parse, or a setting is invalid — and it was started with
- * `exitOnMissingConfig = false` (the embedded mode used by
- * [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]). The Proxy never throws it: its
- * entry point exits instead.
+ * Thrown when an embedded Agent can't be built from its settings — a configuration file or URL cannot be
+ * loaded/parsed, the command-line options fail to parse or ask for `-v`/`-u`, or a setting is invalid — in place of
+ * ending the process. It comes from:
  *
- * An invalid setting is one the agent can't use, from the config, a `-D` override, the command line, or an
- * environment variable: a value of the wrong type or out of range, an unresolved `${…}` substitution, a
- * duplicate `pathConfigs` or `filters` entry, a filter regex that doesn't compile, or an HTTPS trust store or
- * TLS certificate file that is missing or malformed.
+ * - [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]: always the form that takes a `Config`, and
+ *   the one that takes a config file, as [Agent.startSyncAgent][io.prometheus.Agent.Companion.startSyncAgent] does,
+ *   when given `exitOnMissingConfig = false`;
+ * - [EmbeddedAgentConfig.start][io.prometheus.agent.EmbeddedAgentConfig.start], which names a value
+ *   [fromEnvironment][io.prometheus.agent.EmbeddedAgentConfig.Builder.fromEnvironment] read by its variable too;
+ * - the [EmbeddedAgentConfig.Builder][io.prometheus.agent.EmbeddedAgentConfig.Builder] methods, as they're called, for
+ *   a value they can tell is wrong: a blank path, a `scrapeSelf` port out of range, or a path's URL with no scheme, or
+ *   with credentials as well as a username and password;
+ * - the Ktor plugin, for a registry without a path, or a value in the app's config file of the wrong type.
+ *
+ * [EmbeddedAgentConfig.startIfConfigured][io.prometheus.agent.EmbeddedAgentConfig.startIfConfigured] catches it, logs
+ * why, and returns null. The Proxy never throws it: its entry point exits instead.
+ *
+ * An invalid setting is one the agent can't use, from the config, a `-D` override, the command line, an environment
+ * variable, or the builder: a value of the wrong type or out of range, an unresolved `${…}` substitution, a malformed
+ * proxy endpoint, a duplicate `pathConfigs` or `filters` entry, a path with a character the proxy refuses
+ * (whitespace, a control character, `?`, or `#`), a filter regex that doesn't compile, an HTTPS trust store that is
+ * missing or malformed, or TLS material it can't use: a certificate chain, private key, or trust collection whose file
+ * is missing or malformed, whose PEM can't be read, or that is given both as a file and as PEM, or a certificate
+ * chain without its key, or a key without its chain.
  *
  * In standalone mode (`exitOnMissingConfig = true`) such a failure terminates the process via
  * `exitProcess` instead. Embedders that host an Agent inside their own JVM should catch this
