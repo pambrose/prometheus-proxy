@@ -686,9 +686,11 @@ _confirm-release:
 # out, then creating the GitHub release on it (step 7), with the JARs the Quick Start downloads, and then gh-docs: a
 # push to master doesn't deploy the docs site, so the site shows the previous release until this deploys the new one, by
 # which time its clone commands' tag and its download links' release exist. Everything is published by then, so a
-# failure to start that deploy is reported without hiding the next steps. The Homebrew tap (step 9) is printed as the
-# next step. After a partial release, finish with the remaining targets: release-check refuses a version already
-# published.
+# failure to start that deploy is reported without hiding the next step. gh's own lines on how to see the run it started
+# are dropped, since the summary names make gh-status. The Homebrew tap (step 9), the one step left, is printed as the
+# next step, with the GitHub release's link: its notes are RELEASE_NOTES.md's section, merged before the release, so
+# there's nothing to proofread. After a partial release, finish with the remaining targets: release-check refuses a
+# version already published.
 release:  ## Gate, test, build, publish VERSION to Maven Central, Docker Hub, and GitHub (asks first), deploy the docs
 	$(MAKE) release-check
 	$(MAKE) all-tests
@@ -699,17 +701,15 @@ release:  ## Gate, test, build, publish VERSION to Maven Central, Docker Hub, an
 	$(MAKE) docker-verify
 	$(MAKE) release-tag
 	$(MAKE) github-release
-	@if $(MAKE) --no-print-directory gh-docs; then \
+	@if $(MAKE) --no-print-directory gh-docs >/dev/null; then \
 		docs="Started the docs site deploy; make gh-status shows the run."; \
 	else \
 		docs="WARNING: could not start the docs site deploy; run make gh-docs."; \
 	fi; \
 	echo; \
 	echo "Published $(VERSION) to Maven Central, Docker Hub, and GitHub. $$docs"; \
-	echo "Next (steps 7 and 9 of docs/RELEASE.md):"; \
-	echo "  1. Read the GitHub release's notes, from RELEASE_NOTES.md; gh release edit $(VERSION) --notes-file <notes>"; \
-	echo "     replaces them"; \
-	echo "  2. make homebrew-formulae, then commit and push the tap"
+	echo "The GitHub release: https://github.com/pambrose/prometheus-proxy/releases/tag/$(VERSION)"; \
+	echo "Next (step 9 of docs/RELEASE.md): make homebrew-formulae, then commit and push the tap"
 
 # The JARs the GitHub release carries, which distro builds: the fat JARs, which the Quick Start's JAR tab downloads and
 # make homebrew-formulae hashes, and the sources JAR.
