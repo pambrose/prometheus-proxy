@@ -64,7 +64,9 @@ token or the password, and start it:
 - `scrapeSelf` percent-encodes the credentials into the scrape URL, so a password with any character works. An app with
   a metrics registry needn't serve it at all: `source(path, registry)` has the agent
   [read it in-process](embedded-agent.md#metrics-served-in-process).
-- A failure to start is logged, and the app carries on without the agent: its metrics aren't worth an outage.
+- A failure to start is logged, and the app carries on without the agent: its metrics aren't worth an outage. To hear
+  of one somewhere someone will see it, such as a chat channel, add a handler with the builder's
+  [`onFailure`](embedded-agent.md#starting-where-theres-a-proxy), which is given why, as the log line has it.
 
 ### Starting and Stopping It with the App
 
@@ -77,6 +79,12 @@ Start the agent once the app serves `/metrics`, and stop it when the app stops. 
 In Spring Boot, the [Spring Boot Starter](spring-boot-starter.md) starts and stops it with the app, as the
 [Spring Boot Demo](spring-boot-demo.md) shows; [In Spring Boot](embedded-agent.md#in-spring-boot) covers doing it with
 a bean of your own.
+
+The platform stops the app with `SIGTERM`, then kills it once its shutdown window is up: 10 seconds on Cloud Run. Set
+the builder's [`stopTimeout`](embedded-agent.md#embeddedagentinfo) inside that window, so the rest of the app's shutdown
+isn't left waiting on the agent: once it's up, `shutdown()` returns, with a warning, and the agent goes on stopping on
+its own. The [Ktor Plugin](ktor-plugin.md#a-failed-start-and-the-stop) and the Spring Boot Starter take it as their
+`stop-timeout`, 30 seconds by default, longer than Cloud Run's window.
 
 Keep the agent out of the health check the platform restarts the app on. The app serves without its agent, which
 reconnects by itself once the proxy is back, so a failed check would only restart a working app. To see whether the

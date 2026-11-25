@@ -223,9 +223,15 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 ## Shutdown
 
 - Standalone proxy/agent processes shut down cleanly on SIGTERM. **Embedded** agents register no
-  shutdown hook of their own: stop one with `EmbeddedAgentInfo.shutdown()`, which blocks until
-  terminated, where the application stops its own services. The Ktor plugin and the Spring Boot
-  starter do this with the app. See [Embedded Agent](embedded-agent.md#embeddedagentinfo).
+  shutdown hook of their own: stop one with `EmbeddedAgentInfo.shutdown()` where the application
+  stops its own services. The Ktor plugin and the Spring Boot starter do this with the app. See
+  [Embedded Agent](embedded-agent.md#embeddedagentinfo).
+- `shutdown()` blocks until the agent has stopped, up to the builder's `stopTimeout`, or, without
+  one, 30 seconds, after which it throws. Set `stopTimeout` inside the window the platform gives a
+  process between SIGTERM and killing it, such as Cloud Run's 10 seconds, so the rest of the app's
+  shutdown isn't left waiting on the agent: once it's up, `shutdown()` returns, with a warning, and
+  the agent goes on stopping on its own. The Ktor plugin and the Spring Boot starter take it as
+  their `stop-timeout`, 30 seconds by default.
 
 ## Pre-Flight Checklist
 
@@ -246,3 +252,6 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
       `/healthcheck` (agent)
 - [ ] [Consolidated mode](advanced.md#consolidated-mode) where you need agent redundancy, with each agent scraping
       its own instance
+- [ ] An embedded agent's [`stopTimeout`](embedded-agent.md#embeddedagentinfo) inside the platform's shutdown window,
+      and an [`onFailure`](embedded-agent.md#starting-where-theres-a-proxy) handler where a failed start should be
+      reported beyond the log

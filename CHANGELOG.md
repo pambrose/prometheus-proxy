@@ -43,7 +43,9 @@ All notable changes to this project are documented in this file.
   `stopTimeout`, its
   failure example adds the handler to the builder, and its shutdown examples set a stop timeout inside the hook's wait.
   The Ktor Plugin page has a new A Failed Start, and the Stop section, with an example the examples spec runs, and the
-  Spring Boot Starter page the `stop-timeout` property and a customizer's `onFailure`
+  Spring Boot Starter page the `stop-timeout` property and a customizer's `onFailure`. The Production page's Shutdown
+  section and checklist, and the Cloud Platforms page, set the stop timeout inside a platform's shutdown window, such as
+  Cloud Run's 10 seconds, and point to `onFailure` for reporting a failed start
 
 - `examples/simple.conf` and the basics, network, and Kubernetes demos' agents serve their own metrics through the
   proxy with `agent.metrics.proxyPath`, in-process, where each scraped its own port, `localhost:8083`, as a path; all
