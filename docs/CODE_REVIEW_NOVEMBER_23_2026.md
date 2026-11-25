@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 45 fixed, 27 open (8 medium, 64 low, no high).
+**Status:** 72 issues — 47 fixed, 25 open (8 medium, 64 low, no high).
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
 #555–#561).
@@ -44,8 +44,8 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ⬜      |
 | 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ✅      |
 | 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ⬜      |
-| 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ⬜      |
-| 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ⬜      |
+| 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ✅      |
+| 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ✅      |
 | 24 | The starter's `Target.toString` shows URL query values such as an `api_key`                          | Security   | low      | ✅      |
 | 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ✅      |
 | 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ✅      |
@@ -153,7 +153,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 4    | ✅ #557 | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
 | 5    | ✅ #562 | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
 | 6    | ✅ #558 | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
-| 7    | ⬜      | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
+| 7    | ✅ #563 | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
 | 8    | ⬜      | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
 | 9    | ✅ #560 | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
 | 10   | ⬜      | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
@@ -1231,7 +1231,7 @@ the agent asked.
 `b3: 1` produces no reported span, and with `sampleRate = 0.0` a `registerPath` call carrying `x-b3-sampled: 1` produces
 none either.
 
-### 22. ⬜ The dashboard logs a client's `Origin` and `Host` headers whole, unescaped, and unthrottled, before any login
+### 22. ✅ The dashboard logs a client's `Origin` and `Host` headers whole, unescaped, and unthrottled, before any login
 
 **Severity:** low · **Confidence:** confirmed by trace, with CIO's header parser read in `ktor-http-cio` 3.6.1.
 
@@ -1265,7 +1265,9 @@ characters; the same for a refused `Host` with `allowedHosts` set.
 
 **Follows up:** November #40 and #16 (the same rule for client- and agent-supplied text).
 
-### 23. ⬜ Pages behind the dashboard's login can be framed and are cacheable; only the login page refuses both
+**Resolution:** Fixed in #563. `originRefusal` and `checkHost` now log the header through `shownValue`, cut to 270 characters rather than its default 64, so a real origin or host (a 253-character DNS name with its scheme and port) is still shown whole and still names what to allow. Each line has its own `KeyedThrottle` per remote address, as `recordBadLogin` does: INFO once a minute and DEBUG otherwise. The message wording is otherwise unchanged, so the docs' quotes of it still match. `DashboardResponsesTest` sends an `Origin`, then a `Host`, of `ESC[2J` and 5,000 more characters twice from one address over a raw socket (Ktor's client refuses a control character in a header), and sees one INFO and one DEBUG line, each with the escape written out and under 400 characters; the old code logged two INFO lines with the raw escape.
+
+### 23. ✅ Pages behind the dashboard's login can be framed and are cacheable; only the login page refuses both
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1295,6 +1297,8 @@ HTML response once a login is set. Name framing in the Exposure section.
 
 **Tests:** in `ProxyWebDashboardTest` and `AgentWebDashboardTest`, a page, a detail fragment, and a Scrape now response
 each carry `frame-ancestors 'none'`; with a login set, a page carries `no-store`.
+
+**Resolution:** Fixed in #563. A `DashboardServer` application plugin, an `onCallRespond` hook like `DefaultHeaders`', adds `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` to every response, refusals, redirects, error pages, assets, and the WebSocket handshake included. It adds each header once, since StatusPages answers a bare 404 twice, and a brand mark keeps its `sandbox` policy alongside. With a login set, `CachingHeaders` gives every response but the versioned assets `Cache-Control: no-store`, not only HTML responses, so fragments, redirects, and 401s are covered too; `respondLogin` no longer sets either header itself. The Exposure section names framing as a third guard. `DashboardResponsesTest` checks ten kinds of response without a login and seven with one: before the fix all ten lacked the framing headers and six of the seven lacked `no-store`. The proxy and agent harness specs check a page, a fragment, Scrape now, and the login page.
 
 ### 24. ✅ The Spring Boot starter's `Target.toString` masks a URL's user info but not its query values, so a logged property set shows an `api_key`
 
