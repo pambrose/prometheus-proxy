@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 52 fixed, 20 open (8 medium, 64 low, no high).
+**Status:** 72 issues — 57 fixed, 15 open (8 medium, 64 low, no high).
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
 #555–#561).
@@ -24,9 +24,9 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | #  | Finding                                                                                              | Area       | Severity | Status |
 |----|------------------------------------------------------------------------------------------------------|------------|----------|--------|
 | 1  | `ProxyRegistry.tla` lets an invalidated connection deliver path notices the code drops               | Proxy      | low      | ✅      |
-| 2  | The forward span loses its queue-wait and "sent" tags when the send outlasts the scrape              | Proxy      | low      | ⬜      |
-| 3  | The 80% path and identity limit warnings repeat each time the count climbs back to the threshold     | Proxy      | low      | ⬜      |
-| 4  | The proto and AGENTS.md misdescribe the path-notices stream's keepalives                             | Proxy      | low      | ⬜      |
+| 2  | The forward span loses its queue-wait and "sent" tags when the send outlasts the scrape              | Proxy      | low      | ✅      |
+| 3  | The 80% path and identity limit warnings repeat each time the count climbs back to the threshold     | Proxy      | low      | ✅      |
+| 4  | The proto and AGENTS.md misdescribe the path-notices stream's keepalives                             | Proxy      | low      | ✅      |
 | 5  | A dashboard bind failure leaves the agent's admin and metrics servers running, and `/ping` healthy   | Agent      | medium   | ✅      |
 | 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ⬜      |
 | 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ⬜      |
@@ -43,7 +43,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 18 | A gone agent's detail pane names it by its raw `agentId`                                             | Dashboards | low      | ✅      |
 | 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ✅      |
 | 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ✅      |
-| 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ⬜      |
+| 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ✅      |
 | 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ✅      |
 | 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ✅      |
 | 24 | The starter's `Target.toString` shows URL query values such as an `api_key`                          | Security   | low      | ✅      |
@@ -73,7 +73,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
 | 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ✅      |
 | 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ✅      |
-| 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ⬜      |
+| 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ✅      |
 | 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ✅      |
 | 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ✅      |
 | 54 | The Ktor plugin's wait for the agent's stop has no deterministic test                                | Tests      | low      | ✅      |
@@ -156,7 +156,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 7    | ✅ #563 | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
 | 8    | ✅ #564 | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
 | 9    | ✅ #560 | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
-| 10   | ⬜      | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
+| 10   | ✅ #565 | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
 | 11   | ✅ #559 | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
 | 12   | ⬜      | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
 | 13   | ✅ #555 | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
@@ -332,7 +332,7 @@ Then run `make tla-checks-full`.
 
 **Resolution:** Fixed in #559. `RegisterLocked` clears an orphan's unread notices as it invalidates it, and the new `InvalidatedHasNoNotices` is checked in all four ProxyRegistry configs; the optional `valid[c]` guard on `NoticeEmit` was left out, as the invariant would catch the slip it hid. One correction: no shipped config broke the invariant before the fix, since with one path an orphan has always just lost it to its own launch; with two paths and three connections the unchanged model breaks it at depth 12, a model too large to ship. TLC also showed the model needed the notice a refused reclaim sends (`tellHolder` in `reclaimRejection`), which the appendix had called irrelevant, so it sends it now.
 
-### 2. ⬜ `sendScrapeRequest` tags the forward span after a send that can outlast the scrape, so a timed-out scrape's span loses its queue wait and "sent to agent"
+### 2. ✅ `sendScrapeRequest` tags the forward span after a send that can outlast the scrape, so a timed-out scrape's span loses its queue wait and "sent to agent"
 
 **Severity:** low · **Confidence:** plausible: the gap is confirmed in Brave 6.3.1, zipkin-reporter-brave 3.5.3, and
 grpc-kotlin 1.5.0 source; it needs an agent that has stopped reading its scrape-request stream long enough to trip
@@ -366,7 +366,9 @@ removes it from the map before `traced` finishes the span), or drop the post-sen
 forward span. Pass a `send` that finishes the span before returning, which stands in for the scrape timing out during
 a blocked emit, then check that the reported span has `queue.wait_ms`. It's missing today.
 
-### 3. ⬜ The 80% warnings for `maxPathsPerAgent` and `maxAgentsPerIdentity` fire every time the count climbs back to the threshold, not once, as the path one's comment says
+**Resolution:** Fixed in #565. `sendScrapeRequest` now tags the forward span with `queue.wait_ms` before the send, and adds `sent to agent` after it only while the scrape is still tracked (`containsScrapeRequest`), so a send held by flow control can no longer leave a timed-out span without its wait, and nothing is written to a span that has finished. A `ProxyServiceImplTest` case finishes the span during the send, as a timeout would, and failed before the fix; a second, with a mock span, checks that no annotation follows a scrape that has ended. The test collector, `TracingMocks.collectInto`, now copies each span as it finished: before, a late tag still reached the shared span, which hid the loss a real reporter suffers. The `proxy_scrape_queue_wait_seconds` observation stays where it was, as Considered says.
+
+### 3. ✅ The 80% warnings for `maxPathsPerAgent` and `maxAgentsPerIdentity` fire every time the count climbs back to the threshold, not once, as the path one's comment says
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -394,7 +396,9 @@ per agent. Either way, the comment then holds.
 one, register another, and expect still one WARN. Today it's two. The same for `addAgentContextWithinLimit` with
 `maxPerIdentity = 5`: add 4, remove one, add one.
 
-### 4. ⬜ The proto doesn't say that a `PathNotice` with no path is a keepalive, and AGENTS.md says every keepalive waits for the other side's say-so, which the notices stream's don't
+**Resolution:** Fixed in #565. A new `NearLimitWarnings` carries the hysteresis #560 gave `maxPathsPerIdentity`'s warning (warn as a count reaches 80%, and again only once it has fallen below 70%), and all three limit warnings use it. `ProxyPathManager` reports both the agent's and the identity's path counts from `countPaths`, under the `pathMap` lock, so every decrease, an agent's removal included, re-arms the warning and no memory outlives the agent; `AgentContextManager` reports an identity's agent count inside the compute that adds or removes the agent. With a limit of 10, going 8 → 7 → 8 → 6 → 8 now warns twice, not three times, for paths per agent and for agents per identity, and `NearLimitWarningsTest` covers the boundaries. Unlike the fix this finding suggested, the warned keys live in one shared class, not a flag on `AgentContext` or a set in the manager, and the threshold is "at least 80%" where it was "exactly 80%".
+
+### 4. ✅ The proto doesn't say that a `PathNotice` with no path is a keepalive, and AGENTS.md says every keepalive waits for the other side's say-so, which the notices stream's don't
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -421,6 +425,8 @@ so no flag gates them." In AGENTS.md, scope the sentence to `readRequestsFromPro
 the notices stream sends them to every reader.
 
 **Tests:** none needed: comments only.
+
+**Resolution:** Fixed in #565. The proto's `PathNotice` comment now says a notice with no path is a keepalive, which the agent ignores: the proxy sends one after `proxy.internal.streamKeepAliveSecs` of quiet, none when that is 0, and unlike the other streams' keepalives no registration flag gates them, since every agent that reads the stream ignores one. The `readPathNoticesFromProxy` rpc comment points to it, and AGENTS.md limits its gating rule to `readRequestsFromProxy` and the response streams. Only comments changed, so the code and the wire format are as they were. The website's keepalive text is left as is: only an agent that takes keepalives ever opens the notices stream, so it holds for users.
 
 ---
 
@@ -1200,7 +1206,7 @@ fleet) and November #12 and #15 (the same attacker and amplifiers).
 
 **Resolution:** Fixed in #560. A path's labels are parsed once, as it registers (`Proxy.pathLabels`), and its entry keeps only the parsed copy, which service discovery, the dashboard's links, and `/debug` read, and which the dashboard no longer re-parses on each collect: 8 KiB of one-character labels took 134.5 KiB, and with the new `proxy.internal.maxLabelsPerPath` (default 64) a path takes at most about 20 KiB. The new `proxy.internal.maxPathsPerIdentity` (default 100,000) caps what an identity's agents hold together; with auth off it counts the whole fleet, a takeover within an identity leaves its count alone, and it warns at 80%. The release notes gain a Before You Upgrade section for both. Differences from the fix above: the entry keeps every label with a value, since the dashboard's links read labels service discovery leaves out; the agent checks neither limit, both being the proxy's; `maxLabelsSizeBytes` stays at 8 KiB; and `ProxyRegistry.tla` doesn't count paths per identity, since the count changes under the same lock as `pathCounts` and drives no lifecycle decision. One connection at its 20,000-path quota with every path at its limits still holds about 400 MiB, which only a lower `maxPathsPerAgent` would close.
 
-### 21. ⬜ The proxy's gRPC tracing keeps every call whose metadata says "sampled", so any caller can override the sample rate and trace heartbeats
+### 21. ✅ The proxy's gRPC tracing keeps every call whose metadata says "sampled", so any caller can override the sample rate and trace heartbeats
 
 **Severity:** low (Zipkin is off by default) · **Confidence:** confirmed in Brave 6.3.1's source.
 
@@ -1236,6 +1242,8 @@ the agent asked.
 **Tests:** in `ScrapeTracingTest` (with `TracingMocks`), a `sendHeartBeat` server call whose metadata carries
 `b3: 1` produces no reported span, and with `sampleRate = 0.0` a `registerPath` call carrying `x-b3-sampled: 1` produces
 none either.
+
+**Resolution:** Fixed in #565. `ScrapeTracing`'s gRPC tracing uses a propagation, `ServerSampledPropagation`, whose extractor clears the sampled and debug flags of whatever it extracts (`ScrapeTracing.undecided`) and keeps the trace and span IDs, so Brave's server handler always asks the proxy's `rpcSampler`, and a call still joins its caller's trace. The client side's injection is unchanged. New `ScrapeTracingTest` cases make real calls through an in-process server behind the interceptor: a heartbeat sent with `b3: 1`, `b3: d`, `x-b3-sampled: 1`, or `x-b3-flags: 1` is served unsampled; at rate 0 a `registerPath` with `x-b3-sampled: 1` is unsampled and keeps the caller's trace ID; and at rate 1 one sent with `x-b3-sampled: 0` is sampled. The first two failed before the fix. The website's Sampling paragraph says whose rate applies to which side of a call.
 
 ### 22. ✅ The dashboard logs a client's `Origin` and `Host` headers whole, unescaped, and unthrottled, before any login
 
@@ -2557,7 +2565,7 @@ Add a unit check that the agent's `DashboardSite.changes` emits on `activityLog.
 
 **Resolution:** Fixed in #558, with a unit spec rather than a 60-second refresh in the harness specs. `DashboardPushTest` runs `DashboardServer` against a stand-in site with a one-hour tick, so a frame comes only from the wake under test, and a case fails within 5 seconds; removing the change wake fails five of its six cases, and removing Log out's close fails that case. A new `AgentDashboardServiceTest` case, through the now internal `site`, fails when the agent's `changes` is `emptyFlow()`.
 
-### 51. ⬜ The proxy's `scrape` and `forward` spans have no unit test: one successful single-agent harness scrape is all that covers them, and nothing pins that a client's trace headers are ignored
+### 51. ✅ The proxy's `scrape` and `forward` spans have no unit test: one successful single-agent harness scrape is all that covers them, and nothing pins that a client's trace headers are ignored
 
 **Severity:** low · **Confidence:** confirmed by grep and trace
 
@@ -2595,6 +2603,8 @@ Add one scrape sent with `X-B3-TraceId`, `X-B3-SpanId`, and `X-B3-Sampled: 1`, i
 harness spec. Its `scrape` span must have no parent, and a new trace ID.
 
 **Tests:** The cases above. Each fails when its behavior is removed.
+
+**Resolution:** Fixed in #565. `ScrapeDispatchTest` stubs `proxy.tracing` with a collecting `ScrapeTracing` and checks one `forward` span per agent of a consolidated path under the scrape's span, each agent's request carrying its own span (checked by joining the request's context as the agent's fetch would); `outcome`/`error` = `timed_out`, with status 503, for a silent agent and `agent_disconnected` for one that's gone; no span and no context for a scrape without a trace; and an agent name with a line break cut and escaped. `ProxyHttpRoutesTest` sends a scrape with `X-B3-TraceId`, `X-B3-SpanId`, `X-B3-Sampled`, `X-B3-Flags`, `b3`, and `traceparent`: its `scrape` span has no parent, a new trace ID, and no debug flag, and at rate 0 no span is kept. Each failed against code changed to drop its behavior (no escaping, a span for an untraced scrape, a route that joins the request's headers). The timeout case uses a 200 ms `ScrapeSpec` timeout rather than 1 s, and a disconnected case was added.
 
 ### 52. ✅ No test pins AgentMetrics' `PER_LAUNCH` rule as a whole, so a new agent metric that breaks it keeps a stopped agent's series
 

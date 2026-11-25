@@ -260,7 +260,8 @@ The five path limits are safety nets against a runaway or misbehaving agent, set
 over a limit is refused at registration, and the agent logs the rejection once without retrying it. A path too long,
 or with labels too large, is refused before it is checked against the agent's
 [identity patterns](#per-agent-identities); one with too many labels, or past a path count, after. The proxy warns
-when an agent reaches 80% of `maxPathsPerAgent`, and when an identity's agents reach 80% of `maxPathsPerIdentity`.
+when an agent reaches 80% of `maxPathsPerAgent`, and when an identity's agents reach 80% of `maxPathsPerIdentity`, and
+warns again only once the count has fallen below 70%, so a count that hovers at the threshold is warned of once.
 
 `maxPathsPerAgent` counts one connection's paths, and an agent may open any number of connections, so
 `maxPathsPerIdentity` counts the paths of every agent of an [identity](#per-agent-identities) together, whether or not
@@ -331,7 +332,8 @@ Each also takes [`--tf-disabled`](../cli-reference.md#proxy.transportFilterDisab
     connected as one auth identity to `proxy.internal.maxAgentsPerIdentity` (10,000). It refuses a connect
     past the limit with `RESOURCE_EXHAUSTED`, rather than drop an agent already connected, and the refused
     agent tries again after its reconnect pause. The proxy warns as an identity reaches 80% of the limit,
-    and when it refuses a connect, at most once a minute for each identity. With agent auth off, or on the
+    again only once its count has fallen below 70%, and when it refuses a connect, at most once a minute for
+    each identity. With agent auth off, or on the
     legacy `proxy.agentToken`, every agent has the same identity, so the limit is a total. Leave room for
     agents that count twice for a while: one that reconnects while its old connection is half-open, until
     the old one is evicted, and one whose registration is refused, once for each retry until each is

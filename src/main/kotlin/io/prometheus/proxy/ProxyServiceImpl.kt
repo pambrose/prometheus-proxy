@@ -25,6 +25,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
+import io.prometheus.common.ScrapeTracing.Companion.SENT_TO_AGENT
 import io.prometheus.common.ScrapeTracing.Companion.TAG_QUEUE_WAIT
 import io.prometheus.common.AgentValues.truncate
 import io.prometheus.grpc.AgentInfo
@@ -512,13 +513,16 @@ internal class ProxyServiceImpl(
     // A dashboard's scrape-now is left out, as it is from the latency histogram.
     if (!wrapper.scrapeRequest.dashboardScrape)
       proxy.metrics { scrapeQueueWait.observe(queueWait.toDouble(DurationUnit.SECONDS)) }
+    // On the forward span, so the time the request waited in the agent's queue shows, and reads as a number. Before the
+    // send: it suspends while gRPC's flow control holds an agent that stopped reading, and a scrape that times out
+    // meanwhile finishes the span, which drops what is written to it afterwards.
+    wrapper.traceSpan?.tag(TAG_QUEUE_WAIT, queueWait.inWholeMilliseconds.toString())
     try {
       send(wrapper.scrapeRequest)
-      // On the forward span, so the time the request waited in the agent's queue shows, and reads as a number.
-      wrapper.traceSpan?.apply {
-        annotate("sent to agent")
-        tag(TAG_QUEUE_WAIT, queueWait.inWholeMilliseconds.toString())
-      }
+      // Only while the scrape still awaits the result: one that stopped awaiting it finished its span, or is about to.
+      wrapper.traceSpan
+        ?.takeIf { proxy.scrapeRequestManager.containsScrapeRequest(wrapper.scrapeId) }
+        ?.annotate(SENT_TO_AGENT)
     } catch (e: CancellationException) {
       // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
       // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full

@@ -56,6 +56,10 @@ internal class AgentContextManager(
   // identity's entry goes with its last context.
   private val agentIdsByIdentity = ConcurrentHashMap<String, MutableSet<String>>()
 
+  // When to warn that an identity nears maxAgentsPerIdentity, as ProxyPathManager does for its path limits: told of
+  // each change to an identity's set inside the compute that makes it, so the warnings change in the same order.
+  private val identitiesNearLimit = NearLimitWarnings<String>()
+
   // Which identities' refused connects may be logged at WARN now; see logRefusal. The identities are the ones the proxy
   // is configured with, plus the empty one that agents share with agent auth off, far fewer than its cap.
   private val refusalWarnings = KeyedThrottle<String>(REFUSAL_WARNING_INTERVAL, MAX_REFUSAL_IDENTITIES, clock)
@@ -113,13 +117,15 @@ internal class AgentContextManager(
     maxPerIdentity: Int,
   ): Boolean {
     val identity = agentContext.authIdentityName
-    // The identity's count with this context, or 0 when it was refused.
+    // The identity's count with this context, or 0 when it was refused, and whether that count is one to warn of.
     var count = 0
+    var nearLimit = false
     agentIdsByIdentity.compute(identity) { _, agentIds ->
       (agentIds ?: HashSet()).apply {
         if (maxPerIdentity !in 1..size) {
           add(agentContext.agentId)
           count = size
+          nearLimit = identitiesNearLimit.rose(identity, size, maxPerIdentity)
         }
       }.ifEmpty { null }
     }
@@ -128,9 +134,9 @@ internal class AgentContextManager(
       return false
     }
     addAgentContext(agentContext)
-    // Warns as the identity reaches 80% of its limit, as ProxyPathManager does for maxPathsPerAgent, so an operator
-    // hears about it before connects are refused.
-    if (maxPerIdentity > 0 && count == (maxPerIdentity * 4 + 4) / 5)
+    // Warns as the identity reaches 80% of its limit, so an operator hears about it before connects are refused; once,
+    // until its count falls below 70%.
+    if (nearLimit)
       logger.warn {
         "$count agents are connected ${identityDesc(identity)}, of the $maxPerIdentity " +
           "proxy.internal.maxAgentsPerIdentity allows"
@@ -266,8 +272,11 @@ internal class AgentContextManager(
     else if (!isTestMode)
       logger.info { "Removed $agentContext for agentId: $agentId (${reason.logText})" }
     agentContext.invalidate()
-    agentIdsByIdentity.computeIfPresent(agentContext.authIdentityName) { _, agentIds ->
-      agentIds.apply { remove(agentId) }.ifEmpty { null }
+    agentIdsByIdentity.computeIfPresent(agentContext.authIdentityName) { identity, agentIds ->
+      agentIds.apply {
+        remove(agentId)
+        identitiesNearLimit.fell(identity, size)
+      }.ifEmpty { null }
     }
   }
 

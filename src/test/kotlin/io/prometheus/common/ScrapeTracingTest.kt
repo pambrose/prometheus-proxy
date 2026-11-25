@@ -21,8 +21,19 @@ package io.prometheus.common
 import brave.Span
 import brave.Tracing
 import brave.handler.MutableSpan
+import brave.propagation.TraceContext
+import brave.propagation.TraceContextOrSamplingFlags
+import brave.propagation.TraceIdContext
 import brave.rpc.RpcClientRequest
+import com.pambrose.common.dsl.GrpcDsl.channel
+import com.pambrose.common.dsl.GrpcDsl.server
+import io.grpc.Metadata
+import io.grpc.Metadata.ASCII_STRING_MARSHALLER
+import io.grpc.ServerInterceptors
+import io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor
+import io.grpc.stub.StreamObserver
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -34,7 +45,13 @@ import io.prometheus.common.ScrapeTracing.Companion.FORWARD_SPAN
 import io.prometheus.common.ScrapeTracing.Companion.SCRAPE_SPAN
 import io.prometheus.common.ScrapeTracing.Companion.endedAs
 import io.prometheus.common.ScrapeTracing.Companion.traced
+import io.prometheus.grpc.HeartBeatRequest
+import io.prometheus.grpc.HeartBeatResponse
+import io.prometheus.grpc.ProxyServiceGrpc
+import io.prometheus.grpc.RegisterPathRequest
+import io.prometheus.grpc.RegisterPathResponse
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
 
 // Scrapes ride long-lived gRPC streams, whose spans show a connection, not a scrape, so the proxy and the agent trace
@@ -68,6 +85,56 @@ class ScrapeTracingTest : StringSpec() {
 
       override fun unwrap() = this
     }
+
+  // Serves a stand-in ProxyService in-process behind [scrapeTracing]'s server interceptor, as the proxy's agent port
+  // serves the real one, makes one call with [call], sending [headers] in its metadata, as an agent's tracing or any
+  // caller can, and returns the trace context the call was served in, that of the span the interceptor began for it,
+  // which is reported only when sampled. [brave] is the Tracing [scrapeTracing] was built on.
+  private fun servedContext(
+    brave: Tracing,
+    scrapeTracing: ScrapeTracing,
+    headers: Map<String, String>,
+    call: (ProxyServiceGrpc.ProxyServiceBlockingStub) -> Unit,
+  ): TraceContext {
+    val served = AtomicReference<TraceContext>()
+
+    fun <T> answer(
+      response: T,
+      observer: StreamObserver<T>,
+    ) {
+      served.set(brave.currentTraceContext().get())
+      observer.onNext(response)
+      observer.onCompleted()
+    }
+
+    val service =
+      object : ProxyServiceGrpc.ProxyServiceImplBase() {
+        override fun sendHeartBeat(
+          request: HeartBeatRequest,
+          observer: StreamObserver<HeartBeatResponse>,
+        ) = answer(HeartBeatResponse.getDefaultInstance(), observer)
+
+        override fun registerPath(
+          request: RegisterPathRequest,
+          observer: StreamObserver<RegisterPathResponse>,
+        ) = answer(RegisterPathResponse.getDefaultInstance(), observer)
+      }
+    val name = "scrape-tracing-test-${System.nanoTime()}"
+    val server =
+      server(inProcessServerName = name) {
+        addService(ServerInterceptors.intercept(service, scrapeTracing.grpcTracing.newServerInterceptor()))
+      }.start()
+    val channel = channel(inProcessServerName = name) {}
+    val metadata =
+      Metadata().apply { headers.forEach { (key, value) -> put(Metadata.Key.of(key, ASCII_STRING_MARSHALLER), value) } }
+    try {
+      call(ProxyServiceGrpc.newBlockingStub(channel).withInterceptors(newAttachHeadersInterceptor(metadata)))
+    } finally {
+      channel.shutdownNow()
+      server.shutdownNow()
+    }
+    return checkNotNull(served.get()) { "The call was served in no trace" }
+  }
 
   init {
     "a scrape's spans should form one trace, the agent's joining the proxy's through the context it sends" {
@@ -126,6 +193,63 @@ class ScrapeTracingTest : StringSpec() {
       scrapeTracing(1.0).use { tracing ->
         tracing.rpcSampler.trySample(call(ScrapeTracing.PATH_NOTICES_METHOD)) shouldBe false
       }
+    }
+
+    // Brave's server handler keeps the sampling decision a call's trace headers carry, and consults the sampler only
+    // when they carry none, so a caller that marked every call sampled, or debug, made the proxy trace every one,
+    // heartbeats included, whatever its sample rate. The proxy decides each call it serves itself, and still joins the
+    // caller's trace, so an honest agent's client span and the proxy's server span stay one trace.
+    "a heartbeat whose metadata says sampled, or debug, should still not be traced" {
+      val brave = Tracing.newBuilder().addSpanHandler(collectInto(finished)).build()
+      ScrapeTracing(brave, 1.0).use { tracing ->
+        listOf(mapOf("b3" to "1"), mapOf("b3" to "d"), mapOf("x-b3-sampled" to "1"), mapOf("x-b3-flags" to "1"))
+          .forEach { headers ->
+            val served =
+              servedContext(brave, tracing, headers) { it.sendHeartBeat(HeartBeatRequest.getDefaultInstance()) }
+            withClue(headers) {
+              served.sampled() shouldBe false
+              served.debug() shouldBe false
+            }
+          }
+      }
+    }
+
+    "a call's sampling should be the serving side's rate, whatever the caller's trace says, in the caller's trace" {
+      val traceId = "463ac35c9f6413ad"
+      val callerTrace = mapOf("x-b3-traceid" to traceId, "x-b3-spanid" to "a2fb4a1d1a96d312")
+
+      listOf(0.0 to "1", 1.0 to "0").forEach { (sampleRate, callerSampled) ->
+        val brave = Tracing.newBuilder().addSpanHandler(collectInto(finished)).build()
+        ScrapeTracing(brave, sampleRate).use { tracing ->
+          val served =
+            servedContext(brave, tracing, callerTrace + ("x-b3-sampled" to callerSampled)) {
+              it.registerPath(RegisterPathRequest.getDefaultInstance())
+            }
+          withClue("rate $sampleRate, caller's x-b3-sampled $callerSampled") {
+            served.sampled() shouldBe (sampleRate == 1.0)
+            served.traceIdString() shouldBe traceId
+          }
+        }
+      }
+    }
+
+    // B3 extracts a trace context or sampling flags alone, never a trace ID alone, but each comes out undecided, with
+    // its IDs and extra fields kept.
+    "an extracted trace should lose its sampling decision and keep everything else" {
+      val context = TraceContext.newBuilder().traceId(1L).spanId(2L).sampled(true).debug(true).build()
+      val traceId = TraceIdContext.newBuilder().traceId(3L).sampled(true).build()
+
+      ScrapeTracing.undecided(TraceContextOrSamplingFlags.create(context)).context().shouldNotBeNull().apply {
+        sampled().shouldBeNull()
+        debug() shouldBe false
+        spanId() shouldBe 2L
+      }
+      ScrapeTracing.undecided(TraceContextOrSamplingFlags.newBuilder(traceId).addExtra("kept").build()).apply {
+        traceIdContext().shouldNotBeNull().traceId() shouldBe 3L
+        sampled().shouldBeNull()
+        extra() shouldBe ["kept"]
+      }
+      ScrapeTracing.undecided(TraceContextOrSamplingFlags.DEBUG).sampled().shouldBeNull()
     }
 
     "a span should be tagged with its scrape's outcomes and status, and as an error unless every one succeeded" {

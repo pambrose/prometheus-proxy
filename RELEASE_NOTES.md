@@ -84,9 +84,10 @@ _Released 2026-11-23_
   proxy's host and the port Prometheus scrapes, or `Agent: agent-east`, the agent's name, so several open dashboards are
   told apart at a glance.
 - **Each scrape, traced.** With Zipkin on, each scrape Prometheus makes is now a trace of its own, from the proxy
-  through the agent to the target, showing which Prometheus asked, how long the scrape waited for its agent, how long
-  the target took and how often the agent retried it, and why a scrape failed. Set `sampleRate` under
-  `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
+  through the agent to the target, showing which Prometheus asked, how long the scrape waited for its agent, even one
+  that timed out, how long the target took and how often the agent retried it, and why a scrape failed. Set
+  `sampleRate` under `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of
+  them.
 - **Nginx's default timeouts are enough.** A current agent and proxy keep their streams open with a keepalive every 30
   seconds, so nginx's default 60-second timeouts no longer cut off an agent every minute. For a reverse proxy with a
   shorter idle timeout, lower `proxy.internal.streamKeepAliveSecs`. Agents and proxies from 4.6.0 or earlier don't
@@ -112,6 +113,9 @@ _Released 2026-11-23_
   so a few thousand paths could exhaust a small proxy's heap. It now keeps them once, parsed, and with
   `maxLabelsPerPath` a path takes at most about 28 KiB. The dashboard shows a path's labels as the proxy keeps them,
   and no longer parses them on every refresh.
+- **Limit warnings come once.** The proxy's warnings that an agent nears `maxPathsPerAgent`, or an identity
+  `maxAgentsPerIdentity`, repeated each time the count climbed back to 80%, as an agent's discovery file churned or
+  its fleet's agents reconnected. Each now comes once, and again only after the count falls below 70%.
 - **An embedded agent on Spring Boot 4.0 or 4.1 says what to set.** Those releases set two of the agent's libraries,
   kotlinx-coroutines and the Prometheus Java client, below the versions it runs on, and the agent failed once it ran,
   leaving your app running with an agent that never served. It now refuses to start, and names the property to set
@@ -179,8 +183,10 @@ _Released 2026-11-23_
 - **The agent's connect and result counts mean what they say.** `agent_connect_count_total` counts a connect as a
   success once the proxy has registered the agent, and as `rejected` when the proxy refuses it, and a result counts as
   sent only once it's on its way, with one a dropped connection loses counted as `dropped`.
-- **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin. The
-  `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a config that sets it still loads.
+- **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin, and no
+  caller can have the proxy trace one, or more calls than its `sampleRate`, by marking its own trace sampled: the proxy
+  decides each call it serves itself. The `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a
+  config that sets it still loads.
 - **The release date is the release commit's.** The version the proxy and agent print, and the dashboards' Settings,
   give the date of the commit a build is from rather than the day it was built.
 - **Fewer ERROR lines on the proxy.** An unregister the proxy can't apply, for a path that's gone or that another
