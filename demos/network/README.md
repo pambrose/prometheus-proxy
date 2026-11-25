@@ -33,19 +33,10 @@ proxy, between the agents and the proxy; the [Kubernetes demo](../kubernetes) co
 The proxies see every agent at the WAN's address, as they would behind a NAT. Each agent's endpoints are its two
 links, so the dashboards' "via" line names the link it connected through.
 
-## What You Need
-
-The proxy and agent are the latest release's images, from Docker Hub, the same ones the basics demo runs, so there's
-nothing to build. On macOS or Linux, the demo needs only:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Quick Start
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -95,6 +86,21 @@ password, so this setup is for a laptop, not for anything shared.
 | `prometheus` | Scrapes every agent's paths through whichever proxy advertises them, every 5s with a 4s timeout, and both proxies' own metrics directly, from this side of the WAN. It loads the demo's fast alerts (`prometheus/network-alerts.yml`). |
 | `grafana` | Opens on the **Prometheus Proxy Network Demo** dashboard. |
 | `zipkin` | Every proxy and agent reports a span for each gRPC call between them but heartbeats and the stream of path notices, and each scrape's spans, under its own name. |
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to its section under [Guided
+Tour](#guided-tour).
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [Two agents reach the proxy over a simulated WAN](#1-two-agents-reach-the-proxy-over-a-simulated-wan) | Two agents, each with a link to a primary and a standby proxy, and the agent's dashboard listing them in failover order | The healthy baseline, and the agent's side of its connection |
+| 2. [A high-latency link slows scrapes, but nothing fails](#2-a-high-latency-link-slows-scrapes-but-nothing-fails) | 250 ms each way adds about half a second to each scrape, and every scrape succeeds | The connection is already open, so a far site costs one round trip |
+| 3. [A low-bandwidth link fails scrapes; filtering at the agent fixes it](#3-a-low-bandwidth-link-fails-scrapes-filtering-at-the-agent-fixes-it) | A thin link makes a large payload miss Prometheus's timeout, until the agent drops a metric family no one uses | Filtering at the agent saves bandwidth, storage, and query cost |
+| 4. [The primary proxy stops, and the agents fail over to the standby](#4-the-primary-proxy-stops-and-the-agents-fail-over-to-the-standby) | Both agents move to the standby within seconds, and an alert says they're off their primary | Failover needs no operator |
+| 5. [A link goes silent; the agent detects it and fails over](#5-a-link-goes-silent-the-agent-detects-it-and-fails-over) | A link that drops traffic without closing: the agent gives up on it, and fails over, while the proxy evicts it | A NAT or firewall that silently drops a connection is caught by timeouts alone |
+| 6. [A link that keeps dropping: the agent reconnects, traced in Zipkin](#6-a-link-that-keeps-dropping-the-agent-reconnects-traced-in-zipkin) | A link that closes every 15 seconds; the agent reconnects in milliseconds, and Zipkin shows each reconnect | A flapping link costs one scrape per drop, and tracing shows where |
+| 7. [The whole WAN goes down: an alert fires, and the agents reconnect](#7-the-whole-wan-goes-down-an-alert-fires-and-the-agents-reconnect) | Both agents lose both proxies; their targets leave discovery, one alert fires, and they reconnect when it's back | An outage raises one clear alert, not a wall of red targets |
 
 ## Guided Tour
 

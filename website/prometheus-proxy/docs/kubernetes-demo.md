@@ -11,7 +11,7 @@ Kubernetes doing the operating. It shows that the target cluster exposes nothing
 agent's own dashboard inside it all the same, that annotating a Service is all it takes for Prometheus to scrape it,
 that Kubernetes replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its
 targets. Every screenshot on this page comes from it. Unlike the other demos, it needs kind, `kubectl`, and Helm as well
-as Docker: see [What you need](#what-you-need).
+as Docker: see [Running It](#running-it).
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
@@ -25,14 +25,15 @@ graph TB
     services and writes the agent-targets ConfigMap, which is mounted in the agent.
   }
   P[Prometheus :9290] -->|discovery and scrapes| Proxy[prometheus-proxy chart, dashboard :8294]
-  %% The agent connects out, across Docker's kind network, so its arrow points back. The invisible link keeps the
-  %% target cluster below the monitoring one.
-  Proxy ~~~ Agent
-  Agent[prometheus-agent chart, dashboard :8295 by kubectl port-forward] -->|outbound gRPC, to a NodePort| Proxy
+  %% The agent connects out to the proxy, so its edge's one arrowhead is at the proxy. The edge is written from the
+  %% proxy, which keeps the agent below it, as a two-way edge whose other arrowhead linkStyle takes off. Written from
+  %% the agent, it needed an invisible link to keep that order, and the layout bent the edge around the link.
+  Proxy <-->|outbound gRPC, to a NodePort| Agent[prometheus-agent chart, dashboard :8295 by kubectl port-forward]
   Agent -->|HTTP fetch| Svc[orders, payments, shipping, search]
   Sync[targets-sync] -->|watches| Svc
   Sync -->|writes| CM[agent-targets ConfigMap]
   CM -->|mounted| Agent
+  linkStyle 1 marker-end:none
 
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
@@ -50,26 +51,16 @@ graph TB
   end
 ```
 
-## What You Need
-
-The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
-build. Unlike the other demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
-needs:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
-  node as a container, and each node uses about 1 to 1.5 GiB of memory, so give Docker Desktop about 4 GB (its
-  Resources settings).
-- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or later,
-  [`kubectl`](https://kubernetes.io/docs/tasks/tools/) 1.36 to 1.38, and [Helm](https://helm.sh/docs/intro/install/) 3
-  or 4. The clusters run Kubernetes 1.37, the version of the node image the demo pins, and kubectl supports one minor
-  version either side of it. `demo.sh` checks for each, and for kind's and Helm's versions. If kind can't create a
-  cluster, see its [known issues](https://kind.sigs.k8s.io/docs/user/known-issues/).
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Running It
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/), `git`, GNU `make`, and
+`curl`, as the other demos do, and also [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or
+later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/) 1.36 to 1.38, and
+[Helm](https://helm.sh/docs/intro/install/) 3 or 4. The clusters run Kubernetes 1.37, the version of the node image the
+demo pins, and kubectl supports one minor version either side of it; `demo.sh` checks for each, and for kind's and
+Helm's versions. kind runs each cluster's node as a container, which uses about 1 to 1.5 GiB of memory, so give Docker
+Desktop about 4 GB (its Resources settings). If kind can't create a cluster, see its [known
+issues](https://kind.sigs.k8s.io/docs/user/known-issues/).
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -119,11 +110,22 @@ it with `kubectl port-forward`, on `localhost` only, and holds its port only whi
 
 The charts get nothing but a values file each, a config file, and the proxy's address.
 
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to where this page covers it.
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [The Helm charts on two clusters, with no inbound access](#the-helm-charts-on-two-clusters-with-no-inbound-access) | The proxy chart in one cluster, and the agent chart in another that exposes nothing | Nothing in the monitored cluster opens to the outside |
+| 2. [The agent's own dashboard, reached with kubectl port-forward](#the-agents-own-dashboard-reached-with-kubectl-port-forward) | The agent's dashboard through `kubectl port-forward`, and Scrape now against cluster-local URLs | The agent's view, reached without exposing anything new |
+| 3. [Annotate a Service, and Prometheus scrapes it](#annotate-a-service-and-prometheus-scrapes-it) | An annotated Service is scraped within seconds, and leaves when the annotation does, with no restart | A team adds monitoring with one annotation |
+| 4. [Kubernetes replaces a deleted agent pod in about a second](#kubernetes-replaces-a-deleted-agent-pod-in-about-a-second) | A deleted agent pod is replaced, and the new one registers every path again | The Deployment heals a lost agent by itself, at the cost of a scrape |
+| 5. [A config change restarts the agent; a targets change doesn't](#a-config-change-restarts-the-agent-a-targets-change-doesnt) | A change to the agent's main config replaces its pod, where part 3's change of targets didn't | Why the chart keeps targets in a ConfigMap of their own |
+
 ## Scenarios
 
-`demo.sh`, in `demos/kubernetes`, drives the scenarios below. Run it from that directory, where `make up` started the
-demo; most commands print what to watch, and the ones that add, remove, or replace something, how long it took. The
-times on this page were measured on an Apple-silicon laptop.
+The commands that add, remove, or replace something print how long it took; the times on this page were measured on an
+Apple-silicon laptop.
 
 ### The Helm Charts on Two Clusters, with No Inbound Access
 

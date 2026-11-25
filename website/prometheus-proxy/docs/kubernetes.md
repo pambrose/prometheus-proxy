@@ -37,10 +37,11 @@ flowchart TB
     agent -- "scrape in-cluster" --> app
   end
 
-  %% The agent connects out to the proxy, so its arrow points back up. The invisible link keeps the monitoring
-  %% cluster above the target one, as on the other pages.
-  proxy ~~~ agent
-  agent -- "outbound gRPC :50051" --> proxy
+  %% The agent connects out to the proxy, so its edge's one arrowhead is at the proxy. The edge is written from the
+  %% proxy, which keeps the agent below it, as a two-way edge whose other arrowhead linkStyle takes off. Written from
+  %% the agent, it needed an invisible link to keep that order, and the layout bent the edge around the link.
+  proxy <-->|"outbound gRPC :50051"| agent
+  linkStyle 2 marker-end:none
 ```
 
 The agent always initiates the connection, so a target cluster only needs **egress** to the

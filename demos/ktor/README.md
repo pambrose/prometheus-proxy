@@ -42,22 +42,14 @@ flowchart TB
   style platform stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-## What You Need
+## Quick Start
 
-On macOS or Linux, the demo needs:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer, and to turn the coffee shop's knobs.
-- A web browser.
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the coffee shop inside Docker against the
 latest release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it
 builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
-
-## Quick Start
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -110,6 +102,23 @@ The secrets, the proxy's certificate and key, the certificate its agents trust, 
 which `make up` writes the first time it runs, beside any port you moved, and docker compose reads. The certificates
 are the repository's test ones (`testing/certs`), which are public, so this suits a laptop and nothing else; the Cloud
 Platforms page shows how to make your own.
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to its section under [Guided
+Tour](#guided-tour).
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [An app with the agent embedded, and no port open for Prometheus](#1-an-app-with-the-agent-embedded-and-no-port-open-for-prometheus) | The app serves no `/metrics`; the agent inside it reads its registry and sends the metrics out to the proxy | An app on ECS, Cloud Run, or Azure Container Apps is scraped with no port open |
+| 2. [The agent's own dashboard, served from inside the app](#2-the-agents-own-dashboard-served-from-inside-the-app) | The agent's own dashboard, served from inside the app, and Scrape now reading the registry on demand | The agent's side of its connection, turned on from the environment with no rebuild |
+| 3. [The coffee shop's metrics in Grafana](#3-the-coffee-shops-metrics-in-grafana) | The app's business metrics, Ktor's and the JVM's, and the embedded agent on the dashboard the project ships | Framework and runtime metrics come for free, and the agent needs no tooling of its own |
+| 4. [A rush fills the queue, and more baristas drain it](#4-a-rush-fills-the-queue-and-more-baristas-drain-it) | A rush fills the queue and fires an alert, and more baristas drain it | The app's own metrics drive real alerts through the proxy |
+| 5. [The espresso machine breaks, and an alert fires](#5-the-espresso-machine-breaks-and-an-alert-fires) | Espresso orders fail, and an error-rate alert fires | The metrics report a failure, rather than failing with it |
+| 6. [A deploy hands the path to the new version](#6-a-deploy-hands-the-path-to-the-new-version) | Version 1.1's agent takes the path from 1.0's, with no gap in the graphs | Rolling deploys keep metrics continuous, and a failed one gives the path back |
+| 7. [The agent's admin endpoints, for debugging it](#7-the-agents-admin-endpoints-for-debugging-it) | `/ping`, `/version`, `/healthcheck`, `/threaddump`, and `/debug`, turned on from the environment | Tools for an agent that won't connect or scrape, with no rebuild |
+| 8. [The proxy goes away, and the shop keeps serving](#8-the-proxy-goes-away-and-the-shop-keeps-serving) | The shop keeps serving and its `/healthcheck` stays healthy while the proxy is down, and the agent reconnects | A proxy outage never becomes an app outage |
+| 9. [The secrets come from the environment](#9-the-secrets-come-from-the-environment) | The app's token and certificate, and the proxy's, come from environment variables rather than files | It fits platforms that pass secrets as environment variables |
 
 ## Guided Tour
 

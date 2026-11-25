@@ -1,8 +1,13 @@
 # Demos
 
 Seven self-contained demos run the proxy, its agents, and Prometheus on your laptop from the released images. Each
-starts with `make up` in its directory under `demos/`, and a guided tour walks you through it. All but the Kubernetes
-Demo need only Docker. Start with the Basics Demo.
+starts with `make up` in its directory under `demos/`, and a guided tour walks you through it. Start with the Basics
+Demo.
+
+Each runs on macOS or Linux, and needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`
+to clone the repository, GNU `make`, and `curl`; the Kubernetes Demo also needs kind, `kubectl`, and Helm. On macOS, the
+Xcode command-line tools (`xcode-select --install`) have `git` and `make`. Where GNU make is installed as `gmake`, type
+`gmake` wherever the demos say `make`.
 
 ## The Proxy and Its Agents
 

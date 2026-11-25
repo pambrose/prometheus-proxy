@@ -170,7 +170,7 @@ print_urls() {
   echo "  Prometheus:               $PROMETHEUS_URL"
   echo "  Proxy discovery:          $PROXY_URL/discovery"
   echo
-  echo "This demo, explained on the website: $PAGE_URL"
+  echo "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 nginx-log | nginx-long-timeouts | nginx-workers | keepalive 10 | dashboard-host ...  (no" \
     "arguments for help)"
@@ -617,6 +617,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. To start from another part, run" \
     "$MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

@@ -47,22 +47,14 @@ graph TB
   linkStyle 2 marker-end:none
 ```
 
-## What You Need
+## Running It
 
-On macOS or Linux, the demo needs:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer, and to turn the coffee shop's knobs.
-- A web browser.
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the coffee shop inside Docker against the
 latest release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it
 builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
-
-## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -182,6 +174,22 @@ loaded, and stops it as the server stops:
   it runs. It also turns on the agent's admin endpoints, `/debug`, and its dashboard, with `ADMIN_ENABLED`,
   `DEBUG_ENABLED`, and `DASHBOARD_ENABLED`, which the agent reads itself, and each version's service gives the
   dashboard its port, in `DASHBOARD_PORT`.
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to where this page covers it.
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. An app with the agent embedded, and no port open for Prometheus | The app serves no `/metrics`; the agent inside it reads its registry and sends the metrics out to the proxy | An app on ECS, Cloud Run, or Azure Container Apps is scraped with no port open |
+| 2. The agent's own dashboard, served from inside the app | The agent's own dashboard, served from inside the app, and Scrape now reading the registry on demand | The agent's side of its connection, turned on from the environment with no rebuild |
+| 3. [The coffee shop's metrics in Grafana](#the-coffee-shop-in-grafana) | The app's business metrics, Ktor's and the JVM's, and the embedded agent on the dashboard the project ships | Framework and runtime metrics come for free, and the agent needs no tooling of its own |
+| 4. [A rush fills the queue, and more baristas drain it](#the-coffee-shop-in-grafana) | A rush fills the queue and fires an alert, and more baristas drain it | The app's own metrics drive real alerts through the proxy |
+| 5. [The espresso machine breaks, and an alert fires](#the-coffee-shop-in-grafana) | Espresso orders fail, and an error-rate alert fires | The metrics report a failure, rather than failing with it |
+| 6. [A deploy hands the path to the new version](#a-deploy) | Version 1.1's agent takes the path from 1.0's, with no gap in the graphs | Rolling deploys keep metrics continuous, and a failed one gives the path back |
+| 7. [The agent's admin endpoints, for debugging it](#debugging-the-agent) | `/ping`, `/version`, `/healthcheck`, `/threaddump`, and `/debug`, turned on from the environment | Tools for an agent that won't connect or scrape, with no rebuild |
+| 8. [The proxy goes away, and the shop keeps serving](#the-proxy-goes-away) | The shop keeps serving and its `/healthcheck` stays healthy while the proxy is down, and the agent reconnects | A proxy outage never becomes an app outage |
+| 9. [The secrets come from the environment](#secrets-from-the-environment) | The app's token and certificate, and the proxy's, come from environment variables rather than files | It fits platforms that pass secrets as environment variables |
 
 ## The Coffee Shop in Grafana
 

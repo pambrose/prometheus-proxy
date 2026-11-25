@@ -31,19 +31,10 @@ kind clusters; it needs kind, `kubectl`, and Helm as well as Docker.
 Only nginx reaches the proxy's agent port. The proxy's transport filter is off behind nginx, so it records no address
 for an agent, and lists each at the address **Unknown**.
 
-## What You Need
-
-The proxy and agent are the latest release's images, from Docker Hub, the same ones the other demos run, so there's
-nothing to build, and agent-legacy is release 4.6.0's image. On macOS or Linux, the demo needs only:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Quick Start
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -88,6 +79,18 @@ anything shared.
 | `agent-legacy` | An agent of release 4.6.0, beside a warehouse, from before the stream keepalives, to show what an agent without them goes through behind nginx. It has no dashboard, which came later. |
 | `nginx-app` | The simulated services (`app/nginx_app.py`), with small metrics. |
 | `prometheus` | Scrapes both agents' paths through the proxy every 5 seconds, and the proxy's own metrics directly. |
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to its section under [Guided
+Tour](#guided-tour).
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [Two agents reach the proxy through nginx, over TLS](#1-two-agents-reach-the-proxy-through-nginx-over-tls) | nginx ends the agents' TLS and passes their gRPC calls on; each agent has a token of its own | The usual way to put a service behind one TLS endpoint, and what nginx needs for it |
+| 2. [nginx's stream timeouts cut off an agent from 4.6.0 every minute](#2-nginxs-stream-timeouts-cut-off-an-agent-from-460-every-minute) | An agent without stream keepalives is cut off every minute, beside one that has them; longer timeouts fix it | What you see behind nginx with a proxy or agent from 4.6.0 or earlier, and the fix short of upgrading |
+| 3. [A shorter stream timeout, and a reload that doesn't reach connected agents](#3-a-shorter-stream-timeout-and-a-reload-that-doesnt-reach-connected-agents) | A timeout under the 30-second keepalive cuts agents off, and a reload doesn't reach connected ones | How to set `streamKeepAliveSecs` under a load balancer's idle timeout, and make a reload apply |
+| 4. [The dashboard behind nginx](#4-the-dashboard-behind-nginx) | A plain `proxy_pass` breaks the dashboard's live updates, and two settings fix it | What an nginx in front of the dashboard has to pass on |
 
 ## Guided Tour
 
