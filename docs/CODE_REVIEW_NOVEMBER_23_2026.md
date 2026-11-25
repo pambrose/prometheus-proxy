@@ -1,8 +1,8 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 3 fixed, 69 open (8 medium, 64 low, no high); #25 and #39 are partly fixed.
+**Status:** 72 issues — 4 fixed, 68 open (8 medium, 64 low, no high); #25 and #39 are partly fixed.
 
-**Progress:** Wave A: step 2 in #550.
+**Progress:** Wave A: step 2 in #550, and step 3 in #551.
 
 **Date:** 2026-11-23; rechecked twice on 2026-11-24
 
@@ -30,7 +30,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ⬜      |
 | 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ⬜      |
 | 8  | The starter's agent dies with a `NoSuchMethodError` on Spring Boot 4.0.x and 4.1.0                   | Embedding  | medium   | ✅      |
-| 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ⬜      |
+| 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ✅      |
 | 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ⬜      |
 | 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ⬜      |
 | 12 | A start that times out keeps starting, with no handle to stop it                                     | Embedding  | low      | ⬜      |
@@ -148,7 +148,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 |------|--------|------------------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | 1    | ⬜      | #25, #30, #61, #62, #67      | Release checks that miss nothing, and demos that pull a published release | `demos/*/demo.sh`, the demo READMEs, `bin/docker-*.sh`, `Makefile` (`release-check`, `_check-demos-pull-release`, `SITE_VERSION_SOURCES`, `release`), `docs/RELEASE.md`, the publishing-release skill, a new `misc/` spec | No longer blocks the 4.7.0 tag: #537's `_check-demos-pull-release` refuses a release until the demos are lowered. A gate on whether the release's images exist drops that release-day edit and keeps `master`'s `make up` right between the bump and the publish. For 4.7.0 itself, set both changelogs' date in the release's last change (#62). #67 is the demos' links to a site that, between releases, is the last release's. |
 | 2    | ✅ #550 | #8, #24, #31                 | A Spring Boot starter that runs on the Spring Boot it names           | `agent/AgentMetrics.kt`, `Agent.kt` (`connectOutcome`), `spring-boot-starter/` (`PrometheusProxyAgentProperties`, the website YAML), `spring-boot-starter.md`, `embedded-agent.md` | The starter is new in 4.7.0; fixing it before the tag means no release ships it broken. A starter test at Spring Boot 4.0's or 4.1.0's Prometheus client pins #8.                                 |
-| 3    | ⬜      | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
+| 3    | ✅ #551 | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
 | 4    | ⬜      | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
 | 5    | ⬜      | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
 | 6    | ⬜      | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
@@ -729,7 +729,7 @@ without the 1.7 API: it refuses the gauge name `agent_build_info`. So:
 - `oldestSpringBootTest` runs the starter's tests under Spring Boot 4.0.10 with the two set; without them, the
   integration test failed with the `NoSuchMethodError`.
 
-### 9. ⬜ The starter puts Logback on every embedder's classpath, so a Spring Boot app that logs with Log4j2 breaks: it fails to start, or loses its Log4j2 configuration
+### 9. ✅ The starter puts Logback on every embedder's classpath, so a Spring Boot app that logs with Log4j2 breaks: it fails to start, or loses its Log4j2 configuration
 
 **Severity:** medium · **Confidence:** confirmed by trace. The published POM was read, as was Spring Boot 4.2.0's
 `LogbackLoggingSystem` and `Log4J2LoggingSystem`. Which of the two breakages an app sees depends on SLF4J's provider
@@ -779,6 +779,15 @@ Logback. November #19 took `logback.xml` out of the jar but kept the dependency.
   fails today.
 - A consumer-check assertion that `logback-classic` isn't on the classpath of a project that depends only on the agent
   (or only on the starter).
+
+**Resolution:** Fixed in #551. `logback-classic` is `compileOnly` in the agent, so the published POM no longer names it,
+and on the main runtime classpath through `standaloneRuntimeOnly`, a dependency scope `runtimeClasspath` extends and
+`runtimeElements` doesn't, so the fat JARs and the images still log with it. `Utils.setLogLevel` sets a level through
+`LogbackLevels`, the only class that links against Logback, once `Class.forName` finds it, and warns otherwise; a
+`UtilsTest` spec scans the main classes for any other class naming Logback. `make consumer-check` fails when Logback
+resolves for the agent alone, a Ktor app with the plugin, or a Spring Boot app with the starter (a new
+`spring-boot-starter` profile), where the review's Log4j2 starter test would have needed a classpath of its own. The
+Embedded Agent page's Logging section and the upgrade notes say what an app with no SLF4J provider adds.
 
 ### 10. ⬜ The Ktor plugin starts the agent before the engine binds its port, so an app whose port is taken hangs instead of exiting, with its agent connected
 
