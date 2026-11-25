@@ -23,6 +23,7 @@ import io.prometheus.agent.AgentActivityKind
 import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.string.shouldNotContain
@@ -108,6 +109,22 @@ class PathDiscoveryServiceTest : StringSpec() {
       service.reconcileOnce()
 
       coVerify(exactly = 2) { pathManager.reconcileDiscoveredPaths(desired) }
+    }
+
+    // A failed tick was logged and discovery went on, JVM Errors included, so an agent out of stack or heap ran on in
+    // the state the Error left it in (November #7). An Error now propagates, to fail the connection and stop the agent.
+    "a JVM Error reading the discovery file should propagate, not be logged as a failed tick" {
+      val service = PathDiscoveryService(mockk(relaxed = true), { throw StackOverflowError("test") }, 30)
+
+      shouldThrow<StackOverflowError> { service.reconcileOnce() }
+    }
+
+    "a JVM Error reconciling the paths read should propagate" {
+      val pathManager = mockk<AgentPathManager>(relaxed = true)
+      coEvery { pathManager.reconcileDiscoveredPaths(any()) } throws OutOfMemoryError("test")
+      val service = PathDiscoveryService(pathManager, { emptyList() }, 30)
+
+      shouldThrow<OutOfMemoryError> { service.reconcileOnce() }
     }
 
     // A path of just "/" normalizes to "", which can never register, so discovery drops it like a blank one.

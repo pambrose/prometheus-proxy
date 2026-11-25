@@ -244,6 +244,13 @@ All notable changes to this project are documented in this file.
   as the agent staying off, but went on starting, then connected and served its paths with nothing able to stop it,
   and kept the app's JVM from exiting. It now stops as soon as its startup ends, without connecting, and the start
   throws an `IllegalStateException` that says so, with the `TimeoutException` as its cause
+- An agent with one proxy endpoint that lost its proxy tried again every `agent.internal.reconnectPauseSecs`, but each
+  try failed at once while gRPC waited out its own connect backoff, which grows to 2 minutes, so after a long outage
+  the agent reconnected up to 2 minutes after the proxy was back. Each try after a failed one now dials the proxy, so
+  the agent reconnects within seconds
+- Results a scrape finished just before the agent's connection to the proxy ended, as on a proxy restart, could count
+  in `agent_scrape_result_count_total` as neither sent nor `dropped`; they now count as `dropped`, and the agent no
+  longer logs an ERROR with a stack trace for such a disconnect
 - The Spring Boot demo's roastery starts without Spring Boot's build info, as from an IDE's build, showing its version
   as `unknown`; its status page labels its roasted stock `Roasted stock:`; and it roasts the origins in a fixed
   rotation, so their graph lines no longer cross. `RoasteryAgentTest` stops the agent before the proxy, so a passing
@@ -281,6 +288,9 @@ All notable changes to this project are documented in this file.
   whose environment sets them, such as one sharing the proxy's, now opens its dashboard on port 8095 or serves its
   metrics at that path, and a value it can't parse, such as an empty `DASHBOARD_PORT`, fails its start
 - `sendHeartBeat` calls are no longer traced
+- A JVM `Error`, such as an `OutOfMemoryError`, in an agent's connection to the proxy (its streams, heartbeat, path
+  registrations, or discovery) stops the agent, as one in a scrape already did. It ended only the connection, and the
+  agent reconnected and ran on in whatever state the `Error` left it in
 - The unimplemented `internal.zipkin.grpcReportingEnabled` setting is removed; a config that sets it still loads
 - `BuildConfig.BUILD_TIME` and the release date the version and the dashboards show are the time of the commit the
   build is from, not of the build, so every build of a commit is the same
