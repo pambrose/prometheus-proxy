@@ -561,9 +561,9 @@ embeddedAgent {
 
 Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
 and each series carries its agent's `launch_id`. An embedded agent's `logLevel` sets only the `io.prometheus` loggers,
-so it leaves your application's own logging alone. Your application's Logback configuration also configures the
-agent's loggers, since the library jar carries none of its own; the standalone agent's sets `io.grpc.internal` to WARN,
-which you may want too.
+so it leaves your application's own logging alone. The agent logs through SLF4J and brings no provider or configuration
+of its own, so your application's logging, Logback or another provider, configures the agent's loggers too; the
+standalone agent's sets `io.grpc.internal` to WARN, which you may want too.
 
 To debug an embedded agent, start by turning on its admin endpoints and its `/debug` page, which are off unless asked
 for. The agent reads the app's environment itself, so they need no change to the code, and a restart turns them on or

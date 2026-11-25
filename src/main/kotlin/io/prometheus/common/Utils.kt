@@ -125,36 +125,29 @@ internal object Utils {
   // The parent of every proxy and agent logger.
   internal const val PROJECT_LOGGER_NAME = "io.prometheus"
 
-  /** Sets the level of [loggerName], the root logger unless given. */
+  // The levels setLogLevel takes. "all" is intentionally unsupported: Logback's Level.ALL is deprecated. Use "trace".
+  private val LOG_LEVELS = setOf("trace", "debug", "info", "warn", "error", "off")
+
+  // Whether Logback is on the classpath: the standalone proxy and agent run with it, and an app that embeds the agent
+  // has it only when it logs with Logback itself, since the library doesn't bring it
+  internal val isLogbackPresent: Boolean =
+    runCatching { Class.forName("ch.qos.logback.classic.Logger", false, Utils::class.java.classLoader) }.isSuccess
+
+  /**
+   * Sets the level of [loggerName], the root logger unless given, when SLF4J's provider is Logback ([logbackPresent]
+   * says whether Logback is on the classpath at all), and warns that it can't otherwise. Throws
+   * [IllegalArgumentException] for a level that isn't one of trace, debug, info, warn, error, or off, in any case.
+   */
   fun setLogLevel(
     context: String,
     logLevel: String,
     loggerName: String = ROOT_LOGGER_NAME,
+    logbackPresent: Boolean = isLogbackPresent,
   ) {
-    val level =
-      when (logLevel.lowercase()) {
-        // "all" is intentionally unsupported: ch.qos.logback.classic.Level.ALL is deprecated. Use "trace".
-        "trace" -> Level.TRACE
-
-        "debug" -> Level.DEBUG
-
-        "info" -> Level.INFO
-
-        "warn" -> Level.WARN
-
-        "error" -> Level.ERROR
-
-        "off" -> Level.OFF
-
-        else -> throw IllegalArgumentException("Invalid $context log level: $logLevel")
-      }
-    val logger = LoggerFactory.getLogger(loggerName) as? Logger
-      ?: run {
-        LoggerFactory.getLogger(loggerName)
-          .warn("Cannot set log level: SLF4J binding is not Logback")
-        return
-      }
-    logger.level = level
+    val level = logLevel.lowercase()
+    require(level in LOG_LEVELS) { "Invalid $context log level: $logLevel" }
+    if (!logbackPresent || !LogbackLevels.set(loggerName, level))
+      LoggerFactory.getLogger(loggerName).warn("Cannot set log level: SLF4J binding is not Logback")
   }
 
   /**
@@ -323,5 +316,19 @@ internal object Utils {
         HostPort(host, parsePort(portStr, hostPort))
       }
     }
+  }
+}
+
+// The Logback calls setLogLevel makes, in an object of their own, so that no other class of the agent's links against
+// Logback, which an app that embeds the agent may not have. Called only when Logback is on the classpath.
+private object LogbackLevels {
+  // Sets [loggerName]'s level to [level], one of setLogLevel's, or returns false when SLF4J's provider isn't Logback
+  fun set(
+    loggerName: String,
+    level: String,
+  ): Boolean {
+    val logger = LoggerFactory.getLogger(loggerName) as? Logger ?: return false
+    logger.level = Level.toLevel(level)
+    return true
   }
 }

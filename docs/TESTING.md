@@ -199,8 +199,10 @@ resolution checks and the examples' compile see what an application that depends
 fails unless the examples compile there (a public type's supertype at runtime scope broke the Java one, and the
 `PrometheusRegistry` the builder's `source()` takes has to be at compile scope), Maven resolves Jackson, every
 netty-tcnative native, Netty, protobuf, and every module of the Prometheus Java client at the versions
-`gradle/libs.versions.toml` pins, the registry model and the text formats among them, and no jar on the classpath
-carries a `logback.xml`, which would replace the host application's logging config.
+`gradle/libs.versions.toml` pins, the registry model and the text formats among them, Logback isn't resolved, for the
+agent alone, a Ktor app with the Ktor plugin, or a Spring Boot app with the starter (each would displace the host
+application's own SLF4J provider), and no jar on the classpath carries a `logback.xml`, which would replace the host
+application's logging config.
 
 ## Test Categories
 
@@ -781,7 +783,8 @@ One support helper also lives here (not a test class itself):
   whether it is set, and, embedded, throw `ConfigLoadException`
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails; failureKey, which keys a failure by its gRPC status code, wrapped or not, and one
-  without a status by its class, and its message only when asked
+  without a status by its class, and its message only when asked; setLogLevel without Logback warning and setting
+  nothing, and no main class but `LogbackLevels` naming a Logback class, since the library leaves Logback to the app
 
 These support helpers also live here (not test classes themselves):
 

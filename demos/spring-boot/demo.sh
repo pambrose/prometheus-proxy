@@ -412,7 +412,6 @@ cmd_versions() {
   printf '  %-24s %-14s %s\n' "Library" "The agent's" "The roastery's"
   row "kotlinx-serialization" "$(catalog_version serialization)" "$(lib_version "$libs" kotlinx-serialization-json-jvm)"
   row "Jackson 2" "$(catalog_version jackson)" "$(lib_version "$libs" jackson-databind 2)"
-  row "Logback" "$(catalog_version logback)" "$(lib_version "$libs" logback-classic)"
   row "gRPC" "$(catalog_version grpc)" "$(lib_version "$libs" grpc-core)"
   row "Netty" "$(catalog_version netty)" "$(lib_version "$libs" netty-handler)"
   row "netty-tcnative" "$(catalog_version tcnative)" "$(lib_version "$libs" netty-tcnative-classes)"

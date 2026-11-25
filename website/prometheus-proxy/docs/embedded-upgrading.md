@@ -10,6 +10,11 @@ A release that changed nothing an embedding app sees isn't listed; the
 
 ## Upgrading from 4.6.x
 
+- The agent no longer brings Logback. Through 4.6.0, `ch.qos.logback:logback-classic` came with it, at runtime
+  scope, and displaced an application's own SLF4J provider: Spring Boot failed to start an app on Log4j2, or ignored
+  its Log4j2 configuration. The agent's loggers now go to your application's provider. An application that logged
+  through the Logback the agent brought, with no SLF4J provider of its own, now gets SLF4J's warning that it found
+  none, and no logs, so add Logback to it (see [Logging](embedded-agent.md#logging)).
 - An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` registers no JVM shutdown hook. Through 4.6.0 it
   did, and on SIGTERM it stopped at the same time as your application's own hooks, in no set order. Stop it with
   `shutdown()` or `close()` where your application stops its own services (see

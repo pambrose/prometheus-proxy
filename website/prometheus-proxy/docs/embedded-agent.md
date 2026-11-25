@@ -562,10 +562,17 @@ loggers only, so it doesn't change your application's own logging. A standalone 
 
 ## Logging
 
-Your application configures the agent's logging. The agent logs through SLF4J to Logback, and the library jar carries
-no Logback configuration, so your own `logback.xml` (or, in Spring Boot, `logback-spring.xml` and the `logging.level`
-properties) applies to the agent's loggers as it does to the rest. With no configuration at all, Logback logs
-everything at DEBUG, gRPC and Netty included.
+Your application configures the agent's logging. The agent logs through SLF4J, and brings neither an SLF4J provider
+nor a configuration, so its loggers go wherever your application's do:
+
+- **With Logback,** your own `logback.xml` (or, in Spring Boot, `logback-spring.xml` and the `logging.level`
+  properties) applies to the agent's loggers as it does to the rest. With no configuration at all, Logback logs
+  everything at DEBUG, gRPC and Netty included.
+- **With another provider,** such as Log4j2, its configuration applies to them instead. The agent's `logLevel` sets a
+  level only through Logback: with another provider, the agent logs a warning and leaves the level to its
+  configuration.
+- **With none,** SLF4J prints a warning that it found no provider, and nothing logs, the agent included. Add one, such
+  as `ch.qos.logback:logback-classic`, at runtime.
 
 The standalone agent's configuration sets `io.grpc.internal` to WARN, so that only gRPC's internal warnings and errors
 reach its log; you may want the same:
