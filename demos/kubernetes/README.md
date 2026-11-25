@@ -69,10 +69,10 @@ To show it without a network connection, run `make up` once beforehand and leave
 
 Each port is the basics demo's plus 200, so the demos can run side by side. kind publishes the ports, through NodePort
 Services in the monitoring cluster, when it creates `pp-monitoring`, so if one is already taken, set its variable from
-the table for the `make up` that creates the clusters, for example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You
-set it once: every command after reads the ports back from the running cluster, which keeps them until `make down`
-deletes it, and `make up` says so if a variable asks for another. The proxy dashboard's link into Prometheus keeps the
-default port (`config/proxy.conf`).
+the table, all but the agent dashboard's, for the `make up` that creates the clusters, for example
+`KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You set it once: every command after reads the ports back from the
+running cluster, which keeps them until `make down` deletes it, and `make up` says so if a variable asks for another.
+The proxy dashboard's link into Prometheus keeps the default port (`config/proxy.conf`).
 
 Every port binds to `127.0.0.1` only. The dashboard runs without its login, so this setup is for a laptop, not for
 anything shared.
@@ -81,7 +81,8 @@ The agent dashboard's port, 8295, isn't one kind publishes: `pp-target` publishe
 dashboard off the agent's Service. `./demo.sh agent-dashboard` reaches it as the chart's notes tell an operator to,
 with `kubectl --context kind-pp-target -n monitoring port-forward deploy/prometheus-agent 8295:8095`, in the
 foreground. It holds the port only while it runs, on `localhost` only, and `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` moves
-it without recreating a cluster. A port-forward reaches one pod, so once the agent's pod is replaced, as
+it without recreating a cluster. Nothing keeps it, so give it to each `./demo.sh agent-dashboard` and `make tour`, or
+export it in your shell. A port-forward reaches one pod, so once the agent's pod is replaced, as
 `delete-agent-pod` and `change-config` do, it fails at the next request, with `error: lost connection to pod`: run it
 again. The agent's dashboard runs without its login too.
 

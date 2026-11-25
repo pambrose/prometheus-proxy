@@ -279,8 +279,8 @@ class EmbeddedAgentConfig private constructor(
      *
      * A value the agent refuses as it starts, an endpoint it can't parse or a certificate it can't read, fails
      * [start][EmbeddedAgentConfig.start] with a [ConfigLoadException] that names the variable as well as the setting,
-     * such as `PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem: …`, and never
-     * the value.
+     * such as `PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem: …`. An endpoint
+     * it can't parse is quoted in the message, but never a certificate.
      */
     fun fromEnvironment(): Builder = fromEnvironment(System::getenv)
 

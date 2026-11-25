@@ -889,8 +889,9 @@ main() {
         "eviction as a problem, with how many paths the proxy released."
       point "The proxy's own metrics reach Prometheus through agent-east's /proxy_metrics path, so they stop with it." \
         "The DemoAgentEvicted alert and Grafana's panels of the proxy's metrics, such as 'Agent disconnects at the" \
-        "proxy, by reason', can't update while agent-east is gone. Once it's back, they catch up: the alert fires," \
-        "and the panel shows the eviction."
+        "proxy, by reason', can't update while agent-east is gone. Thaw it within a minute of the eviction and they" \
+        "catch up: the alert fires, and the panel shows the eviction. The alert's rule looks back two minutes and the" \
+        "panel five, so a longer freeze leaves both without it; freeze agent-west-2 instead to see the alert fire."
       point "Meanwhile DemoTargetDown fires for agent-east's jobs, and ProxyDown goes pending: Prometheus reads" \
         "up{job=\"prometheus-proxy\"} through agent-east too, so it sees 0 though the proxy itself is up."
     fi

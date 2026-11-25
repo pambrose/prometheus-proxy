@@ -88,8 +88,9 @@ Example Nginx and proxy configuration files are available in the repository:
 
 - [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf)
 - [`nginx/nginx-proxy.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)
-- The nginx Demo's configs, [`demos/nginx/nginx/`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx/nginx),
-  with TLS, the dashboard, and `worker_shutdown_timeout`, which `make up` in `demos/nginx` runs
+- The nginx Demo's configs, [`demos/nginx/nginx/`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx/nginx):
+  `make up` in `demos/nginx` runs nginx with TLS and the dashboard on its stock timeouts, and
+  `./demo.sh nginx-shutdown-timeout` adds `worker_shutdown_timeout`
 
 ### TLS at nginx
 

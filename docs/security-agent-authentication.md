@@ -132,8 +132,8 @@ The original finding is exploitable when **all** of the following hold:
 3. The attacker calls `connectAgent` → `registerAgent` → `registerPath` for an existing path such as
    `/node-exporter`. *Blocked by mutual TLS or by agent authentication; per-agent identities also block a path
    outside the attacker's globs, and a path a live agent of another identity already serves.*
-4. The proxy overwrites the path's owner with the attacker's context and invalidates the legitimate agent if it has
-   no other paths.
+4. The proxy gives the path to the attacker's context. The legitimate agent, of another launch, stays connected
+   without the path, is told who holds it, and has its reclaims refused while the attacker's agent stays connected.
 5. Prometheus scrapes `proxy-host:8080/node-exporter` and receives **attacker-controlled metrics**. The attacker
    can fabricate values to mask an outage, hide an intrusion, or trigger or suppress alerting and autoscaling
    decisions driven by those metrics.
@@ -147,8 +147,8 @@ token — joining still answers a fraction of scrape requests with fabricated da
 
 - **Integrity of metrics** — Prometheus consumes attacker-controlled data for hijacked paths. This is the primary
   risk: monitoring, alerting, and autoscaling built on these metrics can be misled.
-- **Availability** — the legitimate agent's context is invalidated on displacement, so it must reconnect and
-  re-register; an attacker re-registering in a loop can keep a path effectively denied to the real agent.
+- **Availability** — one registration, held open, keeps the path from the real agent, through the real agent's
+  reconnects too, until the attacker's agent disconnects or is evicted, or the real agent restarts as a new launch.
 - **Information disclosure** — when reflection is enabled without agent authentication, a peer can enumerate the
   full RPC surface.
 - **Confidentiality, in one configuration** — with the transport filter disabled, a peer that shares another

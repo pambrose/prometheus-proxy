@@ -109,8 +109,8 @@ enforces, on every path registration, that the requested path matches one of the
 Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
 (e.g. `team_a_*`).
 
-A path is checked against the patterns only once it has passed the path limits
-(`proxy.internal.maxPathLength` and the rest; see
+A path is checked against the patterns only once its form and size have passed
+(`proxy.internal.maxPathLength` and `maxLabelsSizeBytes`; see
 [Proxy configuration](../configuration/proxy.md#internal-settings)), so a path that is too long, has more
 than one segment, or has whitespace, a control character, `?`, or `#` in it is refused as invalid, whatever the
 patterns. A `*` matches any run of characters, line breaks included, so this check is what keeps an agent from

@@ -143,6 +143,9 @@ The path is known but cannot be served right now, or the agent couldn't reach th
 - **Target error** (`upstream_error`) — the target itself answered 502; check the target.
 - **Unusable response** (`invalid_response`) — the agent answered, but a chunk or summary failed
   validation. Check `proxy_chunk_validation_failures_total` and the proxy log.
+- **Zipped payload too large** (`invalid_response`) — a result sent in chunks passed
+  `proxy.internal.maxZippedContentSizeMBytes` (default `5`) before it was unzipped, and the proxy log says `Zipped
+  content size … exceeds maximum allowed size`. Raise the limit for a target with that much to send.
 
 ### `413 Payload Too Large`
 
