@@ -314,6 +314,10 @@ helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs
 			printf '%s\n' "$$manifests" | grep -q "secretName: $$chart-config" || \
 				{ echo "Error: $$chart with existingSecret doesn't mount the $$chart-config Secret" >&2; exit 1; }; \
 		fi; \
+		if [ "$$(basename $$values)" = all-features-values.yaml ]; then \
+			printf '%s\n' "$$manifests" | grep -A1 -e '- name: DASHBOARD_HOST$$' | grep -q 'value: "127.0.0.1"$$' || \
+				{ echo "Error: $$chart's dashboard doesn't default to the pod's loopback (DASHBOARD_HOST)" >&2; exit 1; }; \
+		fi; \
 	done; done
 
 # The online audits (known-vulnerable and impostor actions) need a GitHub token: GH_TOKEN, else gh's login, else they're

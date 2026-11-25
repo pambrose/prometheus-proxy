@@ -21,6 +21,7 @@ package io.prometheus.misc
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigResolveOptions
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.prometheus.agent.discovery.FileDiscoverySource
@@ -29,8 +30,8 @@ import io.prometheus.common.agentOptions
 import io.prometheus.common.proxyOptions
 import java.io.File
 
-// What a new user runs first: the example configs, which the Docker quick start fetches at the release's tag, and the
-// docker run commands the docs give (November #27 and #28).
+// What a new user runs first: the example configs, which the Docker quick start fetches at the release's tag, the
+// docker run commands the docs give (November #27 and #28), and the ports the compose stacks publish.
 class DocsExamplesTest : StringSpec() {
   private val exampleConfigs by lazy {
     File(EXAMPLES_DIR).listFiles { file -> file.extension == "conf" }.orEmpty().sortedBy { it.name }
@@ -46,6 +47,12 @@ class DocsExamplesTest : StringSpec() {
         .filter { DOCKER_RUN.containsMatchIn(it) }
         .map { file.path to it.trim().replace(WHITESPACE, " ") }
     }
+  }
+
+  // Each port a compose file publishes, with the file it's in: the repo's own compose files, and the compose snippets
+  // in the docs.
+  private val composePorts by lazy {
+    (composeFiles() + docFiles()).flatMap { file -> publishedPorts(file).map { file.path to it } }
   }
 
   init {
@@ -75,6 +82,18 @@ class DocsExamplesTest : StringSpec() {
       dockerRunCommands
         .filter { (_, command) -> command.hasFlag("--rm") && command.hasFlag("--restart") }
         .map { (path, command) -> "$path: $command" } shouldBe emptyList()
+    }
+
+    // These stacks run on one machine, to try the proxy or a demo, and a port Docker publishes on every interface gets
+    // past the host's firewall: the quick start's would give anyone who can reach the host the agents' gRPC port, with
+    // no token, every path's metrics, and the admin endpoints (November 23 review, #27). The cloud-proxy example, which
+    // publishes the agents' port on purpose, with a token and TLS, is the Cloud Platforms page's, and isn't read.
+    "every port a compose file or a compose snippet in the docs publishes should be on 127.0.0.1" {
+      composePorts.map { (path, _) -> path } shouldContainAll listOf(QUICK_START_COMPOSE, DOCKER_SNIPPETS)
+
+      composePorts
+        .filterNot { (_, entry) -> entry.startsWith(LOOPBACK) }
+        .map { (path, entry) -> "$path: $entry" } shouldBe emptyList()
     }
   }
 
@@ -107,6 +126,45 @@ class DocsExamplesTest : StringSpec() {
       addAll(File(WEBSITE_SNIPPETS_DIR).listFiles { file -> file.extension == "txt" }.orEmpty().sortedBy { it.name })
     }
 
+  private fun composeFiles(): List<File> =
+    buildList {
+      addAll(File(COMPOSE_DIR).listFiles { file -> file.extension == "yml" }.orEmpty().sortedBy { it.name })
+      addAll(
+        File(DEMOS_DIR)
+          .listFiles { file -> file.isDirectory }
+          .orEmpty()
+          .map { File(it, DEMO_COMPOSE) }
+          .filter { it.isFile }
+          .sortedBy { it.path },
+      )
+    }
+
+  // The entries of each block-style ports: list in [file], without their quotes and comments, that are in the short
+  // syntax every compose file here uses, "[address:]host:container". A Kubernetes manifest's ports, which are maps,
+  // aren't.
+  private fun publishedPorts(file: File): List<String> =
+    buildList {
+      var listIndent = NOT_IN_LIST
+      file
+        .readLines()
+        .filterNot { it.isBlank() || it.trim().startsWith("#") }
+        .forEach { line ->
+          val text = line.trim()
+          val indent = line.length - line.trimStart().length
+          // A list's entries may sit as deep as its key, or deeper; anything else that deep ends the list.
+          when {
+            text == "ports:" -> listIndent = indent
+            listIndent == NOT_IN_LIST -> Unit
+            text.startsWith("- ") && indent >= listIndent -> add(text.listEntry())
+            indent <= listIndent -> listIndent = NOT_IN_LIST
+          }
+        }
+    }.filter { PORT_ENTRY.matches(it) }
+
+  // A YAML list entry's value, without its dash, comment, and quotes.
+  private fun String.listEntry() =
+    removePrefix("- ").substringBefore(" #").trim().removeSurrounding("\"").removeSurrounding("'")
+
   private fun String.hasFlag(flag: String) = split(WHITESPACE).any { it == flag || it.startsWith("$flag=") }
 
   companion object {
@@ -117,6 +175,13 @@ class DocsExamplesTest : StringSpec() {
     private const val LLMS_TXT = "llms.txt"
     private const val WEBSITE_DOCS_DIR = "website/prometheus-proxy/docs"
     private const val WEBSITE_SNIPPETS_DIR = "src/test/kotlin/website"
+    private const val COMPOSE_DIR = "etc/compose"
+    private const val QUICK_START_COMPOSE = "$COMPOSE_DIR/proxy.yml"
+    private const val DOCKER_SNIPPETS = "$WEBSITE_SNIPPETS_DIR/DockerExamples.txt"
+    private const val DEMOS_DIR = "demos"
+    private const val DEMO_COMPOSE = "docker/compose.yml"
+    private const val LOOPBACK = "127.0.0.1:"
+    private const val NOT_IN_LIST = -1
 
     // A line that ends in \ continues on the next, as the shell reads a command.
     private val CONTINUATION = Regex("""\\[ \t]*\r?\n""")
@@ -124,5 +189,8 @@ class DocsExamplesTest : StringSpec() {
     // A command line, in a code block or a tab, that runs a container.
     private val DOCKER_RUN = Regex("""^\s*(?:\$\s+)?docker\s+run\s""")
     private val WHITESPACE = Regex("""\s+""")
+
+    // A compose ports entry in the short syntax: no spaces, and not a map.
+    private val PORT_ENTRY = Regex("""[^\s{]\S*""")
   }
 }

@@ -29,8 +29,9 @@ All notable changes to this project are documented in this file.
   outage stays one line; a page showing the view updates as each line is added. An error, here and in the dashboard's
   other views, shows as the first line of its message, cut at 200 characters (a gRPC status from nginx can carry its
   whole HTML error page); the agent's log keeps all of it
-- The agent's Helm chart turns on the agent's dashboard with `dashboard.enabled` (port 8095, kept off the Service and
-  reached with `kubectl port-forward`), with a login from `dashboard.login.existingSecret`
+- The agent's Helm chart turns on the agent's dashboard with `dashboard.enabled` (port 8095, on the pod's loopback,
+  `dashboard.host`, and off the Service, so reached only with `kubectl port-forward`), with a login from
+  `dashboard.login.existingSecret`
 - Both dashboards have a Settings view (`/dashboard/settings`) of every setting the process resolved, in groups: the
   proxy's listeners, agent authentication with each identity's path globs, TLS, scrape and agent limits, gRPC server
   settings, service discovery, dashboard, admin, metrics, tracing, and logging, and the agent's proxy connection,
@@ -229,6 +230,16 @@ All notable changes to this project are documented in this file.
 - The embedded demo is the Ktor demo, in `demos/ktor`, since the Spring Boot and plain Kotlin demos embed the agent
   too: its page is Ktor Demo, whose old address sends the reader there, its port variables are `KTOR_DEMO_*`, its
   alerting rules `prometheus/ktor-alerts.yml`, and its build check `make ktor-demo-check`
+- The proxy's Helm chart has its dashboard listen on the pod's loopback, as the agent's does (the new `dashboard.host`,
+  default `127.0.0.1`, set as `DASHBOARD_HOST`), so only `kubectl port-forward` reaches it: on every interface, any pod
+  in the cluster could open it at the pod's address, though its port isn't on the Service. A dashboard published
+  through a Service or an Ingress of your own needs `dashboard.host: 0.0.0.0`, and a login. The chart's notes warn when
+  the dashboard is on and `dashboard.host` isn't a loopback address
+- `etc/compose/proxy.yml` and the Docker page's Compose example publish their ports on `127.0.0.1` only, and no
+  longer publish the agents' gRPC port, 50051, which their agent reaches over the compose network: published on every
+  interface, they let anyone who could reach the host register an agent without a token, read every path's metrics,
+  and call the admin endpoints. An agent on another host needs 50051 published, with a token and TLS, as the Cloud
+  Platforms page's compose file does
 
 ### Build & Tooling
 
@@ -237,6 +248,9 @@ All notable changes to this project are documented in this file.
   Spring Boot it supports can't run fails the build
 - `make consumer-check` fails when Logback resolves for the agent alone, a Ktor app with the Ktor plugin, or a Spring
   Boot app with the starter (its new `spring-boot-starter` profile)
+- `make helm-lint` fails when either chart, with its dashboard on, doesn't have it listen on the pod's loopback by
+  default, and `DocsExamplesTest` when a compose file (`etc/compose`, a demo's) or a compose snippet in the docs
+  publishes a port on anything but `127.0.0.1`
 - `make release-check` refuses a release while any demo's `NEEDS_RELEASE_AFTER` isn't below the version, which
   would leave `make up` from the release's tag building the proxy and agent from source, and step 2 of
   `docs/RELEASE.md` says when to raise and lower it

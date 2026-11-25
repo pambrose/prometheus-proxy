@@ -8,9 +8,12 @@ agentToken:
   existingSecret: agent-token
 
 # The chart leaves the dashboard's port out of its Service; the demo's own NodePort Service, proxy-dashboard
-# (k8s/monitoring.yaml), publishes it.
+# (k8s/monitoring.yaml), publishes it. A Service reaches the pod's address, not its loopback, where the chart has the
+# dashboard listen, so here it listens on every interface, and the proxy logs a warning that it has no login. The
+# NodePort is mapped to the laptop's 127.0.0.1 only (kind/pp-monitoring.yaml).
 dashboard:
   enabled: true
+  host: 0.0.0.0
 
 # The gRPC port, for the agent in the other cluster: kind has no load balancer, so a NodePort on this cluster's node,
 # which the agent reaches across Docker's kind network. demo.sh reads its port and hands it to the agent chart.

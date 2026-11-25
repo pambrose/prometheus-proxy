@@ -864,9 +864,11 @@ These support helpers also live here (not test classes themselves):
   at its hyphen
 - **DocsExamplesTest** — every `examples/*.conf` loads through `AgentOptions` and `ProxyOptions` (a discovery
   targets file through `FileDiscoverySource`) with labels service discovery can serve; `simple.conf` fetches the
-  proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; and no `docker run`
+  proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; no `docker run`
   command in the README, `llms.txt`, or the website's pages and snippets combines `--rm` with `--restart`, which
-  Docker refuses
+  Docker refuses; and every port a compose file publishes (`etc/compose`, each demo's `docker/compose.yml`, and the
+  compose snippets in those docs) is on `127.0.0.1`, since Docker publishes past the host's firewall. The cloud-proxy
+  example, which publishes the agents' port with a token and TLS, isn't read
 - **HomebrewFormulaTest** — every line of the Homebrew formulae in `etc/homebrew`, with the version and checksum
   `make homebrew-formulae` fills in, fits within 118 characters, the limit of the `brew style` check the tap's CI runs
   and this repository's 120 doesn't hold a formula to
