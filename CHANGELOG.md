@@ -213,6 +213,16 @@ All notable changes to this project are documented in this file.
   unescaped, so anyone who could reach its port, with no login, could write terminal escape sequences into the proxy's
   or agent's log as fast as they sent requests. It now logs the header cut to 270 characters with its control
   characters escaped, at INFO at most once a minute for each address, and at DEBUG otherwise
+- The dashboards' search matched a path without the slash its row shows, so `/payments_metrics`, as the table,
+  Prometheus, and the copied proxy URL write it, found nothing on the proxy's Paths and Activity views or the agent's
+  Activity view; and the proxy's matched an agent not yet registered by its placeholder, `Unassigned`, rather than the
+  `(registering…)` its row shows. Each now matches what the row shows
+- The proxy dashboard's detail pane for an agent that had gone named it by its internal id (`Agent 17 is no longer
+  connected`), which no other view shows. It now names the agent as the other views did, from the newest activity line
+  or scrape that names it, and otherwise says "The selected agent"
+- An agent's detail on the proxy's dashboard counted down to its eviction with `proxy.internal.staleAgentCheckEnabled`
+  off and the transport filter on, when no agent is evicted, and read `evicted in 0s` for as long as an idle agent
+  stayed. It now shows the countdown only while the check runs
 - The discovery entries the agent skips, which its debug page and dashboard read from other threads, are now published
   to them safely
 - An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a

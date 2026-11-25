@@ -160,7 +160,8 @@ internal object DashboardFixtures {
     count: Int = 1,
     detail: String = "",
     at: Instant = Clock.System.now(),
-  ) = ActivityEntry(at, kind, "1", agentName, identity, paths, count, detail)
+    agentId: String = "1",
+  ) = ActivityEntry(at, kind, agentId, agentName, identity, paths, count, detail)
 
   /**
    * A snapshot whose `paths` defaults to the agents' own paths, matching what
@@ -175,11 +176,12 @@ internal object DashboardFixtures {
     activityChangeCount: Long = 0L,
     scrapeNowEnabled: Boolean = false,
     links: List<PathLink> = emptyList(),
+    evictAfterSecs: Long? = 60,
   ) = ProxySnapshot(
     agents = agents,
     paths = paths,
     health = HealthView(agents.size, paths.size, 0, 25, 1, 25),
-    maxAgentInactivitySecs = 60,
+    evictAfterSecs = evictAfterSecs,
     scrapePort = TestPorts.PROXY_HTTP_PORT,
     authEnabled = authEnabled,
     activity = activity,

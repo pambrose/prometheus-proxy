@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 47 fixed, 25 open (8 medium, 64 low, no high).
+**Status:** 72 issues — 52 fixed, 20 open (8 medium, 64 low, no high).
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
 #555–#561).
@@ -38,10 +38,10 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 13 | An anonymous `POST /logout` forces a collect and a push to every open page, once per request         | Dashboards | medium   | ✅      |
 | 14 | Ending a session whose socket has stopped reading freezes every open page                            | Dashboards | medium   | ✅      |
 | 15 | A session that stops reading stays open, holding a `maxSessions` slot                                | Dashboards | low      | ✅      |
-| 16 | The tables' search doesn't match a path as its row shows it, or an agent by its label                | Dashboards | low      | ⬜      |
+| 16 | The tables' search doesn't match a path as its row shows it, or an agent by its label                | Dashboards | low      | ✅      |
 | 17 | A collect that throws ends the push loop for good, logged only to stderr                             | Dashboards | low      | ✅      |
-| 18 | A gone agent's detail pane names it by its raw `agentId`                                             | Dashboards | low      | ⬜      |
-| 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ⬜      |
+| 18 | A gone agent's detail pane names it by its raw `agentId`                                             | Dashboards | low      | ✅      |
+| 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ✅      |
 | 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ✅      |
 | 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ⬜      |
 | 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ✅      |
@@ -77,8 +77,8 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ✅      |
 | 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ✅      |
 | 54 | The Ktor plugin's wait for the agent's stop has no deterministic test                                | Tests      | low      | ✅      |
-| 55 | `AgentDashboardHtmlTest` pins neither half of the column-guide rule, nor the agent page's live region | Tests     | low      | ⬜      |
-| 56 | Two more `dashboard-constraints.md` rules have no test                                               | Tests      | low      | ⬜      |
+| 55 | `AgentDashboardHtmlTest` pins neither half of the column-guide rule, nor the agent page's live region | Tests     | low      | ✅      |
+| 56 | Two more `dashboard-constraints.md` rules have no test                                               | Tests      | low      | ✅      |
 | 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ✅      |
 | 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ⬜      |
 | 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ⬜      |
@@ -154,7 +154,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 5    | ✅ #562 | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
 | 6    | ✅ #558 | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
 | 7    | ✅ #563 | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
-| 8    | ⬜      | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
+| 8    | ✅ #564 | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
 | 9    | ✅ #560 | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
 | 10   | ⬜      | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
 | 11   | ✅ #559 | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
@@ -1043,7 +1043,7 @@ few seconds of its first failed send.
 
 **Resolution:** Fixed in #558. A failed send ends its session at once, freeing its `maxSessions` slot, and an ended session isn't rendered for again; `DashboardPushTest` sees a stalled page leave within about 2 seconds and a new one connect. One correction: once the buffer overflows, Ktor's pinger fails with an uncaught `ChannelOverflowException`, logged at ERROR, rather than stopping silently; the session stayed open all the same.
 
-### 16. ⬜ The tables' search doesn't match a path as its row shows it: typing `/payments` finds nothing
+### 16. ✅ The tables' search doesn't match a path as its row shows it: typing `/payments` finds nothing
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1065,6 +1065,8 @@ comparing with a path), and agent names through `agentLabel`.
 `AgentDashboardHtmlTest`: `/foo` matches an entry naming path `foo`; `registering` matches a path served by an
 `Unassigned` agent.
 
+**Resolution:** Fixed in #564. The search now matches a row as it shows it. `RowFilter.pathAsShown` gives a path its slash, and the Paths and Activity rows render the path with it too, so the two can't drift apart. The proxy's matchers name each agent through `agentLabel`, so `registering` finds an agent not yet registered and `Unassigned` no longer does. `/payments_metrics` now finds its path on the proxy's Paths and Activity views and on the agent's Activity view. `RowFilterTest` covers a path with its slash, an agent by its label, and an activity line's paths and agent; `ActivityHtmlTest` and `AgentDashboardHtmlTest` cover the rendered views. `dashboard-constraints.md` gains the rule that the search matches a row as the row shows it.
+
 ### 17. ✅ A collect that throws ends the push loop for good, with nothing logged through the logger
 
 **Severity:** low · **Confidence:** confirmed by trace; no collect was found that throws today.
@@ -1085,7 +1087,7 @@ logged.
 
 **Resolution:** Fixed in #558. `collectForPush` logs a run of failed collects at ERROR once, then DEBUG, and the loop carries on at its next wake or tick; the server's scope logs its tasks' failures through the logger. `DashboardPushTest` sees one ERROR for two failures and a push on the next change.
 
-### 18. ⬜ The detail pane of an agent that has gone names it by its raw numeric `agentId`, which no other view shows
+### 18. ✅ The detail pane of an agent that has gone names it by its raw numeric `agentId`, which no other view shows
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1104,7 +1106,9 @@ connected", with no id.
 **Tests:** `ProxyDashboardHtmlTest`: `detailFragment` for an id no longer connected doesn't contain the id, and names
 the agent when a path's history holds a scrape of it.
 
-### 19. ⬜ An agent's detail shows a stale-agent eviction countdown when the stale-agent check is off
+**Resolution:** Fixed in #564. The gone pane names the agent through `agentLabel`, from the newest activity line or scrape the snapshot still holds of it (`ProxySnapshot.goneAgentName`), worked out once per snapshot and only once a session's selected agent has gone. When the snapshot holds neither, the pane says "The selected agent is no longer connected", and the id no longer appears. Unlike the fix this finding suggested, it reads the activity log as well as the paths' histories, so an agent that left before its first scrape is still named, usually from the line recording its departure. `ProxyDashboardHtmlTest` covers the name from a scrape, from an activity line, and from neither, never the id; `ProxySnapshotTest` covers the newest line or scrape winning, and no name for a connected agent or for a line that names no agent.
+
+### 19. ✅ An agent's detail shows a stale-agent eviction countdown when the stale-agent check is off
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1119,6 +1123,8 @@ agent idle past `maxAgentInactivitySecs` (heartbeats off) reads "evicted in 0s" 
 **Fix:** carry the check's state in the snapshot and leave the countdown out, or say it's off, when it doesn't run.
 
 **Tests:** `ProxyDashboardHtmlTest`: an agent's detail from a snapshot with the check off has no "evicted in".
+
+**Resolution:** Fixed in #564. `ProxySnapshot.maxAgentInactivitySecs` became `evictAfterSecs`, which is null while `Proxy.isStaleAgentCheckRunning` is false, so a snapshot can't carry a delay that no check acts on, and the detail shows the countdown only when it's set. It leaves the countdown out rather than saying the check is off, which the Settings view already says. A disabled transport filter forces the check on, and the countdown then shows, correctly. `ProxyDashboardHtmlTest` covers 58s, 0s when overdue, and no countdown with the check off; `ProxySnapshotTest` covers `collect` from a proxy with the check on and with `staleAgentCheckEnabled = false`.
 
 ---
 
@@ -2661,7 +2667,7 @@ flag when it returns. Then assert the flag is set as soon as `events.raise(Appli
 
 **Resolution:** Fixed in #562. `AgentLifecycleTest`'s "the app's disposal waits for the agent's stop the engine began" holds the mocked `shutdown()` on a latch that a helper thread opens only once the disposing thread is inside `Thread.join` (or after 5 seconds), and asserts that the stop finished as soon as `ApplicationStopping` returns. With the join removed, it failed in 3 of 3 runs, and every other case passed.
 
-### 55. ⬜ `dashboard-constraints.md` says `AgentDashboardHtmlTest` pins the column-guide rule, but it pins neither half, and the agent page's live region has no positive test
+### 55. ✅ `dashboard-constraints.md` says `AgentDashboardHtmlTest` pins the column-guide rule, but it pins neither half, and the agent page's live region has no positive test
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2694,7 +2700,9 @@ rule file says the agent's page does too.
 - the page has `id=ANNOUNCER_ID` with `aria-live="polite"`;
 - no push contains `ANNOUNCER_ID`.
 
-### 56. ⬜ Two more `dashboard-constraints.md` rules have no test: text tokens on `--surface-2`, and `agentLabel` in the proxy's Activity view
+**Resolution:** Fixed in #564. `AgentDashboardHtmlTest` now pins both halves of the column-guide rule and the live region, as the rule file said it did: the Activity page's `<th>` labels equal its guide's `<dt>` labels, in order; the guide follows the search and precedes `#activity`, and no view's push carries it; every view's page has the announcer, with `role="status"` and `aria-live="polite"`; and no push, for any view or none, carries it. Each of those four regressions fails a test, and so does sending the announcer in every push. The rule file's live-region bullet now names `AgentDashboardHtmlTest` too.
+
+### 56. ✅ Two more `dashboard-constraints.md` rules have no test: text tokens on `--surface-2`, and `agentLabel` in the proxy's Activity view
 
 **Severity:** low · **Confidence:** confirmed by trace (contrast computed from `DashboardCss.TOKENS`)
 
@@ -2725,6 +2733,8 @@ rule file says the agent's page does too.
 - Assert that an `ActivityEntry` with `agentName = "Unassigned"` renders `agentLabel("Unassigned")`.
 
 **Tests:** The two checks above.
+
+**Resolution:** Fixed in #564. `DashboardThemeTest` requires `--ink`, `--ink-2`, `--ink-3`, `--ok`, `--warn`, and `--crit` to clear 4.5:1 on `--surface-2` in all three token blocks, reusing its `tokenValues` and `contrast`; it passes today, and lightening light `--ink-3` or darkening dark `--crit` fails it. `ActivityHtmlTest` requires an `Unassigned` agent to render as `agentLabel("Unassigned")`, with no placeholder in the push; rendering the raw name fails it. The rule file names both tests.
 
 ### 57. ✅ "fromEnvironment reads the process's environment" can't fail where the tests run
 

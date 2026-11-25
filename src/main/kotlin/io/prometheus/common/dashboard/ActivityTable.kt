@@ -79,7 +79,7 @@ internal fun TR.activityPathsCell(
     if (paths.isEmpty()) {
       +DASH
     } else {
-      +paths.joinToString(", ") { "/$it" }
+      +paths.joinToString(", ") { RowFilter.pathAsShown(it) }
       if (more > 0) span("dim") { +" and $more more" }
     }
   }

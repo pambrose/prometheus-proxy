@@ -34,7 +34,8 @@ import io.prometheus.common.dashboard.DashboardPage.QUERY_PARAM
  * both read by [of]: the URL a page is opened at, and that URL's query in each WebSocket message, so a change applies
  * at once without a reload.
  *
- * @param query matched case-insensitively against what a row shows
+ * @param query matched case-insensitively against what a row shows, as it shows it: a path with its slash
+ *   ([pathAsShown]), and on the proxy's dashboard an agent by its label
  * @param problemsOnly keep only the problems, the rows an operator has to act on
  */
 internal data class RowFilter(
@@ -56,6 +57,13 @@ internal data class RowFilter(
 
   companion object {
     val NONE = RowFilter()
+
+    /**
+     * A path as a filtered table's row shows it, with the slash the proxy's URL and Prometheus give it, and so as a
+     * search matches it: a search for `/payments_metrics`, as an operator copies it, matched nothing when the rows
+     * were matched by the path without its slash.
+     */
+    fun pathAsShown(path: String): String = "/$path"
 
     // A search box's worth: the query is browser input, on a port that may have no auth, matched against every row each
     // push.

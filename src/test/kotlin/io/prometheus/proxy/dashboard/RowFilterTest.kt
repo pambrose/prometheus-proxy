@@ -62,6 +62,24 @@ class RowFilterTest : StringSpec() {
       matches("west").shouldBeFalse()
     }
 
+    // The row shows a path with its slash, as Prometheus and the proxy URL write it, so a search copied from either
+    // finds it. The path below has no target URL, which would hold the text with a slash on its own.
+    "a query should match a path as its row shows it, with its slash" {
+      matches("/payments_metrics").shouldBeTrue()
+      matches("/orders_metrics", pathView(path = "orders_metrics")).shouldBeTrue()
+      matches("/ORDERS", pathView(path = "orders_metrics")).shouldBeTrue()
+      matches("/metrics", pathView(path = "orders_metrics")).shouldBeFalse()
+    }
+
+    // The row names an agent not yet registered through agentLabel, so a search finds it by that, not the placeholder.
+    "a query should match an agent by the label its row shows" {
+      val registering = pathView(agentIds = ["1", "2"], agentNames = ["Unassigned", "Unassigned"])
+
+      matches("registering", registering).shouldBeTrue()
+      matches("unassigned", registering).shouldBeFalse()
+      matches("registering", departedPathView(lastScrape = scrapeRecord(agentName = "Unassigned"))).shouldBeTrue()
+    }
+
     // A consolidated path lists every agent in agentNames, though its row names only the first.
     "a query should match any agent on a consolidated path" {
       matches("agent-west-2", pathView(agentIds = ["1", "2"], agentNames = ["agent-west-1", "agent-west-2"]))
@@ -158,6 +176,18 @@ class RowFilterTest : StringSpec() {
       matches("team_c").shouldBeTrue()
       matches("not authorized").shouldBeTrue()
       matches("west").shouldBeFalse()
+    }
+
+    // As in the Paths view: a line's paths as its row shows them, with their slashes, and its agent through agentLabel.
+    "a query should match an activity line's paths and agent as its row shows them" {
+      val line = activityEntry(agentName = "Unassigned", paths = ["orders_metrics", "payments_metrics"])
+
+      fun matches(query: String) = RowFilter.of(query, problemsOnly = false).matches(line)
+
+      matches("/payments_metrics").shouldBeTrue()
+      matches("/orders").shouldBeTrue()
+      matches("registering").shouldBeTrue()
+      matches("unassigned").shouldBeFalse()
     }
 
     "problems only should keep the activity an operator has to act on" {

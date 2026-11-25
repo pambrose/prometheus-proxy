@@ -399,9 +399,11 @@ application's logging config.
   scrape from the proxy's dashboard marked; and the Scrape now button in the pushed detail pane, its result panel
   outside every push on the Paths view alone, and neither with Scrape now off; and the Activity view: newest first, a
   problem a crit tag and news a warn one, a run counted and its paths named, escaped, its search and column guide,
-  filtered with a count, its empty state, and its push carrying the table out of band, or not when told; the Settings
-  view's groups, escaped, none of them on the Connection view, and its push carrying them out of band, or not when
-  told; and the stored theme applied in the page's head, with the theme picker in the bar and in no push
+  filtered with a count, a path matched with its slash, its empty state, and its push carrying the table out of band,
+  or not when told; its column guide explaining each header in the header's order, after the search and ahead of the
+  table, and in no view's push; the Settings view's groups, escaped, none of them on the Connection view, and its push
+  carrying them out of band, or not when told; the polite live region on every view's page and in no push; and the
+  stored theme applied in the page's head, with the theme picker in the bar and in no push
 - **AgentSettingsTest** (`dashboard/`) — the agent's Settings view (`AgentSettings`), from an agent built but never
   started: its groups in order; what it resolved, its endpoints, the client timeout the deprecated `cioTimeoutSecs` set,
   its trust store and TLS files, and its login's username; the defaults with nothing configured; discovery's file and
@@ -603,9 +605,10 @@ Three support helpers also live here (not test classes themselves):
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: the Log out button only with a login and in no push,
   the Agents view (an agent row's htmx attributes and its one id across the page and the pushes, never a region's; the
-  selected agent marked current; an explicit gone state for a selected agent that disconnected, a prompt when none is
-  selected, and a placeholder for one not yet registered;
-  failover markers; an agent's uptime; an empty proxy said to be empty), the detail's Recent scrapes (the selected
+  selected agent marked current; an explicit gone state for a selected agent that disconnected, naming it through
+  `agentLabel` from a scrape or activity line and never by its id, a prompt when none is selected, and a placeholder
+  for one not yet registered; failover markers; an agent's uptime; the eviction countdown only while the stale-agent
+  check runs; an empty proxy said to be empty), the detail's Recent scrapes (the selected
   agent's alone from a shared path's history, its latest across its paths, newest first, at most the cap, which the
   header counts), the pushes (top-level out-of-band regions, only those of the session's layout, the status bar alone
   for a session with no known layout, and the view stamp on the frame's first tag, which an agent-supplied value can't
@@ -661,8 +664,9 @@ Three support helpers also live here (not test classes themselves):
   Simple Icons bump that drops a brand), and each colour clearing 3:1 on `--surface-2` in both themes
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
-  agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
-  states; the form at the view's own route; the column guide (every header explained in its order, Identity only
+  agent, and an agent not yet registered named by `agentLabel`; the Identity column while agent auth is on; escaped
+  values; the search, its match count, and its empty states, a path matched with its slash and an agent by its label;
+  the form at the view's own route; the column guide (every header explained in its order, Identity only
   while agent auth is on, every problem kind named in Event's explanation, and the panel outside every push); and the
   push carrying the status bar and the table, out of band, or the status bar alone, still the frame's first tag, when
   the page already shows the table
@@ -678,10 +682,12 @@ Three support helpers also live here (not test classes themselves):
   asking for text and marked as the dashboard's, so the agent leaves it out of its scrape metrics
 - **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
   name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
-  departed path's agent and identity, from its departure or its last scrape; "problems only" keeping failing and
+  departed path's agent and identity, from its departure or its last scrape; a path matched with its slash, as its row
+  shows it, and an agent not yet registered by its label, not its placeholder; "problems only" keeping failing and
   departed paths; both having to match; browser input
   trimmed and cut, never inside a surrogate pair; a filter read from a URL's query; an activity line matched by its
-  event, agent, identity, paths, or detail, and its problems kept; and identity labels
+  event, agent, identity, paths, or detail, its paths with their slashes and its agent by its label, and its problems
+  kept; and identity labels
 - **ProxyDashboardServiceTest** (`dashboard/`) — the value a push compares to leave out an Activity table the page
   already shows (`ActivityTable`): equal for an unchanged feed and the same message, different on a change of the
   feed, the search, "Problems only", or the message, and none for another layout; and the settings, sent once a message
@@ -696,8 +702,10 @@ Three support helpers also live here (not test classes themselves):
   with its departure's agent, identity, target, and source; a departure's attribution over the last scrape's, which
   names the agent and identity when there is no departure; and no gone row for a path the path map still holds; an
   agent's scrapes (`scrapesOf`), its latest across every path's history, live or gone, newest first and at most the
-  cap, none for an agent with none or no longer connected, and worked out once per snapshot; and `collect`, from a proxy
-  built but never started, reading them from the path history and the activity log's lines with their change count
+  cap, none for an agent with none or no longer connected, and worked out once per snapshot; a gone agent's name
+  (`goneAgentName`), its newest activity line's or scrape's, and none for a connected agent; and `collect`, from a proxy
+  built but never started, reading them from the path history and the activity log's lines with their change count,
+  and the eviction delay only while the stale-agent check runs
 
 One support helper also lives here (not a test class itself):
 
@@ -765,7 +773,9 @@ One support helper also lives here (not a test class itself):
   forgotten
 - **DashboardThemeTest** (`dashboard/`) — the dashboards' theme: a dark rule written for the system's dark preference
   unless the page is set to light and for a page set to dark, with a selector or at `:root`; the tokens' dark colours
-  under both, and the browser's own widgets following the choice; the head's script applying only a stored light or
+  under both, and the browser's own widgets following the choice; every text colour (`--ink`, `--ink-2`, `--ink-3`,
+  `--ok`, `--warn`, `--crit`) clearing 4.5:1 on `--surface-2` in each token block, and a hovered row's address line
+  on `--surface-3`; the head's script applying only a stored light or
   dark; and the theme picker offering light, dark, and auto, each named for its theme, marking the theme in force from
   the page's `data-theme` with the icon buttons' glyphs, and sharing the bar's end with Log out in one box
 - **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,

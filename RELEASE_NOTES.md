@@ -160,6 +160,14 @@ _Released 2026-11-23_
   header, with the header in full, so anyone who could reach its port could write control characters into the proxy's
   or agent's log as fast as they sent requests. It now logs one such line a minute for each address at INFO, and the
   rest at DEBUG, with the header cut and its control characters escaped.
+- **The dashboards' search finds a path as it's shown.** Searching for `/payments_metrics`, as the table and
+  Prometheus write it, found nothing; a path now matches with its slash or without, and on the proxy's dashboard an
+  agent not yet registered matches the `(registering…)` its row shows.
+- **A gone agent is named.** When the agent you're looking at on the proxy's dashboard disconnects, its panel names it
+  as the other views did, rather than by an internal number no view shows.
+- **No eviction countdown without evictions.** With the stale-agent check off (`proxy.internal.staleAgentCheckEnabled`
+  false and the transport filter on), an agent's panel on the proxy's dashboard no longer counts down to an eviction
+  that never comes.
 
 ### Behavior Changes
 

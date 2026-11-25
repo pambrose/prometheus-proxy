@@ -184,7 +184,9 @@ internal data class ProxySnapshot(
   val agents: List<AgentView>,
   val paths: List<PathView>,
   val health: HealthView,
-  val maxAgentInactivitySecs: Long,
+  // How long an agent may go unheard before the stale-agent check evicts it, proxy.internal.maxAgentInactivitySecs, or
+  // null when the check doesn't run (Proxy.isStaleAgentCheckRunning), so no agent is evicted, however long it's idle.
+  val evictAfterSecs: Long?,
   // The port Prometheus scrapes, from which the page builds each path's proxy URL.
   val scrapePort: Int,
   // Whether agent auth is on, which is when a path has an identity to show.
@@ -238,6 +240,32 @@ internal data class ProxySnapshot(
 
   /** [agentId]'s latest scrapes, newest first, at most [MAX_DETAIL_SCRAPES]; none for an agent not connected. */
   fun scrapesOf(agentId: String): List<ScrapeRecord> = agentScrapes[agentId].orEmpty()
+
+  /**
+   * The name of each agent the snapshot still remembers but that is no longer connected, by its id, as its newest
+   * [activity] line or scrape in a path's history names it, which is usually the line recording its departure.
+   *
+   * For the gone agent's detail, which named it by its id, a counter no view shows, so an operator couldn't tell
+   * which agent the Agents, Paths, and Activity views had named. Worked out once per snapshot, at the first read, as
+   * [agentScrapes] is, and only when a session's selected agent has gone.
+   */
+  private val goneAgentNames: Map<String, String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    val connected = agents.mapTo(HashSet()) { it.agentId }
+    val newest = HashMap<String, Pair<Instant, String>>()
+    val sightings =
+      activity.asSequence().map { Triple(it.agentId, it.agentName, it.at) } +
+        paths.asSequence().flatMap { it.history }.map { Triple(it.agentId, it.agentName, it.at) }
+    sightings
+      .filter { (agentId, agentName, _) -> agentId !in connected && agentId.isNotEmpty() && agentName.isNotEmpty() }
+      .forEach { (agentId, agentName, at) ->
+        val seen = newest[agentId]
+        if (seen == null || at > seen.first) newest[agentId] = at to agentName
+      }
+    newest.mapValues { (_, seen) -> seen.second }
+  }
+
+  /** The name of [agentId], an agent no longer connected, if the snapshot holds an activity line or scrape of it. */
+  fun goneAgentName(agentId: String): String? = goneAgentNames[agentId]
 
   companion object {
     /** The most scrapes an agent's detail lists, its latest. */
@@ -379,7 +407,7 @@ internal data class ProxySnapshot(
             scrapeMapSize = proxy.scrapeRequestManager.scrapeMapSize,
             scrapeMapThreshold = proxy.options.scrapeRequestMapUnhealthySize,
           ),
-        maxAgentInactivitySecs = internal.maxAgentInactivitySecs.toLong(),
+        evictAfterSecs = internal.maxAgentInactivitySecs.toLong().takeIf { proxy.isStaleAgentCheckRunning },
         scrapePort = proxy.scrapePort,
         authEnabled = proxy.agentAuthManager.isEnabled,
         activity = activity.entries,
