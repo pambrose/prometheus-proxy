@@ -46,10 +46,11 @@ _Released 2026-11-23_
   Kotlin programs, with no framework or HTTP server, each with the agent started in a few lines of its `main`. An oven listens on no port and
   is scraped all the same, more ovens become more Prometheus targets with no change to Prometheus's config, and an
   oven with no proxy, or with the agent's settings wrong, keeps baking.
-- **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot app and set the proxy's
+- **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot 4.2 app and set the proxy's
   address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
-  or a web server, and shows its connection in `/actuator/health`. The new Spring Boot Starter page lists its
-  properties, and the Spring Boot demo's roastery now runs its agent with it.
+  or a web server, and shows its connection in `/actuator/health`. On Spring Boot 4.0 or 4.1, set two of its version
+  properties, as the new Spring Boot Starter page says, which also lists its properties. The Spring Boot demo's
+  roastery now runs its agent with it.
 - **A Ktor plugin.** Add `prometheus-proxy-ktor` to a Ktor app and `install(PrometheusProxyAgent)` with the app's
   registry and a path: the agent starts and stops with the app and serves its metrics to Prometheus without a
   `/metrics` route. Set the proxy in code or in `application.conf`. The new Ktor Plugin page lists its settings, and
@@ -93,6 +94,10 @@ _Released 2026-11-23_
 
 ### Bug Fixes
 
+- **An embedded agent on Spring Boot 4.0 or 4.1 says what to set.** Those releases set two of the agent's libraries,
+  kotlinx-coroutines and the Prometheus Java client, below the versions it runs on, and the agent failed once it ran,
+  leaving your app running with an agent that never served. It now refuses to start, and names the property to set
+  for each: `kotlin-coroutines.version` and `prometheus-client.version`.
 - **Scrape now says why it refused a path.** Clicking Scrape now on a path that had just left the proxy showed only
   "404 Not Found" instead of the reason.
 - **No secrets in an embedded agent's logged settings.** `EmbeddedAgentConfig.toString()` hid a token or a private

@@ -358,6 +358,10 @@ carries a `logback.xml`, which would replace the host application's logging conf
   `isConnected` and `proxyEndpoint`, read live from the agent; and `use` stopping the agent after its block, and
   running the block on a null handle
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
+- **RuntimeLibrariesTest** — the libraries an embedded agent checks before it starts: the versions this JVM has are
+  read, and pass; Spring Boot 4.2's pass, and 4.1.1's kotlinx-coroutines, 4.1.0's Prometheus client, and both of 4.0's
+  are refused, in one message naming each Spring Boot property to set; a version that can't be read passes; and
+  versions compare by their leading dotted numbers, a release candidate as its release
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
 - **TrustAllX509TrustManagerTest** — TrustAllX509TrustManager (dev/test only, bypasses SSL validation)
 - **AgentSnapshotTest** (`dashboard/`) — `AgentSnapshot.collect`, from an agent built but never started: connecting
@@ -1132,12 +1136,17 @@ scenario built from those values (with modest fallbacks), letting the inputs be 
 The starter is a Java subproject, so its tests are JUnit 5 with AssertJ, in the Spring Boot idiom, under
 `spring-boot-starter/src/test/java/`. `./gradlew :spring-boot-starter:test` runs them, and so does `build`. They run
 at Spring Boot's versions of the agent's libraries, enforced as an app's dependency management enforces them, so the
-agent runs with what it gets in an app. `TestingGuideTest` reads only the root project's specs, so name new ones here.
+agent runs with what it gets in an app. They run twice: `test` at the Spring Boot the starter compiles against, and
+`oldestSpringBootTest`, which `test` runs too, at the oldest it supports (`spring-boot-oldest` in
+`libs.versions.toml`, Spring Boot 4.0's last release), with kotlinx-coroutines and the Prometheus client set as the
+Spring Boot Starter page tells such an app to set them. A run that names tests with `--tests` filters `test` alone,
+and leaves `oldestSpringBootTest` out. `TestingGuideTest` reads only the root project's specs, so name new ones here.
 
 - **PrometheusProxyAgentAutoConfigurationTest** — the auto-configuration, through `ApplicationContextRunner`: the agent
   stays off without a proxy, starts and stops with the context with one, and isn't made with `enabled=false`; each
   property becomes its `EmbeddedAgentConfig` setting, `metrics-proxy-path` and its labels included, with the secrets
-  out of `toString`, and labels without a path are warned of; the default name (the app's,
+  out of `toString`, and a target URL's user info and query values masked in the properties' own, and labels without a
+  path are warned of; the default name (the app's,
   with its build's version) and path (`<app>_metrics`, or `application_metrics`); the registry served, or not with
   `source=none` or no `PrometheusRegistry` bean; `settings` keys keeping their case from a properties file, and losing
   it from an environment variable; customizers running after the properties in their order, a builder method of one
@@ -1158,8 +1167,10 @@ agent runs with what it gets in an app. `TestingGuideTest` reads only the root p
   property has a description, and the defaults are the fields' initial values. An incremental compile drops the
   descriptions, so the build compiles the starter in full.
 - **StarterExamplesTest** — the Spring Boot Starter page's examples: `website/application.yml`, in the test resources,
-  reads the agent's settings from the environment, and `website.AgentCustomizations`, with its stand-ins
-  **SecretStore** and **BatchJobs**, sets the certificate and serves a second registry.
+  reads the agent's settings from the environment, and with `PROMETHEUS_PROXY_CERT` checks the proxy's certificate
+  against the name `fromEnvironment()` does, `PROMETHEUS_PROXY_AUTHORITY` or `prometheus-proxy`; and
+  `website.AgentCustomizations`, with its stand-ins **SecretStore** and **BatchJobs**, sets the certificate and serves
+  a second registry.
 
 ### Ktor Plugin Tests (`ktor-plugin/`)
 

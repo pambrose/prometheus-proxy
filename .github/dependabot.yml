@@ -41,6 +41,12 @@ updates:
       # netty-tcnative is updated by hand, not on tcnative's own releases. libs.versions.toml pins it, currently ahead of
       # the version grpc-java is built and tested with for BoringSSL fixes, and says when to return to grpc's version.
       - dependency-name: "io.netty:netty-tcnative*"
+      # spring-boot-oldest, the oldest Spring Boot the starter's tests run under, which takes its dependency management
+      # through this artifact so that only its patch releases arrive here: moving it to a later line drops that line's
+      # support, a decision, not a routine bump. The roastery's pom takes its Spring Boot from the same artifact, through
+      # the maven entry below, which this doesn't reach.
+      - dependency-name: "org.springframework.boot:spring-boot-starter-parent"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # The docs site's Python dependencies (website/pyproject.toml and uv.lock), including the mkdocs-material pin.
   - package-ecosystem: uv

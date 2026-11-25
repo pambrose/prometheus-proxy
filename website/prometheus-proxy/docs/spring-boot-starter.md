@@ -25,10 +25,16 @@ runs it in a roastery app.
     --8<-- "EmbeddedAgentExamples.txt:starter-gradle-dependency"
     ```
 
-The starter needs Spring Boot 4 and Java 17 or later, and is released with the agent, at the agent's version. It brings
-Micrometer's Prometheus registry, so with Actuator, or `spring-boot-starter-micrometer-metrics` in an app without it,
-Spring Boot puts the app's meters in a `PrometheusRegistry` bean, which the agent serves. Spring Boot's dependency
-management sets that registry's version, as it does the app's own dependencies'.
+The starter needs Spring Boot 4.2 or later and Java 17 or later, and is released with the agent, at the agent's version.
+It brings Micrometer's Prometheus registry, so with Actuator, or `spring-boot-starter-micrometer-metrics` in an app
+without it, Spring Boot puts the app's meters in a `PrometheusRegistry` bean, which the agent serves. Spring Boot's
+dependency management sets that registry's version, as it does the app's own dependencies'.
+
+On Spring Boot 4.0 or 4.1, whose dependency management sets kotlinx-coroutines and the Prometheus Java client below the
+versions the agent runs on, set those two to the agent's: `kotlin-coroutines.version` to `1.11.0`, and
+`prometheus-client.version` to `1.10.0`, in the pom's `<properties>`, or with Spring's dependency-management plugin in
+Gradle, as `extra["kotlin-coroutines.version"]` and `extra["prometheus-client.version"]`. Without them the agent
+doesn't start, and the reason it gives names each property to set.
 
 ## Configuring
 
@@ -114,11 +120,12 @@ has none, since it couldn't choose between them.
 ## Spring Boot's Versions of the Agent's Libraries
 
 Spring Boot's dependency management sets the versions of the libraries it knows, some of the agent's among them, and
-some of those run older than the agent's own. The agent runs with them, and the starter's tests run it at Spring
-Boot's versions, as the [Spring Boot Demo](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries) does,
-whose `./demo.sh versions` shows which are older. Were a Spring Boot release to break it, the app's pom sets that
-library to the agent's version with the property Spring Boot names it by, such as `grpc-java.version` or
-`netty.version`, which Spring Boot's
+some of those run older than the agent's own. The agent runs with Spring Boot 4.2's, and with 4.0's and 4.1's once the
+two [above](#adding-the-dependency) are set. The starter's tests run it at 4.2's, and at 4.0's last release's with those
+two set, and the [Spring Boot Demo](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries) runs it at
+4.2's, whose `./demo.sh versions` shows which are older. Were a Spring Boot release to break it, the app's pom sets that
+library to the agent's version with the property Spring Boot names it by, such as `kotlin-coroutines.version`,
+`prometheus-client.version`, `grpc-java.version`, or `netty.version`, which Spring Boot's
 [Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
 library it manages. netty-tcnative has none, since Netty's BOM sets it: pin `netty-tcnative-classes` and
 `netty-tcnative-boringssl-static`, with each native's classifier, in the pom's own `dependencyManagement`.

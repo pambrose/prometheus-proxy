@@ -92,7 +92,10 @@ a required agent with `start()` and any other with `startIfConfigured()`. Its PO
 Boot artifact and imports no BOM, so an app's own Spring Boot is the one it runs with: the Spring Boot artifacts are
 `compileOnly`, through the BOM at `spring-boot` in `libs.versions.toml`, and its JUnit 5 tests run the agent at Spring
 Boot's versions, enforced as an app's dependency management enforces them (`./gradlew :spring-boot-starter:test`, part
-of `build`). Kover, detekt, and kotlinter don't cover it. Its `compileJava` runs in full and isn't cached,
+of `build`), and again, in `oldestSpringBootTest`, which `test` runs, under the oldest Spring Boot it supports
+(`spring-boot-oldest`, 4.0's last release), with kotlinx-coroutines and the Prometheus client set as the starter's page
+tells such an app to set them. An embedded agent refuses to start on versions of those two it can't run on
+(`RuntimeLibraries`), naming the Spring Boot property that sets each. Kover, detekt, and kotlinter don't cover it. Its `compileJava` runs in full and isn't cached,
 since an incremental compile drops the configuration metadata's descriptions (`ConfigurationMetadataTest`), and the
 docs site's Spring Boot Starter page shows a YAML file and a customizer from its tests, which `StarterExamplesTest` runs.
 

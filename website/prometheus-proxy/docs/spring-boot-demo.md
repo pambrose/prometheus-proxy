@@ -151,9 +151,10 @@ roastery and runs its
 [`RoasteryAgentTest`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/spring-boot/app/src/test/java/roastery/RoasteryAgentTest.java),
 which starts the agent against a proxy and scrapes through it, so a Spring Boot release that breaks the agent fails
 there. Were one to break it, the app's pom sets that library to the agent's version with the property Spring Boot names
-it by, such as `grpc-java.version` or `netty.version`, which Spring Boot's
+it by, such as `prometheus-client.version`, `grpc-java.version`, or `netty.version`, which Spring Boot's
 [Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
-library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
+library it manages. An app on Spring Boot 4.0 or 4.1 sets two of them, as
+[Adding the Dependency](spring-boot-starter.md#adding-the-dependency) on the starter's page says. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
 `netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
 ## The Agent's Dashboard

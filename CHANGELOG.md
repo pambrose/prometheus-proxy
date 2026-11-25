@@ -61,10 +61,11 @@ All notable changes to this project are documented in this file.
   the default registry then leaves them out, so each series is served once. The agent's dashboard shows the path in
   its Settings view
 - A Spring Boot starter, `com.pambrose:prometheus-proxy-spring-boot-starter`, released with the agent at its version:
-  with `prometheus-proxy.agent.proxy` set, a Spring Boot 4 app runs an embedded agent that starts and stops with it,
-  serves the app's `PrometheusRegistry` bean in-process at `/<spring.application.name>_metrics`, and reports its
-  connection as Actuator's `prometheusAgent` health component. Its other `prometheus-proxy.agent.*` properties map onto
-  `EmbeddedAgentConfig`'s settings, and a `PrometheusProxyAgentCustomizer` bean changes them in code
+  with `prometheus-proxy.agent.proxy` set, a Spring Boot 4.2 app, or a 4.0 or 4.1 app that sets
+  `kotlin-coroutines.version` and `prometheus-client.version` to the agent's, runs an embedded agent that starts and
+  stops with it, serves the app's `PrometheusRegistry` bean in-process at `/<spring.application.name>_metrics`, and
+  reports its connection as Actuator's `prometheusAgent` health component. Its other `prometheus-proxy.agent.*`
+  properties map onto `EmbeddedAgentConfig`'s settings, and a `PrometheusProxyAgentCustomizer` bean changes them in code
 - A Ktor plugin, `com.pambrose:prometheus-proxy-ktor`, released with the agent at its version:
   `install(PrometheusProxyAgent)` runs an embedded agent that starts once the app's modules load, begins stopping when
   the server stops accepting connections, and serves the `PrometheusRegistry` it's given in-process at its `path`. Its
@@ -149,6 +150,10 @@ All notable changes to this project are documented in this file.
 
 ### Bug Fixes
 
+- An embedded agent whose app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java
+  client below 1.7.0, as Spring Boot 4.0 and 4.1 do, failed once it ran, with a `NoSuchMethodError` or an
+  `ExceptionInInitializerError`, and the app ran on with an agent that never served. It now refuses to start, with a
+  message naming the Spring Boot property that sets each
 - The dashboard's Scrape now result said only "404 Not Found" when it refused a path that isn't registered, rather than
   why: the scrape port's handler that gives a bare 404 its status line as a body replaced every 404's body. It now
   fills in only a 404 that has none
@@ -218,6 +223,9 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- The Spring Boot starter's tests also run under Spring Boot 4.0's last release (`oldestSpringBootTest`, which `test`
+  runs), with kotlinx-coroutines and the Prometheus client set as the starter's page says, so a change the oldest
+  Spring Boot it supports can't run fails the build
 - `make release-check` refuses a release while any demo's `NEEDS_RELEASE_AFTER` isn't below the version, which
   would leave `make up` from the release's tag building the proxy and agent from source, and step 2 of
   `docs/RELEASE.md` says when to raise and lower it
@@ -397,6 +405,10 @@ All notable changes to this project are documented in this file.
   demo isn't running; the nginx demo's config scenarios wait for nginx's reload and print their headline first. Every
   demo page's scenario table has a How it works column, the Ktor and plain Kotlin demos' images are named
   `ktor-app` and `plain-kotlin-app`, and the demos' messages end each URL's sentence with it
+- Add the November 23, 2026 code review (`docs/CODE_REVIEW_NOVEMBER_23_2026.md`): 72 findings (8 medium, 64 low, none
+  high), each with a status, and a 17-step fix plan in waves of steps that can run in parallel. The November 11 review
+  moves to `docs/archive/`, since all 43 of its findings are resolved, and `docs/security-agent-authentication.md`
+  links it there
 
 ### Dependencies
 
@@ -590,7 +602,7 @@ All notable changes to this project are documented in this file.
 - The metrics guide gives the agent's scrape latency buckets as 5ms to 90s, and it and the website say `launch_id` identifies each agent instance, not each process. The Production page no longer offers `EmbeddedAgentInfo.close()`, which doesn't exist. KDoc and help text no longer list `all` as a log level, and describe the service discovery target as it has worked since 4.4.0
 - The website's Running in Production page says how long a proxy switch takes, and its Zipkin section what is traced and why Zipkin should start first
 - The website's menu has one Operations section, with the Dashboard page in it
-- Add the November 2026 code review (`docs/CODE_REVIEW_NOVEMBER_11_2026.md`); the October 2026 review, all of whose findings are resolved, moves to `docs/archive/`
+- Add the November 2026 code review (`docs/archive/CODE_REVIEW_NOVEMBER_11_2026.md`, archived once all 43 of its findings were resolved); the October 2026 review, all of whose findings are resolved, moves to `docs/archive/`
 
 ### Build & Tooling
 

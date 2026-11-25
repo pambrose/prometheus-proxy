@@ -135,11 +135,13 @@ the ones the agent is built with, and marks each one older, the same, or newer.
 The agent runs with Spring Boot's versions, as the roastery shows. On every pull request,
 `make spring-boot-demo-check` builds the roastery and runs its `RoasteryAgentTest`, which starts the agent against a
 proxy and scrapes through it, so a Spring Boot release that breaks the agent fails there. Were one to break it, the pom
-sets that library to the agent's version with the property Spring Boot names it by, such as `grpc-java.version` or
-`netty.version`, which Spring Boot's
+sets that library to the agent's version with the property Spring Boot names it by, such as
+`prometheus-client.version`, `grpc-java.version`, or `netty.version`, which Spring Boot's
 [Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
-library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
-`netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
+library it manages. An app on Spring Boot 4.0 or 4.1 sets two of them, as the
+[Spring Boot Starter](https://prometheus-proxy.com/spring-boot-starter/#adding-the-dependency) page says. netty-tcnative
+has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and `netty-tcnative-boringssl-static`,
+with each native's classifier, in its own `dependencyManagement`.
 
 ### 4. The Proxy Goes Away, and the Roastery Stays Healthy
 

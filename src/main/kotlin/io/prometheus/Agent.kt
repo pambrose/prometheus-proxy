@@ -50,6 +50,8 @@ import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.EndpointFailover
 import io.prometheus.agent.HeartBeatResult
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.agent.RuntimeLibraries
+import io.prometheus.agent.connectOutcome
 import io.prometheus.agent.dashboard.AgentDashboardService
 import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.agent.discovery.PathDiscoveryService
@@ -451,7 +453,7 @@ class Agent(
     // then refused the agent counted as a success.
     runCatchingCancellable { grpcService.registerAgent(initialConnectionLatch) }
       .also { result ->
-        val outcome = AgentMetrics.connectOutcome(result.exceptionOrNull())
+        val outcome = connectOutcome(result.exceptionOrNull())
         metrics { connectCount.labelValues(launchId, outcome).inc() }
       }.getOrThrow()
     // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
@@ -1052,7 +1054,10 @@ class Agent(
      *   that is missing or malformed. Credentials in a config URL are redacted from its message and from every message
      *   in its cause chain.
      * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
-     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
+     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first. Also
+     *   when the app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java client
+     *   below 1.7.0, as Spring Boot 4.0 and 4.1 do, before the Agent is built: its message names the Spring Boot
+     *   property that sets each.
      */
     @Suppress("unused")
     @JvmStatic
@@ -1086,7 +1091,10 @@ class Agent(
      * @throws io.prometheus.common.ConfigLoadException when a setting is invalid, in the cases the [startAsyncAgent]
      *   that takes a config file lists.
      * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
-     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
+     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first. Also
+     *   when the app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java client
+     *   below 1.7.0, as Spring Boot 4.0 and 4.1 do, before the Agent is built: its message names the Spring Boot
+     *   property that sets each.
      */
     @Suppress("unused")
     @JvmStatic
@@ -1107,6 +1115,9 @@ class Agent(
           info { getBanner("banners/agent.txt", this) }
           info { getVersionDesc() }
         }
+      // An app's dependency management, Spring Boot's among them, can set a library below the version the agent runs
+      // on, which would fail it only once it ran
+      RuntimeLibraries.requireSupported()
       // startSync(), not startAsync(): a startup failure must reach the caller as an exception rather than leave it
       // holding a handle to a FAILED agent.
       val agent = newAgent(exitOnMissingConfig, options).apply { isEmbedded = true }

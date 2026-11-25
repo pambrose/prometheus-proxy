@@ -139,6 +139,25 @@ class PrometheusProxyAgentAutoConfigurationTest {
         });
   }
 
+  // The properties' toString, there so they can be logged, masks a target URL as the agent's logs do: its user info and
+  // each query value, keeping the keys
+  @Test
+  void theLoggedPropertiesMaskATargetUrlsCredentialsAndQueryValues() {
+    runner
+        .withPropertyValues(
+            "prometheus-proxy.agent.paths[0].path=grinder_metrics",
+            "prometheus-proxy.agent.paths[0].url=https://u:pw@grinder:9100/metrics?api_key=k3y&x=1#top")
+        .run(context -> assertThat(context.getBean(PrometheusProxyAgentProperties.class).toString())
+            .contains("url=https://***@grinder:9100/metrics?api_key=***&x=***#top")
+            .doesNotContain("pw", "k3y", "x=1"));
+
+    assertThat(PrometheusProxyAgentProperties.shownUrl("http://grinder:9100/metrics")).isEqualTo(
+        "http://grinder:9100/metrics");
+    assertThat(PrometheusProxyAgentProperties.shownUrl("http://a@b@grinder/m?flag&k=v&")).isEqualTo(
+        "http://***@b@grinder/m?flag&k=***&");
+    assertThat(PrometheusProxyAgentProperties.shownUrl(null)).isNull();
+  }
+
   @Test
   void theAppsRegistryIsServedAtTheGivenPath() {
     runner

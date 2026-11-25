@@ -83,6 +83,11 @@ jacksonAnnotations = "2.23"
 # What the Spring Boot starter (spring-boot-starter/) compiles and tests against, through this BOM. Its POM names no
 # Spring Boot artifact, so an app runs it with the app's own Spring Boot.
 spring-boot = "4.2.0"
+# The oldest Spring Boot the starter supports: its tests run again under this release's dependency management
+# (oldestSpringBootTest), which sets the agent's libraries furthest behind, the Prometheus client at 1.4.3 among them.
+# The last release of Spring Boot 4.0, taken through spring-boot-starter-parent, whose dependency management is
+# spring-boot-dependencies', so Dependabot, which ignores this artifact's minor updates, keeps it on 4.0.
+spring-boot-oldest = "4.0.10"
 
 # Tracing
 zipkin = "6.3.1"
@@ -163,6 +168,7 @@ ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref 
 ktor-server-metrics-micrometer = { module = "io.ktor:ktor-server-metrics-micrometer", version.ref = "ktor" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
 spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+spring-boot-oldest = { module = "org.springframework.boot:spring-boot-starter-parent", version.ref = "spring-boot-oldest" }
 
 # WebJars
 webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
