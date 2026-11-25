@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 61 fixed, 11 open (8 medium, 64 low, no high).
+**Status:** 72 issues — 68 fixed, 4 open (8 medium, 64 low, no high).
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
 #555–#561).
@@ -50,8 +50,8 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ✅      |
 | 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ✅      |
 | 27 | The quick-start compose file publishes the agent, scrape, and admin ports on every interface         | CI/build   | low      | ✅      |
-| 28 | `--tests=<spec>` runs the whole suite unfiltered, and `unitTest --tests X` fails                     | CI/build   | low      | ⬜      |
-| 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ⬜      |
+| 28 | `--tests=<spec>` runs the whole suite unfiltered, and `unitTest --tests X` fails                     | CI/build   | low      | ✅      |
+| 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ✅      |
 | 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ✅      |
 | 31 | The starter page's YAML sets no `authority`, so the docs' own certificate fails the handshake        | Docs       | medium   | ✅      |
 | 32 | The upgrade notes miss that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`               | Docs       | low      | ✅      |
@@ -80,21 +80,21 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 55 | `AgentDashboardHtmlTest` pins neither half of the column-guide rule, nor the agent page's live region | Tests     | low      | ✅      |
 | 56 | Two more `dashboard-constraints.md` rules have no test                                               | Tests      | low      | ✅      |
 | 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ✅      |
-| 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ⬜      |
-| 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ⬜      |
+| 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ✅      |
+| 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ✅      |
 | 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ✅      |
 | 61 | `release-check`'s stale-version check misses the Quick Start's JAR download links                    | CI/build   | low      | ✅      |
 | 62 | Both changelogs date 4.7.0 2026-11-23, and `release-check` accepts any date                          | CI/build   | low      | ✅      |
 | 63 | The basics demo promises an alert that a late thaw never fires                                       | CI/build   | low      | ✅      |
 | 64 | The agent page says `--proxy` and `PROXY_HOSTNAME` apply only without `endpoints`                    | Docs       | low      | ✅      |
 | 65 | Two diagram descriptions split a hyphenated name across a line                                       | Docs       | low      | ✅      |
-| 66 | Nothing checks the settings tables' options, variables, links, or gRPC defaults                      | Tests      | low      | ⬜      |
+| 66 | Nothing checks the settings tables' options, variables, links, or gRPC defaults                      | Tests      | low      | ✅      |
 | 67 | On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have     | CI/build   | low      | ✅      |
-| 68 | `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap                           | CI/build   | low      | ⬜      |
+| 68 | `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap                           | CI/build   | low      | ✅      |
 | 69 | The changelogs describe the home page #546 replaced, and miss four commits' changes                  | Docs       | low      | ✅      |
 | 70 | The release skill still lists `index.md`, and a design-check exemption covers a deleted class        | Docs       | low      | ⬜      |
 | 71 | The Kubernetes demo's docs say its agent dashboard port is set once, but nothing keeps it            | Docs       | low      | ✅      |
-| 72 | `DemoTourTablesTest` misses a stale README heading and `demo.sh`'s page anchors                      | Tests      | low      | ⬜      |
+| 72 | `DemoTourTablesTest` misses a stale README heading and `demo.sh`'s page anchors                      | Tests      | low      | ✅      |
 
 ---
 
@@ -160,7 +160,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 11   | ✅ #559 | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
 | 12   | ✅ #566 | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
 | 13   | ✅ #555 | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
-| 14   | ⬜      | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
+| 14   | ✅ #567 | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
 | 15   | ✅ #556 | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
 | 16   | ✅ #552 | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
 | 17   | ⬜      | #43, #44, #45, #70           | Maintainer docs that describe what shipped                            | `docs/packages.md`, `docs/KDOC_SUMMARY.md`, `ConfigLoadException`'s KDoc, AGENTS.md, `docs/TESTING.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, the publishing-release skill, `.impeccable/config.json`, `extra.css` | No behavior change. Last, so they describe what the earlier steps settle.                                                                                                                        |
@@ -1489,7 +1489,7 @@ compose snippets names `127.0.0.1`, as the demos' entries do.
 
 **Resolution:** Fixed in #556. `etc/compose/proxy.yml` and the site's compose example bind every port to `127.0.0.1`, and no longer publish 50051, which the compose agent reaches over the compose network; `docker.md` says so, and sends readers with remote agents to the cloud-proxy compose file. `DocsExamplesTest` fails on a compose file or docs snippet that publishes a port on every interface, the cloud-proxy example excepted.
 
-### 28. ⬜ `--tests=<spec>` (the equals form) runs the whole suite unfiltered, and with `RUN_CONTAINER_TESTS` runs the harness specs three at a time
+### 28. ✅ `--tests=<spec>` (the equals form) runs the whole suite unfiltered, and with `RUN_CONTAINER_TESTS` runs the harness specs three at a time
 
 **Severity:** low · **Confidence:** reproduced with `./gradlew -m test --tests=io.prometheus.common.UtilsTest`, which
 schedules `:unitTest`, `:harnessTest`, and the disabled `:test`.
@@ -1520,7 +1520,9 @@ schedules `:unitTest`, `:harnessTest`, and the disabled `:test`.
 **Tests:** a Gradle TestKit check, or a `misc/` spec that runs `./gradlew -m`, asserting that `--tests=X` schedules
 `:test` and neither partition.
 
-### 29. ⬜ The `misc/` specs read docs, workflows, the Makefile, and demo files that aren't `Test` inputs, so `./gradlew check` and `make ci-build` take their result from the cache after an edit to those files
+**Resolution:** Fixed in #567. `namedSpecs()` reads both `--tests X` and `--tests=X`, and both `testsOnlyContainerSpecs()` and `configureTestPartitions` use it. `unitTest` and `harnessTest` are always registered; `test` runs only them when nothing is named and it isn't excluded, and otherwise the Kover tasks leave the partitions out, so `./gradlew build -x test` still runs no spec. `harnessTest` never gets `ContainerTestsConfig`. On master, `./gradlew -m test --tests=io.prometheus.misc.TestingGuideTest` scheduled both partitions and a disabled `:test`; now it schedules `:test` alone, and only that spec's results appear. `./gradlew unitTest --tests X`, which failed with "Task 'unitTest' not found", runs the named spec. The partition logic got no spec of its own, since a nested `./gradlew -m` would start a second daemon per case; dry runs and an init script verified it.
+
+### 29. ✅ The `misc/` specs read docs, workflows, the Makefile, and demo files that aren't `Test` inputs, so `./gradlew check` and `make ci-build` take their result from the cache after an edit to those files
 
 **Severity:** low · **Confidence:** confirmed by trace: the build script declares only property inputs on `Test`
 (`build.gradle.kts:344-346`), and `org.gradle.caching=true`. Reproduced at `5c9f0a24`: with four demo files edited so
@@ -1552,6 +1554,8 @@ fileTree("demos") { include("*/docker/compose.yml", "*/demo.sh", "*/README.md", 
 own list in `docs/TESTING.md`.
 
 **Tests:** none beyond the build: after the change, editing `docs/TESTING.md` makes the next `./gradlew unitTest` run.
+
+**Resolution:** Fixed in #567. `build.gradle.kts` declares two input sets with relative path sensitivity: `testConfigFiles()` (`config/test-configs`, `testing`) on every `Test` task, and `checkedFiles()` on `unitTest` and `test` only, which takes the top-level `Makefile`, `README.md`, `AGENTS.md`, changelogs, `llms.txt`, `gradle.properties`, and `settings.gradle.kts`; `config/config.conf`, `.github`, and `docs` without the code reviews; the site's pages and `zensical.toml`; `demos` without build output or `docker/.env`; `examples`, `etc`, `grafana`, `bin`, `logback`, and `src/shadow/resources`; and the source text, the subprojects' included. On master, an edit to `docs/TESTING.md` left `./gradlew test --tests TestingGuideTest` up to date; now it reruns `unitTest`, as a file planted in `ktor-plugin/src/test` does, while `harnessTest`'s inputs leave the docs out. `docs/TESTING.md`'s new Test Inputs section lists the sets.
 
 ### 30. ✅ `make site-version` doesn't scan `examples/cloud-proxy/docker-compose.yml`, which the site shows with an image tag, though its comment says nothing outside its sources names a version
 
@@ -1719,7 +1723,7 @@ be an anchor of the README too (see #72).
 
 **Resolution:** Fixed in #561. `make up`, `make tour`, and the tours name the demo's README, which matches the checkout, beside the docs site's page for the latest release.
 
-### 68. ⬜ `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap, though only the harness specs read the profile, so the run can grow to 32g of test heap beside Gradle's 4g
+### 68. ✅ `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap, though only the harness specs read the profile, so the run can grow to 32g of test heap beside Gradle's 4g
 
 **Severity:** low · **Confidence:** plausible: the per-task heap is traced in the build script; how far each JVM grows
 depends on the load and G1's sizing.
@@ -1742,6 +1746,8 @@ rather than end in a clear `OutOfMemoryError`.
 leaving `unitTest` at its 1g; say "16g for the harness JVM" in `docs/TESTING.md`.
 
 **Tests:** none beyond the build; `ps` during a `make xxl-tests` run shows each test JVM's `-Xmx`.
+
+**Resolution:** Fixed in #567. The harness profile's heap is no longer set on every `Test` task: `unitTest` keeps 1g, and `harnessTest` and `test` (which runs every spec in one JVM when specs are named) take the profile's; `-PtestMaxHeapSize` still overrides them all. An init script showed `maxHeapSize=16g` on all three at `-PharnessConfig=XXLARGE` on master, and `1g` on `unitTest` after. `docs/TESTING.md` and the 4.7.0 changelog say 16g for the harness JVM.
 
 ---
 
@@ -2772,7 +2778,7 @@ Otherwise, delete the test.
 
 **Resolution:** Fixed in #555. The test runs `fromEnvironment()` in a forked JVM, as `BaseOptionsTest` does, whose environment has all four `PROMETHEUS_*` variables, and checks that it builds what the lookup overload builds from them. It failed for a `fromEnvironment()` that read nothing. A variable set on the Gradle `Test` task would have reached every spec and child process, and IntelliJ's runner wouldn't set it.
 
-### 58. ⬜ The config-key guards don't reach keys passed to `EmbeddedAgentConfig.setting()`, whose KDoc says they aren't checked, or the website's HOCON blocks
+### 58. ✅ The config-key guards don't reach keys passed to `EmbeddedAgentConfig.setting()`, whose KDoc says they aren't checked, or the website's HOCON blocks
 
 **Severity:** low · **Confidence:** confirmed by trace, and by a scratch checker showing that nothing has drifted yet
 
@@ -2811,7 +2817,9 @@ and checked the `setting()` keys against `config/config.conf`. All are valid tod
 
 **Tests:** The two new checks. Each fails on a planted misnamed key.
 
-### 59. ⬜ The `misc/` guards stop at the root project: `TestingGuideTest` and `TestPortsTest` never read `ktor-plugin/` or `spring-boot-starter/` tests
+**Resolution:** Fixed in #567. `ConfigFileKeysTest` gains two checks. The key of every literal `setting(…)` or `setting(key = …)` call must be declared under `agent`, a list taken whole, across the tests, the main sources, both subprojects, the demos' apps, the site pages, the READMEs, `docs`, and `llms.txt` (`EmbeddedAgentConfigTest`'s three wrong-case keys are exempt). And every fenced `hocon` block in those docs, with its `--8<--` includes resolved from `zensical.toml`'s base paths, must declare only known settings, read as a proxy or agent config, a discovery file, or a lone list entry such as an `agent.filters` entry; `proxyMetricsHost` and the Ktor plugin's `prometheus-proxy` section are exempt, and a block that doesn't parse fails. Every key and block checked is valid today. A planted `setting("scrapeTimeoutSec", 5)` on the Embedded Agent page, `agent.consolidate` in an inline block, and `proxy.zipkin.enabled` in an included snippet each passed the old spec and fail the new one.
+
+### 59. ✅ The `misc/` guards stop at the root project: `TestingGuideTest` and `TestPortsTest` never read `ktor-plugin/` or `spring-boot-starter/` tests
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2842,7 +2850,9 @@ keeps every bound port in `TestPorts`. Neither holds for the two subprojects:
 
 **Tests:** The two extended checks. Each fails on an unlisted spec, or on a port that isn't in `TestPorts`.
 
-### 66. ⬜ `WebsiteConfigKeysTest` checks the settings tables' keys and defaults, but not the option and variable columns #542 added, the anchors they link to, or the gRPC defaults, so any of those can drift silently
+**Resolution:** Fixed in #567. `TestingGuideTest` reads the subprojects `settings.gradle.kts` includes: each `*Test.kt` or `*Test.java` must be named in its subproject's section (whose regex now admits `-`), and their support files in the guide. `TestPortsTest` requires each `*_PORT = <n>` constant in a subproject's tests to be a `TestPorts` port that no root test source uses. The support-file check found one real gap, the starter's `AgentCustomizations`, which the guide named only as `website.AgentCustomizations`; it's now named. A planted unlisted spec and support file in `ktor-plugin/src/test` passed the old spec and fail the new one, as does a subproject port moved to a harness port (9506) or to one `TestPorts` doesn't list.
+
+### 66. ✅ `WebsiteConfigKeysTest` checks the settings tables' keys and defaults, but not the option and variable columns #542 added, the anchors they link to, or the gRPC defaults, so any of those can drift silently
 
 **Severity:** low · **Confidence:** confirmed by trace. A script that extracted every row found all of them correct
 today: 171 rows name a key, 125 of them also name an option or a variable.
@@ -2902,7 +2912,9 @@ wrong:
 `MAX_CLIENT_CACHE_SIZE` misspelled in `cli-reference.md`, a link's fragment or a `<span id>` changed, and the agent's
 `keepAliveTimeSecs` given as 7200.
 
-### 72. ⬜ `DemoTourTablesTest` misses a README's Guided Tour heading left at a part's old name and the anchors `demo.sh` adds to its page link, and `docs/TESTING.md` misdescribes what it checks
+**Resolution:** Fixed in #567. A new `CliReferenceTest` checks that each CLI Reference row's options are exactly one `@Parameter`'s names on its role's options class or `BaseOptions`, with every option given a row; that its variable is one its role's options import from `EnvVars`, with every imported variable given a row and every `EnvVars` entry a role; that its `<span id>` is its key; that options built from `[option, value]` equal options built from `-D<key>=<value>`; and that the source call reading its variable takes its option's field (or, with no option, names the key's last part). Each configuration-page row linked to the CLI Reference must use the key as its fragment and repeat that row's option, variable, and default, a configuration row for such a key must link, and every link to `cli-reference.md#…` must land on an anchor. `WebsiteConfigKeysTest` compares a `long | -1` setting's documented default with gRPC's own (`GrpcUtil`'s keepalive constants, the server builder's handshake timeout, `INT_MAX` for a limit that's off) and pins `ProxyOptions`' two gRPC constants to them. Every row is right today. This finding's planted errors (`--chunks`, a misspelled variable, a changed link fragment and span id, the agent's `keepAliveTimeSecs` as 7200), plus swapped options, swapped variables, and the proxy's `-p` on an agent row, each passed master's specs and fail the new ones.
+
+### 72. ✅ `DemoTourTablesTest` misses a README's Guided Tour heading left at a part's old name and the anchors `demo.sh` adds to its page link, and `docs/TESTING.md` misdescribes what it checks
 
 **Severity:** low · **Confidence:** reproduced by planting errors in a scratch edit of the tree, then reverting; the
 guide's wording confirmed from the files.
@@ -2948,6 +2960,8 @@ guide's wording confirmed from the files.
   which `make up` and `make tour` print, is its page".
 
 **Tests:** the two extended checks, which fail on the planted errors above.
+
+**Resolution:** Fixed in #567. `DemoTourTablesTest` requires each README part's `### N.` heading, lowercased, to equal the part's name, and every `${PAGE_URL}#anchor` or `$PAGE_URL#anchor` in a `demo.sh` to be a heading anchor of the demo's page, read from the script, so the links #561 rewrote are covered. Today's tree passes both. This finding's plants each passed the old spec and fail the new one: the Spring Boot demo's part 5 renamed in `TOUR_PARTS` and both tables with its README heading left alone, and the Kubernetes demo's `#running-it` changed to `#running-it-nowhere`. `docs/TESTING.md` says a page's rows, where they link, link only below the table.
 
 ---
 
