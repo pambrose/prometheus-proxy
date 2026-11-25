@@ -77,21 +77,57 @@ class TestPortsTest : StringSpec() {
     // as an intermittent bind failure. The Lincheck specs are exempt: they run on their own (make lincheck-tests).
     "only a harness spec should start a proxy and agent the harness's way, or bind a harness port" {
       val harnessDir = File("src/test/kotlin/io/prometheus/harness")
-      val exempt = setOf("TestPorts.kt", "TestPortsTest.kt")
       val outside =
-        File("src/test")
-          .walkTopDown()
-          .filter { it.isFile && it.extension in setOf("kt", "java") }
-          .filterNot { it.startsWith(harnessDir) || it.name in exempt || it.name.endsWith("LincheckTest.kt") }
+        rootTestSources()
+          .filterNot { it.startsWith(harnessDir) || it.name in PORTS_FILES || it.name.endsWith("LincheckTest.kt") }
           .filter { file -> file.readLines().filterNot { it.isComment() }.any { HARNESS_USE.containsMatchIn(it) } }
           .map { it.invariantSeparatorsPath }
           .toList()
 
       outside shouldBe emptyList()
     }
+
+    // The subprojects' tests can't use the root project's test sources, so each spells out the ports it binds, which
+    // TestPorts lists so that no root spec binds them (STARTER_PROXY_* and KTOR_PLUGIN_PROXY_*). They run while the
+    // root project's tests do, in build, so a port a subproject binds must be one TestPorts reserves for it: listed,
+    // and used by no root test source, as a harness port is.
+    "every port a subproject's test binds should be one TestPorts reserves for it" {
+      val bound = subprojectPorts()
+      bound.keys.map { it.substringBefore('/') }.toSet() shouldContainAll listOf("ktor-plugin", "spring-boot-starter")
+
+      val ports = testPorts()
+      val rootSources = rootTestSources().filterNot { it.name in PORTS_FILES }.map { it.readText() }.toList()
+      val problems =
+        bound.mapNotNull { (constant, port) ->
+          val names = ports.filterValues { it == port }.keys
+          val usedByRoot = names.firstOrNull { name -> rootSources.any { Regex("""\b$name\b""").containsMatchIn(it) } }
+          when {
+            names.isEmpty() -> "$constant is $port, which TestPorts doesn't list"
+            usedByRoot != null -> "$constant is $port, TestPorts.$usedByRoot, which a root spec uses"
+            else -> null
+          }
+        }
+
+      problems shouldBe emptyList()
+    }
   }
 
   private fun String.isComment() = trimStart().let { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+
+  private fun rootTestSources(): Sequence<File> =
+    File("src/test").walkTopDown().filter { it.isFile && it.extension in setOf("kt", "java") }
+
+  // Each port constant in a subproject's tests, "SCRAPE_PORT = 11402" in Kotlin or Java, keyed by its file and name.
+  // The subprojects are the ones settings.gradle.kts includes.
+  private fun subprojectPorts(): Map<String, Int> =
+    INCLUDE
+      .findAll(File("settings.gradle.kts").readText())
+      .map { it.groupValues[1] }
+      .flatMap { sub -> File(sub, "src/test").walkTopDown() }
+      .filter { it.isFile && it.extension in setOf("kt", "java") }
+      .flatMap { file ->
+        PORT_CONSTANT.findAll(file.readText()).map { "${file.invariantSeparatorsPath}: ${it.groupValues[1]}" to it }
+      }.associate { (constant, match) -> constant to match.groupValues[2].toInt() }
 
   private fun testPorts(): Map<String, Int> =
     TestPorts::class.java.declaredFields
@@ -146,6 +182,16 @@ class TestPortsTest : StringSpec() {
       )
 
     private const val COMPOSE_FILE = "docker/compose.yml"
+
+    // The files that name every TestPorts constant: its own, and this spec's
+    private val PORTS_FILES = setOf("TestPorts.kt", "TestPortsTest.kt")
+
+    // A build's include of a subproject, in settings.gradle.kts
+    private val INCLUDE = Regex("""^include\("([^"]+)"\)""", RegexOption.MULTILINE)
+
+    // A port constant, as the subprojects' tests declare one: "const val SCRAPE_PORT = 11402" in Kotlin, or
+    // "private static final int SCRAPE_PORT = 11400;" in Java
+    private val PORT_CONSTANT = Regex("""\b([A-Z][A-Z0-9_]*PORT)\s*=\s*(\d+)\b""")
 
     // A compose ports entry with a host port, "[address:]host:container", the host port a ${VAR:-default} or a number.
     private val COMPOSE_PORT = Regex("""^\s*-\s*"?(?:[\d.]+:)?(?:\$\{\w+:-(\d+)\}|(\d+)):\d+""")

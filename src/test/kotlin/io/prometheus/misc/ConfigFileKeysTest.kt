@@ -23,10 +23,15 @@ import com.typesafe.config.ConfigList
 import com.typesafe.config.ConfigObject
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigValue
+import com.typesafe.config.ConfigValueType
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.ConfigVals
 import java.io.File
 
@@ -105,6 +110,97 @@ class ConfigFileKeysTest : StringSpec() {
   // '='.
   private fun dSettingKeys(source: String) = D_SETTING.findAll(source).map { it.groupValues[1] }.toSet()
 
+  // The literal key of every setting() call in [source], setting("http.clientTimeoutSecs", 30) or setting(key = …), in
+  // Kotlin, Java, or a page's prose. A key built at run time isn't seen.
+  private fun settingKeys(source: String) = SETTING_CALL.findAll(source).map { it.groupValues[1] }.toSet()
+
+  // Whether the schema declares [key] under agent, as setting() takes it: a value, or a list, which setting() takes
+  // whole, as setting("proxy.endpoints", listOf(…)) does.
+  private fun settingDeclared(key: String): Boolean =
+    undeclaredIn("agent.$key = x").isEmpty() ||
+      runCatching { schema.toConfig().getValue("agent.$key").valueType() == ConfigValueType.LIST }.getOrDefault(false)
+
+  // Where code or a page can call setting(): the test sources (the docs site's snippet files among them), the main
+  // sources' KDoc, both subprojects', the demos' apps, and the docs readers copy from.
+  private val settingSources by lazy {
+    (
+      SETTING_SOURCE_DIRS.flatMap { dir -> File(dir).walkTopDown().toList() } +
+        markdownDocs + File("README.md") + File("llms.txt")
+    ).filter { it.isFile && it.extension in setOf("kt", "java", "txt", "md") && it.name != SELF }
+      .distinct()
+      .sortedBy { it.invariantSeparatorsPath }
+  }
+
+  // The Markdown readers copy configs from: the docs site's pages, the maintainer docs, and the demos' READMEs. Not the
+  // code reviews, which quote what they find.
+  private val markdownDocs by lazy {
+    (
+      File(SITE_DOCS).walkTopDown().toList() +
+        File("docs").listFiles().orEmpty() +
+        File("demos").listFiles().orEmpty().map { File(it, "README.md") }
+    ).filter { it.isFile && it.extension == "md" && !it.name.startsWith("CODE_REVIEW_") }
+  }
+
+  // Each fenced HOCON block in [text], without the indentation of a block in a tab or an admonition, and with the
+  // snippet lines the docs site replaces with a file, or a section of one, replaced as it replaces them.
+  private fun hoconBlocks(text: String): List<String> =
+    HOCON_BLOCK.findAll(text).map { match ->
+      val indent = match.groupValues[1]
+      match.groupValues[2].lines().joinToString("\n") { line ->
+        val unindented = line.removePrefix(indent)
+        SNIPPET_LINE.matchEntire(unindented.trim())?.let { snippet(it.groupValues[1]) } ?: unindented
+      }
+    }.toList()
+
+  // A snippet's text as the docs site includes it (zensical.toml's pymdownx.snippets): a file found under one of its
+  // base paths, whole or only the lines between its "--8<-- [start:name]" and "--8<-- [end:name]" markers, without any
+  // marker line.
+  private fun snippet(spec: String): String {
+    val name = spec.substringBefore(':')
+    val section = spec.substringAfter(':', "")
+    val file = SNIPPET_BASE_PATHS.map { File(it, name) }.firstOrNull { it.isFile }
+    requireNotNull(file) { "No snippet file $name under $SNIPPET_BASE_PATHS" }
+    val lines = file.readLines()
+    val selected =
+      if (section.isEmpty()) {
+        lines
+      } else {
+        val start = lines.indexOfFirst { "--8<-- [start:$section]" in it }
+        val end = lines.indexOfFirst { "--8<-- [end:$section]" in it }
+        require(start in 0..<end) { "No section $section in ${file.path}" }
+        lines.subList(start + 1, end)
+      }
+    return selected.filterNot { SNIPPET_MARKER.containsMatchIn(it) }.joinToString("\n")
+  }
+
+  // The settings a docs block gives that the schema doesn't declare. A block is a proxy or agent config, a discovery
+  // targets file, or a lone entry of a list of objects, such as an agent.filters entry, checked against the list it
+  // fits best. Top-level keys that hold no setting are left out.
+  private fun undeclaredInBlock(block: String): List<String> {
+    val config = ConfigFactory.parseString(block).root()
+    val roots = config.keys - NOT_SETTING_ROOTS
+    return when {
+      config.containsKey(DISCOVERY_PATHS_KEY) -> {
+        undeclared("", config, discoverySchema)
+      }
+
+      roots.any { it == "proxy" || it == "agent" } || roots.isEmpty() -> {
+        undeclared("", NOT_SETTING_ROOTS.fold(config) { obj, key -> obj.withoutKey(key) }, schema)
+      }
+
+      else -> {
+        listEntrySchemas.map { (list, entry) -> undeclared(list, config, entry) }.minBy { it.size }
+      }
+    }
+  }
+
+  // Each list of objects the schema declares, by its path, with the object its entries take.
+  private val listEntrySchemas by lazy {
+    listOf("proxy.auth", "agent.pathConfigs", "agent.filters").associateWith { path ->
+      (schema.toConfig().getList(path).first() as ConfigObject)
+    }
+  }
+
   init {
     "every setting in a config the repo ships or its tests load should be declared in config/config.conf" {
       configFiles.map { it.invariantSeparatorsPath } shouldContain HARNESS_CONFIG
@@ -177,6 +273,57 @@ class ConfigFileKeysTest : StringSpec() {
       undeclaredIn("agent.chunkContentSizeBytes = x") shouldBe listOf("agent.chunkContentSizeBytes")
       undeclaredIn("agent.chunkContentSizeKbs = x") shouldBe emptyList()
     }
+
+    // EmbeddedAgentConfig.setting() takes a key relative to agent and doesn't check it, so a misnamed one does nothing,
+    // as a misnamed key in a config file does. The starter's and the plugin's settings.<key> call it too.
+    "every key a setting() call in the tests, the code, or the docs gives should be declared in config/config.conf" {
+      val keysByFile = settingSources.associate { it.invariantSeparatorsPath to settingKeys(it.readText()) }
+      keysByFile.values.flatten().toSet() shouldContainAll listOf("scrapeTimeoutSecs", "http.clientTimeoutSecs")
+
+      keysByFile
+        .mapValues { (file, keys) ->
+          keys.filterNot { key -> key in NOT_SETTING_KEYS[file].orEmpty() || settingDeclared(key) }
+        }.filterValues { it.isNotEmpty() } shouldBe emptyMap()
+    }
+
+    // The configs the docs show, the snippet files' sections they include among them, are what readers copy, and a
+    // misnamed key in one does nothing just the same. A block that doesn't parse fails too.
+    "every setting in a HOCON block of the docs should be declared in config/config.conf" {
+      val blocks =
+        (markdownDocs + File("README.md") + File("llms.txt"))
+          .sortedBy { it.invariantSeparatorsPath }
+          .flatMap { file -> hoconBlocks(file.readText()).map { file.invariantSeparatorsPath to it } }
+      blocks.size shouldBeGreaterThan 50
+
+      blocks
+        .mapNotNull { (file, block) ->
+          val problems = runCatching { undeclaredInBlock(block) }.getOrElse { listOf("doesn't parse: ${it.message}") }
+          if (problems.isEmpty()) null else "$file: $problems in\n$block"
+        } shouldBe emptyList()
+    }
+
+    "the setting() and docs block checks should find a misnamed key, and the snippet a block includes" {
+      settingKeys("""setting("http.clientTimeout", 9)\n.setting(key = "scrapeTimeoutSecs", value = 1)""") shouldBe
+        setOf("http.clientTimeout", "scrapeTimeoutSecs")
+      settingKeys($$"setting(\"internal.$key\", 1)") shouldBe emptySet()
+
+      settingDeclared("http.clientTimeoutSecs") shouldBe true
+      settingDeclared("proxy.endpoints") shouldBe true
+      settingDeclared("http.clientTimeout") shouldBe false
+      settingDeclared("http") shouldBe false
+
+      undeclaredInBlock("agent { scrapeTimeoutSecs = 5, http.clientTimeout = 9 }") shouldBe
+        listOf("agent.http.clientTimeout")
+      undeclaredInBlock("""paths = [{ name = a, path = a, url = "http://a", label = "{}" }]""") shouldBe
+        listOf("paths[0].label")
+      undeclaredInBlock("""{ path: a, metricNameAllow: [], metricNameDenied: [] }""") shouldBe
+        listOf("agent.filters.metricNameDenied")
+      undeclaredInBlock("proxyMetricsHost = localhost\nproxy.http.port = 8080") shouldBe emptyList()
+
+      val included = hoconBlocks("```hocon\n--8<-- \"ConfigExamples.txt:proxy-grpc-config\"\n```").single()
+      included shouldContain "proxy"
+      included shouldNotContain "--8<--"
+    }
   }
 
   companion object {
@@ -216,5 +363,46 @@ class ConfigFileKeysTest : StringSpec() {
     // Top-level keys that hold no setting: simple.conf's proxyMetricsHost only feeds a substitution in a pathConfigs
     // url, and neither the proxy nor the agent reads it.
     private val NOT_SETTINGS = mapOf("examples/simple.conf" to setOf("proxyMetricsHost"))
+
+    // A setting() call with its key spelled out: the call, then the key's string literal, named or not.
+    private val SETTING_CALL = Regex("""\bsetting\(\s*(?:key\s*=\s*)?"([^"$]+)"""")
+
+    private val SETTING_SOURCE_DIRS =
+      listOf(
+        "src/test",
+        "src/main/kotlin",
+        "ktor-plugin/src",
+        "spring-boot-starter/src",
+      ) + File("demos").listFiles().orEmpty().map { "demos/${it.name}/app/src" }
+
+    // Keys that are wrong on purpose: toString() must leave out a secret whose key is in another case, as Spring Boot
+    // gives a settings.<key> read from an environment variable.
+    private val NOT_SETTING_KEYS =
+      mapOf(
+        "src/test/kotlin/io/prometheus/agent/EmbeddedAgentConfigTest.kt" to
+          setOf("agenttoken", "tls.privatekeypem", "dashboard.PASSWORD"),
+      )
+
+    private const val SITE_DOCS = "website/prometheus-proxy/docs"
+
+    // A fenced HOCON block, indented when it's in a tab or an admonition
+    private val HOCON_BLOCK =
+      Regex(
+        """^([ \t]*)```[ \t]*hocon\b[^\n]*\n(.*?)^[ \t]*```""",
+        setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL),
+      )
+
+    // A line the docs site replaces with a snippet file, or a section of one:
+    // --8<-- "ConfigExamples.txt:proxy-grpc-config"
+    private val SNIPPET_LINE = Regex("""--8<--\s+"([^"]+)"""")
+    private val SNIPPET_MARKER = Regex("""--8<-- \[(start|end):""")
+
+    // zensical.toml's pymdownx.snippets base_path, from the repository's root
+    private val SNIPPET_BASE_PATHS = listOf("src/test/kotlin/website", "src/test/java/website", ".")
+
+    // Top-level keys of a docs block that hold no setting of the proxy or agent: simple.conf's proxyMetricsHost
+    // (above), and the Ktor plugin's prometheus-proxy section, which takes the Spring Boot starter's property names
+    // (PrometheusProxyAgentConfigTest checks the plugin reads them).
+    private val NOT_SETTING_ROOTS = setOf("proxyMetricsHost", "prometheus-proxy")
   }
 }

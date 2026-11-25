@@ -14,6 +14,10 @@ This document describes the test suite structure and how to run tests for the pr
 # Run specific test class
 ./gradlew test --tests "ProxyServiceImplTest"
 
+# Run one spec outside the harness, or the harness specs alone, in their partition's JVM
+./gradlew unitTest --tests "io.prometheus.misc.TestingGuideTest"
+./gradlew harnessTest
+
 # Run a single test method
 ./gradlew test --tests "io.prometheus.proxy.ProxyServiceImplTest.someTestMethod"
 
@@ -31,15 +35,32 @@ and the Kover tasks still run every spec; each task's reports are under `build/r
 `build/test-results/<task>`. A spec that starts a proxy and an agent through `HarnessSetup` or `TestUtils`, or binds a
 `HARNESS_*` port, belongs in `harness/`, which `TestPortsTest` checks, or it could collide with a harness spec running
 alongside it. A run that names specs with `--tests`, IntelliJ's among them, or excludes `test` with `-x test`, isn't
-split: `test` runs the specs it names in one JVM, as before. To recompute coverage from the last run without rerunning
-it, exclude both partitions: `./gradlew koverVerify koverVerifyPerClass -x unitTest -x harnessTest`.
+split: `test` runs the specs it names in one JVM, as before, whether the command line gives `--tests X` or
+`--tests=X`. Either partition can still be named, filtered or not: `./gradlew unitTest --tests …` runs only the specs
+it names outside the harness. Only the harness JVM takes a harness profile's heap (`-PharnessConfig`); `unitTest` keeps
+1g, since only the harness specs read the profile. To recompute coverage from the last run without rerunning it,
+exclude both partitions: `./gradlew koverVerify koverVerifyPerClass -x unitTest -x harnessTest`.
+
+### Test Inputs
+
+Gradle reruns a `Test` task when its classpath changes, not when a file its specs open does, so the files the specs
+read are inputs of the tasks that run them (`testConfigFiles()` and `checkedFiles()` in `build.gradle.kts`). Without
+them, a change that edited only a workflow, the `Makefile`, or this document passed on the result of the run before
+it, up to date, or from the build cache after a clean. Every `Test` task takes the configs in `config/test-configs`
+and the certificates in `testing`. `unitTest` (and `test`) also takes what the specs that check the docs, CI, and demos
+read: the top-level `Makefile`, `README.md`, `AGENTS.md`, changelogs, `llms.txt`, `gradle.properties`, and
+`settings.gradle.kts`; `config/config.conf`; `.github`; `docs` (not the code reviews); the docs site's pages and
+`zensical.toml`; `demos` (not what a demo's build or `demo.sh` writes); `examples`, `etc`, `grafana`, `bin`, `logback`,
+and `src/shadow/resources`; and the text of the sources, main and test, both subprojects' included, and of the docs
+site's snippet files beside the test sources. An edit to any of them reruns `unitTest`, but not the harness specs. A
+spec that reads a file outside those needs it added there.
 
 ### Make Targets
 
 ```bash
 make tests            # All checks (lint + tests), rerunning the tests; the container tests are SKIPPED
 make medium-tests     # `make tests` with the MEDIUM harness profile (a load run; the default is MINI, as in CI)
-make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 16g test heap)
+make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 16g for the harness JVM)
 make nh-tests         # Every spec outside the harness (`./gradlew unitTest`)
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
@@ -862,7 +883,9 @@ One support helper also lives here (not a test class itself):
   outside the ephemeral range the OS hands out to outgoing connections; and none a spec binds is a host port a demo
   publishes (its `docker/compose.yml` ports, its kind configs' `hostPort`s, and its `demo.sh` port defaults), so a
   spec run while a demo is up doesn't reach the demo's container. The constants that mirror the product defaults skip
-  the 32768 and demo checks, by name, since no spec binds them on the host
+  the 32768 and demo checks, by name, since no spec binds them on the host. Each port constant in the subprojects'
+  tests (`*_PORT = <n>`, in Kotlin or Java), which can't use `TestPorts`, is a `TestPorts` port that no root test
+  source uses, as `STARTER_PROXY_*` and `KTOR_PLUGIN_PROXY_*` are, so a subproject's spec never binds a harness port
 - **TlsMaterialTest** — TLS material given as PEM text (`*Pem` settings, `*_PEM` env vars): a value is read as PEM,
   as base64 of PEM (wrapped in lines or not), or as PEM on one line with literal `\n` escapes, and anything else is
   refused without the value in the message; a file and a PEM for the same material are refused; server and client
@@ -924,13 +947,27 @@ These support helpers also live here (not test classes themselves):
   uploads and deploys the site only from the `workflow_dispatch` `make release` starts with `make gh-docs`, so a hung
   job gives its check back, what CI runs changes only with a diff here, and a push to `master` leaves the live site
   alone
+- **CliReferenceTest** — the CLI Reference's tables against the code: each row's options are all the names of one
+  JCommander `@Parameter` of its role's options or `BaseOptions`, and every option has a row; each row's variable is
+  one its role's options read (an `EnvVars` entry they import), every one they read has a row, and every `EnvVars`
+  entry is read by one role or the other; each row's `<span id>` is its key; each option sets its row's key, the
+  options built from it equal to those built from `-D<key>=<value>` (`true` for a flag); each variable is read in the
+  options' source by the call that takes its row's option's field, or, without an option, names its key's last part;
+  each configuration page row that links to the CLI Reference links to its key's row and gives its option, variable,
+  and default, and a configuration page's row for a key that has an option or a variable links to it; and every link
+  to the CLI Reference, from any page, lands on an anchor it has
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
   `examples`, `testing`, `etc/compose`, each demo's `demos/<name>/config`, the container suite's agent configs, and the
   bundled `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON ignores a key it
   doesn't know; a list's entries are checked against the fields its schema entry gives, as for `proxy.auth` and
   `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'. The same goes for
   every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a string literal,
-  which HOCON ignores just the same; a key built at run time isn't seen
+  which HOCON ignores just the same; a key built at run time isn't seen. So does every key an
+  `EmbeddedAgentConfig.setting()` call spells out, which the builder doesn't check, in the tests, the main sources,
+  both subprojects, the demos' apps, the docs site's pages, the READMEs, `docs`, and `llms.txt`, but for the
+  wrong-case keys `EmbeddedAgentConfigTest` gives on purpose; and every setting in a fenced HOCON block of those docs,
+  with the snippet-file sections the docs site includes in it, checked as a proxy or agent config, a discovery targets
+  file, or a lone list entry such as an `agent.filters` entry; a block that doesn't parse fails too
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
   `proxy.dashboard.links`); a config that still sets the retired `proxy.dashboard.recentScrapesQueueSize` loads
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
@@ -948,10 +985,11 @@ These support helpers also live here (not test classes themselves):
   reach to the pull, while the Kubernetes demo, whose clusters pull the images themselves, stops. Each demo's
   `NEEDS_RELEASE_AFTER` is a release no later than the docs', and its `README_PATH`, which it prints beside its page on
   the docs site, is its README
-- **DemoTourTablesTest** — each demo's README and its page on the docs site open with a What This Demo Shows
-  table that names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their
-  parts' sections of its Guided Tour, a page's rows link only to sections the page has, and each `demo.sh`'s
-  `PAGE_URL`, which `make up` and `make tour` print, is its page
+- **DemoTourTablesTest** — each demo's README and its page on the docs site have a What This Demo Shows table that
+  names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
+  of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the
+  table; each `demo.sh`'s `PAGE_URL`, which `make up` and `make tour` print, is its page, and every section of the page
+  it links to (`${PAGE_URL}#running-it`) is one the page has
 - **DocsCodeBlocksTest** — the fenced blocks of the docs site's pages, the maintainer docs, and the READMEs: every
   HOCON block that has an agent scrape its own metrics port, `localhost:8083`, turns the port on too, as it's off by
   default; and no line of a Mermaid diagram's `accDescr`, the text a screen reader gives for it, ends with a word broken
@@ -994,10 +1032,15 @@ These support helpers also live here (not test classes themselves):
   their version from it, not from `gradle.properties`, whose `-SNAPSHOT` between releases has no image, and, run with a
   stubbed `docker`, say so when Docker Hub has no image of it rather than leave it to `docker run`
 - **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
-  document, and every support file under `src/test` is named somewhere in it
+  document, every spec of a subproject that `settings.gradle.kts` includes (`ktor-plugin`, `spring-boot-starter`) in
+  its subproject's section, and every support file under `src/test`, the subprojects' included, somewhere in it
 - **WebsiteConfigKeysTest** — every `proxy.` and `agent.` config key the website's pages name is in
-  `config/config.conf`, since HOCON ignores a key it doesn't know, and every default the pages' tables give for one
-  is the one `config/config.conf` declares
+  `config/config.conf`, since HOCON ignores a key it doesn't know; and the default the pages' tables give for a key is
+  the number, boolean, or string `config/config.conf` declares, or a tscfg spec's default (`double | 1.0`), and, for a
+  setting it leaves to gRPC (`long | -1`), gRPC's own: `GrpcUtil`'s server and client keepalive defaults, the server
+  builder's handshake timeout, and `INT_MAX` for a limit that's off; and the two gRPC defaults `ProxyOptions` names for
+  the startup log and the dashboard are gRPC's. A list's or an object's default isn't checked, nor the `logLevel` the
+  CLI Reference gives
 
 One support helper also lives here (not a test class itself):
 
@@ -1259,7 +1302,8 @@ agent runs with what it gets in an app. They run twice: `test` at the Spring Boo
 `oldestSpringBootTest`, which `test` runs too, at the oldest it supports (`spring-boot-oldest` in
 `libs.versions.toml`, Spring Boot 4.0's last release), with kotlinx-coroutines and the Prometheus client set as the
 Spring Boot Starter page tells such an app to set them. A run that names tests with `--tests` filters `test` alone,
-and leaves `oldestSpringBootTest` out. `TestingGuideTest` reads only the root project's specs, so name new ones here.
+and leaves `oldestSpringBootTest` out. `TestingGuideTest` fails on a spec of the starter's that isn't named here, or a
+support file that isn't named in this document.
 
 - **PrometheusProxyAgentAutoConfigurationTest** — the auto-configuration, through `ApplicationContextRunner`: the agent
   stays off without a proxy, starts and stops with the context with one, and isn't made with `enabled=false`; each
@@ -1290,14 +1334,15 @@ and leaves `oldestSpringBootTest` out. `TestingGuideTest` reads only the root pr
 - **StarterExamplesTest** — the Spring Boot Starter page's examples: `website/application.yml`, in the test resources,
   reads the agent's settings from the environment, and with `PROMETHEUS_PROXY_CERT` checks the proxy's certificate
   against the name `fromEnvironment()` does, `PROMETHEUS_PROXY_AUTHORITY` or `prometheus-proxy`; and
-  `website.AgentCustomizations`, with its stand-ins **SecretStore** and **BatchJobs**, sets the certificate and serves
-  a second registry.
+  **AgentCustomizations** (`website.AgentCustomizations`), with its stand-ins **SecretStore** and **BatchJobs**, sets
+  the certificate and serves a second registry.
 
 ### Ktor Plugin Tests (`ktor-plugin/`)
 
 The Ktor plugin is a Kotlin subproject, with Kotest specs under `ktor-plugin/src/test/kotlin/`. `./gradlew
 :ktor-plugin:test` runs them, and so does `build`; the root project aggregates their coverage, so the coverage floors
-count them. `TestingGuideTest` reads only the root project's specs, so name new ones here.
+count them. `TestingGuideTest` fails on a spec of the plugin's that isn't named here, or a support file that isn't named
+in this document.
 
 - **AgentLifecycleTest** — the lifecycle's events raised by hand on a mocked app's monitor, with the agent's start
   replaced: the app's `ApplicationStarted` starts the agent and puts its handle in the app's attributes, and another
