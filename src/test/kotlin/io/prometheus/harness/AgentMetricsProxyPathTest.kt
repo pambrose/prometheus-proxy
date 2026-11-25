@@ -45,6 +45,7 @@ import io.ktor.client.engine.cio.CIO as ClientCIO
 // metrics port off: its agent_* series, and the JVM metric groups its agent.metrics settings turn on, which only its
 // port served before. The port's service registers those groups only while the port is on, so the agent registers them
 // itself. RegistryMetricsSourceTest covers what the path serves; this covers the whole way, from a config file.
+// EmbeddedAgentConfigTest shows that an embedded agent, whose JVM metrics are its host's, registers none of the groups.
 class AgentMetricsProxyPathTest : StringSpec() {
   init {
     "a standalone agent serves its own and its JVM's metrics at its proxy path, with no metrics port" {

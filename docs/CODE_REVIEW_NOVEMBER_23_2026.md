@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 20 fixed, 52 open (8 medium, 64 low, no high); #25 is partly fixed.
+**Status:** 72 issues — 24 fixed, 48 open (8 medium, 64 low, no high); #25 is partly fixed.
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
 
@@ -69,16 +69,16 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ⬜      |
 | 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ⬜      |
 | 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ⬜      |
-| 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ⬜      |
+| 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
 | 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ⬜      |
 | 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ⬜      |
 | 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ⬜      |
-| 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ⬜      |
-| 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ⬜      |
+| 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ✅      |
+| 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ✅      |
 | 54 | The Ktor plugin's wait for the agent's stop has no deterministic test                                | Tests      | low      | ⬜      |
 | 55 | `AgentDashboardHtmlTest` pins neither half of the column-guide rule, nor the agent page's live region | Tests     | low      | ⬜      |
 | 56 | Two more `dashboard-constraints.md` rules have no test                                               | Tests      | low      | ⬜      |
-| 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ⬜      |
+| 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ✅      |
 | 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ⬜      |
 | 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ⬜      |
 | 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ⬜      |
@@ -158,7 +158,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 10   | ⬜      | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
 | 11   | ⬜      | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
 | 12   | ⬜      | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
-| 13   | ⬜      | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
+| 13   | ✅ #555 | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
 | 14   | ⬜      | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
 | 15   | ⬜      | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
 | 16   | ✅ #552 | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
@@ -2378,7 +2378,7 @@ isn't PEM. Assert that the context fails with a `ConfigLoadException` root cause
 
 **Tests:** That test fails with `launch()` changed to always use `startIfConfigured`.
 
-### 48. ⬜ Two of a `MetricsSource`'s isolation promises have no test: a `VirtualMachineError` propagates, and a stuck call holds neither another path's scrape nor the agent's shutdown
+### 48. ✅ Two of a `MetricsSource`'s isolation promises have no test: a `VirtualMachineError` propagates, and a stuck call holds neither another path's scrape nor the agent's shutdown
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2421,6 +2421,8 @@ Today:
 
 **Tests:** The `OutOfMemoryError` test fails without the `:766` branch. The second-path check fails under the bounded
 dispatcher. The `close()` check fails under a joining `close()`.
+
+**Resolution:** Fixed in #555. `MetricsSourceTest` checks that a source throwing `OutOfMemoryError` or `StackOverflowError` lets it propagate; that while one source is stuck past its timeout, another path's source answers 200; and, in a test of its own, that `close()` returns within 5 seconds with the source still stuck. Each failed with the code broken: the `VirtualMachineError` branch dropped, sources on `limitedParallelism(1)`, and a `close()` that joins the source scope.
 
 ### 49. ⬜ `ProxyPathManagerLincheckTest` never runs the takeover and reclaim code under contention: its agents share one launch, none reads path notices, and none reclaims
 
@@ -2543,7 +2545,7 @@ harness spec. Its `scrape` span must have no parent, and a new trace ID.
 
 **Tests:** The cases above. Each fails when its behavior is removed.
 
-### 52. ⬜ No test pins AgentMetrics' `PER_LAUNCH` rule as a whole, so a new agent metric that breaks it keeps a stopped agent's series
+### 52. ✅ No test pins AgentMetrics' `PER_LAUNCH` rule as a whole, so a new agent metric that breaks it keeps a stopped agent's series
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2567,7 +2569,9 @@ agent in the JVM holds the shared collectors, as when an embedded host restarts 
 
 **Tests:** The new `AgentMetricsTest` case. It fails if, say, `SCRAPE_QUEUE_WAIT` moves to the sampled list.
 
-### 53. ⬜ Nothing tests that an embedded agent leaves the JVM metric groups to its host
+**Resolution:** Fixed in #555. A new `AgentMetricsTest` test reads `AgentMetrics.COLLECTORS`, and each metric's declared label order, by reflection, since this step changed no main source. It checks that every agent metric takes `launch_id` first, and that closing one agent's metrics removes its series from every family while keeping another's. It failed for a metric moved to the sampled gauges, one with another label first, and a `close()` that cleared every agent's series.
+
+### 53. ✅ Nothing tests that an embedded agent leaves the JVM metric groups to its host
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2586,6 +2590,8 @@ registry and call `SystemMetrics.forget`, as `AgentMetricsProxyPathTest` does. A
 registry gained no `process_` or `jvm_` family.
 
 **Tests:** That case fails without `!isEmbedded`.
+
+**Resolution:** Fixed in #555, in a unit spec rather than the harness spec named here. A new `EmbeddedAgentConfigTest` test starts an agent embedded, with `agentMetricsAt` and two JVM groups turned on, and finds no `jvm_` or `process_` family in the default registry. An agent built directly from the same settings adds them, so the check can fail; it did with `!isEmbedded` dropped from `registersJvmMetrics`.
 
 ### 54. ⬜ The Ktor plugin's wait on `ApplicationStopping` for the agent's stop has no deterministic test
 
@@ -2673,7 +2679,7 @@ rule file says the agent's page does too.
 
 **Tests:** The two checks above.
 
-### 57. ⬜ "fromEnvironment reads the process's environment" can't fail where the tests run
+### 57. ✅ "fromEnvironment reads the process's environment" can't fail where the tests run
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2688,6 +2694,8 @@ reads it, and with no `PROMETHEUS_PROXY` set, no agent starts. Then assert that 
 Otherwise, delete the test.
 
 **Tests:** The changed test fails if `fromEnvironment()` doesn't read `System.getenv`.
+
+**Resolution:** Fixed in #555. The test runs `fromEnvironment()` in a forked JVM, as `BaseOptionsTest` does, whose environment has all four `PROMETHEUS_*` variables, and checks that it builds what the lookup overload builds from them. It failed for a `fromEnvironment()` that read nothing. A variable set on the Gradle `Test` task would have reached every spec and child process, and IntelliJ's runner wouldn't set it.
 
 ### 58. ⬜ The config-key guards don't reach keys passed to `EmbeddedAgentConfig.setting()`, whose KDoc says they aren't checked, or the website's HOCON blocks
 

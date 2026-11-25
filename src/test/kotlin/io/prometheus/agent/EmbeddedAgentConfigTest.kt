@@ -18,11 +18,15 @@
 
 package io.prometheus.agent
 
+import com.pambrose.common.metrics.SystemMetrics
+import com.typesafe.config.ConfigRenderOptions
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -35,7 +39,13 @@ import io.prometheus.common.TestCerts.CLIENT_CERT
 import io.prometheus.common.TestCerts.CLIENT_KEY
 import io.prometheus.common.TestCerts.read
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import java.io.File
 import java.net.URI
+import java.util.concurrent.TimeUnit
+import kotlin.io.path.createTempFile
+
+// The settings as one line, the form FromEnvironmentMain prints them in.
+private fun EmbeddedAgentConfig.rendered() = toConfig().root().render(ConfigRenderOptions.concise())
 
 // The typed builder for an embedded agent's in-memory config, and its Kotlin DSL: each method's setting reaches the
 // agent's options as a config file's would, credentials are percent-encoded into a path's URL so they survive any
@@ -46,6 +56,47 @@ class EmbeddedAgentConfigTest : StringSpec() {
 
   // The pathConfigs the agent would register.
   private fun EmbeddedAgentConfig.pathConfigs() = options().configVals.agent.pathConfigs
+
+  // Clears the default registry, and has SystemMetrics, which registers each JVM metric group once per registry,
+  // forget it, as HarnessSetup does, so an agent can register the groups again.
+  private fun clearDefaultRegistry() {
+    PrometheusRegistry.defaultRegistry.clear()
+    SystemMetrics.forget(PrometheusRegistry.defaultRegistry)
+  }
+
+  // The settings FromEnvironmentMain prints, run in a JVM of its own on the test runtime classpath, whose
+  // environment has [env] as its only fromEnvironment() variables. The output goes to a file rather than a pipe, as
+  // BaseOptionsTest's forked mains' does, so a JVM that never exits fails the test at the timeout instead of blocking
+  // the read.
+  private fun fromEnvironmentInJvmOfItsOwn(env: Map<String, String>): String {
+    val javaBin =
+      ProcessHandle.current().info().command()
+        .orElse(File(File(System.getProperty("java.home"), "bin"), "java").path)
+    val outputFile = createTempFile("from-environment", ".log").toFile()
+    try {
+      val process =
+        ProcessBuilder(javaBin, "-cp", System.getProperty("java.class.path"), FromEnvironmentMain::class.java.name)
+          .redirectErrorStream(true)
+          .redirectOutput(outputFile)
+          .apply {
+            environment().apply {
+              keys.removeAll(EnvironmentSetting.entries.map { it.variable }.toSet())
+              putAll(env)
+            }
+          }.start()
+      val exited = process.waitFor(FORKED_JVM_TIMEOUT_SECS, TimeUnit.SECONDS)
+      if (!exited)
+        process.destroyForcibly().waitFor()
+      val output = outputFile.readText()
+      withClue(output) {
+        exited.shouldBeTrue()
+        process.exitValue() shouldBe 0
+      }
+      return output.lines().single { it.startsWith(SETTINGS_PREFIX) }.removePrefix(SETTINGS_PREFIX)
+    } finally {
+      outputFile.delete()
+    }
+  }
 
   init {
     "each builder method's setting reaches the agent's options" {
@@ -429,12 +480,24 @@ class EmbeddedAgentConfigTest : StringSpec() {
       }.options().proxyHostname shouldBe "from-the-code:50051"
     }
 
-    // System.getenv can't be set in a test; the tests' environment has none of the variables
+    // fromEnvironment() is the lookup's overload reading the process's environment, which a test can't set in its own
+    // JVM. Where the tests run, none of the variables is set, so comparing the two there passed for a fromEnvironment()
+    // that read nothing. A JVM of its own, given all four, builds the settings the lookup builds from them.
     "fromEnvironment reads the process's environment" {
-      val fromProcess = embeddedAgent { fromEnvironment() }.toString()
+      val env =
+        mapOf(
+          "PROMETHEUS_PROXY" to "proxy.example.com:50443",
+          "PROMETHEUS_AGENT_TOKEN" to TOKEN,
+          "PROMETHEUS_PROXY_CERT" to read(CA_CERT),
+          "PROMETHEUS_PROXY_AUTHORITY" to "proxy.internal",
+        )
 
-      fromProcess shouldBe
-        embeddedAgent { fromEnvironment { name -> System.getenv(name) } }.toString()
+      val fromProcess = fromEnvironmentInJvmOfItsOwn(env)
+
+      fromProcess shouldBe embeddedAgent { fromEnvironment(env::get) }.rendered()
+      fromProcess shouldContain "proxy.example.com:50443"
+      fromProcess shouldContain TOKEN
+      fromProcess shouldContain "proxy.internal"
     }
 
     "agentMetricsAt adds an in-process path for the agent's own metrics, which turns on its metrics but no port" {
@@ -482,6 +545,48 @@ class EmbeddedAgentConfigTest : StringSpec() {
       config.agentOptions().metricsProxyPathLabels shouldBe "{}"
     }
 
+    // AGENTS.md: an embedded agent's path serves only its agent_* series, the JVM's being its host's. A standalone
+    // agent with its metrics port off registers the JVM metric groups its agent.metrics settings turn on, for its path
+    // to serve (AgentMetricsProxyPathTest); one started embedded registers none of them in the host's default
+    // registry, where they could collide with the host's own JVM collectors, even with those settings on. An agent
+    // built from the same settings directly, as the standalone agent is, registers them, so the check can fail.
+    "an embedded agent with its own metrics path leaves the JVM metric groups to its host, even with them turned on" {
+      val config =
+        embeddedAgent {
+          // Nothing listens there: the agent connects to no proxy, and retries until it stops
+          proxy = "localhost:1"
+          agentMetricsAt(path = "embedded_agent_metrics")
+          setting("metrics.standardExportsEnabled", true)
+          setting("metrics.threadExportsEnabled", true)
+        }
+
+      fun jvmFamilies() =
+        PrometheusRegistry.defaultRegistry
+          .scrape()
+          .map { it.metadata.prometheusName }
+          .filter { it.startsWith("jvm_") || it.startsWith("process_") }
+
+      clearDefaultRegistry()
+      try {
+        config.start(logBanner = false).use { jvmFamilies().shouldBeEmpty() }
+
+        val standalone =
+          Agent(
+            options = config.agentOptions(),
+            inProcessServerName = "embedded-config-${System.nanoTime()}",
+            testMode = true,
+          )
+        standalone.startSync()
+        try {
+          jvmFamilies() shouldContainAll listOf("process_cpu_seconds", "jvm_threads_current")
+        } finally {
+          standalone.stopSync()
+        }
+      } finally {
+        clearDefaultRegistry()
+      }
+    }
+
     "source with a registry serves it in-process, with or without labels" {
       val registry = PrometheusRegistry()
       val sources =
@@ -509,6 +614,9 @@ class EmbeddedAgentConfigTest : StringSpec() {
   }
 
   companion object {
+    // What FromEnvironmentMain prints before the settings, so its line stands out from any log line.
+    internal const val SETTINGS_PREFIX = "settings: "
+    private const val FORKED_JVM_TIMEOUT_SECS = 60L
     private const val DASHBOARD_PASSWORD = "dash-Passw0rd-9"
     private const val TOKEN = "0123456789abcdef0123456789abcdef"
 
@@ -517,5 +625,14 @@ class EmbeddedAgentConfigTest : StringSpec() {
 
     // Shaped like a private key, so a key that isn't masked shows it
     private const val PEM = "-----BEGIN PRIVATE KEY-----MIIEvQIBADANBg-----END PRIVATE KEY-----"
+  }
+}
+
+// Run in a JVM of its own by "fromEnvironment reads the process's environment": prints the settings fromEnvironment()
+// reads from that JVM's environment.
+internal object FromEnvironmentMain {
+  @JvmStatic
+  fun main(args: Array<String>) {
+    println("${EmbeddedAgentConfigTest.SETTINGS_PREFIX}${embeddedAgent { fromEnvironment() }.rendered()}")
   }
 }
