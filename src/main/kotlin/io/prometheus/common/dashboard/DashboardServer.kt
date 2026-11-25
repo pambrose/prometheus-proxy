@@ -62,6 +62,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.prometheus.BuildConfig
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.KeyedThrottle
 import io.prometheus.common.dashboard.LoginHtml.renderLogin
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
@@ -188,6 +189,9 @@ internal interface DashboardSite<V : Any, S : Any> {
  *   WebSocket and every action ([pageGuard]), sessions are capped, a session that stops reading is closed rather than
  *   buffered for, and a page request or a browser message renders the recent snapshot rather than collecting one (see
  *   [SnapshotCache]). Setting `allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
+ *   No response may be framed by another page, and with a password set, none but the versioned assets may be kept in a
+ *   browser's cache. A refused Origin or Host, which needs no login, is logged cut and escaped, at INFO at most once a
+ *   minute for each address.
  * - **Assets.** htmx and its WebSocket extension, and the site's brand marks, from the classpath, under URLs that carry
  *   their WebJar's version, so a year-long cache can never run an old script against new markup.
  * - **Updates.** One shared push loop, not one per session. It wakes on one of the site's [DashboardSite.changes] or a
@@ -312,10 +316,29 @@ internal class DashboardServer<V : Any, S : Any>(
     val origin = request.headers[HttpHeaders.Origin]
     if (isOriginAllowed(origin, request.headers[HttpHeaders.Host], settings.allowedOrigins))
       return null
-    logger.info {
-      "Refused a dashboard request from origin $origin; add it to ${settings.role}.dashboard.allowedOrigins if expected"
+    logRefusal(originRefusals, request.origin.remoteAddress) {
+      "Refused a dashboard request from origin ${shownHeader(origin)}; " +
+        "add it to ${settings.role}.dashboard.allowedOrigins if expected"
     }
     return "Origin not allowed"
+  }
+
+  // Which addresses' refused Origins, and which addresses' refused Hosts, may be logged at INFO now.
+  private val originRefusals = KeyedThrottle<String>(NOTICE_INTERVAL, MAX_NOTICED_ADDRESSES)
+  private val hostRefusals = KeyedThrottle<String>(NOTICE_INTERVAL, MAX_NOTICED_ADDRESSES)
+
+  // A request from [address] refused for its Origin or Host, which needs no login: logged at INFO at most once a minute
+  // for each address, by [notices], and at DEBUG otherwise, so a client refused in a loop can't flood the log, and with
+  // the header cut and escaped (shownHeader), so it can't write control characters or a request line's worth into it.
+  private fun logRefusal(
+    notices: KeyedThrottle<String>,
+    address: String,
+    message: () -> String,
+  ) {
+    if (notices.tryAcquire(address))
+      logger.info(message)
+    else
+      logger.debug(message)
   }
 
   // The cookie that carries a login page's session: named for the role and the port, since a browser sends a host's
@@ -325,7 +348,7 @@ internal class DashboardServer<V : Any, S : Any>(
   private val logoutPath = "$routeBase/logout"
 
   // Which addresses' wrong logins may be logged at WARN now.
-  private val badLoginWarnings = KeyedThrottle<String>(BAD_LOGIN_WARNING_INTERVAL, MAX_BAD_LOGIN_HOSTS)
+  private val badLoginWarnings = KeyedThrottle<String>(NOTICE_INTERVAL, MAX_NOTICED_ADDRESSES)
 
   // The limit on wrong logins, which refuses every login from an address past it, or from any past the overall one,
   // before its password is looked at, from the form or as Basic Auth.
@@ -388,17 +411,14 @@ internal class DashboardServer<V : Any, S : Any>(
       call.respondText("Login required", ContentType.Text.Plain, HttpStatusCode.Unauthorized)
   }
 
-  // The login page, never cached or framed, for a page asked for without a session or after a wrong login.
+  // The login page, for a page asked for without a session or after a wrong login. Like every response with a login
+  // set, never framed or cached (see noFraming and caching).
   private suspend fun ApplicationCall.respondLogin(
     next: String,
     username: String = "",
     alert: String? = null,
     status: HttpStatusCode = HttpStatusCode.OK,
-  ) {
-    response.header(HttpHeaders.CacheControl, "no-store")
-    response.header("Content-Security-Policy", "frame-ancestors 'none'")
-    respondHtml(status) { renderLogin(LoginHtml.Form(settings.loginHeading, routeBase, next, username, alert)) }
-  }
+  ) = respondHtml(status) { renderLogin(LoginHtml.Form(settings.loginHeading, routeBase, next, username, alert)) }
 
   // The login form's POST, behind originGuard: a body over MAX_LOGIN_BODY_BYTES (or of unknown length) refused unread,
   // any login from an address past the limit on wrong ones refused, and a right one given a session and sent on to
@@ -462,12 +482,31 @@ internal class DashboardServer<V : Any, S : Any>(
   private suspend fun checkHost(call: ApplicationCall) {
     val host = call.request.headers[HttpHeaders.Host]
     if (!isHostAllowed(host, hostAllowlist)) {
-      logger.info {
-        "Refused a dashboard request for host $host; add it to ${settings.role}.dashboard.allowedHosts if expected"
+      logRefusal(hostRefusals, call.request.origin.remoteAddress) {
+        "Refused a dashboard request for host ${shownHeader(host)}; " +
+          "add it to ${settings.role}.dashboard.allowedHosts if expected"
       }
       call.respondText("Host not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
     }
   }
+
+  // Application-wide, on every response: a page, a fragment, an action's result, an asset, a refusal, a redirect, an
+  // error page, and the WebSocket's handshake. No page may frame the dashboard, so another site's page can't lay itself
+  // over the dashboard's and steer a viewer's clicks, the WebSocket and the actions passing the Origin check as the
+  // dashboard's own. X-Frame-Options is the same rule for a browser that predates frame-ancestors. A response with a
+  // policy of its own, as a brand mark's, gets this one beside it, since a browser enforces every policy a response
+  // carries. Each header is added once, however many times the response is answered: StatusPages answers a bare 404
+  // again.
+  private val noFraming =
+    createApplicationPlugin("DashboardNoFraming") {
+      onCallRespond { call ->
+        val headers = call.response.headers
+        if (headers.values(CONTENT_SECURITY_POLICY).none { it.contains(FRAME_ANCESTORS) })
+          call.response.header(CONTENT_SECURITY_POLICY, "$FRAME_ANCESTORS 'none'")
+        if (X_FRAME_OPTIONS !in headers)
+          call.response.header(X_FRAME_OPTIONS, "DENY")
+      }
+    }
 
   private val server = buildServer()
 
@@ -485,6 +524,7 @@ internal class DashboardServer<V : Any, S : Any>(
       // returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is off -- a dashboard polling
       // its own socket would drown the process's logs.
       configureKtorServer(isLoggingEnabled = false)
+      install(noFraming)
       install(hostCheck)
       settings.login?.also { install(authCheck(it)) }
       install(WebSockets) {
@@ -503,7 +543,7 @@ internal class DashboardServer<V : Any, S : Any>(
         // The served asset URLs carry their WebJar's version (ASSET_DIR, ICON_DIR), so a URL's content never changes
         // and a year-long max-age is safe. An unversioned URL would let a browser keep running a cached htmx after an
         // upgrade.
-        options { _, outgoing -> assetCaching(outgoing.contentType) }
+        options { _, outgoing -> caching(outgoing.contentType) }
       }
 
       routing {
@@ -527,12 +567,15 @@ internal class DashboardServer<V : Any, S : Any>(
       get("/") { call.respondRedirect(basePath, permanent = false) }
   }
 
-  // A year for what ASSET_DIR and ICON_DIR serve (see CachingHeaders above), and nothing for anything else.
-  private fun assetCaching(contentType: ContentType?): CachingOptions? {
-    val cached = CACHED_TYPES.any { contentType?.match(it) == true }
-    val yearLong = CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public)
-    return CachingOptions(yearLong).takeIf { cached }
-  }
+  // A year for what ASSET_DIR and ICON_DIR serve (see CachingHeaders above). With a login set, no-store for every other
+  // response, the login page's included, so a page behind the login isn't kept to be shown again after Log out, as from
+  // the browser's back button; without one, nothing.
+  private fun caching(contentType: ContentType?): CachingOptions? =
+    when {
+      CACHED_TYPES.any { contentType?.match(it) == true } -> CachingOptions(YEAR_LONG)
+      loginEnabled -> CachingOptions(NO_STORE)
+      else -> null
+    }
 
   // The login page and its form, and Log out, only with a password set.
   private fun Route.loginRoutes(credentials: DashboardLogin) {
@@ -584,7 +627,7 @@ internal class DashboardServer<V : Any, S : Any>(
         call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
       } else {
         call.response.header("X-Content-Type-Options", "nosniff")
-        call.response.header("Content-Security-Policy", "sandbox")
+        call.response.header(CONTENT_SECURITY_POLICY, "sandbox")
         call.respondBytes(bytes, ContentType.Image.SVG, HttpStatusCode.OK)
       }
     }
@@ -834,6 +877,8 @@ internal class DashboardServer<V : Any, S : Any>(
     private val CACHED_TYPES = listOf(ContentType.Application.JavaScript, ContentType.Image.SVG)
 
     private const val ASSET_MAX_AGE_SECS = 31_536_000
+    private val YEAR_LONG = CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public)
+    private val NO_STORE = CacheControl.NoStore(visibility = null)
     private const val GRACE_MILLIS = 2_000L
     private const val TIMEOUT_MILLIS = 5_000L
     private const val PING_PERIOD_MILLIS = 15_000L
@@ -850,8 +895,21 @@ internal class DashboardServer<V : Any, S : Any>(
     // Why a page's socket is closed when its login ends. The page then asks for its session and goes to the login page.
     private val SESSION_ENDED = CloseReason(CloseReason.Codes.VIOLATED_POLICY, "The dashboard session ended")
 
-    private val BAD_LOGIN_WARNING_INTERVAL = 1.minutes
-    private const val MAX_BAD_LOGIN_HOSTS = 1_000
+    // How often each address's wrong logins, and its refused Origins and Hosts, may each be logged above DEBUG, and how
+    // many addresses each of those throttles remembers.
+    private val NOTICE_INTERVAL = 1.minutes
+    private const val MAX_NOTICED_ADDRESSES = 1_000
+
+    // How much of a refused Origin or Host its log line shows: room for any real one, a 253-character DNS name with a
+    // scheme and a port, so the line still names what to allow, and no more of a client's text.
+    private const val SHOWN_HEADER_CHARS = 270
+
+    // A refused request's Origin or Host as its log line shows it: cut and escaped (see AgentValues.shownValue).
+    private fun shownHeader(value: String?) = shownValue(value.orEmpty(), SHOWN_HEADER_CHARS)
+
+    private const val CONTENT_SECURITY_POLICY = "Content-Security-Policy"
+    private const val FRAME_ANCESTORS = "frame-ancestors"
+    private const val X_FRAME_OPTIONS = "X-Frame-Options"
 
     /** The largest login form the login route reads; a browser's is a few hundred bytes. */
     internal const val MAX_LOGIN_BODY_BYTES = 4_096

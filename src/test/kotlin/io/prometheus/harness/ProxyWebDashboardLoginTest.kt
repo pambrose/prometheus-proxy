@@ -265,6 +265,9 @@ class ProxyWebDashboardLoginTest : StringSpec() {
         val token = loggedIn()
         page("/dashboard", token).apply {
           status shouldBe HttpStatusCode.OK
+          // Behind a login, a page is never kept in the browser's cache, to be shown again after Log out, or framed.
+          headers[HttpHeaders.CacheControl] shouldBe "no-store"
+          headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
           bodyAsText() shouldContain """id="${DashboardPage.LOGOUT_ID}""""
         }
         sessionStatus(token) shouldBe HttpStatusCode.NoContent

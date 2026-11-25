@@ -152,6 +152,14 @@ _Released 2026-11-23_
   disconnected once 32 updates are waiting for it, giving up its place under `maxSessions`.
 - **A dashboard keeps updating after a failure reading its state.** One failure stopped every page's updates until a
   restart, with the error printed only to stderr; it's now logged, and the next update goes out as usual.
+- **No page can frame a dashboard.** Only the login page refused to be shown in a frame, so a page on another site
+  could show the dashboard under content of its own and steer a viewer's clicks onto Scrape now or Log out. Every
+  response now refuses framing, so a dashboard can't be embedded in another page, a portal of your own included. With a
+  login set, the browser is also told to keep no page behind it, so none outlives Log out in its cache.
+- **A refused request can't flood the log.** A dashboard logged every request it refused for its `Origin` or `Host`
+  header, with the header in full, so anyone who could reach its port could write control characters into the proxy's
+  or agent's log as fast as they sent requests. It now logs one such line a minute for each address at INFO, and the
+  rest at DEBUG, with the header cut and its control characters escaped.
 
 ### Behavior Changes
 

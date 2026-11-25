@@ -105,7 +105,9 @@ A login starts a session, which the browser keeps in a cookie. It ends after 24 
 the login, or with **Log out**, the exit icon at the end of the top bar. The proxy keeps sessions in memory, so a
 restart signs everyone out; a page left open then goes to the login page by itself. The cookie is `HttpOnly`,
 `SameSite=Lax`, named for the dashboard's port (so two proxies on one host keep their own), and `Secure` when the
-browser reached the dashboard over `https`, as through a reverse proxy.
+browser reached the dashboard over `https`, as through a reverse proxy. With a login set, the dashboard tells the
+browser to keep none of its pages (`Cache-Control: no-store`), so a page behind the login isn't kept to be shown again
+after Log out.
 
 A script sends the login with each request as HTTP Basic Auth instead, and needs no session. A browser can't: it always
 gets the login page, even with a Basic login it saved for the dashboard's address earlier, so Log out signs it out.
@@ -515,7 +517,7 @@ Without a [login](#login), anyone who can reach the dashboard's port can read it
 network, or bind it to a private address with `proxy.dashboard.host`; without a login, the proxy warns at startup
 when the dashboard listens on all interfaces.
 
-A browser inside that network can still be used to reach it. The dashboard guards against the two ways a
+A browser inside that network can still be used to reach it. The dashboard guards against the three ways a
 web page can do that:
 
 - **A WebSocket from another site.** Browsers let any page open a WebSocket to any address, so the
@@ -528,6 +530,15 @@ web page can do that:
   dashboard by in `proxy.dashboard.allowedHosts` and it refuses any other host name with a 403, on every
   route; IP addresses, `localhost`, and the hosts in `allowedOrigins` are always allowed. This check is off
   until you set it.
+- **Framing.** A page can show the dashboard in a frame, hidden under content of its own, and steer a viewer's
+  clicks onto Scrape now or Log out; the frame's requests come from the dashboard's own page, so the Origin check
+  passes them. Every response the dashboard sends forbids framing (`Content-Security-Policy: frame-ancestors 'none'`,
+  and `X-Frame-Options: DENY` for older browsers), so no page, on any site, can frame it.
+
+The dashboard logs a request it refuses for its `Origin` or `Host` at INFO, naming the setting that would allow it, at
+most once a minute for each address the requests come from, and the rest at DEBUG. It cuts the header to 270
+characters, the longest a real one can be, and escapes its control characters, since a client sends it before any
+login.
 
 The Activity layout shows the address each call with a bad token came from, so anyone who can read the dashboard
 can see who has tried the agent port.

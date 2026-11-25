@@ -1174,7 +1174,7 @@ main() {
       "site's page can't use it, and refuses this one with 403."
     watch_for
     point "Reload the dashboard through nginx: it's still 'reconnecting...': $NGINX_DASHBOARD_URL"
-    point "The proxy logs each refusal, 'Refused a dashboard request from origin', naming the address the browser" \
+    point "The proxy logs the refusal, 'Refused a dashboard request from origin', naming the address the browser" \
       "opened, and the setting that would allow it, proxy.dashboard.allowedOrigins. To see it, run $0 logs proxy"
     point "In the Paths view, click the scrape button, the circular arrow beside /storefront_metrics: the result" \
       "says 'Origin not allowed', since the button sends a POST: $NGINX_DASHBOARD_URL/paths"
