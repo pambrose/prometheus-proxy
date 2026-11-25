@@ -56,7 +56,9 @@ each scrape their own instance of a service whose series carry an instance label
 
 The agent's dashboard (`dashboard.enabled`) shows what the proxy's can't: whether the agent is connected, and if not,
 the last error from each proxy endpoint; every path, with the proxy's reason for refusing one; each path's recent
-scrapes; and what has happened to the agent. It stays off the Service, so you reach it with `kubectl port-forward`:
+scrapes; and what has happened to the agent. It listens on the pod's loopback (`dashboard.host`, `127.0.0.1`), so you
+reach it with `kubectl port-forward`, which connects there, and no other pod in the cluster can. Its port isn't on the
+Service either:
 
 ```bash
 helm upgrade prometheus-agent ./charts/prometheus-agent --namespace monitoring --reuse-values \
@@ -76,6 +78,10 @@ helm upgrade prometheus-agent ./charts/prometheus-agent --namespace monitoring -
 Create the Secret with `--from-literal`, not from a file that ends in a newline: the agent refuses a password with a
 control character in it. The dashboard serves plain HTTP, so the password is protected only by the port-forward's
 tunnel.
+
+To publish the dashboard through a Service of your own instead, set `dashboard.host` to `0.0.0.0`, and require a
+login. Any pod in the cluster can then open the dashboard at the pod's address, and the password crosses the pod
+network in plain HTTP.
 
 ## Values
 
@@ -98,6 +104,7 @@ tunnel.
 | `admin.enabled` / `admin.port`           | `true` / `8093`                            | `/ping` and `/healthcheck`, used by the probes                                     |
 | `metrics.enabled` / `metrics.port`       | `true` / `8083`                            | The agent's own metrics                                                            |
 | `dashboard.enabled` / `dashboard.port`   | `false` / `8095`                           | The agent's dashboard; not on the Service, so use `port-forward`                   |
+| `dashboard.host`                         | `127.0.0.1`                                | Its listen address (`DASHBOARD_HOST`); the pod's loopback keeps it local           |
 | `dashboard.login.existingSecret`         | `""`                                       | Secret holding the dashboard's password (`DASHBOARD_PASSWORD`), at `key`           |
 | `dashboard.login.username`               | `admin`                                    | The username the dashboard's login takes (`DASHBOARD_USERNAME`)                    |
 | `service.enabled`                        | `true`                                     | A Service for the metrics port                                                     |

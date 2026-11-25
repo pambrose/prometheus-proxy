@@ -338,11 +338,11 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
 - **`./demo.sh agent-dashboard` stops with `lost connection to pod`**: the agent's pod was replaced; run it again. If
   it can't listen on 8295, another program holds it: set `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT`. If it says the
   dashboard is off, the agent was installed before the demo turned it on: `make up` upgrades it.
-- The proxy logs warnings at startup that the dashboard has no authentication and that agent tokens cross without
-  TLS, and the agent one that its token crosses without TLS. The agent also logs a WARN that its dashboard has no
-  authentication and listens on all interfaces. All are expected here: the token crosses only Docker's `kind` network
-  on this machine, every published port binds to `127.0.0.1`, and the agent's dashboard is on no Service, so only
-  `kubectl port-forward` reaches it.
+- The proxy logs warnings at startup that the dashboard has no authentication and listens on all interfaces, which
+  its NodePort Service needs, and that agent tokens cross without TLS, and the agent one that its token crosses without
+  TLS. All are expected here: the token crosses only Docker's `kind` network on this machine, and every published port
+  binds to `127.0.0.1`. The agent's dashboard has no login either, but the chart has it listen on its pod's loopback,
+  where only `kubectl port-forward` reaches it, so the agent doesn't warn about it.
 
 ## The Other Demos
 

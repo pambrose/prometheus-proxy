@@ -155,6 +155,16 @@ _Released 2026-11-23_
   at DEBUG instead of INFO, and the shutdown hook's lines go to the log instead of stderr.
 - **The embedded demo is now the Ktor demo.** `demos/embedded` is `demos/ktor`, since the Spring Boot and plain
   Kotlin demos embed the agent too. Its page's old address still works, and its port variables are `KTOR_DEMO_*`.
+- **The Helm charts keep the dashboard on the pod.** The proxy chart's dashboard now listens only on the pod's
+  loopback (the new `dashboard.host`, default `127.0.0.1`), as the agent chart's does, so `kubectl port-forward`
+  reaches it and no other pod in the cluster can. Leaving its port off the Service didn't stop a pod from opening it
+  at the pod's address. If you publish the proxy's dashboard through a Service or an Ingress of your own, set
+  `dashboard.host` to `0.0.0.0` when you upgrade, and require a login.
+- **The Docker Compose stack keeps its ports on your machine.** `etc/compose/proxy.yml` and the Docker page's Compose
+  example publish their ports on `127.0.0.1` only, and no longer publish the agents' port, 50051, which their own agent
+  reaches over the compose network. Before, anyone who could reach the host could register an agent without a token
+  and read every path's metrics. To connect agents on other hosts, publish 50051 with a token and TLS, as the Cloud
+  Platforms page's compose file does.
 
 ### Documentation
 

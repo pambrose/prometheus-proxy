@@ -40,3 +40,16 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "prometheus-agent.discoveryConfigMapName" -}}
 {{- default (printf "%s-discovery" (include "prometheus-agent.fullname" .)) .Values.discovery.existingConfigMap }}
 {{- end }}
+
+{{/*
+The dashboard's listen address: dashboard.host, or 127.0.0.1 when the values have no such key, as after a helm upgrade
+--reuse-values of a release from a chart that had none. Empty leaves the address to agent.dashboard.host in the config.
+*/}}
+{{- define "prometheus-agent.dashboardHost" -}}
+{{- if hasKey .Values.dashboard "host" }}{{ .Values.dashboard.host }}{{ else }}127.0.0.1{{ end }}
+{{- end }}
+
+{{/* Whether the dashboard listens only on the pod's loopback, which port-forward reaches and no other pod can. */}}
+{{- define "prometheus-agent.dashboardIsLocal" -}}
+{{- if has (include "prometheus-agent.dashboardHost" .) (list "127.0.0.1" "localhost" "::1") }}true{{ end }}
+{{- end }}
