@@ -53,7 +53,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
@@ -144,9 +143,10 @@ class ProxyPathManagerTest : StringSpec() {
     name: String = "agent-$launch",
   ): AgentContext = launched("remote-$launch", launch, name, pathNotices = true)
 
-  // The notices [context] has waiting, or none: awaitPathNotices waits for one, so a context with none times out.
+  // The notices [context] has waiting, or none once its wait times out, or once the context is invalidated. Through the
+  // wait's own timeout: a wait inside withTimeoutOrNull can lose a wake that comes as it times out (November #46).
   private suspend fun waitingNotices(context: AgentContext): List<PathNotice> =
-    withTimeoutOrNull(200.milliseconds) { context.awaitPathNotices() }.orEmpty()
+    context.awaitPathNotices(200.milliseconds).orEmpty()
 
   // A notice that [holder] took [path], or, with no holder, that no agent serves it any more.
   private fun noticeOf(

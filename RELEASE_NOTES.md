@@ -142,6 +142,13 @@ _Released 2026-11-23_
 - **An app that fails after starting an embedded agent exits.** An app that failed without stopping the agent it had
   started kept running, the agent connected, since the agent's thread held the JVM up: a Ktor app with the plugin
   whose port was taken did so. The agent's thread no longer holds it, so the app exits, and can be restarted.
+- **An agent finds its proxy again within seconds.** An agent with one proxy that lost it tried again every 3
+  seconds, but each try failed at once while gRPC waited out its own backoff, so after a long outage the agent
+  reconnected up to 2 minutes after the proxy was back. Each try now dials the proxy, so the agent is back within
+  seconds of it.
+- **Every scrape result is counted.** Results a scrape finished just before the agent's connection to the proxy ended
+  could count in `agent_scrape_result_count_total` as neither sent nor dropped; they now count as `dropped`, and the
+  agent no longer logs an ERROR with a stack trace for such a disconnect.
 - **An embedded agent that's slow to start stops.** When an embedded agent took over 30 seconds to start, the start
   failed, and `startIfConfigured()` said the agent stays off, but it went on starting and then connected, with
   nothing able to stop it, and kept your app from exiting. It now stops as soon as its startup ends, without
@@ -183,6 +190,9 @@ _Released 2026-11-23_
 - **The agent's connect and result counts mean what they say.** `agent_connect_count_total` counts a connect as a
   success once the proxy has registered the agent, and as `rejected` when the proxy refuses it, and a result counts as
   sent only once it's on its way, with one a dropped connection loses counted as `dropped`.
+- **An agent that runs out of memory stops.** An `OutOfMemoryError`, or another JVM `Error`, in the agent's
+  connection to the proxy ended only that connection, and the agent reconnected and ran on. It now stops, as it
+  already did for one in a scrape, so whatever supervises it can restart it.
 - **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin, and no
   caller can have the proxy trace one, or more calls than its `sampleRate`, by marking its own trace sampled: the proxy
   decides each call it serves itself. The `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a

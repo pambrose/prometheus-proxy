@@ -65,6 +65,7 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.logStreamFailure
+import io.prometheus.common.runCatchingNonFatal
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeUrl
@@ -159,10 +160,11 @@ import io.prometheus.agent.ShownFailure
  *
  * The Agent includes robust error handling for:
  * - Network connectivity issues, retrying at a fixed rate of one connect attempt per
- *   `agent.internal.reconnectPauseSecs` (3 by default)
+ *   `agent.internal.reconnectPauseSecs` (3 by default), each one dialing the proxy
  * - Individual scrape failures without affecting other scrapes
  * - Configuration errors with detailed error messages
- * - Resource exhaustion with proper cleanup
+ * - Resource exhaustion with proper cleanup: a JVM `Error`, such as `OutOfMemoryError`, stops the agent, which ends
+ *   `FAILED`, rather than ending only a connection or a scrape
  *
  * Built directly, the constructor throws [IllegalArgumentException] for a setting it rejects: an HTTPS trust store or
  * TLS certificate file that is missing or malformed, a duplicate `pathConfigs` or `filters` entry, a path with a
@@ -460,8 +462,7 @@ class Agent(
         metrics { connectCount.labelValues(launchId, outcome).inc() }
       }.getOrThrow()
     // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
-    val connectionContext =
-      AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER)
+    val connectionContext = newConnectionContext()
     try {
       pathManager.registerPaths()
       endpointFailover.registrationSucceeded()
@@ -479,6 +480,13 @@ class Agent(
     }
     return connectionContext.endedBy
   }
+
+  // A connection's channels, which count a result the connection can't send as dropped (November #6).
+  internal fun newConnectionContext() =
+    AgentConnectionContext(
+      backlogCapacity = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER,
+      onUndeliveredResult = { updateScrapeResultCounter(it, AgentMetrics.RESULT_DROPPED) },
+    )
 
   // Each task runs for the connection's lifetime; on completion launchConnectionTask closes the shared
   // connectionContext and adjusts the backlog. Ends on disconnect/shutdown.
@@ -594,6 +602,10 @@ class Agent(
    * drained. [block] is a [CoroutineScope] extension so a task (e.g. scrape processing) can launch
    * its own child coroutines against the task's scope.
    *
+   * A JVM [Error] isn't logged here but rethrown, so it fails the connection's scope and reaches
+   * handleConnectionFailure, which stops the agent, as a scrape's does. Caught here, it ended only the connection, and
+   * the agent reconnected (November #7).
+   *
    * Any task ending ends the connection, so completion also cancels the receiver scope's other tasks. Closing the
    * context stops the tasks that poll it, but not an idle readRequestsFromProxy collect: without the cancellation, a
    * failed write stream left that collect holding the connection open until a scrape request arrived or the proxy
@@ -606,7 +618,7 @@ class Agent(
   ): Job {
     val connectionJob = coroutineContext.job
     return launch(Dispatchers.IO) {
-      runCatchingCancellable { block() }
+      runCatchingNonFatal { block() }
         .onFailure { e ->
           if (isRunning) {
             logger.logStreamFailure(name, e)

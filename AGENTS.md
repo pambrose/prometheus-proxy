@@ -197,6 +197,15 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   still exits, and so does one whose agent's `startUp()` never returns. Its admin and metrics servers' Jetty threads,
   which common-utils builds, aren't daemons. The standalone agent keeps the hook and a thread that isn't a daemon.
 - **Proxy failover**: The agent rotates through an ordered `agent.proxy.endpoints` list (`AgentGrpcService.advanceEndpoint` / `resetEndpoint`, chosen by `EndpointFailover.beforeAttempt`); a failed connect or a rejected registration advances, and only a connection that registered and then dropped retries from the head.
+  An agent with one endpoint keeps its channel between attempts, so `connectAgent` resets the channel's connect backoff
+  after a failed connect (`resetConnectBackoff`); without it, gRPC dialed only on its own backoff, up to 2 minutes, and
+  each attempt in between failed at once, so the agent tried every `reconnectPauseSecs` but reconnected up to 2
+  minutes late.
+- **JVM Errors**: an agent's connection tasks, response streams, heartbeat, discovery tick, and per-path calls catch
+  failures with `runCatchingNonFatal` (`common/NonFatal.kt`), which rethrows a JVM `Error` as well as a
+  `CancellationException`, so an `OutOfMemoryError` fails the connection and `Agent.handleConnectionFailure` stops the
+  agent, as a scrape's does. Don't catch one there with `runCatching` or common-utils' `runCatchingCancellable`, which
+  ended only the connection, and the agent reconnected.
 - **Path takeover**: a non-consolidated registration takes the path (`ProxyPathManager.takeOverPath`), and a displaced
   agent of another launch stays connected. The proxy tells it on `readPathNoticesFromProxy`
   (`AgentContext.queuePathNotice`); it keeps the path, its `PathEntry` in `AgentPathManager.paths` carrying the

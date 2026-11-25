@@ -35,6 +35,7 @@ import kotlin.concurrent.atomics.AtomicReference
  * requests and closes both channels so waiting coroutines are notified.
  *
  * @param backlogCapacity maximum number of buffered scrape request actions
+ * @param onUndeliveredResult what becomes of a result the connection can't send; see [dropUnsentResults]
  * @see AgentGrpcService
  * @see io.prometheus.Agent
  */
@@ -42,6 +43,8 @@ internal class AgentConnectionContext(
   // No default: the sole production caller derives this from config, and a default would silently
   // diverge if a future call site forgot to pass it (finding 31).
   val backlogCapacity: Int,
+  // The agent counts each one as dropped (Agent.newConnectionContext). Tests leave it out.
+  onUndeliveredResult: (ScrapeResults) -> Unit = {},
 ) {
   /** When the connection began, for the agent's dashboard. */
   val startedAt: Instant = Clock.System.now()
@@ -62,7 +65,11 @@ internal class AgentConnectionContext(
 
   private var disconnected by atomicBoolean(false)
   private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(backlogCapacity)
-  private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
+
+  // Hands onUndeliveredResult each result dropUnsentResults() finds still queued, and one the results' reader took just
+  // as it was cancelled, which kotlinx's prompt cancellation would otherwise lose. Not one sendScrapeResults offers
+  // after close(): trySend calls no onUndeliveredElement, and its caller counts the result itself.
+  private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED, onUndeliveredElement = onUndeliveredResult)
   private val closeLock = Any()
 
   fun scrapeRequestActions() = scrapeRequestActionsChannel
@@ -112,6 +119,14 @@ internal class AgentConnectionContext(
       }
     }
   }
+
+  /**
+   * Drops the results still queued, which nothing will send, handing each to `onUndeliveredResult`, which counts it as
+   * dropped. For the results' one reader, once it stops: after [close], so no result is queued after them, since a
+   * scrape that finishes later finds the channel closed and counts its own result as dropped. Results the reader left
+   * queued when a writer's stream failed were counted neither as sent nor as dropped (November #6).
+   */
+  fun dropUnsentResults() = scrapeResultsChannel.cancel()
 
   val connected get() = !disconnected
 

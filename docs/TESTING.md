@@ -213,7 +213,9 @@ application's logging config.
   gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
   cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
   `agent_dashboard_scrapes_total` counts instead; and a call the proxy refuses with `UNAUTHENTICATED` after a connect
-  logged at ERROR, naming where the token is set, and another status at INFO, as before
+  logged at ERROR, naming where the token is set, and another status at INFO, as before; a connection task's JVM
+  `Error` failing the connection's scope, which stops the agent, rather than ending the connection quietly; and a
+  connection's results it can't send counted as dropped
 - **AgentStartupTest** — a start that fails or takes too long releases what the agent opened: a dashboard that fails
   to start, on a port the spec holds, stops the admin, metrics, and Zipkin services and removes the JVM shutdown hook,
   through `startSync()` and through `startAsyncAgent(Config)`, and a release step that throws (a MockK constructor
@@ -224,7 +226,11 @@ application's logging config.
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling;
   a connect counted once the proxy registered the agent, a refused registration as rejected; each endpoint advance and
   each heartbeat sent counted, by outcome; a scrape request's wait for its scrape recorded, not a dashboard's; and a
-  result counted as sent once a writer takes it, and as dropped when the stream fails first;
+  result counted as sent once a writer takes it, and as dropped when the stream fails first, the results the producer
+  hadn't forwarded included, with no ERROR logged when the other writer is the one that failed; a JVM `Error` in a
+  heartbeat or a response stream propagated, not taken for a transient failure; a connect after failed ones dialing an
+  in-process proxy started meanwhile at once, rather than waiting out gRPC's backoff, and the channel's backoff reset
+  only after a failed connect;
   channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel a
   reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status code
   (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses with
@@ -268,8 +274,10 @@ application's logging config.
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
 - **AgentContextTest** — Agent context unique ID generation, validity, invalidation, ScrapeRequestWrapper management
 - **AgentContextManagerTest** — Context management: add/remove, concurrent access, chunked contexts
-- **AgentConnectionContextTest** — Connection state, close/drain behavior, concurrent scrape request handling; and the
-  first of its tasks' failures kept as what ended it
+- **AgentConnectionContextTest** — Connection state, close/drain behavior, concurrent scrape request handling; the
+  first of its tasks' failures kept as what ended it; and what it can't send handed to `onUndeliveredResult`, which
+  the agent counts as dropped: each result still queued when the producer drops them after a close, once, and one the
+  producer takes just as it's cancelled, but not one offered after the close, whose scrape counts it
 - **AgentConnectionContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the agent's
   scrape-request backlog count, kept as `AgentGrpcService` and the scrape loop keep it, never goes negative and returns
   to zero once the connection closes -- including a queued request `close()` drains and a sender blocked on a full
@@ -282,7 +290,9 @@ application's logging config.
   until the path returns to the file; a static path whose retries fail in transport backs off as a rejected one does,
   and still registers once the proxy accepts it; a lookup strips a requested path's leading slashes, and only them; and
   for the activity feed, a path registered, refused once with the proxy's reason, and unregistered, static or
-  discovered, paths refused for one cause one line, and filters failing open for different reasons apart
+  discovered, paths refused for one cause one line, and filters failing open for different reasons apart; and a JVM
+  `Error` in a static path's retry, a discovered path's registration or unregister, or a reclaim propagated, not
+  isolated as the path's failure
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
@@ -422,8 +432,9 @@ application's logging config.
   its paths again, and reconciles nothing before the first; a successful read, including an empty one, reconciles the
   desired set; a repeating failure logs one WARN, compared by gRPC status code, or by class and message without one, so
   timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news; a
-  read's failure told to the activity feed when it is new or changes, not while it repeats; and every reconcile reported
-  for the agent's metrics by whether it succeeded
+  read's failure told to the activity feed when it is new or changes, not while it repeats; every reconcile reported
+  for the agent's metrics by whether it succeeded; and a JVM `Error` from the read or the reconcile propagated, not
+  logged as a failed tick
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved;
   and why a filter lets a scrape through unfiltered, told once per cause
@@ -527,7 +538,8 @@ Three support helpers also live here (not test classes themselves):
   path's agent, is still connected, and, while valid, has a notice about the path, and no agent has a notice about a
   path it serves
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
-  queue
+  queue; and a scrape request, or a path notice, queued just as its wait times out returned by that wait, not lost
+  (`lateArrival`)
 - **AgentContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the scrape-request
   hand-off -- write, read, invalidate -- from three threads under model checking and stress; each write's outcome
   must fit a sequential order, and no accepted request may be stranded after invalidate
@@ -736,6 +748,11 @@ One support helper also lives here (not a test class itself):
 - **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution; in a forked JVM, a
   standalone agent or proxy whose config URL carries credentials exits 1 on a setting it rejects, with one log line
   and no credentials or uncaught stack trace
+- **ChannelsTest** — `receiveCatchingWithin`, every wait that ends in a keepalive: an element that comes as the wait
+  times out returned and the channel left empty (`lateArrival`), where a receive inside `withTimeoutOrNull` loses it;
+  null once the timeout passes with nothing, the channel left to the next wait; an element already queued returned at
+  once, even with no time to wait; the channel's closing returned with its cause; and an infinite timeout waiting with
+  none
 - **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
 - **CommonSettingsTest** (`dashboard/`) — the Settings groups both dashboards share (`CommonSettings`): the About
   group with only the keys of the `-D` overrides; each TLS file named and a PEM only as set; the admin endpoints, the
@@ -813,6 +830,9 @@ One support helper also lives here (not a test class itself):
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
   Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume
+- **NonFatalTest** — `runCatchingNonFatal`, which the agent's connection tasks and per-path calls catch failures
+  with: a result, or an exception as a failure, returned, but a JVM `Error` (`OutOfMemoryError`, `StackOverflowError`,
+  `AssertionError`) and a `CancellationException` rethrown
 - **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel, the proxy's and the agent's: the status, path,
   facts, and start of the body; a body's families and samples shown only when it is in a text format, its content type
   either way; a cut body and an EOF named; an agent's size after its filter, and a cut body as the filtered one's
@@ -886,6 +906,10 @@ These support helpers also live here (not test classes themselves):
   status code rather than its message
 - **DaemonAwait** — `awaitOnDaemonThread { … }`, which runs a block on a daemon thread and suspends until it
   returns, so the spec's timeout can fail a CPU-bound call, such as a backtracking regex, that ignores cancellation
+- **LateArrival** — `lateArrival(wait, arrive)`, what a timed wait returns when something arrives just as its timeout
+  passes: on runBlocking's one thread, the wait suspends, the arrival runs while the thread is held, and the thread
+  stays held past the timeout, so the wait's resumption and its timeout meet without a race, and a wait that takes an
+  element and is then cancelled by its timeout loses it every time
 - **Lincheck** — the Kotest tag every `*LincheckTest` carries, which the default test run excludes
 
 ### Unit Tests — Misc (`misc/`)

@@ -22,7 +22,6 @@ import kotlin.concurrent.atomics.AtomicBoolean
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.util.hostInfo
-import com.pambrose.common.util.runCatchingCancellable
 import io.prometheus.common.MetricBuilders.metricLabel
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.utils.TlsContext
@@ -45,6 +44,7 @@ import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
+import io.prometheus.common.runCatchingNonFatal
 import io.prometheus.common.receiveCatchingWithin
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -65,7 +65,6 @@ import io.prometheus.grpc.scrapeResponse
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
 import kotlin.concurrent.atomics.AtomicInt
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
@@ -431,7 +430,14 @@ internal class AgentGrpcService(
   // disagree with itself.
   suspend fun connectAgent(): Boolean {
     val proxyHost = agent.proxyHost
-    return runCatchingCancellable {
+    // After a failed connect, a channel dials again only on gRPC's backoff, which grows to 2 minutes, and fails every
+    // call in between at once, so an agent with one proxy found it again up to 2 minutes after it was back, not every
+    // reconnectPauseSecs (November #60). Resetting the backoff has the channel resolve the proxy's name and dial it
+    // now, and gRPC's own backoff starts over in between, so the agent's reconnect follows within about a pause. A
+    // channel EndpointFailover just built, as for a failover list, has no backoff to reset.
+    if (lastConnectFailed)
+      channel.resetConnectBackoff()
+    return runCatchingNonFatal {
       if (connectFailures.containsKey(proxyHost))
         logger.debug { "Connecting to proxy at $proxyHost using ${tlsContext.desc()} again..." }
       else
@@ -448,11 +454,9 @@ internal class AgentGrpcService(
       agent.activityLog?.record(AgentActivityKind.CONNECTED, detail = proxyHost, group = proxyHost)
       true
     }.getOrElse { e ->
-      // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so they propagate to
-      // handleConnectionFailure() and terminate the agent instead of being collapsed into a
-      // routine "couldn't connect, will retry". Only transient connection failures return false.
-      if (e is Error)
-        throw e
+      // runCatchingNonFatal rethrows JVM Errors (OutOfMemoryError, StackOverflowError, etc.), so they propagate to
+      // handleConnectionFailure() and terminate the agent instead of being collapsed into a routine "couldn't connect,
+      // will retry". Only transient connection failures return false.
       connectFailed(proxyHost, e)
       false
     }
@@ -659,7 +663,8 @@ internal class AgentGrpcService(
   // agentId, usually because it evicted the agent, or the call's connection or identity doesn't match it) maps
   // to EVICTED; any RPC failure -- DEADLINE_EXCEEDED / UNAVAILABLE / non-gRPC -- maps to TRANSIENT_FAILURE
   // so the caller can force a reconnect after N consecutive failures rather than spinning forever on a
-  // half-open transport (finding 2). Cancellation propagates (runCatchingCancellable) for clean shutdown.
+  // half-open transport (finding 2). Cancellation propagates for clean shutdown, and a JVM Error to stop the agent
+  // (runCatchingNonFatal, November #7).
   // Takes its own deadline (see Agent.heartbeatDeadlineSecs) so a half-open connection is detected within a few
   // heartbeat intervals rather than several unary deadlines.
   suspend fun sendHeartBeat(deadlineSecs: Long = unaryDeadlineSecs): HeartBeatResult {
@@ -667,7 +672,7 @@ internal class AgentGrpcService(
     if (anAgentId.isEmpty())
       return HeartBeatResult.SUCCESS
 
-    return runCatchingCancellable {
+    return runCatchingNonFatal {
       stubWithDeadline(deadlineSecs).sendHeartBeat(heartBeatRequest { agentId = anAgentId })
         .let { response ->
           agent.markMsgSent()
@@ -748,10 +753,16 @@ internal class AgentGrpcService(
     chunkedChannel: Channel<Outgoing<ChunkedScrapeResponse>>,
   ) {
     for (scrapeResults in connectionContext.scrapeResults()) {
-      // Throws ClosedSendChannelException once a sibling writer coroutine has closed the response channels (e.g. a
-      // transient gRPC failure triggered closeAll()), which stops the producer. The result can no longer be delivered
-      // on this connection; the channel counts it as dropped (outgoingChannel).
-      forwardScrapeResult(scrapeResults, nonChunkedChannel, chunkedChannel)
+      // A send fails once a writer's stream has failed: with the CancellationException its flow cancelled the channel
+      // with as it ended, or, for the other writer's channel, which the failed writer's closeAll() closed, with a
+      // ClosedSendChannelException. Either way the connection is over, which isn't this task's failure, so the second
+      // isn't logged as one: it read as an UNKNOWN status, and logged an ERROR with a stack trace (November #6). The
+      // channel counts the message it couldn't take as dropped (outgoingChannel), and the caller what's still queued.
+      try {
+        forwardScrapeResult(scrapeResults, nonChunkedChannel, chunkedChannel)
+      } catch (_: ClosedSendChannelException) {
+        return
+      }
       agent.markMsgSent()
     }
   }
@@ -866,19 +877,19 @@ internal class AgentGrpcService(
       chunkedChannel.close()
     }
 
-    // Shared per-stream failure policy: run [block], and on a non-cancellation failure log it (tagged
-    // with [name]) while the agent is still running, then tear down the shared channels. Cancellation
-    // is propagated without closing (normal shutdown). Factored out of the three coroutines below so
-    // the failure handling lives in one place.
+    // Shared per-stream failure policy: run [block], and on a failure log it (tagged with [name]) while the agent is
+    // still running, then tear down the shared channels. Cancellation is propagated without closing (normal shutdown),
+    // and a JVM Error without either, so it fails the connection and stops the agent (November #7). Factored out of the
+    // three coroutines below so the failure handling lives in one place.
     suspend fun runStreamTask(
       name: String,
       block: suspend () -> Unit,
     ) {
-      runCatchingCancellable { block() }
+      runCatchingNonFatal { block() }
         .onFailure { e ->
           if (agent.isRunning)
             logger.logStreamFailure(name, e)
-          if (e !is CancellationException) closeAll()
+          closeAll()
         }
     }
 
@@ -890,10 +901,12 @@ internal class AgentGrpcService(
             processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
           }
         } finally {
-          // Close the channels when the producer finishes, so each streamOf flow ends. closeAll() also closes them
-          // when a stream fails; no outer finally is needed.
-          nonChunkedChannel.close()
-          chunkedChannel.close()
+          // The producer is the results' one reader, so once it stops, however it stops, none can be sent: end the
+          // connection, which closes the response channels, so each streamOf flow ends, and has a scrape that finishes
+          // later count its own result as dropped, then drop the results it left queued, which counts each as
+          // dropped. Those were counted as neither when a writer's failure stopped the producer (November #6).
+          closeAll()
+          connectionContext.dropUnsentResults()
         }
       }
 

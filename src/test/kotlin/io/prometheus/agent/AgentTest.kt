@@ -90,6 +90,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import ch.qos.logback.classic.Logger as LogbackLogger
 
+@Suppress("LargeClass")
 class AgentTest : StringSpec() {
   // Every agent createTestAgent builds, released after each test: an Agent opens a gRPC channel and an HTTP client
   // cache on construction, and most of these tests never start or stop it, so each would otherwise leak both.
@@ -138,6 +139,29 @@ class AgentTest : StringSpec() {
 
       connectionEnded shouldBe true
       // Asserted on the Job, not a finally in the task: the idle task may be cancelled before it ever starts running.
+      idleTask.isCancelled.shouldBeTrue()
+      connectionContext.connected.shouldBeFalse()
+    }
+
+    // An Error in a connection task ended only the connection, and the agent reconnected, running on in the state the
+    // Error left it in, though the same Error in a scrape stopped it (November #7). It now fails the connection's
+    // scope, so the run loop's handleConnectionFailure rethrows it and the agent stops.
+    "a JVM Error in a connection task should fail the connection's scope, and still end the other tasks" {
+      val agent = createTestAgent()
+      val connectionContext = AgentConnectionContext(8)
+      lateinit var idleTask: Job
+
+      shouldThrow<OutOfMemoryError> {
+        withTimeoutOrNull(5.seconds) {
+          coroutineScope {
+            with(agent) {
+              idleTask = launchConnectionTask(connectionContext, "idle read stream") { awaitCancellation() }
+              launchConnectionTask(connectionContext, "result stream") { throw OutOfMemoryError("test") }
+            }
+          }
+        }
+      }
+
       idleTask.isCancelled.shouldBeTrue()
       connectionContext.connected.shouldBeFalse()
     }
@@ -518,6 +542,22 @@ class AgentTest : StringSpec() {
         agent.metrics.scrapeResultCount.collect().dataPoints.associate { it.labels.get("type") to it.value } shouldBe
           mapOf("non-gzipped" to 1.0, "gzipped" to 0.0, "chunked" to 0.0, "dropped" to 0.0)
         agent.metrics.dashboardScrapeCount.labelValues(agent.launchId).get() shouldBe 1.0
+      } finally {
+        agent.metrics.close()
+      }
+    }
+
+    // The production wiring of what a connection can't send: each result is counted as dropped (November #6). The
+    // agent isn't started, so its metrics are built but serve no port.
+    "a connection's results it can't send should count as dropped" {
+      val agent = createTestAgent("-Dagent.metrics.enabled=true")
+      try {
+        val context = agent.newConnectionContext()
+        (1L..2L).forEach { context.sendScrapeResults(ScrapeResults(srAgentId = "agent", srScrapeId = it)) }
+        context.close()
+        context.dropUnsentResults()
+
+        agent.metrics.scrapeResultCount.labelValues(agent.launchId, AgentMetrics.RESULT_DROPPED).get() shouldBe 2.0
       } finally {
         agent.metrics.close()
       }

@@ -175,8 +175,8 @@ change to shared infrastructure.
     ```
 
 3. **Restart the proxy.** Identities are read only at startup. Every team's agents lose their connection, reconnect
-   on their own once the proxy is back (gRPC's backoff between attempts grows while it's down, so a quick restart is
-   a quick reconnect), and register their paths again; a scrape that lands in between fails. Once it's up, the
+   on their own within seconds of the proxy being back (each tries every `agent.internal.reconnectPauseSecs`, 3 seconds
+   by default), and register their paths again; a scrape that lands in between fails. Once it's up, the
    [dashboard](../web-dashboard.md)'s **Settings** layout lists `team-b` and its patterns under Agent
    authentication.
 
