@@ -228,7 +228,8 @@ _Released 2026-11-23_
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
 - **The demos' tours.** Each demo opens its tour with a table of what each part shows and why, every step shows
-  something, and `make up` links to the demo's page on the docs site.
+  something, and `make up` points to the demo's README and its page on the docs site. A demo run from a checkout
+  whose release isn't out yet builds the proxy and agent itself, rather than failing to pull them.
 - **The docs site.** It takes the dashboard's look, its warning and danger colors included, follows your light or
   dark setting, loads no web font, and has no chat widget. Its sidebar is regrouped into seven sections, with a Demos
   page listing every demo; each heading has a link of its own; and the reference tables no longer break a flag or key

@@ -25,9 +25,9 @@ help:  ## Show this help (list of targets)
 	@awk 'BEGIN {FS = ":.*?## "; printf "Usage: make <target>\n\nTargets:\n"} \
 		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# up runs the proxy image of the latest release, from Docker Hub, and builds the roastery against that release's
-# library, from Maven Central, unless that release predates what the demo shows; then it builds all three, as up-local
-# always does, from this checkout, so the demo shows the code as it is.
+# up runs the proxy image of the release the docs give, from Docker Hub, and builds the roastery against that
+# release's library, from Maven Central, unless that release predates what the demo shows or isn't out yet; then it
+# builds all three, as up-local always does, from this checkout, so the demo shows the code as it is.
 up:  ## Start the demo with the latest release, and print its URLs (needs Docker)
 	@$(DEMO) up
 

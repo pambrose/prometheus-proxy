@@ -882,6 +882,13 @@ These support helpers also live here (not test classes themselves):
   closed after the spec, which must leave none of their shared collectors registered
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
   compilation, and native memory export flags each turn on only their own MetricsConfig field
+- **DemoReleaseGateTest** — each demo's `make up` (its `demo.sh`'s `cmd_up`, run with a stubbed `docker` and
+  `start_demo`) builds from the checkout while the release the docs give is no later than its `NEEDS_RELEASE_AFTER`,
+  or while Docker Hub answers that it has no image of the release, and runs the release once Docker Hub has it; the
+  Docker demos also run a release whose images Docker has without asking Docker Hub, and leave a Docker Hub they can't
+  reach to the pull, while the Kubernetes demo, whose clusters pull the images themselves, stops. Each demo's
+  `NEEDS_RELEASE_AFTER` is a release no later than the docs', and its `README_PATH`, which it prints beside its page on
+  the docs site, is its README
 - **DemoTourTablesTest** — each demo's README and its page on the docs site open with a What This Demo Shows
   table that names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their
   parts' sections of its Guided Tour, a page's rows link only to sections the page has, and each `demo.sh`'s
@@ -910,13 +917,23 @@ These support helpers also live here (not test classes themselves):
   dashboards' tabs and bars show its small-size cut, `favicon.svg`; the dashboards carry both inline
   (`DashboardLogo.LOGO_SVG` and `SMALL_LOGO_SVG`) as the same markup
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
+- **ReleaseCheckTest** — the parts of `make release-check` that read the checkout, run as `make` runs them:
+  `_check-version-files`, given the version as the previous one, names every line of the files step 2 of
+  `docs/RELEASE.md` bumps that gives the version (the Quick Start's JAR links among them), but `llms.txt`'s release
+  annotations and the README's New Features summary, and passes the tree as it is; `_check-changelogs` passes only on
+  the day both changelogs date a release, and names the date a changelog gives; and `_check-demos-pull-release`
+  refuses a release at or below a demo's `NEEDS_RELEASE_AFTER`, or a demo whose value it can't read (in a temporary
+  copy of the demos). `make github-release-notes` gives a release's `RELEASE_NOTES.md` section with each paragraph and
+  list item on one line, its headings a level up, and the full changelog's link last
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here
   instead of only in the container suite
 - **SiteVersionTest** — `make site-version` prints the version the docs site's image tags and Maven coordinate give:
   the Docker examples' tag, a release version, whatever `gradle.properties` holds. It skips `latest` and a full stop
-  after a tag, and fails when the site gives two versions or none, the Spring Boot starter's coordinate counted. `bin/docker-*.sh` read their version from it, not
-  from `gradle.properties`, whose `-SNAPSHOT` between releases has no image
+  after a tag, and fails when the site gives two versions or none, the Spring Boot starter's coordinate counted. Every
+  file a page includes with `--8<--` is under the directories it reads, or names no version. `bin/docker-*.sh` read
+  their version from it, not from `gradle.properties`, whose `-SNAPSHOT` between releases has no image, and, run with a
+  stubbed `docker`, say so when Docker Hub has no image of it rather than leave it to `docker run`
 - **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
   document, and every support file under `src/test` is named somewhere in it
 - **WebsiteConfigKeysTest** — every `proxy.` and `agent.` config key the website's pages name is in

@@ -53,8 +53,8 @@ On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/g
 `make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the coffee shop inside Docker against the
-latest release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it
-builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
+latest release's library, from Maven Central, so it needs no JDK. Until a release with everything the demo shows is
+on Docker Hub, it builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
