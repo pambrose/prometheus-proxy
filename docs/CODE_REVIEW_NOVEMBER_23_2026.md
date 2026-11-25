@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 41 fixed, 31 open (8 medium, 64 low, no high).
+**Status:** 72 issues — 45 fixed, 27 open (8 medium, 64 low, no high).
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
 #555–#561).
@@ -32,8 +32,8 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ⬜      |
 | 8  | The starter's agent dies with a `NoSuchMethodError` on Spring Boot 4.0.x and 4.1.0                   | Embedding  | medium   | ✅      |
 | 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ✅      |
-| 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ⬜      |
-| 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ⬜      |
+| 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ✅      |
+| 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ✅      |
 | 12 | A start that times out keeps starting, with no handle to stop it                                     | Embedding  | low      | ✅      |
 | 13 | An anonymous `POST /logout` forces a collect and a push to every open page, once per request         | Dashboards | medium   | ✅      |
 | 14 | Ending a session whose socket has stopped reading freezes every open page                            | Dashboards | medium   | ✅      |
@@ -69,14 +69,14 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 44 | AGENTS.md and `docs/TESTING.md` name a deploy check that's gone, and misdescribe `make all-tests`    | Docs       | low      | ⬜      |
 | 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ⬜      |
 | 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ⬜      |
-| 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ⬜      |
+| 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ✅      |
 | 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
 | 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ✅      |
 | 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ✅      |
 | 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ⬜      |
 | 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ✅      |
 | 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ✅      |
-| 54 | The Ktor plugin's wait for the agent's stop has no deterministic test                                | Tests      | low      | ⬜      |
+| 54 | The Ktor plugin's wait for the agent's stop has no deterministic test                                | Tests      | low      | ✅      |
 | 55 | `AgentDashboardHtmlTest` pins neither half of the column-guide rule, nor the agent page's live region | Tests     | low      | ⬜      |
 | 56 | Two more `dashboard-constraints.md` rules have no test                                               | Tests      | low      | ⬜      |
 | 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ✅      |
@@ -151,7 +151,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 2    | ✅ #550 | #8, #24, #31                 | A Spring Boot starter that runs on the Spring Boot it names           | `agent/AgentMetrics.kt`, `Agent.kt` (`connectOutcome`), `spring-boot-starter/` (`PrometheusProxyAgentProperties`, the website YAML), `spring-boot-starter.md`, `embedded-agent.md` | The starter is new in 4.7.0; fixing it before the tag means no release ships it broken. A starter test at Spring Boot 4.0's or 4.1.0's Prometheus client pins #8.                                 |
 | 3    | ✅ #551 | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
 | 4    | ✅ #557 | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
-| 5    | ⬜      | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
+| 5    | ✅ #562 | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
 | 6    | ✅ #558 | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
 | 7    | ⬜      | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
 | 8    | ⬜      | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
@@ -794,7 +794,7 @@ resolves for the agent alone, a Ktor app with the plugin, or a Spring Boot app w
 `spring-boot-starter` profile), where the review's Log4j2 starter test would have needed a classpath of its own. The
 Embedded Agent page's Logging section and the upgrade notes say what an app with no SLF4J provider adds.
 
-### 10. ⬜ The Ktor plugin starts the agent before the engine binds its port, so an app whose port is taken hangs instead of exiting, with its agent connected
+### 10. ✅ The Ktor plugin starts the agent before the engine binds its port, so an app whose port is taken hangs instead of exiting, with its agent connected
 
 **Severity:** medium · **Confidence:** reproduced with a scratch spec (since deleted):
 
@@ -848,7 +848,9 @@ Embedded Agent page's Logging section and the upgrade notes say what an app with
 
 It fails today.
 
-### 11. ⬜ Both integrations decide whether to start from their own proxy setting alone: a proxy from `PROXY_HOSTNAME`, a `setting()` key, or (in the starter) a customizer leaves the agent off
+**Resolution:** Fixed in #562. An embedded agent's service thread is now a daemon: `Agent` overrides Guava's `executor()` when `isEmbedded`, which `startEmbedded` sets before `startAsync()`, so a host that fails after starting its agent, without stopping it, exits. `ServerBindFailureTest` runs a CIO app with the plugin in a child JVM against a port the test holds: before, it was still running after 30 seconds, its agent retrying the proxy; now it exits with status 1 in about a second, its app disposed by Ktor's shutdown hook, which stops the agent through the plugin. `AgentStartupTest` pins the thread kind, and covers a `startUp()` that never returns, the part of #12 that `startWithin` couldn't stop. The admin and metrics servers' Jetty threads, which common-utils builds, still aren't daemons, so an agent with either port on still holds the JVM; the docs say so. A program whose `main()` only starts an embedded agent and returns now exits, which both changelogs and the upgrade page note.
+
+### 11. ✅ Both integrations decide whether to start from their own proxy setting alone: a proxy from `PROXY_HOSTNAME`, a `setting()` key, or (in the starter) a customizer leaves the agent off
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -890,6 +892,8 @@ The two integrations also disagree with each other: the plugin honors a proxy se
 - A starter test with no `proxy` property and a customizer that calls `proxy(...)`, which expects a running agent.
 - An `AgentLifecycle` test with `settings.proxy.hostname` and no `proxy` key.
 - The internal `env` lookup lets both cover `PROXY_HOSTNAME`.
+
+**Resolution:** Fixed in #562. `EmbeddedAgentConfig.namesProxy()` is public: the rule `startIfConfigured()` already followed (the builder's proxy, a `setting()` of the endpoints or host name, or `PROXY_HOSTNAME`). The starter runs its customizers before deciding, and the plugin decides once the file and the install block have built the settings; both read `namesProxy()`. New tests in `PrometheusProxyAgentAutoConfigurationTest` (a customizer's proxy, a `settings.proxy.hostname` property, and a required agent whose customizer sets the proxy) and in `AgentLifecycleTest` (a file `settings` key on a required agent, and an agent block's `setting()`) failed before the change; `PROXY_HOSTNAME` itself is covered by `StartIfConfiguredTest`, through the internal `env` lookup. Both integrations now log `No proxy is set (prometheus-proxy.agent.proxy or PROXY_HOSTNAME)`.
 
 ### 12. ✅ A start that times out is reported as "stays off", but the agent keeps starting, with no handle to stop it
 
@@ -2381,7 +2385,7 @@ Change `waitingNotices` to call `context.awaitPathNotices(200.milliseconds)`.
 
 **Tests:** The three tests above. Each fails once its subject is rewritten as `withTimeoutOrNull { receiveCatching() }`.
 
-### 47. ⬜ The starter's required-agent tests all fail before `launch()` picks `start()`, so a required agent started with `startIfConfigured()` passes them
+### 47. ✅ The starter's required-agent tests all fail before `launch()` picks `start()`, so a required agent started with `startIfConfigured()` passes them
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2408,6 +2412,8 @@ the builder accepts.
 isn't PEM. Assert that the context fails with a `ConfigLoadException` root cause.
 
 **Tests:** That test fails with `launch()` changed to always use `startIfConfigured`.
+
+**Resolution:** Fixed in #562. `aRequiredAgentTheAgentRejectsFailsTheApp` starts a required agent with a proxy and a `trust-certificate` that isn't PEM, which the builder accepts and the agent rejects as it starts, and asserts that the context's startup failure has a `ConfigLoadException` in its cause chain, the root cause being the `IllegalArgumentException` it wraps. With `launch()` changed to always call `startIfConfigured()`, it's the only starter test that fails.
 
 ### 48. ✅ Two of a `MetricsSource`'s isolation promises have no test: a `VirtualMachineError` propagates, and a stuck call holds neither another path's scrape nor the agent's shutdown
 
@@ -2628,7 +2634,7 @@ registry gained no `process_` or `jvm_` family.
 
 **Resolution:** Fixed in #555, in a unit spec rather than the harness spec named here. A new `EmbeddedAgentConfigTest` test starts an agent embedded, with `agentMetricsAt` and two JVM groups turned on, and finds no `jvm_` or `process_` family in the default registry. An agent built directly from the same settings adds them, so the check can fail; it did with `!isEmbedded` dropped from `registersJvmMetrics`.
 
-### 54. ⬜ The Ktor plugin's wait on `ApplicationStopping` for the agent's stop has no deterministic test
+### 54. ✅ The Ktor plugin's wait on `ApplicationStopping` for the agent's stop has no deterministic test
 
 **Severity:** low · **Confidence:** plausible. Removing the join makes one test racy rather than failing.
 
@@ -2648,6 +2654,8 @@ disposing while the agent is still stopping, and the only sign is an occasional 
 flag when it returns. Then assert the flag is set as soon as `events.raise(ApplicationStopping, app)` returns.
 
 **Tests:** That test fails every time once the join is removed.
+
+**Resolution:** Fixed in #562. `AgentLifecycleTest`'s "the app's disposal waits for the agent's stop the engine began" holds the mocked `shutdown()` on a latch that a helper thread opens only once the disposing thread is inside `Thread.join` (or after 5 seconds), and asserts that the stop finished as soon as `ApplicationStopping` returns. With the join removed, it failed in 3 of 3 runs, and every other case passed.
 
 ### 55. ⬜ `dashboard-constraints.md` says `AgentDashboardHtmlTest` pins the column-guide rule, but it pins neither half, and the agent page's live region has no positive test
 
