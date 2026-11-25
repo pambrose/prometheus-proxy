@@ -542,7 +542,8 @@ store that can't be loaded), the embedded `startAsyncAgent` / `startSyncAgent` e
 `exitProcess`; credentials in a config URL are redacted from it. Stand-alone agents (run from the CLI) still log the
 reason and exit with code 1. If the agent then fails to start (for example, its admin or metrics port is already in
 use), `startAsyncAgent` throws `IllegalStateException` with the startup failure as its cause, after releasing everything
-the agent had opened.
+the agent had opened. The agent runs on a daemon thread, so it doesn't keep the JVM running: your application's own
+threads do, and a `main()` that only starts the agent and returns ends it.
 
 An application that holds the agent's settings itself, such as a token, the proxy's certificate, or credentials for
 its own `/metrics`, can build them in code instead of in a file, with `embeddedAgent { }` (or

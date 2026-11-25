@@ -28,9 +28,11 @@ import org.springframework.context.SmartLifecycle;
 
 /**
  * The embedded agent, started and stopped with the app. It starts in the last phase, once the app is up, so it stops
- * first, before a graceful shutdown stops the web server. It starts only with a {@code prometheus-proxy.agent.proxy}:
- * without one it logs a line and stays off. An agent that can't start is logged and stays off too, and the app runs
- * without it, unless {@code prometheus-proxy.agent.required} is set.
+ * first, before a graceful shutdown stops the web server. It starts only where its settings name a proxy, once the
+ * customizers have run, by the agent's own rule ({@link EmbeddedAgentConfig#namesProxy()}): the
+ * {@code prometheus-proxy.agent.proxy} property, a customizer's proxy, a {@code settings} key of one, or the agent's
+ * own {@code PROXY_HOSTNAME} environment variable. Without one it logs a line and stays off. An agent that can't start
+ * is logged and stays off too, and the app runs without it, unless {@code prometheus-proxy.agent.required} is set.
  *
  * <p>The agent's settings are the {@code prometheus-proxy.agent.*} properties, then each
  * {@link PrometheusProxyAgentCustomizer} in order. It serves the app's {@code PrometheusRegistry} bean in-process, at
@@ -39,7 +41,7 @@ import org.springframework.context.SmartLifecycle;
  */
 public class PrometheusProxyAgent implements SmartLifecycle {
   private static final Logger logger = LoggerFactory.getLogger(PrometheusProxyAgent.class);
-  private static final String PROXY_UNSET = "prometheus-proxy.agent.proxy isn't set";
+  private static final String PROXY_UNSET = "No proxy is set (prometheus-proxy.agent.proxy or PROXY_HOSTNAME)";
 
   private final PrometheusProxyAgentProperties properties;
   // Read as the agent starts, once every bean is: the app's name, its build info, its registry, and the customizers
@@ -63,23 +65,20 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     if (agent != null) {
       return;
     }
-    if (isBlank(properties.getProxy())) {
-      withoutAProxy();
-      return;
-    }
     try {
       launch();
     } catch (RuntimeException e) {
-      // A key the agent's config can't hold, or a customizer's own failure, or, for a required agent, a setting the
-      // agent rejects (ConfigLoadException) or its failure to start. Any other agent's start logs its own failure.
+      // A key the agent's config can't hold, or a customizer's own failure, or, for a required agent, no proxy, a
+      // setting the agent rejects (ConfigLoadException), or its failure to start, its start timing out included
+      // (IllegalStateException). Any other agent's start logs its own failure.
       failed(e, e);
     } catch (Exception e) {
-      // A checked exception, which Kotlin throws undeclared, such as a required agent's start timing out
+      // A checked exception, which Kotlin code, such as a customizer written in Kotlin, can throw undeclared
       failed(e, new IllegalStateException("The Prometheus agent could not start", e));
     }
   }
 
-  // No proxy: the agent stays off, as on a developer's machine, unless it's required
+  // No proxy: the agent stays off, as on a developer's machine, unless it's required, whose app it fails
   private void withoutAProxy() {
     if (properties.isRequired()) {
       throw new IllegalStateException(PROXY_UNSET + ", and prometheus-proxy.agent.required is true");
@@ -87,10 +86,15 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     logger.info("{}, so the Prometheus agent stays off", PROXY_UNSET);
   }
 
-  // A required agent starts with start(), whose failure fails the app, and any other with startIfConfigured(), which
-  // logs a failure, with why, and leaves the agent off
+  // Decided once the customizers have made the settings, by the agent's own rule, which startIfConfigured() follows
+  // too. A required agent then starts with start(), whose failure fails the app, and any other with
+  // startIfConfigured(), which logs a failure, with why, and leaves the agent off.
   private void launch() {
     EmbeddedAgentConfig config = config();
+    if (!config.namesProxy()) {
+      withoutAProxy();
+      return;
+    }
     logger.info("Starting the Prometheus agent with {}", config);
     EmbeddedAgentInfo started = properties.isRequired() ? config.start(false) : config.startIfConfigured(false);
     if (started == null) {

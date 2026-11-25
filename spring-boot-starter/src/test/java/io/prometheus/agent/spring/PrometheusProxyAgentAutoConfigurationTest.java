@@ -29,10 +29,10 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -237,7 +237,42 @@ class PrometheusProxyAgentAutoConfigurationTest {
             assertThat(context)
                 .getFailure()
                 .rootCause()
-                .hasMessageContaining("prometheus-proxy.agent.proxy isn't set"));
+                .hasMessage("No proxy is set (prometheus-proxy.agent.proxy or PROXY_HOSTNAME), and "
+                    + "prometheus-proxy.agent.required is true"));
+  }
+
+  // The agent's own rule, EmbeddedAgentConfig.namesProxy(), read once the customizers have run: the starter read only
+  // its proxy property, before them, so a customizer's proxy, a settings key's, or the agent's PROXY_HOSTNAME left the
+  // agent off, and failed a required one's app (November 23 review, #11)
+  @Test
+  void aCustomizersProxyStartsTheAgent() {
+    runner
+        .withBean(PrometheusProxyAgentCustomizer.class, () -> builder -> builder.proxy("localhost:" + closedPort()))
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isTrue();
+        });
+  }
+
+  @Test
+  void aRequiredAgentWhoseCustomizerSetsTheProxyStarts() {
+    runner
+        .withPropertyValues("prometheus-proxy.agent.required=true")
+        .withBean(PrometheusProxyAgentCustomizer.class, () -> builder -> builder.proxy("localhost:" + closedPort()))
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isTrue();
+        });
+  }
+
+  @Test
+  void aProxySettingStartsTheAgent() throws IOException {
+    runner
+        .withPropertyValues("prometheus-proxy.agent.settings.proxy.hostname=localhost:" + freePort())
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isTrue();
+        });
   }
 
   @Test
@@ -320,19 +355,34 @@ class PrometheusProxyAgentAutoConfigurationTest {
             assertThat(context).getFailure().rootCause().hasMessageContaining("the secret store is down"));
   }
 
-  // A checked exception, which Kotlin throws undeclared, such as the agent's start timing out
+  // A checked exception, which Kotlin code can throw undeclared
   @Test
   void aRequiredAgentThatFailsWithACheckedExceptionFailsTheAppWithIt() throws IOException {
     runner
         .withPropertyValues(
             "prometheus-proxy.agent.required=true", "prometheus-proxy.agent.proxy=localhost:" + freePort())
-        .withBean(PrometheusProxyAgentCustomizer.class, () -> builder -> sneakyThrow(new TimeoutException("too slow")))
+        .withBean(PrometheusProxyAgentCustomizer.class, () -> builder -> sneakyThrow(new IOException("unreachable")))
         .run(context ->
             assertThat(context)
                 .getFailure()
                 .rootCause()
-                .isInstanceOf(TimeoutException.class)
-                .hasMessage("too slow"));
+                .isInstanceOf(IOException.class)
+                .hasMessage("unreachable"));
+  }
+
+  // A setting the builder takes but the agent rejects as it starts, as the Ktor plugin's test of its counterpart has:
+  // only the agent's start() reaches it, which the starter calls for a required agent, where startIfConfigured() would
+  // log it and leave the app running without the agent. The other required tests fail before the starter picks either
+  // (November 23 review, #47).
+  @Test
+  void aRequiredAgentTheAgentRejectsFailsTheApp() throws IOException {
+    runner
+        .withPropertyValues(
+            "prometheus-proxy.agent.required=true",
+            "prometheus-proxy.agent.proxy=localhost:" + freePort(),
+            "prometheus-proxy.agent.trust-certificate=not a certificate")
+        .run(context ->
+            assertThat(causes(context.getStartupFailure())).hasAtLeastOneElementOfType(ConfigLoadException.class));
   }
 
   // The docs site's Spring Boot Starter page says so: a certificate the agent can't read doesn't stop the app
@@ -469,6 +519,15 @@ class PrometheusProxyAgentAutoConfigurationTest {
   // Variables as the process environment gives them, which Spring Boot maps to properties by its rules
   private static SystemEnvironmentPropertySource environment(Map<String, Object> variables) {
     return new SystemEnvironmentPropertySource("test-" + SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, variables);
+  }
+
+  // A throwable and its causes, outermost first; none for null
+  private static List<Throwable> causes(Throwable failure) {
+    List<Throwable> causes = new ArrayList<>();
+    for (Throwable cause = failure; cause != null && !causes.contains(cause); cause = cause.getCause()) {
+      causes.add(cause);
+    }
+    return causes;
   }
 
   // Throws a checked exception undeclared, as Kotlin code called from Java can

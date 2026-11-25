@@ -60,8 +60,9 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * A start that fails or takes too long releases what the agent opened: a dashboard that can't bind its port stops the
  * admin, metrics, and Zipkin services `super.startUp()` started and removes the JVM shutdown hook, and a start that
- * outlasts its wait stops as soon as its startup ends (November 23 review, #5 and #12). The failed starts that came
- * before these, an admin port that's taken and one started from `initBlock`, are in `AgentTest`.
+ * outlasts its wait stops as soon as its startup ends (November 23 review, #5 and #12). An embedded agent's thread is a
+ * daemon, so a host that fails without stopping it, or a start that never ends, can't hold up the JVM (#10). The failed
+ * starts that came before these, an admin port that's taken and one started from `initBlock`, are in `AgentTest`.
  */
 class AgentStartupTest : StringSpec() {
   // Every agent createTestAgent builds, released after each test, as AgentTest's are: an Agent opens a gRPC channel and
@@ -90,6 +91,12 @@ class AgentStartupTest : StringSpec() {
 
   // This throwable and its causes, outermost first.
   private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this) { it.cause }
+
+  // The running agent [agentName]'s service thread, which Guava names after the service from its startUp() on. The
+  // tests run with coroutines' debug mode, which adds the coroutine to the name while the thread runs one, as the
+  // agent's connection loop does.
+  private fun serviceThread(agentName: String): Thread =
+    Thread.getAllStackTraces().keys.single { it.name.substringBefore(" @") == "Agent $agentName" }
 
   init {
     afterTest {
@@ -247,6 +254,57 @@ class AgentStartupTest : StringSpec() {
           // The run loop never began, so the agent never tried to connect.
           agent.isConnectedToProxy.shouldBeFalse()
         }
+      } finally {
+        startCanEnd.countDown()
+        unmockkConstructor(AgentDashboardService::class)
+      }
+    }
+
+    // An embedded agent's thread, which runs its startUp() and its connection loop, is a daemon, so it can't keep its
+    // host's JVM up: a Ktor app whose port was taken failed its start after the plugin had started the agent, and ran
+    // on, its agent connected (November 23 review, #10). An Agent started directly, as the standalone agent is, keeps a
+    // thread that holds the JVM until it stops.
+    "an embedded agent should run on a daemon thread, and one started directly shouldn't" {
+      val embeddedName = "daemon-test-${System.nanoTime()}"
+      val embedded =
+        Agent.startEmbedded(exitOnMissingConfig = false, logBanner = false) {
+          agentOptions(["--proxy", "localhost:1", "--name", embeddedName], exitOnMissingConfig = false)
+        }
+      val embeddedThread = embedded.use { serviceThread(embeddedName) }
+
+      val direct = createTestAgent("--name", "direct-test-${System.nanoTime()}")
+      direct.startSync()
+      val directThread =
+        try {
+          serviceThread(direct.agentName)
+        } finally {
+          direct.stopSync()
+        }
+
+      assertSoftly {
+        embeddedThread.isDaemon.shouldBeTrue()
+        directThread.isDaemon.shouldBeFalse()
+      }
+    }
+
+    // An agent whose start outlasts its wait stops once its startUp() returns, as the timeout case shows, but one that
+    // never returns keeps its thread. An embedded agent's is a daemon, so even then it can't hold up its host's JVM
+    // (November 23 review, #10 and #12). Here the dashboard's start, mocked, blocks until the case ends.
+    "an embedded agent whose start never ends should hold no thread that keeps the JVM up" {
+      PrometheusRegistry.defaultRegistry.clear()
+      val startCanEnd = CountDownLatch(1)
+      mockkConstructor(AgentDashboardService::class)
+      try {
+        every { anyConstructed<AgentDashboardService>().startSync(any<Duration>()) } answers { startCanEnd.await() }
+        val name = "stuck-start-${System.nanoTime()}"
+        val agent =
+          createTestAgent("--name", name, "--dashboard", "--dashboard_port", "$AGENT_START_TIMEOUT_DASHBOARD_PORT")
+            .apply { isEmbedded = true }
+
+        shouldThrow<IllegalStateException> { agent.startWithin(200.milliseconds) }
+
+        // Still in startUp()
+        serviceThread(name).isDaemon.shouldBeTrue()
       } finally {
         startCanEnd.countDown()
         unmockkConstructor(AgentDashboardService::class)

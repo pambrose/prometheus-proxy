@@ -50,8 +50,9 @@ With that, the app gets:
   `PrometheusMeterRegistry` gives its registry as `prometheusRegistry`; an app on the Prometheus Java client gives its
   own, such as `PrometheusRegistry.defaultRegistry`. A path is required with a registry: there's no default, since two
   apps given the same one would take the path from each other.
-- **An app that runs without an agent that can't start.** Without a proxy, as on a developer's machine or in
-  `testApplication`, the agent logs a line and stays off. A setting it rejects, such as an unreadable certificate, is
+- **An app that runs without an agent that can't start.** Without a proxy, from the file, the install block, or the
+  agent's own `PROXY_HOSTNAME`, as on a developer's machine or in `testApplication`, the agent logs a line and stays
+  off. A setting it rejects, such as an unreadable certificate, is
   logged, and the agent stays off, without stopping the app. Set `required = true` to have the app fail to start
   instead, then without a proxy too.
 
@@ -60,7 +61,8 @@ typed method for each setting, such as a certificate the app reads from a secret
 which serves the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) through the proxy too, with no port,
 as the file's `metrics-proxy-path` does.
 As with any embedded agent, the agent's own environment variables, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, take
-precedence over its settings, so give the app's other names, as `fromEnvironment()`'s `PROMETHEUS_` ones are.
+precedence over its settings, and `PROXY_HOSTNAME` alone starts it, so give the app's other names, as
+`fromEnvironment()`'s `PROMETHEUS_` ones are.
 
 ## Settings in application.conf
 
@@ -85,7 +87,7 @@ environment variable gives:
 
 | Key                        | Default                    | What it sets                                                                                                                                                                  |
 |----------------------------|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `proxy`                    |                            | The proxy, as `host` or `host:port` (the port defaults to 50051), or several, separated by commas, in the order the agent fails over through them. Unset, the agent stays off |
+| `proxy`                    |                            | The proxy, as `host` or `host:port` (the port defaults to 50051), or several, separated by commas, in the order the agent fails over through them. Unset, the agent stays off, unless the install block, a `settings` key, or `PROXY_HOSTNAME` names one |
 | `token`                    |                            | The token the agent presents to the proxy, which has to match the proxy's                                                                                                     |
 | `trust-certificate`        |                            | The certificate the agent trusts the proxy's by, as PEM text or its base64, which turns [TLS](security/tls.md) on                                                             |
 | `authority`                |                            | The name the proxy's certificate was issued to, when it isn't the host the agent connects to; used with `trust-certificate`                                                   |
@@ -118,7 +120,10 @@ while the agent is off. A route can show it:
 ```
 
 The agent starts before the server listens on its port. The registry doesn't mind, but a path the agent scrapes at the
-app's own port, from `paths` or the builder's `scrapeSelf`, can fail a scrape that comes in that moment.
+app's own port, from `paths` or the builder's `scrapeSelf`, can fail a scrape that comes in that moment. A server that
+can't listen, on a port another process holds, fails the app's start, and the app exits all the same: the agent's
+thread doesn't keep the JVM running, and Ktor's shutdown hook stops the agent as the JVM exits. With `metrics-port`,
+or the agent's admin port, on, that port's server does keep the JVM running; `metrics-proxy-path` opens no port.
 
 ## Without the Plugin
 

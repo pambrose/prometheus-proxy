@@ -94,8 +94,10 @@ scrape executor, path manager, HTTP-client cache, TLS helpers, and gRPC intercep
   in-process, and its own metrics, with
   [agentMetricsAt][io.prometheus.agent.EmbeddedAgentConfig.Builder.agentMetricsAt]) and starts it,
   with [start][io.prometheus.agent.EmbeddedAgentConfig.start] or, for an app that runs without it,
-  [startIfConfigured][io.prometheus.agent.EmbeddedAgentConfig.startIfConfigured]; its builder is the
-  receiver of [embeddedAgent][io.prometheus.agent.embeddedAgent], the Kotlin DSL.
+  [startIfConfigured][io.prometheus.agent.EmbeddedAgentConfig.startIfConfigured], which starts it
+  where [namesProxy][io.prometheus.agent.EmbeddedAgentConfig.namesProxy] says the settings name a
+  proxy; its builder is the receiver of [embeddedAgent][io.prometheus.agent.embeddedAgent], the
+  Kotlin DSL.
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] is the return value of
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], carrying the
   `launchId` and `agentName` of the started agent, its connection to the proxy (`isConnected`,
