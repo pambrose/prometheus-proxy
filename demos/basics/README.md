@@ -33,33 +33,27 @@ flowchart TB
 
   grafana -->|queries| prometheus
   prometheus -->|"discovers every path,<br/>and scrapes it through"| proxy
-  proxy ~~~ agentEast & agentWest1 & agentWest2 & scenario
-  agentEast ==>|"gRPC, outbound only"| proxy
-  agentWest1 ==> proxy
-  agentWest2 ==> proxy
-  scenario -.-> proxy
+  %% Each agent connects out to the proxy, so its edge's one arrowhead is at the proxy. Each is written from the upper
+  %% end, which keeps the lower end below it, as a two-way edge whose other arrowhead linkStyle takes off. Written from
+  %% the lower end, an edge needed an invisible link to keep that order, and the layout bent it around the link.
+  proxy <==>|"gRPC, outbound only"| agentEast
+  proxy <==> agentWest1
+  proxy <==> agentWest2
+  proxy <-.-> scenario
   agentEast -->|scrapes| app
   agentWest1 -->|"both scrape<br/>shipping"| app
   agentWest2 --> app
+  linkStyle 2,3,4,5 marker-end:none
 
   classDef started stroke-dasharray: 5 5
   class scenario started
   style inside stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-## What You Need
-
-The proxy and agent are the latest release's images, from Docker Hub, so there's nothing to build. On macOS or Linux,
-the demo needs only:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Quick Start
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -109,6 +103,25 @@ and Grafana uses its default admin password, so this setup is for a laptop, not 
 | `demo-app` | The simulated services (`app/demo_app.py`). Traffic follows a 5-minute "day", so the graphs move. It also writes agent-east's discovery file. |
 | `prometheus` | Scrapes every path through the proxy every 5s, with no target in its config. It loads the project's alerting rules (`grafana/alerts.yml`) and the demo's fast ones (`prometheus/demo-alerts.yml`). |
 | `grafana` | Opens on the **Prometheus Proxy Demo** dashboard. The project's own **Prometheus Proxy** and **Prometheus Agents** dashboards (`grafana/*.json`) are linked from its top bar. |
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to its section under [Guided
+Tour](#guided-tour).
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [How Prometheus scrapes services behind a firewall](#1-how-prometheus-scrapes-services-behind-a-firewall) | Agents dial out to the proxy over gRPC, and Prometheus scrapes the proxy as if it were each service | A firewall that allows no inbound connections stays closed |
+| 2. [Agents, paths, and live scrapes on the proxy dashboard](#2-agents-paths-and-live-scrapes-on-the-proxy-dashboard) | Every agent, the paths it registered, and each scrape as it happens, the proxy's own metrics included | One place to see who's connected and what's flowing, without reading logs |
+| 3. [Target health and business metrics in Grafana](#3-target-health-and-business-metrics-in-grafana) | Target health, scrape outcomes, and the services' own metrics, which Prometheus finds through the proxy's discovery | Metrics arrive unchanged, and adding a service never touches Prometheus's config |
+| 4. [An outage and a timeout](#4-an-outage-and-a-timeout) | A service that answers 500 and one that hangs, each reported on its own path while the rest keep answering | A failing target is named, and a hung one gets a timeout rather than stalling Prometheus |
+| 5. [Two agents, one path](#5-two-agents-one-path) | One agent of a consolidated pair stops, and the other keeps their path up | Consolidated mode gives a path redundancy |
+| 6. [New services, no restart](#6-new-services-no-restart) | Services added to an agent's discovery file are scraped within seconds, and leave as cleanly | Services come and go with no restart and no change to Prometheus |
+| 7. [A silent agent is evicted](#7-a-silent-agent-is-evicted) | A frozen agent keeps its connection but goes quiet; the proxy evicts it after 30 seconds | A hung agent is found, and doesn't hold its paths |
+| 8. [Per-team tokens](#8-per-team-tokens) | A contractor's agent is refused a path its identity doesn't allow, with the proxy's reason | One team's agent can't take over another team's metrics |
+| 9. [A refused path, a lost proxy](#9-a-refused-path-a-lost-proxy) | The agent's own dashboard shows a refused path and a lost proxy, and Scrape now checks a target directly | When something's wrong, the agent's side says what, even while the proxy is down |
+| 10. [A duplicate agent](#10-a-duplicate-agent) | A copy of an agent without consolidated mode takes its paths, the two settle, and the proxy logs the fix | A misdeployment is reported with its fix, not left to flap |
+| 11. [A login for the dashboard](#11-a-login-for-the-dashboard) | A dashboard password from the proxy's environment, with signing in and out | The dashboard can be locked without a password in a file |
 
 ## Guided Tour
 

@@ -25,17 +25,17 @@ graph TB
   }
   P[Prometheus :9590] -->|discovery and scrapes| Proxy[Proxy, dashboard :8594]
   Browser[Browser] -->|dashboard :8590| Nginx
-  Nginx[nginx: TLS on 443] -->|gRPC, plaintext| Proxy
-  Nginx -->|HTTP| Proxy
-  %% Each agent connects out, to nginx, so its arrows point back. The invisible links keep nginx and the agents
-  %% below the proxy, as on the other demo pages.
-  Proxy ~~~ Nginx
-  Nginx ~~~ Current
-  Nginx ~~~ Legacy
-  Current[agent-current, dashboard :8595] -->|gRPC over TLS| Nginx
-  Legacy[agent-legacy, release 4.6.0] -->|gRPC over TLS| Nginx
+  %% Each agent connects out to nginx, and nginx to the proxy, so each edge's arrowhead points toward the proxy. Each
+  %% is written from the upper end, which keeps the lower end below it, as a two-way edge whose other arrowhead
+  %% linkStyle takes off. Written from the lower end, an edge needed an invisible link to keep that order, and the
+  %% layout bent it around the link.
+  Proxy <-->|gRPC, plaintext| Nginx[nginx: TLS on 443]
+  Proxy <-->|HTTP| Nginx
+  Nginx <-->|gRPC over TLS| Current[agent-current, dashboard :8595]
+  Nginx <-->|gRPC over TLS| Legacy[agent-legacy, release 4.6.0]
   Current -->|HTTP fetch| App[nginx-app: simulated services]
   Legacy -->|HTTP fetch| App
+  linkStyle 2,3,4,5 marker-end:none
 
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
@@ -54,19 +54,10 @@ graph TB
   end
 ```
 
-## What You Need
-
-The proxy and agent are the latest release's images, from Docker Hub, the same ones the other demos run, so there's
-nothing to build, and agent-legacy is release 4.6.0's image. On macOS or Linux, the demo needs only:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Running It
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -109,10 +100,20 @@ anything shared.
 | `nginx-app` | The simulated services, with small metrics. |
 | `prometheus` | Scrapes both agents' paths through the proxy every 5 seconds, and the proxy's own metrics directly. |
 
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to where this page covers it.
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [Two agents reach the proxy through nginx, over TLS](#two-agents-reach-the-proxy-through-nginx-over-tls) | nginx ends the agents' TLS and passes their gRPC calls on; each agent has a token of its own | The usual way to put a service behind one TLS endpoint, and what nginx needs for it |
+| 2. [nginx's stream timeouts cut off an agent from 4.6.0 every minute](#nginxs-stream-timeouts-cut-off-an-agent-from-460-every-minute) | An agent without stream keepalives is cut off every minute, beside one that has them; longer timeouts fix it | What you see behind nginx with a proxy or agent from 4.6.0 or earlier, and the fix short of upgrading |
+| 3. [A shorter stream timeout, and a reload that doesn't reach connected agents](#a-shorter-stream-timeout-and-a-reload-that-doesnt-reach-connected-agents) | A timeout under the 30-second keepalive cuts agents off, and a reload doesn't reach connected ones | How to set `streamKeepAliveSecs` under a load balancer's idle timeout, and make a reload apply |
+| 4. [The dashboard behind nginx](#the-dashboard-behind-nginx) | A plain `proxy_pass` breaks the dashboard's live updates, and two settings fix it | What an nginx in front of the dashboard has to pass on |
+
 ## Scenarios
 
-`demo.sh`, in `demos/nginx`, drives the scenarios below. Run it from that directory, where `make up` started the demo;
-each command prints what to watch. `./demo.sh reset` puts nginx and the proxy back as `make up` starts them.
+`./demo.sh reset` puts nginx and the proxy back as `make up` starts them.
 
 ### Two Agents Reach the Proxy through nginx, over TLS
 

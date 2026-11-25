@@ -841,6 +841,10 @@ These support helpers also live here (not test classes themselves):
   closed after the spec, which must leave none of their shared collectors registered
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
   compilation, and native memory export flags each turn on only their own MetricsConfig field
+- **DemoTourTablesTest** — each demo's README and its page on the docs site open with a What This Demo Shows
+  table that names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their
+  parts' sections of its Guided Tour, a page's rows link only to sections the page has, and each `demo.sh`'s
+  `PAGE_URL`, which `make up` and `make tour` print, is its page
 - **DocsExamplesTest** — every `examples/*.conf` loads through `AgentOptions` and `ProxyOptions` (a discovery
   targets file through `FileDiscoverySource`) with labels service discovery can serve; `simple.conf` fetches the
   proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; and no `docker run`

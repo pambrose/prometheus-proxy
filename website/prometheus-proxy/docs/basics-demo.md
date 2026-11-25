@@ -21,17 +21,16 @@ graph TB
   }
   G[Grafana :3000] --> P[Prometheus :9090]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8094]
-  %% Each agent connects out to the proxy, so its arrow points back. The invisible links keep the agents
-  %% below the proxy.
-  Proxy ~~~ East
-  Proxy ~~~ West1
-  Proxy ~~~ West2
-  East[agent-east, dashboard :8095] -->|gRPC| Proxy
-  West1[agent-west-1, dashboard :8096] -->|gRPC| Proxy
-  West2[agent-west-2, dashboard :8097] -->|gRPC| Proxy
+  %% Each agent connects out to the proxy, so its edge's one arrowhead is at the proxy. Each is written from the upper
+  %% end, which keeps the lower end below it, as a two-way edge whose other arrowhead linkStyle takes off. Written from
+  %% the lower end, an edge needed an invisible link to keep that order, and the layout bent it around the link.
+  Proxy <-->|gRPC| East[agent-east, dashboard :8095]
+  Proxy <-->|gRPC| West1[agent-west-1, dashboard :8096]
+  Proxy <-->|gRPC| West2[agent-west-2, dashboard :8097]
   East -->|HTTP fetch| App[demo-app: simulated services]
   West1 -->|HTTP fetch| App
   West2 -->|HTTP fetch| App
+  linkStyle 2,3,4 marker-end:none
 
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
@@ -52,19 +51,10 @@ graph TB
   end
 ```
 
-## What You Need
-
-The proxy and agent are the latest release's images, from Docker Hub, so there's nothing to build. On macOS or Linux,
-the demo needs only:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Running It
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -114,6 +104,24 @@ for anything shared.
 | `prometheus` | Scrapes every path through the proxy every 5 seconds, with no targets in its config, and loads the project's alerting rules and a few fast demo ones. |
 | `grafana` | Opens on the demo's dashboard, which links to the two dashboards the project ships. |
 
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to where this page covers it.
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. How Prometheus scrapes services behind a firewall | Agents dial out to the proxy over gRPC, and Prometheus scrapes the proxy as if it were each service | A firewall that allows no inbound connections stays closed |
+| 2. [Agents, paths, and live scrapes on the proxy dashboard](#the-dashboard) | Every agent, the paths it registered, and each scrape as it happens, the proxy's own metrics included | One place to see who's connected and what's flowing, without reading logs |
+| 3. Target health and business metrics in Grafana | Target health, scrape outcomes, and the services' own metrics, which Prometheus finds through the proxy's discovery | Metrics arrive unchanged, and adding a service never touches Prometheus's config |
+| 4. [An outage and a timeout](#one-service-fails-another-hangs-and-the-rest-keep-working) | A service that answers 500 and one that hangs, each reported on its own path while the rest keep answering | A failing target is named, and a hung one gets a timeout rather than stalling Prometheus |
+| 5. [Two agents, one path](#a-second-agent-keeps-a-path-up-when-one-stops) | One agent of a consolidated pair stops, and the other keeps their path up | Consolidated mode gives a path redundancy |
+| 6. [New services, no restart](#new-services-appear-without-a-restart) | Services added to an agent's discovery file are scraped within seconds, and leave as cleanly | Services come and go with no restart and no change to Prometheus |
+| 7. [A silent agent is evicted](#the-proxy-evicts-an-agent-that-goes-silent) | A frozen agent keeps its connection but goes quiet; the proxy evicts it after 30 seconds | A hung agent is found, and doesn't hold its paths |
+| 8. [Per-team tokens](#per-team-tokens-restrict-which-paths-an-agent-can-register) | A contractor's agent is refused a path its identity doesn't allow, with the proxy's reason | One team's agent can't take over another team's metrics |
+| 9. [A refused path, a lost proxy](#an-agents-own-dashboard-shows-a-refused-path-and-a-lost-proxy) | The agent's own dashboard shows a refused path and a lost proxy, and Scrape now checks a target directly | When something's wrong, the agent's side says what, even while the proxy is down |
+| 10. [A duplicate agent](#a-duplicate-agent-takes-over-the-paths-and-the-proxy-logs-the-fix) | A copy of an agent without consolidated mode takes its paths, the two settle, and the proxy logs the fix | A misdeployment is reported with its fix, not left to flap |
+| 11. [A login for the dashboard](#a-login-for-the-dashboard) | A dashboard password from the proxy's environment, with signing in and out | The dashboard can be locked without a password in a file |
+
 ## The Dashboard
 
 The proxy's dashboard has four views: one organized by agent, one by path, one of what has happened, newest first,
@@ -153,8 +161,7 @@ lost proxy on it.
 
 ## Scenarios
 
-`demo.sh`, in `demos/basics`, drives the scenarios below. Run it from that directory, where `make up` started
-the demo; each command prints what to watch, and a minute between them lets the graphs catch up.
+Leave about a minute between scenarios, so the graphs catch up.
 
 ### An Outage and a Timeout { #one-service-fails-another-hangs-and-the-rest-keep-working }
 

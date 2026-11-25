@@ -44,22 +44,14 @@ flowchart TB
   style workers stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-## What You Need
+## Quick Start
 
-On macOS or Linux, the demo needs:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer, and to read the proxy and Prometheus.
-- A web browser.
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the oven inside Docker against the latest
-release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds
-from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
-
-## Quick Start
+release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds from
+the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -156,6 +148,19 @@ fun main() {
   `use { }` stops the agent, which disconnects from the proxy. The hook waits 25 seconds at most, short of the 30
   Kubernetes gives a pod to stop. Once it's added, `main` mustn't call `exitProcess()`, which waits for the hooks while
   this one waits for `main`, so the JVM would hang until the hook gives up.
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to its section under [Guided
+Tour](#guided-tour).
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [A worker with no port at all](#1-a-worker-with-no-port-at-all) | A worker with no HTTP server and nothing listening is scraped anyway, through the agent its `main` starts | Queue consumers, schedulers, and daemons can be monitored with no port |
+| 2. [The metrics in Grafana](#2-the-metrics-in-grafana) | The worker's metrics and its agent's at paths of their own, each series served once | No duplicate series, and no metrics port for the agent |
+| 3. [A rush, and two more ovens clear it](#3-a-rush-and-two-more-ovens-clear-it) | A backlog builds, and two more workers register paths of their own and clear it | Scaling out needs no change to Prometheus |
+| 4. [Scaling in stops ovens cleanly](#4-scaling-in-stops-ovens-cleanly) | On SIGTERM, each worker finishes its order, then its agent disconnects and its paths leave discovery | Scaling in loses no work, and Prometheus stops scraping the stopped workers by itself |
+| 5. [No proxy, no outage](#5-no-proxy-no-outage) | Workers with no proxy set, a bad certificate, or a refused token keep working, and log why | Trouble with metrics never stops the work |
 
 ## Guided Tour
 

@@ -176,7 +176,7 @@ print_urls() {
   echo "  1.1's, after a deploy:  $NEXT_AGENT_DASHBOARD_URL"
   echo "  Agent's /debug:         $AGENT_ADMIN_URL/debug"
   echo
-  echo "This demo, explained on the website: $PAGE_URL"
+  echo "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 rush | break-machine | deploy | proxy-stop ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -460,6 +460,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
     "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

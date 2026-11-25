@@ -55,22 +55,14 @@ graph TB
   linkStyle 1 marker-end:none
 ```
 
-## What You Need
+## Running It
 
-On macOS or Linux, the demo needs:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the roastery inside Docker with Maven,
 against the latest release's library, from Maven Central, so it needs no JDK or Maven. `make up-local` builds the
 library, the proxy, and the roastery from the checkout, which takes a JDK 17 or later and Maven 3.9 or later.
-
-## Running It
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -134,6 +126,18 @@ show each part:
   it isn't, so a lost proxy leaves the roastery's health UP. `./demo.sh health` shows it.
 
 [In Spring Boot](embedded-agent.md#in-spring-boot) shows how to wire the agent into an app yourself instead.
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to where this page covers it.
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. A Spring Boot app with the agent embedded | The starter runs the agent from properties in `application.yml`, and logs its secrets only as set | Embedding the agent takes configuration, not code |
+| 2. The app's metrics, read in-process, through the proxy | No `/actuator/prometheus`: the agent reads the app's registry, and Prometheus scrapes it through the proxy | There's no metrics endpoint to secure |
+| 3. [What Spring Boot's dependency management picked](#spring-boots-versions-of-the-agents-libraries) | The versions of the agent's libraries Spring Boot picked, against the agent's own, and how to pin one | You can see what the agent runs with in your app, and fix a conflict |
+| 4. [The proxy goes away, and the roastery stays healthy](#the-agents-dashboard) | With the proxy gone, Actuator reports the agent UNKNOWN and the app UP, and the agent's dashboard says why | A proxy outage never takes the app out of service |
+| 5. [A graceful shutdown takes the agent down first](#a-graceful-shutdown) | On SIGTERM, the agent stops before Tomcat's graceful shutdown begins | No scrape lands on a half-stopped app during a deploy |
 
 ## Spring Boot's Versions of the Agent's Libraries
 

@@ -28,18 +28,17 @@ graph TB
   G[Grafana :3100] --> P[Prometheus :9190]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8194]
   P -->|discovery and scrapes| Standby[Standby proxy, dashboard :8195]
-  %% Each agent connects out, through the WAN, so its arrows point back. The invisible links keep the WAN and the
-  %% agents below the proxies, as on the Basics Demo page.
-  Proxy ~~~ WAN
-  Standby ~~~ WAN
-  WAN ~~~ HQ
-  WAN ~~~ Branch
-  WAN[WAN: Toxiproxy] -->|primary links| Proxy
-  WAN -.->|standby links| Standby
-  HQ[agent-hq, dashboard :8196] -->|gRPC| WAN
-  Branch[agent-branch, dashboard :8197] -->|gRPC| WAN
+  %% Each agent connects out, through the WAN, so its edges' arrowheads point toward the proxies. Each is written from
+  %% the upper end, which keeps the lower end below it, as a two-way edge whose other arrowhead linkStyle takes off.
+  %% Written from the lower end, an edge needed an invisible link to keep that order, and the layout bent it around the
+  %% link.
+  Proxy <-->|primary links| WAN[WAN: Toxiproxy]
+  Standby <-.->|standby links| WAN
+  WAN <-->|gRPC| HQ[agent-hq, dashboard :8196]
+  WAN <-->|gRPC| Branch[agent-branch, dashboard :8197]
   HQ -->|HTTP fetch| App[network-app: simulated services]
   Branch -->|HTTP fetch| App
+  linkStyle 3,4,5,6 marker-end:none
 
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
@@ -58,19 +57,10 @@ graph TB
   end
 ```
 
-## What You Need
-
-The proxy and agent are the latest release's images, from Docker Hub, the same ones the Basics Demo runs, so there's
-nothing to build. On macOS or Linux, the demo needs only:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Running It
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -120,13 +110,26 @@ password, so this setup is for a laptop, not for anything shared.
 | `grafana` | Opens on the demo's dashboard: scrape time per agent, target health, payload size, connects, connected agents per proxy, evictions, bytes a filter saved, and firing alerts. |
 | `zipkin` | Receives a span from every proxy and agent for each gRPC call between them but heartbeats and the stream of path notices, and each scrape's spans. |
 
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to where this page covers it.
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. Two agents reach the proxy over a simulated WAN | Two agents, each with a link to a primary and a standby proxy, and the agent's dashboard listing them in failover order | The healthy baseline, and the agent's side of its connection |
+| 2. [A high-latency link slows scrapes, but nothing fails](#a-high-latency-link-slows-scrapes-but-nothing-fails) | 250 ms each way adds about half a second to each scrape, and every scrape succeeds | The connection is already open, so a far site costs one round trip |
+| 3. [A low-bandwidth link fails scrapes; filtering at the agent fixes it](#a-low-bandwidth-link-fails-scrapes-filtering-at-the-agent-fixes-it) | A thin link makes a large payload miss Prometheus's timeout, until the agent drops a metric family no one uses | Filtering at the agent saves bandwidth, storage, and query cost |
+| 4. [The primary proxy stops, and the agents fail over to the standby](#the-primary-proxy-stops-and-the-agents-fail-over-to-the-standby) | Both agents move to the standby within seconds, and an alert says they're off their primary | Failover needs no operator |
+| 5. [A link goes silent; the agent detects it and fails over](#a-link-goes-silent-the-agent-detects-it-and-fails-over) | A link that drops traffic without closing: the agent gives up on it, and fails over, while the proxy evicts it | A NAT or firewall that silently drops a connection is caught by timeouts alone |
+| 6. [A link that keeps dropping: the agent reconnects, traced in Zipkin](#a-link-that-keeps-dropping-the-agent-reconnects-traced-in-zipkin) | A link that closes every 15 seconds; the agent reconnects in milliseconds, and Zipkin shows each reconnect | A flapping link costs one scrape per drop, and tracing shows where |
+| 7. [The whole WAN goes down: an alert fires, and the agents reconnect](#the-whole-wan-goes-down-an-alert-fires-and-the-agents-reconnect) | Both agents lose both proxies; their targets leave discovery, one alert fires, and they reconnect when it's back | An outage raises one clear alert, not a wall of red targets |
+
 ## Scenarios
 
-`demo.sh`, in `demos/network`, drives the scenarios below. Run it from that directory, where `make up` started the
-demo; each command prints what to watch. The scenarios that change one agent's links change agent-branch's unless
-they're given `agent-hq`, and `./demo.sh heal` ends each scenario: it removes every change to the WAN, brings back
-every link and proxy, and returns any agent on the standby to the primary. The proxies' dashboards show each scenario
-as the proxies see it; agent-branch's own dashboard, at <http://localhost:8197/dashboard>, shows the agent's side.
+The scenarios that change one agent's links change agent-branch's unless they're given `agent-hq`, and `./demo.sh heal`
+ends each scenario: it removes every change to the WAN, brings back every link and proxy, and returns any agent on the
+standby to the primary. The proxies' dashboards show each scenario as the proxies see it, and agent-branch's own
+dashboard shows the agent's side.
 
 ### A High-Latency Link Slows Scrapes, but Nothing Fails
 

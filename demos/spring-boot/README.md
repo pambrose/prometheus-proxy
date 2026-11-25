@@ -24,10 +24,13 @@ one.
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph LR
   P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
-  %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
-  Proxy ~~~ Agent
-  Agent[embedded agent, run by the Spring Boot starter, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
+  %% The agent connects out to the proxy, so its edge's one arrowhead is at the proxy. The edge is written from the
+  %% proxy, which keeps the agent to the right of it, as a two-way edge whose other arrowhead linkStyle takes off.
+  %% Written from the agent, it needed an invisible link to keep that order, and the layout bent the edge around the
+  %% link.
+  Proxy <-->|gRPC over TLS, with a token| Agent[embedded agent, run by the Spring Boot starter, dashboard :8495]
   Agent -->|reads its metrics registry in-process| App[roastery: Spring Boot, Micrometer]
+  linkStyle 1 marker-end:none
 
   subgraph host[Proxy host]
     P
@@ -40,15 +43,14 @@ graph LR
   end
 ```
 
-## What You Need
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and `curl`, `make`, and `bash`.
-- For `make up-local` only: a JDK 17 or later and [Maven](https://maven.apache.org/install.html) 3.9 or later, which
-  build the library and the roastery from this checkout.
-
 ## Quick Start
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
+
+`make up` runs the latest release's proxy image, from Docker Hub, and builds the roastery inside Docker with Maven,
+against the latest release's library, from Maven Central, so it needs no JDK or Maven. `make up-local` builds the
+library, the proxy, and the roastery from the checkout, which takes a JDK 17 or later and Maven 3.9 or later.
 
 From a clone of the release, so the scripts match the images:
 
@@ -91,6 +93,19 @@ the saved ports.
 | `roastery` | The app, version 1.0 (`app/`): a Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. The prometheus-proxy agent runs inside it, started by the project's Spring Boot starter, and reads them, with the JVM's and Tomcat's, from the app's metrics registry, in-process; Actuator exposes only its health. Its dashboard is on, at port 8495, from the environment (`PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`). |
 | `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with none of them in a file. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to its section under [Guided
+Tour](#guided-tour).
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [A Spring Boot app with the agent embedded](#1-a-spring-boot-app-with-the-agent-embedded) | The starter runs the agent from properties in `application.yml`, and logs its secrets only as set | Embedding the agent takes configuration, not code |
+| 2. [The app's metrics, read in-process, through the proxy](#2-the-apps-metrics-read-in-process-through-the-proxy) | No `/actuator/prometheus`: the agent reads the app's registry, and Prometheus scrapes it through the proxy | There's no metrics endpoint to secure |
+| 3. [What Spring Boot's dependency management picked](#3-what-spring-boots-dependency-management-picked) | The versions of the agent's libraries Spring Boot picked, against the agent's own, and how to pin one | You can see what the agent runs with in your app, and fix a conflict |
+| 4. [The proxy goes away, and the roastery stays healthy](#4-the-proxy-goes-away-and-the-roastery-stays-healthy) | With the proxy gone, Actuator reports the agent UNKNOWN and the app UP, and the agent's dashboard says why | A proxy outage never takes the app out of service |
+| 5. [A graceful shutdown takes the agent down first](#5-a-graceful-shutdown-takes-the-agent-down-first) | On SIGTERM, the agent stops before Tomcat's graceful shutdown begins | No scrape lands on a half-stopped app during a deploy |
 
 ## Guided Tour
 

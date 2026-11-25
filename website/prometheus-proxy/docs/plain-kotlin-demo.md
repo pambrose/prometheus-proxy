@@ -32,12 +32,14 @@ graph TB
   }
   G[Grafana :3600] --> P[Prometheus :9690]
   P -->|reads /discovery, scrapes each oven's path| Proxy[Proxy, dashboard :8694]
-  %% The agents connect out to the proxy, so their arrow points back. The invisible link keeps the ovens below.
-  Proxy ~~~ Agent
-  Agent[embedded agent, in each oven] -->|gRPC, with a token, outbound only| Proxy
+  %% Each oven's agent connects out to the proxy, so its edge's one arrowhead is at the proxy. The edge is written from
+  %% the proxy, which keeps the agent below it, as a two-way edge whose other arrowhead linkStyle takes off. Written
+  %% from the agent, it needed an invisible link to keep that order, and the layout bent the edge around the link.
+  Proxy <-->|gRPC, with a token, outbound only| Agent[embedded agent, in each oven]
   Agent -->|reads the registry in-process| Oven[oven: a plain Kotlin program, no port]
   Oven -->|takes orders| Redis[Redis queue]
   Counter[counter] -->|pushes orders| Redis
+  linkStyle 2 marker-end:none
 
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
@@ -54,22 +56,14 @@ graph TB
   end
 ```
 
-## What You Need
+## Running It
 
-On macOS or Linux, the demo needs:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
-  Compose plugin.
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer, and to read the proxy and Prometheus.
-- A web browser.
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, GNU
+`make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the oven inside Docker against the latest
-release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds
-from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
-
-## Running It
+release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds from
+the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -156,6 +150,18 @@ The oven also has a `logback.xml`, which sets the agent's logging along with the
 Logback configuration of its own: INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no
 framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which
 would bury the lines `startIfConfigured()` logs. [Logging](embedded-agent.md#logging) covers the agent's loggers.
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to where this page covers it.
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [A worker with no port at all](#a-worker-with-no-port) | A worker with no HTTP server and nothing listening is scraped anyway, through the agent its `main` starts | Queue consumers, schedulers, and daemons can be monitored with no port |
+| 2. [The metrics in Grafana](#its-metrics-and-its-agents) | The worker's metrics and its agent's at paths of their own, each series served once | No duplicate series, and no metrics port for the agent |
+| 3. [A rush, and two more ovens clear it](#scaling-out-and-in) | A backlog builds, and two more workers register paths of their own and clear it | Scaling out needs no change to Prometheus |
+| 4. [Scaling in stops ovens cleanly](#scaling-out-and-in) | On SIGTERM, each worker finishes its order, then its agent disconnects and its paths leave discovery | Scaling in loses no work, and Prometheus stops scraping the stopped workers by itself |
+| 5. [No proxy, no outage](#no-proxy-no-outage) | Workers with no proxy set, a bad certificate, or a refused token keep working, and log why | Trouble with metrics never stops the work |
 
 ## A Worker with No Port
 

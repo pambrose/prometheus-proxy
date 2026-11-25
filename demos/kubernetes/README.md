@@ -7,7 +7,7 @@ installed with the project's own Helm charts, from [`charts/`](../../charts). It
 cluster exposes nothing, how `kubectl port-forward` reaches the agent's own dashboard inside it all the same, that
 annotating a Service is all it takes for Prometheus to scrape it, that Kubernetes replaces a lost agent by itself, and
 what a change to the agent's config costs next to a change to its targets.
-Unlike the other demos, it needs kind, `kubectl`, and Helm as well as Docker: see [What you need](#what-you-need).
+Unlike the other demos, it needs kind, `kubectl`, and Helm as well as Docker: see [Quick Start](#quick-start).
 
 It follows the [nginx demo](../nginx), the [network demo](../network), and the [basics demo](../basics): those show
 the dashboard, Grafana, the proxy's features, and the link through the firewall, and this one assumes them. It keeps the
@@ -30,26 +30,16 @@ the deployment itself.
                 Prometheus :9290 (5s scrapes, 4s timeout)        dashboard :8294        scrape port :8280
 ```
 
-## What You Need
-
-The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
-build. Unlike the other demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
-needs:
-
-- [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
-  node as a container, and each node uses about 1 to 1.5 GiB of memory, so give Docker Desktop about 4 GB (its
-  Resources settings).
-- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or later,
-  [`kubectl`](https://kubernetes.io/docs/tasks/tools/) 1.36 to 1.38, and [Helm](https://helm.sh/docs/intro/install/) 3
-  or 4. The clusters run Kubernetes 1.37, the version of the node image `kind/*.yaml` pins, and kubectl supports one
-  minor version either side of it. `demo.sh` checks for each, and for kind's and Helm's versions. If kind can't create
-  a cluster, see its [known issues](https://kind.sigs.k8s.io/docs/user/known-issues/).
-- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
-  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
-- `curl`, which the demo uses to wait for each service to answer.
-- A web browser.
-
 ## Quick Start
+
+On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/get-docker/), `git`, GNU `make`, and
+`curl`, as the other demos do, and also [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or
+later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/) 1.36 to 1.38, and
+[Helm](https://helm.sh/docs/intro/install/) 3 or 4. The clusters run Kubernetes 1.37, the version of the node image the
+demo pins, and kubectl supports one minor version either side of it; `demo.sh` checks for each, and for kind's and
+Helm's versions. kind runs each cluster's node as a container, which uses about 1 to 1.5 GiB of memory, so give Docker
+Desktop about 4 GB (its Resources settings). If kind can't create a cluster, see its [known
+issues](https://kind.sigs.k8s.io/docs/user/known-issues/).
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -108,6 +98,19 @@ every command, and puts back the context that was current when it creates a clus
 | `pp-target` / `monitoring` | `prometheus-agent` | The agent, from the `prometheus-agent` chart (`values/agent.yaml`), named for its pod. It dials the proxy's NodePort on `pp-monitoring`'s node, and its token comes from a Secret. Its one static path is its own metrics; the services come from discovery. Its dashboard is on (`dashboard.enabled`), on port 8095 in its pod only, not on its Service. |
 | `pp-target` / `monitoring` | `targets-sync` | Lists and watches the Services in `apps`, and writes each annotated `prometheus-proxy/path` into the agent's targets ConfigMap, `agent-targets` (`sync/targets_sync.py`). Part of the demo, not the product. |
 | `pp-target` / `apps` | `orders`, `payments`, `shipping` | The simulated services (`app/services_app.py`), one per pod, each behind a ClusterIP Service annotated `prometheus-proxy/path`. Traffic follows a 5-minute "day". |
+
+## What This Demo Shows
+
+Each part of the guided tour, `make tour`, makes one point. A part's name links to its section under [Guided
+Tour](#guided-tour).
+
+| Part | What it shows | Why it matters |
+|---|---|---|
+| 1. [The Helm charts on two clusters, with no inbound access](#1-the-helm-charts-on-two-clusters-with-no-inbound-access) | The proxy chart in one cluster, and the agent chart in another that exposes nothing | Nothing in the monitored cluster opens to the outside |
+| 2. [The agent's own dashboard, reached with kubectl port-forward](#2-the-agents-own-dashboard-reached-with-kubectl-port-forward) | The agent's dashboard through `kubectl port-forward`, and Scrape now against cluster-local URLs | The agent's view, reached without exposing anything new |
+| 3. [Annotate a Service, and Prometheus scrapes it](#3-annotate-a-service-and-prometheus-scrapes-it) | An annotated Service is scraped within seconds, and leaves when the annotation does, with no restart | A team adds monitoring with one annotation |
+| 4. [Kubernetes replaces a deleted agent pod in about a second](#4-kubernetes-replaces-a-deleted-agent-pod-in-about-a-second) | A deleted agent pod is replaced, and the new one registers every path again | The Deployment heals a lost agent by itself, at the cost of a scrape |
+| 5. [A config change restarts the agent; a targets change doesn't](#5-a-config-change-restarts-the-agent-a-targets-change-doesnt) | A change to the agent's main config replaces its pod, where part 3's change of targets didn't | Why the chart keeps targets in a ConfigMap of their own |
 
 ## Guided Tour
 
