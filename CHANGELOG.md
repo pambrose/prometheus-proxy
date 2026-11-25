@@ -315,6 +315,12 @@ All notable changes to this project are documented in this file.
   one stuck past its timeout holds neither another path's scrape nor the agent's shutdown
 - Update the GitHub Actions the workflows pin by commit SHA: `actions/setup-java` 6.2.0 → 6.3.0 and
   `anthropics/claude-code-action` 1.0.275 → 1.0.278 (#477, #521)
+- `ProxyRegistry.tla` drops an orphaned connection's unread path notices as the code does, where it let the dead
+  connection deliver them, checks that no invalidated connection holds any (`InvalidatedHasNoNotices`), and sends a
+  refused reclaim the notice the proxy sends it
+- `ProxyPathManagerLincheckTest` runs takeovers and reclaims under contention, among agents of several launches: a
+  reclaim never takes a path from a live agent of another launch, and the waiting lists and unread notices stay
+  consistent
 
 ### Documentation
 

@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 33 fixed, 39 open (8 medium, 64 low, no high); #25 is partly fixed.
+**Status:** 72 issues — 35 fixed, 37 open (8 medium, 64 low, no high); #25 is partly fixed.
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
 
@@ -22,7 +22,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 
 | #  | Finding                                                                                              | Area       | Severity | Status |
 |----|------------------------------------------------------------------------------------------------------|------------|----------|--------|
-| 1  | `ProxyRegistry.tla` lets an invalidated connection deliver path notices the code drops               | Proxy      | low      | ⬜      |
+| 1  | `ProxyRegistry.tla` lets an invalidated connection deliver path notices the code drops               | Proxy      | low      | ✅      |
 | 2  | The forward span loses its queue-wait and "sent" tags when the send outlasts the scrape              | Proxy      | low      | ⬜      |
 | 3  | The 80% path and identity limit warnings repeat each time the count climbs back to the threshold     | Proxy      | low      | ⬜      |
 | 4  | The proto and AGENTS.md misdescribe the path-notices stream's keepalives                             | Proxy      | low      | ⬜      |
@@ -70,7 +70,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ⬜      |
 | 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ⬜      |
 | 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
-| 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ⬜      |
+| 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ✅      |
 | 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ✅      |
 | 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ⬜      |
 | 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ✅      |
@@ -156,7 +156,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 8    | ⬜      | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
 | 9    | ⬜      | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
 | 10   | ⬜      | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
-| 11   | ⬜      | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
+| 11   | ✅ #559 | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
 | 12   | ⬜      | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
 | 13   | ✅ #555 | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
 | 14   | ⬜      | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
@@ -295,7 +295,7 @@ the tree, and #29's new reach by a run that passed `UP-TO-DATE` on four broken d
 
 ## 📡 Proxy
 
-### 1. ⬜ `ProxyRegistry.tla` invalidates an orphaned connection without clearing its unread notices, which the code's `invalidate()` clears, so the model lets a dead connection deliver notices the code drops
+### 1. ✅ `ProxyRegistry.tla` invalidates an orphaned connection without clearing its unread notices, which the code's `invalidate()` clears, so the model lets a dead connection deliver notices the code drops
 
 **Severity:** low · **Confidence:** confirmed by trace (model against code)
 
@@ -328,6 +328,8 @@ Then run `make tla-checks-full`.
 
 **Tests:** `make tla-checks-full` still passes. A temporary invariant `\A o \in Conns : ~valid[o] /\ phase[o] =
 "live" => notices[o] = {}` fails in `ProxyRegistryReconnect.cfg` today and holds after the change.
+
+**Resolution:** Fixed in #559. `RegisterLocked` clears an orphan's unread notices as it invalidates it, and the new `InvalidatedHasNoNotices` is checked in all four ProxyRegistry configs; the optional `valid[c]` guard on `NoticeEmit` was left out, as the invariant would catch the slip it hid. One correction: no shipped config broke the invariant before the fix, since with one path an orphan has always just lost it to its own launch; with two paths and three connections the unchanged model breaks it at depth 12, a model too large to ship. TLC also showed the model needed the notice a refused reclaim sends (`tellHolder` in `reclaimRejection`), which the appendix had called irrelevant, so it sends it now.
 
 ### 2. ⬜ `sendScrapeRequest` tags the forward span after a send that can outlast the scrape, so a timed-out scrape's span loses its queue wait and "sent to agent"
 
@@ -2440,7 +2442,7 @@ dispatcher. The `close()` check fails under a joining `close()`.
 
 **Resolution:** Fixed in #555. `MetricsSourceTest` checks that a source throwing `OutOfMemoryError` or `StackOverflowError` lets it propagate; that while one source is stuck past its timeout, another path's source answers 200; and, in a test of its own, that `close()` returns within 5 seconds with the source still stuck. Each failed with the code broken: the `VirtualMachineError` branch dropped, sources on `limitedParallelism(1)`, and a `close()` that joins the source scope.
 
-### 49. ⬜ `ProxyPathManagerLincheckTest` never runs the takeover and reclaim code under contention: its agents share one launch, none reads path notices, and none reclaims
+### 49. ✅ `ProxyPathManagerLincheckTest` never runs the takeover and reclaim code under contention: its agents share one launch, none reads path notices, and none reclaims
 
 **Severity:** low · **Confidence:** confirmed by trace. The gap is confirmed; the impact is limited, since the code
 runs under the `pathMap` lock.
@@ -2478,6 +2480,8 @@ The spec's header says it checks `ProxyRegistry.tla`'s invariants on the real co
   - no `waiting` list holds more than `MAX_WAITERS_PER_PATH` agents.
 
 **Tests:** The extended spec fails with `reclaimRejection`'s holder check removed (`make lincheck-tests`).
+
+**Resolution:** Fixed in #559. The spec's seven agents include two team-a launches that read notices, a reconnected context of one, and one that predates notices. A `reclaim` operation records a reclaim that displaced a live agent of another launch, or one refused with no such holder. `@Validate` checks an invalidated agent's notices, notices to an agent that predates them, a notice about a path the agent serves, and each waiter's notices, launch, connection, and uniqueness. It failed for six breaks of main source, the holder check in `reclaimRejection` among them. "Every waiter is valid" was left out: an old context of a launch can wait on another path until its connection is removed, which is harmless.
 
 ### 50. ✅ A change no longer waking the dashboards' push loop fails no test: every push spec runs on a 1-second tick and waits 10 seconds or more
 
