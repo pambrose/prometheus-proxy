@@ -2,6 +2,16 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### Documentation
+
+- **The examples serve the agent's metrics without a port.** `examples/simple.conf`, which the Quick Start runs, has
+  the agent serve its own metrics at `/agent_metrics` with `agent.metrics.proxyPath`, so its metrics port stays off,
+  as do the basics and network demos' agents.
+
 ## 4.7.0
 
 _Released 2026-11-24_

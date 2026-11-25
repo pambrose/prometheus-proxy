@@ -461,7 +461,7 @@ Start an agent container with:
 # Agent with remote config file
 docker run --detach --name prometheus-agent --restart unless-stopped \
         --network prometheus-proxy-net \
-        -p 8083:8083 -p 8093:8093 \
+        -p 8093:8093 \
         --env PROXY_HOSTNAME=prometheus-proxy \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf' \
         pambrose/prometheus-agent:4.7.0
@@ -476,8 +476,8 @@ the proxy and the agent metrics would be available from the proxy's scrape port 
 * http://localhost:8080/proxy_metrics
 * http://localhost:8080/agent_metrics
 
-Ports 8082 and 8083 serve the proxy's and the agent's own metrics at `/metrics`, which the agent fetches for those two
-paths.
+The proxy's metrics port, 8082, serves `/metrics`, which the agent fetches for `/proxy_metrics`; `/agent_metrics` is
+the agent's own.
 
 If you want to use a local config file with a docker container (instead of the above HTTP-served config file), use the
 docker [mount](https://docs.docker.com/storage/bind-mounts/) option. Assuming the config file `prom-agent.conf`

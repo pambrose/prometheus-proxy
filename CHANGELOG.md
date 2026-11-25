@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Documentation
+
+- `examples/simple.conf` and the basics, network, and Kubernetes demos' agents serve their own metrics through the
+  proxy with `agent.metrics.proxyPath`, in-process, where each scraped its own port, `localhost:8083`, as a path; all
+  but the Kubernetes demo's, whose chart opens the port for its Service, leave the metrics port off
+
 ## [4.7.0] - 2026-11-24
 
 ### New Features
