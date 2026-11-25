@@ -206,10 +206,10 @@ the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spr
 
 - **Without a proxy,** neither the builder's `proxy` nor the agent's own `PROXY_HOSTNAME`, as on a developer's machine,
   it logs one INFO line, `No proxy is set, so the Prometheus agent stays off`, and returns `null`.
-- **A start that fails,** for a setting the agent rejects or for anything else, such as its admin port being in use,
-  is logged at ERROR, `The Prometheus agent could not start, so it stays off:` and why, which holds no token, password,
-  or PEM, and it returns `null`, so the app runs on. To report the failure elsewhere, as to a chat channel, pass
-  `onFailure`, which is given why, as the log line has it, and what was thrown.
+- **A start that fails,** for a setting the agent rejects or for anything else, such as its admin port being in use
+  or its start taking over 30 seconds, is logged at ERROR, `The Prometheus agent could not start, so it stays off:`
+  and why, which holds no token, password, or PEM, and it returns `null`, so the app runs on. To report the failure
+  elsewhere, as to a chat channel, pass `onFailure`, which is given why, as the log line has it, and what was thrown.
 - **The handle is `AutoCloseable`,** and Kotlin's `use` and Java's try-with-resources both take a `null` one, so a
   program that runs while its agent does reads as `startIfConfigured().use { worker.run() }`: the worker runs whether
   or not the agent started, and the agent stops after it. Write `.use`, not `?.use`, which skips the block for `null`.
@@ -420,11 +420,12 @@ exception that rejected the setting, usually an `IllegalArgumentException`. When
 with credentials, as a Typesafe `ConfigException`'s does for a value read from a config URL, the cause is a stand-in
 `ConfigLoadException` with the redacted message and the original stack trace.
 
-`IllegalStateException` when the agent fails to start (for example, its admin or metrics port is already in
-use), with the startup failure as its cause. A failed start releases everything the agent had opened. Also, before the
-agent is built, when the app's dependency management sets kotlinx-coroutines below 1.11.0 or the Prometheus Java client
-below 1.7.0, as Spring Boot 4.0 and 4.1 do ([In Spring Boot](#in-spring-boot)): its message names the Spring Boot
-property that sets each.
+`IllegalStateException` when the agent fails to start (for example, its admin, metrics, or dashboard port is already
+in use), with the startup failure as its cause, or doesn't start within 30 seconds, with a `TimeoutException` as its
+cause. A failed start releases everything the agent had opened, and an agent still starting when the wait ends stops
+as soon as its startup does, without connecting. Also, before the agent is built, when the app's dependency
+management sets kotlinx-coroutines below 1.11.0 or the Prometheus Java client below 1.7.0, as Spring Boot 4.0 and 4.1
+do ([In Spring Boot](#in-spring-boot)): its message names the Spring Boot property that sets each.
 
 ### `EmbeddedAgentConfig`
 

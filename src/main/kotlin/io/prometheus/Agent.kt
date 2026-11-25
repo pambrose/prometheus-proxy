@@ -81,6 +81,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeoutException
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.update
@@ -867,46 +868,42 @@ class Agent(
 
   override val registersShutDownHook: Boolean get() = !isEmbedded
 
-  // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- an admin or metrics port already in
-  // use -- the service goes straight to FAILED. super.startUp() stops the servers it had already started, but without
-  // this the gRPC channel and HTTP client cache built in the constructor would stay open for the life of the JVM.
+  // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- a port already in use -- the service
+  // goes straight to FAILED, so each part of the startup that fails releases what came before it. super.startUp()
+  // stops the admin, metrics, and Zipkin services it had started when it fails itself (common-utils 5.0.0), but not the
+  // gRPC channel and HTTP client cache this class's constructor built.
   override fun startUp() {
-    runCatching {
+    startOrRelease(releaseSteps) {
       // Built here, so a registry that rejects them fails startup visibly instead of every connect, forever.
       if (collectsMetrics) {
         val _ = metrics
         if (registersJvmMetrics) registerJvmMetricGroups(agentConfigVals.metrics)
       }
       super.startUp()
-      dashboardService?.startSync()
-    }.onFailure { e ->
-      releaseAfterFailedStartUp()
-      throw e
     }
+    // Once super.startUp() returns, its admin, metrics, and Zipkin services run and its JVM shutdown hook is
+    // registered, so a dashboard that fails to start, on a port that's taken, releases them too, as shutDown() does.
+    // Left running, they kept a standalone agent's JVM up after main() threw, its /ping answering 200 with no
+    // connection (November 23 review, #5).
+    startOrRelease(releaseSteps + { super.shutDown() }) { dashboardService?.startSync() }
   }
 
   // What this class's constructor built and startup started, released whether startup failed or the agent stops. The
   // tracing closes after the services that trace, and before super.shutDown() stops the reporter, which sends what's
-  // still queued. A getter: an initBlock that starts the agent runs in the init block, before a property declared down
-  // here is set, so a startup that failed there released through a null list, and a NullPointerException took the
-  // failure's place. listOf, not a collection literal: Dokka 2.3.0 can't translate a public class's property
-  // initialized with one, and fails the KDoc build.
+  // still queued. A dashboard that failed to start has already stopped its server (DashboardService.startUp), and a
+  // FAILED service rejects stopSync(). A getter: an initBlock that starts the agent runs in the init block, before a
+  // property declared down here is set, so a startup that failed there released through a null list, and a
+  // NullPointerException took the failure's place. listOf, not a collection literal: Dokka 2.3.0 can't translate a
+  // public class's property initialized with one, and fails the KDoc build.
   private val releaseSteps: List<() -> Unit>
     get() =
       listOf(
-        { dashboardService?.stopSync() },
+        { dashboardService?.takeUnless { it.state() == Service.State.FAILED }?.stopSync() },
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
         { if (tracingHolder.isInitialized()) tracing?.close() },
         { closeMetrics() },
       )
-
-  // super.startUp() stops the admin, metrics and Zipkin services it started when it fails (common-utils 5.0.0), but
-  // not the gRPC channel and HTTP client cache this class's constructor built. Each step runs whether or not the
-  // other succeeds.
-  private fun releaseAfterFailedStartUp() {
-    releaseSteps.runEach().forEach { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
-  }
 
   // Every step runs even when an earlier one fails, so a gRPC shutdown that throws can't leave the client cache open,
   // or the admin and metrics servers that super.shutDown() stops running. The first failure is rethrown with the rest
@@ -918,9 +915,6 @@ class Agent(
       throw first
     }
   }
-
-  // Runs every step, including those after one that throws, and returns what they threw.
-  private fun List<() -> Unit>.runEach(): List<Throwable> = mapNotNull { step -> runCatching(step).exceptionOrNull() }
 
   // Removes this agent from the agent metrics every agent in the JVM shares, if it built them.
   private fun closeMetrics() {
@@ -936,10 +930,26 @@ class Agent(
   // channel/servlets but leave isRunning true, so the run loop would reconnect forever.
   fun stop() {
     // A FAILED service rejects stopSync(), and has nothing left to stop: a failure in run() already went through
-    // shutDown(), and a failure in startUp() through super.startUp()'s own rollback and releaseAfterFailedStartUp().
+    // shutDown(), and a failure in startUp() through startUp()'s own release, which stops what super.startUp() started
+    // whether super.startUp() or the dashboard failed.
     if (state() == Service.State.FAILED)
       return
     stopSync()
+  }
+
+  // Starts the agent and waits up to [timeout] for it to run, as startEmbedded does. Guava leaves a start that takes
+  // longer STARTING, and runs it to the end, so an embedded agent whose start timed out then connected and served its
+  // paths with no handle to stop it, its thread, which isn't a daemon, holding up its host's JVM (November 23
+  // review, #12). stopAsync() on a STARTING service stops it as soon as startUp() returns: Guava skips run(), so the
+  // agent never connects, and calls shutDown(), which releases what startUp() opened. A startUp() that fails
+  // releases it itself.
+  internal fun startWithin(timeout: Duration) {
+    try {
+      startSync(timeout)
+    } catch (e: TimeoutException) {
+      stopAsync()
+      throw IllegalStateException("The agent didn't start within $timeout; it stops as soon as its startup ends", e)
+    }
   }
 
   override fun toString() =
@@ -963,6 +973,9 @@ class Agent(
     // The connection's scrape-request channel is sized at 2x the backlog-unhealthy threshold so the
     // health check can fire (backlog >= threshold) before the channel actually blocks senders (finding 28).
     private const val BACKLOG_CAPACITY_MULTIPLIER = 2
+
+    // How long startAsyncAgent and EmbeddedAgentConfig.start wait for the agent to start, startSync()'s default.
+    private val EMBEDDED_START_TIMEOUT = 30.seconds
 
     /**
      * JVM entry point for the standalone Agent process.
@@ -1053,11 +1066,13 @@ class Agent(
      *   character, `?`, or `#`), a filter regex that doesn't compile, or an HTTPS trust store or TLS certificate file
      *   that is missing or malformed. Credentials in a config URL are redacted from its message and from every message
      *   in its cause chain.
-     * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
-     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first. Also
-     *   when the app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java client
-     *   below 1.7.0, as Spring Boot 4.0 and 4.1 do, before the Agent is built: its message names the Spring Boot
-     *   property that sets each.
+     * @throws IllegalStateException if the Agent fails to start, for example because its admin, metrics, or dashboard
+     *   port is already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
+     *   Also when the Agent doesn't start within 30 seconds, with a `java.util.concurrent.TimeoutException` as the
+     *   cause: the Agent then stops as soon as its startup ends, releasing what it opened, and never connects. Also
+     *   when the app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java client below
+     *   1.7.0, as Spring Boot 4.0 and 4.1 do, before the Agent is built: its message names the Spring Boot property
+     *   that sets each.
      */
     @Suppress("unused")
     @JvmStatic
@@ -1090,11 +1105,13 @@ class Agent(
      * @return An [EmbeddedAgentInfo] handle for inspecting and shutting down the launched Agent.
      * @throws io.prometheus.common.ConfigLoadException when a setting is invalid, in the cases the [startAsyncAgent]
      *   that takes a config file lists.
-     * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
-     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first. Also
-     *   when the app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java client
-     *   below 1.7.0, as Spring Boot 4.0 and 4.1 do, before the Agent is built: its message names the Spring Boot
-     *   property that sets each.
+     * @throws IllegalStateException if the Agent fails to start, for example because its admin, metrics, or dashboard
+     *   port is already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
+     *   Also when the Agent doesn't start within 30 seconds, with a `java.util.concurrent.TimeoutException` as the
+     *   cause: the Agent then stops as soon as its startup ends, releasing what it opened, and never connects. Also
+     *   when the app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java client below
+     *   1.7.0, as Spring Boot 4.0 and 4.1 do, before the Agent is built: its message names the Spring Boot property
+     *   that sets each.
      */
     @Suppress("unused")
     @JvmStatic
@@ -1118,10 +1135,10 @@ class Agent(
       // An app's dependency management, Spring Boot's among them, can set a library below the version the agent runs
       // on, which would fail it only once it ran
       RuntimeLibraries.requireSupported()
-      // startSync(), not startAsync(): a startup failure must reach the caller as an exception rather than leave it
-      // holding a handle to a FAILED agent.
+      // Waits for the start, not startAsync(): a startup failure must reach the caller as an exception rather than
+      // leave it holding a handle to a FAILED agent. A start that times out stops rather than run on with no handle.
       val agent = newAgent(exitOnMissingConfig, options).apply { isEmbedded = true }
-      agent.startSync()
+      agent.startWithin(EMBEDDED_START_TIMEOUT)
       return EmbeddedAgentInfo(agent)
     }
   }
@@ -1143,3 +1160,18 @@ private fun registerJvmMetricGroups(metrics: ConfigVals.Agent.Metrics) =
       enableNativeMemoryExports = nativeMemoryExportsEnabled,
     )
   }
+
+// Runs [start], and when it throws, runs every one of [release] and rethrows, with what they threw attached as
+// suppressed exceptions.
+private fun startOrRelease(
+  release: List<() -> Unit>,
+  start: () -> Unit,
+) {
+  runCatching(start).onFailure { e ->
+    release.runEach().forEach(e::addSuppressed)
+    throw e
+  }
+}
+
+// Runs every step, including those after one that throws, and returns what they threw.
+private fun List<() -> Unit>.runEach(): List<Throwable> = mapNotNull { step -> runCatching(step).exceptionOrNull() }

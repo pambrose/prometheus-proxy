@@ -14,6 +14,7 @@ _Released 2026-11-23_
   path, with the proxy's reason for refusing one and when it's tried again; each path's metric filter and what it has
   dropped; the discovery file; and the agent's settings. It is off by default, and asks for a login once you set
   `agent.dashboard.password` (or `DASHBOARD_PASSWORD`). An embedded agent turns it on with `dashboard(port, host)`.
+  If its port is taken, the agent doesn't start, as with a taken admin or metrics port.
 - **Each path's scrapes, as the agent saw them.** The agent's dashboard shows a path's recent scrapes: the target's
   status, how long the fetch took, and how big the body was before and after the path's metric filter. Its Scrape now
   button fetches a target from the agent right away, even for a path the proxy refused, and shows the start of what
@@ -117,6 +118,10 @@ _Released 2026-11-23_
   styles again.
 - **Hovered rows stay readable.** In a dashboard's list of agents or paths, a hovered row's address line fell under
   the WCAG AA contrast floor; it now darkens on hover.
+- **An embedded agent that's slow to start stops.** When an embedded agent took over 30 seconds to start, the start
+  failed, and `startIfConfigured()` said the agent stays off, but it went on starting and then connected, with
+  nothing able to stop it, and kept your app from exiting. It now stops as soon as its startup ends, without
+  connecting.
 
 ### Behavior Changes
 

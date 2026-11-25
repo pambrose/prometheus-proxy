@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 26 fixed, 46 open (8 medium, 64 low, no high); #25 is partly fixed.
+**Status:** 72 issues — 28 fixed, 44 open (8 medium, 64 low, no high); #25 is partly fixed.
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
 
@@ -26,14 +26,14 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 2  | The forward span loses its queue-wait and "sent" tags when the send outlasts the scrape              | Proxy      | low      | ⬜      |
 | 3  | The 80% path and identity limit warnings repeat each time the count climbs back to the threshold     | Proxy      | low      | ⬜      |
 | 4  | The proto and AGENTS.md misdescribe the path-notices stream's keepalives                             | Proxy      | low      | ⬜      |
-| 5  | A dashboard bind failure leaves the agent's admin and metrics servers running, and `/ping` healthy   | Agent      | medium   | ⬜      |
+| 5  | A dashboard bind failure leaves the agent's admin and metrics servers running, and `/ping` healthy   | Agent      | medium   | ✅      |
 | 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ⬜      |
 | 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ⬜      |
 | 8  | The starter's agent dies with a `NoSuchMethodError` on Spring Boot 4.0.x and 4.1.0                   | Embedding  | medium   | ✅      |
 | 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ✅      |
 | 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ⬜      |
 | 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ⬜      |
-| 12 | A start that times out keeps starting, with no handle to stop it                                     | Embedding  | low      | ⬜      |
+| 12 | A start that times out keeps starting, with no handle to stop it                                     | Embedding  | low      | ✅      |
 | 13 | An anonymous `POST /logout` forces a collect and a push to every open page, once per request         | Dashboards | medium   | ⬜      |
 | 14 | Ending a session whose socket has stopped reading freezes every open page                            | Dashboards | medium   | ⬜      |
 | 15 | A session that stops reading stays open, holding a `maxSessions` slot                                | Dashboards | low      | ⬜      |
@@ -149,7 +149,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 1    | ⬜      | #25, #30, #61, #62, #67      | Release checks that miss nothing, and demos that pull a published release | `demos/*/demo.sh`, the demo READMEs, `bin/docker-*.sh`, `Makefile` (`release-check`, `_check-demos-pull-release`, `SITE_VERSION_SOURCES`, `release`), `docs/RELEASE.md`, the publishing-release skill, a new `misc/` spec | No longer blocks the 4.7.0 tag: #537's `_check-demos-pull-release` refuses a release until the demos are lowered. A gate on whether the release's images exist drops that release-day edit and keeps `master`'s `make up` right between the bump and the publish. For 4.7.0 itself, set both changelogs' date in the release's last change (#62). #67 is the demos' links to a site that, between releases, is the last release's. |
 | 2    | ✅ #550 | #8, #24, #31                 | A Spring Boot starter that runs on the Spring Boot it names           | `agent/AgentMetrics.kt`, `Agent.kt` (`connectOutcome`), `spring-boot-starter/` (`PrometheusProxyAgentProperties`, the website YAML), `spring-boot-starter.md`, `embedded-agent.md` | The starter is new in 4.7.0; fixing it before the tag means no release ships it broken. A starter test at Spring Boot 4.0's or 4.1.0's Prometheus client pins #8.                                 |
 | 3    | ✅ #551 | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
-| 4    | ⬜      | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
+| 4    | ✅ #557 | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
 | 5    | ⬜      | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
 | 6    | ⬜      | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
 | 7    | ⬜      | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
@@ -423,7 +423,7 @@ the notices stream sends them to every reader.
 
 ## 🛰️ Agent and shared code
 
-### 5. ⬜ When the agent's dashboard can't bind its port, the admin, metrics, and Zipkin services and the JVM shutdown hook keep running, so a standalone agent never exits and its `/ping` still answers 200
+### 5. ✅ When the agent's dashboard can't bind its port, the admin, metrics, and Zipkin services and the JVM shutdown hook keep running, so a standalone agent never exits and its `/ping` still answers 200
 
 **Severity:** medium · **Confidence:** reproduced with the shipped `prometheus-agent.jar`. The config had the dashboard on
 port 27420, which another process was holding, and the admin server on 27421 and the metrics server on 27422. `main()`
@@ -474,6 +474,8 @@ free ports, and calls `startSync()` expecting `IllegalStateException`. It then c
 again and that no shutdown hook is left. common-utils' `registeredShutDownHook` is `internal` to its own module, so the
 test reads it through reflection. Today's code fails both checks. An `EmbeddedAgentApiTest` case
 should check the same through `startAsyncAgent(Config)`.
+
+**Resolution:** Fixed in #557. `Agent.startUp()` starts in two parts: a failure in `super.startUp()` runs the release steps, and a dashboard that fails after it returned runs them and `super.shutDown()` too, stopping the admin, metrics, and Zipkin services and removing the shutdown hook, as `Proxy.startUp()` does; what the release throws is attached as suppressed, and a FAILED dashboard isn't stopped again. The fix also closes a second leak: Ktor's `start()` leaves its shutdown hook and application behind when the bind fails, so `DashboardService.startUp()` stops the server. On the shipped jar, an agent with its dashboard port held now exits with status 1 in about 1.3 s; it ran on with `/ping` answering 200. `AgentStartupTest` and `DashboardServiceTest` pin both.
 
 ### 6. ⬜ Results still queued in the connection's results channel when a writer stream fails are never counted, as sent or as dropped
 
@@ -886,7 +888,7 @@ The two integrations also disagree with each other: the plugin honors a proxy se
 - An `AgentLifecycle` test with `settings.proxy.hostname` and no `proxy` key.
 - The internal `env` lookup lets both cover `PROXY_HOSTNAME`.
 
-### 12. ⬜ A start that times out is reported as "stays off", but the agent keeps starting, with no handle to stop it
+### 12. ✅ A start that times out is reported as "stays off", but the agent keeps starting, with no handle to stop it
 
 **Severity:** low · **Confidence:** plausible: the gap is confirmed in the code. It needs `startUp()` to take over
 30 s, which is rare (binding the admin, metrics, and dashboard ports, and starting Zipkin's reporter).
@@ -912,6 +914,8 @@ once `startUp()` returns, and runs `shutDown()`. Then throw an `IllegalStateExce
 **Tests:** an `EmbeddedAgentApiTest` case with an agent whose `startUp()` blocks past a shortened start timeout. For
 that, make the timeout a parameter of `startEmbedded`. The case expects the exception, and the agent TERMINATED
 shortly after.
+
+**Resolution:** Fixed in #557. `startEmbedded` starts the agent with `Agent.startWithin`, at `startSync()`'s 30 seconds: on a timeout it calls `stopAsync()`, so Guava skips `run()` once `startUp()` returns and calls `shutDown()`, and the agent releases what it opened and never connects; the start throws an `IllegalStateException` with the `TimeoutException` as its cause. `AgentStartupTest` blocks the dashboard's start on a latch and checks the agent reaches TERMINATED, its port free and its channel shut, without connecting. Step 5's daemon thread would cover a `startUp()` that never returns, which this doesn't.
 
 ---
 

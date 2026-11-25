@@ -214,6 +214,11 @@ application's logging config.
   cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
   `agent_dashboard_scrapes_total` counts instead; and a call the proxy refuses with `UNAUTHENTICATED` after a connect
   logged at ERROR, naming where the token is set, and another status at INFO, as before
+- **AgentStartupTest** — a start that fails or takes too long releases what the agent opened: a dashboard that fails
+  to start, on a port the spec holds, stops the admin, metrics, and Zipkin services and removes the JVM shutdown hook,
+  through `startSync()` and through `startAsyncAgent(Config)`, and a release step that throws (a MockK constructor
+  mock) is attached to the failure while the rest still run; and a start that times out, its dashboard's start held
+  by a MockK constructor mock, throws at once, then stops without connecting as soon as its startup ends
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling;
   a connect counted once the proxy registered the agent, a refused registration as rejected; each endpoint advance and
   each heartbeat sent counted, by outcome; a scrape request's wait for its scrape recorded, not a dashboard's; and a
@@ -719,6 +724,9 @@ One support helper also lives here (not a test class itself):
   port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host, `allowedOrigins`, foreign
   or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS rebinding; and changes waking the
   push loop at once, then at most once an interval, with the latest
+- **DashboardServiceTest** (`dashboard/`) — a dashboard's service lifecycle over a mocked `DashboardServer`: a
+  server that fails to start stopped, so Ktor's shutdown hook and application don't outlive it, with a stop that
+  fails attached to the start's failure; and a server that starts stopped only when the service stops
 - **DashboardSessionsTest** (`dashboard/`) — a dashboard's login-page sessions: a new one valid and a token never
   issued, null, or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request,
   which a request restarts, and a check that isn't a request doesn't; 7 days after it began however recently used;

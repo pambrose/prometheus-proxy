@@ -38,7 +38,9 @@ Before diving into a specific symptom, gather signal:
 Another process already listens on one of the proxy's ports: the HTTP port Prometheus scrapes (default `8080`),
 the agent gRPC port (`50051`), or, when they're enabled, the admin (`8092`), metrics (`8082`), or dashboard
 (`8094`) port. The proxy logs the exception and exits with status 1, so a supervisor's restart policy retries it;
-before 4.3.0 it kept running instead.
+before 4.3.0 it kept running instead. An agent does the same when its admin (`8093`), metrics (`8083`), or dashboard
+(`8095`) port is taken, and an [embedded agent](embedded-agent.md#agentstartasyncagent) throws an
+`IllegalStateException` with the `BindException` as its cause, having released the ports it had opened.
 
 - Find what holds the port: `lsof -nP -iTCP:8080 -sTCP:LISTEN` (macOS, Linux) or `ss -ltnp 'sport = :8080'`
   (Linux).
