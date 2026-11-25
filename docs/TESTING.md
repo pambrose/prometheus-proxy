@@ -499,10 +499,15 @@ Three support helpers also live here (not test classes themselves):
   a path whose last agent unregisters it or disconnects is recorded as departed, with the agent, identity, target, and
   source its entry showed, a consolidated path only once its last agent goes, and a registration forgets it; a path
   the scrape port serves itself is refused, the blitz path also when it was configured with leading slashes
-- **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
-  and agent removal race on the real code the TLA+ `ProxyRegistry` spec models; no path is left on a removed agent,
-  `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, and a
-  consolidated path never takes an agent of another identity
+- **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, reclaims,
+  unregistration, and agent removal race on the real code the TLA+ `ProxyRegistry` spec models, among agents of
+  several launches, one of them reconnected and one predating path notices; no reclaim takes a path from a live agent
+  of another launch (`ReclaimNeverDisplaces`), or is refused as held without one, no path is left on a removed agent,
+  `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, a consolidated
+  path never takes an agent of another identity, and an invalidated agent holds no unread notices
+  (`InvalidatedHasNoNotices`); each agent waiting on a path reads notices, waits once, is of another launch than the
+  path's agent, is still connected, and, while valid, has a notice about the path, and no agent has a notice about a
+  path it serves
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
   queue
 - **AgentContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the scrape-request
