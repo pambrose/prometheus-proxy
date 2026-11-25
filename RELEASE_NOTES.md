@@ -6,6 +6,18 @@
 
 _Released 2026-11-23_
 
+### Before you upgrade
+
+- **The proxy refuses a path with more than 64 labels.** The new `proxy.internal.maxLabelsPerPath` refuses such a path
+  at registration, and the agent logs the rejection once without retrying it. If a path of yours has more, raise the
+  limit, or set it to `0` for none, before you upgrade.
+- **The agents of one identity may register at most 100,000 paths together.** The new
+  `proxy.internal.maxPathsPerIdentity` counts the paths of every connection an identity's agents open, where
+  `maxPathsPerAgent` counts one connection's. With agent auth off, or every agent on the legacy `proxy.agentToken`,
+  all agents share one identity, so the limit counts your whole fleet. A path past it is refused, and the agent doesn't
+  retry it until it reconnects. If your fleet could come near it, raise the limit, or set it to `0` for none, before
+  you upgrade.
+
 ### New Features
 
 - **A dashboard on the agent.** Turn on `agent.dashboard.enabled` (or `--dashboard`, or `DASHBOARD_ENABLED=true` in
@@ -95,6 +107,11 @@ _Released 2026-11-23_
 
 ### Bug Fixes
 
+- **A path's labels take far less of the proxy's memory.** The proxy kept each path's labels twice, as the agent sent
+  them and parsed, and parsed labels can take many times their size: 8 KiB of short labels took about 130 KiB a path,
+  so a few thousand paths could exhaust a small proxy's heap. It now keeps them once, parsed, and with
+  `maxLabelsPerPath` a path takes at most about 28 KiB. The dashboard shows a path's labels as the proxy keeps them,
+  and no longer parses them on every refresh.
 - **An embedded agent on Spring Boot 4.0 or 4.1 says what to set.** Those releases set two of the agent's libraries,
   kotlinx-coroutines and the Prometheus Java client, below the versions it runs on, and the agent failed once it ran,
   leaving your app running with an agent that never served. It now refuses to start, and names the property to set

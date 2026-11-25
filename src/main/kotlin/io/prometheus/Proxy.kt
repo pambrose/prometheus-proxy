@@ -64,6 +64,8 @@ import io.prometheus.proxy.dashboard.ProxyDashboardService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
@@ -303,10 +305,13 @@ class Proxy(
   internal val isStartingOrRunning: Boolean
     get() = state().let { it == Service.State.STARTING || it == Service.State.RUNNING }
 
-  // Limits on what one agent connection may register; 0 means unlimited. See ProxyPathManager.addPath.
+  // Limits on what one agent connection, and the agents of one auth identity, may register; 0 means unlimited. See
+  // ProxyPathManager.addPath.
   internal val maxPathsPerAgent: Int get() = proxyConfigVals.internal.maxPathsPerAgent
+  internal val maxPathsPerIdentity: Int get() = proxyConfigVals.internal.maxPathsPerIdentity
   internal val maxPathLength: Int get() = proxyConfigVals.internal.maxPathLength
   internal val maxLabelsSizeBytes: Int get() = proxyConfigVals.internal.maxLabelsSizeBytes
+  internal val maxLabelsPerPath: Int get() = proxyConfigVals.internal.maxLabelsPerPath
 
   // How much of what an agent reports about itself the proxy keeps; 0 means all. See ProxyServiceImpl.registerAgent.
   internal val maxAgentFieldLength: Int get() = proxyConfigVals.internal.maxAgentFieldLength
@@ -701,7 +706,7 @@ class Proxy(
             put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
             put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))
 
-            // The agent's labels, parsed and filtered when the path registered (see serviceDiscoveryLabels), which
+            // The agent's labels, parsed and filtered when the path registered (see pathLabels), which
             // also warned about the ones left out; each request only copies them (November #15). The reserved keys
             // are among those left out, so none of them replaces a label set above.
             agentContextInfo.sdLabels.forEach { (key, value) -> put(key, value) }
@@ -718,14 +723,21 @@ class Proxy(
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 
-  /** A path's labels as service discovery serves them, worked out once, when the path registers. */
-  internal class SdLabels(
-    /** The labels service discovery serves for the path. */
+  /** A path's labels as the proxy keeps and serves them, worked out once, when the path registers. */
+  internal class PathLabels(
+    /**
+     * The labels that have a value, a string, number, or boolean, which the dashboard shows and its links read, those
+     * service discovery leaves out included. The path's entry keeps them in place of the labels as sent.
+     */
+    val kept: JsonObject,
+    /** The labels service discovery serves for the path: [kept] itself when it serves them all. */
     val served: JsonObject,
     /** The keys [isReservedSdLabelKey] kept out, for the registration's warning. */
     val reserved: List<String>,
     /** Why some labels can't be served (see [labelsProblem]), or null when all can. */
     val problem: String?,
+    /** How many labels the path registered with, all of them, which `proxy.internal.maxLabelsPerPath` limits. */
+    val count: Int,
   )
 
   companion object {
@@ -755,28 +767,47 @@ class Proxy(
       key in RESERVED_SD_LABEL_KEYS || key.startsWith("__") || (reserveJobAndInstance && key in JOB_AND_INSTANCE)
 
     /**
-     * [labels], a path's labels, as service discovery serves them, parsed once: the entries of a JSON object, less the
-     * keys [isReservedSdLabelKey] reserves, the names Prometheus can't decode, and the values that aren't strings. One
-     * label Prometheus can't decode failed the whole response, so every target behind the proxy stopped updating
-     * (October #24). None when [labels] is blank or isn't a JSON object.
+     * [labels], a path's labels, parsed once, as the path registers: the labels its entry keeps, those with a string,
+     * number, or boolean value, and those service discovery serves, the kept labels less the keys
+     * [isReservedSdLabelKey] reserves, the names Prometheus can't decode, and the values that aren't strings. One label
+     * Prometheus can't decode failed the whole response, so every target behind the proxy stopped updating (October
+     * #24). None when [labels] is blank or isn't a JSON object.
      *
-     * Worked out when the path registers, rather than on every service-discovery request, which re-parsed every path's
-     * labels and warned about each bad value each time, from the unauthenticated scrape port (November #15).
+     * Service discovery, which re-parsed every path's labels on each request from the unauthenticated scrape port
+     * (November #15), the dashboard and its links, and `/debug` all read the result, and the entry keeps nothing else:
+     * a parsed label takes about 16 times the bytes it took in the request, and the entry kept the labels as sent
+     * beside them, which each dashboard collect parsed again. The served labels are the kept ones, the same object,
+     * unless service discovery leaves some out.
      */
-    internal fun serviceDiscoveryLabels(
+    internal fun pathLabels(
       labels: String,
       reserveJobAndInstance: Boolean,
-    ): SdLabels {
+    ): PathLabels {
       if (labels.isBlank())
-        return SdLabels(EMPTY_LABELS, emptyList(), null)
+        return PathLabels(NO_LABELS, NO_LABELS, emptyList(), null, 0)
       val parsed = runCatching { labels.toJsonElement() }.getOrNull()
-      val entries = (parsed as? JsonObject).orEmpty().entries
-      val (reserved, rest) = entries.partition { isReservedSdLabelKey(it.key, reserveJobAndInstance) }
-      val served = rest.filter { (key, value) -> isValidLabelName(key) && value is JsonPrimitive && value.isString }
-      return SdLabels(JsonObject(served.associate { it.toPair() }), reserved.map { it.key }, labelsProblem(parsed))
+      val all = parsed as? JsonObject ?: return PathLabels(NO_LABELS, NO_LABELS, emptyList(), labelsProblem(parsed), 0)
+      val kept = if (all.values.all { it.isLabelValue() }) all else JsonObject(all.filterValues { it.isLabelValue() })
+      val served =
+        kept.filter { (key, value) ->
+          !isReservedSdLabelKey(key, reserveJobAndInstance) &&
+            isValidLabelName(key) &&
+            (value as JsonPrimitive).isString
+        }
+      return PathLabels(
+        kept = kept,
+        served = if (served.size == kept.size) kept else JsonObject(served),
+        reserved = all.keys.filter { isReservedSdLabelKey(it, reserveJobAndInstance) },
+        problem = labelsProblem(all),
+        count = all.size,
+      )
     }
 
-    private val EMPTY_LABELS = JsonObject(emptyMap())
+    // A label's value as the dashboard reads one: a string, number, or boolean.
+    private fun JsonElement.isLabelValue() = this is JsonPrimitive && this !is JsonNull
+
+    /** No labels: a path registered with none, or with labels that aren't a JSON object. */
+    internal val NO_LABELS = JsonObject(emptyMap())
 
     /**
      * JVM entry point for the standalone Proxy process.

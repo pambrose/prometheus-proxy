@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 35 fixed, 37 open (8 medium, 64 low, no high); #25 is partly fixed.
+**Status:** 72 issues — 36 fixed, 36 open (8 medium, 64 low, no high); #25 is partly fixed.
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
 
@@ -41,7 +41,7 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 17 | A collect that throws ends the push loop for good, logged only to stderr                             | Dashboards | low      | ✅      |
 | 18 | A gone agent's detail pane names it by its raw `agentId`                                             | Dashboards | low      | ⬜      |
 | 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ⬜      |
-| 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ⬜      |
+| 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ✅      |
 | 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ⬜      |
 | 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ⬜      |
 | 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ⬜      |
@@ -154,7 +154,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 6    | ✅ #558 | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
 | 7    | ⬜      | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
 | 8    | ⬜      | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
-| 9    | ⬜      | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
+| 9    | ✅ #560 | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
 | 10   | ⬜      | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
 | 11   | ✅ #559 | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
 | 12   | ⬜      | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
@@ -1119,7 +1119,7 @@ agent idle past `maxAgentInactivitySecs` (heartbeats off) reads "evicted in 0s" 
 
 ## 🔒 Security
 
-### 20. ⬜ One agent's labels can exhaust the proxy's heap within the default limits, and `maxPathsPerAgent` doesn't bound an identity
+### 20. ✅ One agent's labels can exhaust the proxy's heap within the default limits, and `maxPathsPerAgent` doesn't bound an identity
 
 **Severity:** medium · **Confidence:** reproduced: a standalone JVM program that builds what `addPath` keeps per path
 (the raw labels string plus `Proxy.serviceDiscoveryLabels`' filtered `JsonObject`, with kotlinx-serialization 1.13.0)
@@ -1186,6 +1186,8 @@ heap.
 
 **Follows up:** late-September #14 (per-connection quota, chosen so the legacy token's shared identity wouldn't cap the
 fleet) and November #12 and #15 (the same attacker and amplifiers).
+
+**Resolution:** Fixed in #560. A path's labels are parsed once, as it registers (`Proxy.pathLabels`), and its entry keeps only the parsed copy, which service discovery, the dashboard's links, and `/debug` read, and which the dashboard no longer re-parses on each collect: 8 KiB of one-character labels took 134.5 KiB, and with the new `proxy.internal.maxLabelsPerPath` (default 64) a path takes at most about 20 KiB. The new `proxy.internal.maxPathsPerIdentity` (default 100,000) caps what an identity's agents hold together; with auth off it counts the whole fleet, a takeover within an identity leaves its count alone, and it warns at 80%. The release notes gain a Before You Upgrade section for both. Differences from the fix above: the entry keeps every label with a value, since the dashboard's links read labels service discovery leaves out; the agent checks neither limit, both being the proxy's; `maxLabelsSizeBytes` stays at 8 KiB; and `ProxyRegistry.tla` doesn't count paths per identity, since the count changes under the same lock as `pathCounts` and drives no lifecycle decision. One connection at its 20,000-path quota with every path at its limits still holds about 400 MiB, which only a lower `maxPathsPerAgent` would close.
 
 ### 21. ⬜ The proxy's gRPC tracing keeps every call whose metadata says "sampled", so any caller can override the sample rate and trace heartbeats
 

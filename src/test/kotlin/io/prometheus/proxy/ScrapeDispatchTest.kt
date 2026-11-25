@@ -1246,7 +1246,7 @@ class ScrapeDispatchTest : StringSpec() {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val first = AgentContext("first-remote")
       val second = AgentContext("second-remote")
-      val info = ProxyPathManager.AgentContextInfo(isConsolidated = true, labels = "", agentContexts = [first, second])
+      val info = ProxyPathManager.AgentContextInfo(isConsolidated = true, agentContexts = [first, second])
       val secondAnswered = CompletableDeferred<Unit>()
 
       launch {
@@ -1277,7 +1277,7 @@ class ScrapeDispatchTest : StringSpec() {
       val bus = mockk<ProxyEventBus>(relaxed = true)
       every { proxy.eventBus } returns bus
       val agentContext = AgentContext("test-remote")
-      val info = ProxyPathManager.AgentContextInfo(isConsolidated = false, labels = "", agentContexts = [agentContext])
+      val info = ProxyPathManager.AgentContextInfo(isConsolidated = false, agentContexts = [agentContext])
 
       launch {
         val wrapper = agentContext.readScrapeRequest()!!

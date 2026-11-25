@@ -154,6 +154,11 @@ All notable changes to this project are documented in this file.
 
 ### Bug Fixes
 
+- A path's labels kept up to about 16 times their size on the proxy: the entry kept them as sent and parsed, so within
+  `maxLabelsSizeBytes`, 8 KiB of one-character labels kept about 130 KiB a path, and a few thousand registrations on
+  one connection, a fraction of its quota, could exhaust the Helm chart's proxy heap. The entry keeps them once,
+  parsed, at most `maxLabelsPerPath` of them, about 28 KiB a path at worst with the defaults, and the dashboard's links
+  read them without parsing every path's labels again on each collect
 - An embedded agent whose app's dependency management sets kotlinx-coroutines below 1.11.0, or the Prometheus Java
   client below 1.7.0, as Spring Boot 4.0 and 4.1 do, failed once it ran, with a `NoSuchMethodError` or an
   `ExceptionInInitializerError`, and the app ran on with an agent that never served. It now refuses to start, with a
@@ -213,6 +218,17 @@ All notable changes to this project are documented in this file.
 
 ### Behavior Changes
 
+- The new `proxy.internal.maxLabelsPerPath` (default 64) refuses a path whose labels hold more labels, as
+  `INVALID_PATH`, which the agent doesn't retry. Every label counts, those service discovery leaves out included, and
+  labels that aren't a JSON object hold none. `0` turns it off, and a negative value fails startup
+- The new `proxy.internal.maxPathsPerIdentity` (default 100000) limits the paths the agents of one auth identity hold
+  together, whatever the transport filter, and refuses more as `PATH_LIMIT_REACHED`, which the agent doesn't retry:
+  `maxPathsPerAgent` counts one connection, and an identity could open any number, each with a fresh quota. With agent
+  auth off, or on the legacy `agentToken`, every agent shares one identity, so the limit is a total. A takeover from an
+  agent of the same identity leaves the count as it was, so a redeploy at the limit still registers. The proxy warns
+  at 80%, once until the count falls below 70%. `0` turns it off, and a negative value fails startup
+- A path's entry keeps its labels only as the proxy parsed them, those with a string, number, or boolean value, so the
+  dashboard's agent panel and `/debug` show them as compact JSON, without the ones it never used
 - A scrape the proxy dashboard's Scrape now makes no longer counts in the agent's `agent_filter_lines_dropped_total`
   and `agent_filter_bytes_saved_total`, or in the lines and bytes the agent's dashboard shows a filter dropping: like
   the `agent_scrape_*` metrics, they count only Prometheus's scrapes

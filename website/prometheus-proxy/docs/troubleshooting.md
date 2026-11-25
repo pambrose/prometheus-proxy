@@ -67,7 +67,8 @@ Settings that fail startup since 4.5.0:
 - An agent `pathConfigs` path with whitespace, a control character, `?`, or `#`, which no scrape can reach.
 - A `proxy.dashboard.links` entry the dashboard can't use, or an `icon` it doesn't have
   ([Links](web-dashboard.md#links)).
-- A negative `proxy.internal.maxTargetUrlLength` or `proxy.internal.maxAgentsPerIdentity`.
+- A negative `proxy.internal.maxTargetUrlLength` or `proxy.internal.maxAgentsPerIdentity`, and since 4.7.0 a negative
+  `proxy.internal.maxPathsPerIdentity` or `proxy.internal.maxLabelsPerPath`.
 
 ## Agent Can't Connect to the Proxy
 
@@ -194,7 +195,9 @@ The proxy logs the reason and returns `valid = false` to the agent:
 | `Path /… is served by agentId … (…), of another launch; agentId … takes it back once that agent leaves` (INFO) | Not a fault. Another agent took the path over, and this one, told so, is waiting to take it back; see [An agent is connected but serves no paths](#an-agent-is-connected-but-serves-no-paths). |
 | `Path /… is N characters, over proxy.internal.maxPathLength (…)` | Shorten the path, or raise the limit ([Internal Settings](configuration/proxy.md#internal-settings)). |
 | `Labels for path /… are N bytes, over proxy.internal.maxLabelsSizeBytes (…)` | Trim the path's `labels`, or raise the limit. |
+| `Path /… has N labels, over proxy.internal.maxLabelsPerPath (…)` | Drop some of the path's `labels`, or raise the limit. |
 | `Agent … already serves N paths, the proxy.internal.maxPathsPerAgent limit (…); path /… refused` | Spread the paths across more agents, or raise the limit. |
+| `The agents of identity '…' already serve N paths, the proxy.internal.maxPathsPerIdentity limit (…); path /… refused` (or `with no auth identity`) | The agents that share the identity hold that many paths together; with agent auth off, or only the legacy `agentToken`, that's every agent. Raise the limit, or split the agents across identities. |
 | `Invalid path: /… is the service discovery path, which the proxy serves itself` | The proxy serves that path itself, as it does `favicon.ico` and, when enabled, the [Blitz verification path](service-discovery.md#labels). Rename it. |
 
 See [Consolidated Mode](advanced.md#consolidated-mode) for the all-or-nothing rule. The agent retries the

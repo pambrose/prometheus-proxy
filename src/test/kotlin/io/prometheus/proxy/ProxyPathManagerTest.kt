@@ -33,6 +33,7 @@ import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
@@ -48,6 +49,8 @@ import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.pathNotice
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.ProxyPathManager.PathMetadata
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -71,6 +74,8 @@ class ProxyPathManagerTest : StringSpec() {
     maxLabelsSizeBytes: Int = 0,
     maxTargetUrlLength: Int = 0,
     maxAgentFieldLength: Int = 0,
+    maxPathsPerIdentity: Int = 0,
+    maxLabelsPerPath: Int = 0,
   ): Proxy =
     createMockProxy().also { proxy ->
       every { proxy.maxPathsPerAgent } returns maxPathsPerAgent
@@ -78,7 +83,12 @@ class ProxyPathManagerTest : StringSpec() {
       every { proxy.maxLabelsSizeBytes } returns maxLabelsSizeBytes
       every { proxy.maxTargetUrlLength } returns maxTargetUrlLength
       every { proxy.maxAgentFieldLength } returns maxAgentFieldLength
+      every { proxy.maxPathsPerIdentity } returns maxPathsPerIdentity
+      every { proxy.maxLabelsPerPath } returns maxLabelsPerPath
     }
+
+  // Registration metadata presenting the auth identity [identity].
+  private fun asIdentity(identity: String) = PathMetadata(identityName = identity)
 
   // A manager whose proxy records into a real activity feed, which it returns beside it.
   private fun managerWithActivity(): Pair<ProxyPathManager, ActivityLog> {
@@ -187,7 +197,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
-      info.labels shouldBe """{"job":"test"}"""
+      info.labels shouldBe JsonObject(mapOf("job" to JsonPrimitive("test")))
       info.agentContexts.shouldHaveSize(1)
     }
 
@@ -422,7 +432,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
-      info.labels shouldBe """{"job":"test2"}"""
+      info.labels shouldBe JsonObject(mapOf("job" to JsonPrimitive("test2")))
       info.agentContexts.shouldHaveSize(1)
       info.agentContexts[0].agentId shouldBe context2.agentId
     }
@@ -1399,6 +1409,173 @@ class ProxyPathManagerTest : StringSpec() {
       rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
       rejection.reason shouldContain "maxLabelsSizeBytes"
       manager.pathMapSize shouldBe 1
+    }
+
+    // Within maxLabelsSizeBytes' 8 KiB, about 900 one-character labels kept over 130 KiB a path once parsed, so a few
+    // thousand registrations exhausted a small heap. Every label counts, those service discovery leaves out included,
+    // since the proxy parses them all.
+    "labels with more than maxLabelsPerPath labels should be rejected as an invalid path" {
+      val manager = ProxyPathManager(createLimitedProxy(maxLabelsPerPath = 2), isTestMode = true)
+      val context = createMockAgentContext()
+
+      manager.addPath("two", """{"a":"1","b":"2"}""", context).shouldBeNull()
+      for (labels in ["""{"a":"1","b":"2","c":"3"}""", """{"__a":"1","b":2,"c":null}"""]) {
+        val rejection = manager.addPath("three", labels, context)
+        rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+        rejection.reason shouldContain "3 labels"
+        rejection.reason shouldContain "maxLabelsPerPath (2)"
+      }
+      // Labels that aren't a JSON object hold none, and are left out of service discovery as before.
+      manager.addPath("not-an-object", "[1, 2, 3, 4]", context).shouldBeNull()
+      manager.pathMapSize shouldBe 2
+    }
+
+    "a maxLabelsPerPath of 0 should mean no limit" {
+      val manager = ProxyPathManager(createLimitedProxy(maxLabelsPerPath = 0), isTestMode = true)
+      val labels = (1..200).joinToString(",", "{", "}") { "\"l$it\":\"v\"" }
+
+      manager.addPath("many", labels, createMockAgentContext()).shouldBeNull()
+      manager.getAgentContextInfo("many").shouldNotBeNull().labels.size shouldBe 200
+    }
+
+    // The entry kept the labels as sent beside a parsed copy, and the dashboard parsed them again on each collect.
+    "an accepted path's entry should keep one copy of its labels, parsed" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      manager.addPath("metrics", """{ "team": "web",  "env": "prod" }""", createMockAgentContext()).shouldBeNull()
+
+      val info = manager.getAgentContextInfo("metrics").shouldNotBeNull()
+      info.labels shouldBe JsonObject(mapOf("team" to JsonPrimitive("web"), "env" to JsonPrimitive("prod")))
+      // Service discovery serves every label, so it reads the same object.
+      info.sdLabels shouldBeSameInstanceAs info.labels
+      // /debug prints the labels once.
+      info.toString() shouldContain """labels={"team":"web","env":"prod"}"""
+      info.toString() shouldNotContain "sdLabels"
+    }
+
+    // ==================== Paths per identity ====================
+
+    // maxPathsPerAgent counts one connection, and an identity may open any number, each with a quota of its own.
+    "agents of one identity should together be refused past maxPathsPerIdentity, as PATH_LIMIT_REACHED" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerIdentity = 3), isTestMode = true)
+      val first = createMockAgentContext()
+      val second = createMockAgentContext()
+      manager.addPath("a", "{}", first, asIdentity("team_a")).shouldBeNull()
+      manager.addPath("b", "{}", first, asIdentity("team_a")).shouldBeNull()
+      manager.addPath("c", "{}", second, asIdentity("team_a")).shouldBeNull()
+
+      val rejection = manager.addPath("d", "{}", second, asIdentity("team_a"))
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.PATH_LIMIT_REACHED
+      rejection.reason shouldContain "identity 'team_a'"
+      rejection.reason shouldContain "maxPathsPerIdentity limit (3)"
+      manager.identityPathCountFor("team_a") shouldBe 3
+      // Another identity has a limit of its own.
+      manager.addPath("d", "{}", createMockAgentContext(), asIdentity("team_b")).shouldBeNull()
+      manager.identityPathCountFor("team_b") shouldBe 1
+    }
+
+    // As for maxAgentsPerIdentity: with agent auth off, or only the legacy agentToken, every agent has one identity.
+    "agents with no auth identity should share one maxPathsPerIdentity limit" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerIdentity = 2), isTestMode = true)
+      manager.addPath("a", "{}", createMockAgentContext()).shouldBeNull()
+      manager.addPath("b", "{}", createMockAgentContext()).shouldBeNull()
+
+      val rejection = manager.addPath("c", "{}", createMockAgentContext())
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.PATH_LIMIT_REACHED
+      rejection.reason shouldContain "with no auth identity"
+      manager.identityPathCountFor("") shouldBe 2
+    }
+
+    // The identity's count follows every way a path leaves one of its agents, or a full identity could never register
+    // again.
+    "a path that leaves an identity's agent by unregister, displacement, or disconnect should make room again" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerIdentity = 2), isTestMode = true)
+      val agent = createMockAgentContext()
+      manager.addPath("a", "{}", agent, asIdentity("team_a")).shouldBeNull()
+      manager.addPath("b", "{}", agent, asIdentity("team_a")).shouldBeNull()
+
+      manager.removePath("a", agent.agentId)
+      manager.identityPathCountFor("team_a") shouldBe 1
+      manager.addPath("c", "{}", agent, asIdentity("team_a")).shouldBeNull()
+
+      // An agent of the same identity takes b over, which leaves the identity's count as it was.
+      val other = createMockAgentContext()
+      manager.addPath("b", "{}", other, asIdentity("team_a")).shouldBeNull()
+      manager.identityPathCountFor("team_a") shouldBe 2
+
+      manager.removeFromPathManager(agent.agentId, RemovalReason.TERMINATION)
+      manager.identityPathCountFor("team_a") shouldBe 1
+      manager.removeFromPathManager(other.agentId, RemovalReason.TERMINATION)
+      manager.identityPathCountFor("team_a") shouldBe 0
+      manager.addPath("e", "{}", createMockAgentContext(), asIdentity("team_a")).shouldBeNull()
+      manager.addPath("f", "{}", createMockAgentContext(), asIdentity("team_a")).shouldBeNull()
+    }
+
+    // A redeploy at the limit takes over its own paths: each takeover adds a path to the new agent and takes one from
+    // the old, so the identity's count doesn't change. A consolidated join adds one.
+    "an identity at maxPathsPerIdentity should still take over its own exclusive paths, but not join another" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerIdentity = 2), isTestMode = true)
+      val old = createMockAgentContext()
+      manager.addPath("a", "{}", old, asIdentity("team_a")).shouldBeNull()
+      manager.addPath("b", "{}", old, asIdentity("team_a")).shouldBeNull()
+
+      val redeployed = createMockAgentContext()
+      manager.addPath("a", "{}", redeployed, asIdentity("team_a")).shouldBeNull()
+      manager.addPath("b", "{}", redeployed, asIdentity("team_a")).shouldBeNull()
+      manager.identityPathCountFor("team_a") shouldBe 2
+
+      val consolidated = ProxyPathManager(createLimitedProxy(maxPathsPerIdentity = 1), isTestMode = true)
+      consolidated.addPath("shared", "{}", createMockAgentContext(consolidated = true), asIdentity("team_a"))
+        .shouldBeNull()
+      consolidated.addPath("shared", "{}", createMockAgentContext(consolidated = true), asIdentity("team_a"))
+        .shouldNotBeNull().cause shouldBe PathRejectionCause.PATH_LIMIT_REACHED
+    }
+
+    // A client may present another identity's token on a later call. Its paths still come off the identity they were
+    // counted against, so the counts never drift.
+    "an agent's paths should count against the identity its first path registered as" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val agent = createMockAgentContext()
+      manager.addPath("a", "{}", agent, asIdentity("team_a")).shouldBeNull()
+      manager.addPath("b", "{}", agent, asIdentity("team_b")).shouldBeNull()
+
+      manager.identityPathCountFor("team_a") shouldBe 2
+      manager.identityPathCountFor("team_b") shouldBe 0
+      manager.removePath("b", agent.agentId)
+      manager.removeFromPathManager(agent.agentId, RemovalReason.TERMINATION)
+      manager.identityPathCountFor("team_a") shouldBe 0
+    }
+
+    "a maxPathsPerIdentity of 0 should mean no limit" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerIdentity = 0), isTestMode = true)
+
+      repeat(50) { manager.addPath("p$it", "{}", createMockAgentContext(), asIdentity("team_a")).shouldBeNull() }
+      manager.identityPathCountFor("team_a") shouldBe 50
+    }
+
+    // So an operator hears about an identity nearing the limit before its registrations start failing, once, rather
+    // than on each registration while its count hovers there.
+    "an identity reaching 80% of maxPathsPerIdentity should be warned about once, until it falls below 70%" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerIdentity = 10), isTestMode = true)
+      val agent = createMockAgentContext()
+
+      val warnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          (1..8).forEach { manager.addPath("p$it", "{}", agent, asIdentity("team_a")) }
+          // Down to 7 and back to 8: still warned of.
+          manager.removePath("p8", agent.agentId)
+          manager.addPath("p8", "{}", agent, asIdentity("team_a"))
+          // Down to 6, below 70%, and back to 8: warned again.
+          manager.removePath("p8", agent.agentId)
+          manager.removePath("p7", agent.agentId)
+          manager.addPath("p7", "{}", agent, asIdentity("team_a"))
+          manager.addPath("p8", "{}", agent, asIdentity("team_a"))
+        }.map { it.formattedMessage }.filter { "maxPathsPerIdentity" in it }
+
+      warnings shouldHaveSize 2
+      warnings.forEach { it shouldContain "identity 'team_a' serve 8 of 10" }
     }
 
     // October #23: the lines logged for each path a registration adds, takes over, or removes printed the whole agent

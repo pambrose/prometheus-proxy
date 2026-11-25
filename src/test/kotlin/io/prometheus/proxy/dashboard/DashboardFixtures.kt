@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.Proxy
 import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
@@ -28,6 +29,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
+import kotlinx.serialization.json.JsonObject
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -51,7 +53,11 @@ internal object DashboardFixtures {
   /** The dashboard's name for [snapshot], as the bar and the tab's title give it. */
   val PROXY_NAME = "Proxy: $PROXY_HOST:${TestPorts.PROXY_HTTP_PORT}"
 
-  // lastScrape is shorthand for a one-record history, since a path view's last scrape is its history's newest.
+  /** [labels], a path's labels as an agent sends them, as the proxy keeps them once the path registers. */
+  fun labelsOf(labels: String): JsonObject = Proxy.pathLabels(labels, reserveJobAndInstance = false).kept
+
+  // lastScrape is shorthand for a one-record history, since a path view's last scrape is its history's newest. The
+  // labels are given as an agent sends them, and kept as the proxy keeps them (see labelsOf).
   fun pathView(
     path: String = "app_metrics",
     agentIds: List<String> = ["1"],
@@ -63,7 +69,7 @@ internal object DashboardFixtures {
     agentNames: List<String> = agentIds.map { "agent-$it" },
     history: List<ScrapeRecord> = listOfNotNull(lastScrape),
     identity: String = "",
-  ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history, identity)
+  ) = PathView(path, agentIds, labelsOf(labels), targetUrl, pathSource, isDeparted, agentNames, history, identity)
 
   /**
    * A path whose agent has gone, as [ProxySnapshot.buildPathViews] builds one: no agent ids, and named by its

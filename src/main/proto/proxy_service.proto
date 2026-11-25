@@ -94,8 +94,8 @@ enum PathRejectionCause {
   INVALID_AGENT = 5;
   // The request's agentId isn't the connection's, or its context is bound to another identity.
   BINDING_MISMATCH = 6;
-  // The agent already registered proxy.internal.maxPathsPerAgent paths on this connection. Clears only as it frees
-  // paths, so an agent doesn't retry it.
+  // The agent already registered proxy.internal.maxPathsPerAgent paths on this connection, or the agents of its auth
+  // identity maxPathsPerIdentity together. Clears only as they free paths, so an agent doesn't retry it.
   PATH_LIMIT_REACHED = 7;
   // The registration was a reclaim, and a live agent of another launch serves the path. Clears once that agent leaves.
   HELD_BY_ANOTHER_AGENT = 8;
