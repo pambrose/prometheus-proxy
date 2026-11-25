@@ -28,9 +28,11 @@ TH=(helm --kube-context "kind-$TARGET" --namespace monitoring)
 PROXY_IMAGE=prometheus-proxy-demo/proxy:local
 AGENT_IMAGE=prometheus-proxy-demo/agent:local
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
-# The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
-# checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.7.0
+# The newest release that lacks something the demo shows. up runs the release the docs give (make site-version)
+# once it's later than this and its images are on Docker Hub, and otherwise builds the proxy and agent from this
+# checkout, as up-local does, so nothing here changes with a release. When the demo comes to use something no
+# release has yet, set this to the latest release on Docker Hub.
+NEEDS_RELEASE_AFTER=4.6.0
 # The chart values that choose the proxy's and the agent's images, which up and up-local set.
 PROXY_IMAGE_VALUES=()
 AGENT_IMAGE_VALUES=()
@@ -58,7 +60,10 @@ cluster_port() {
 DASHBOARD_PORT="$(cluster_port "${KUBERNETES_DEMO_DASHBOARD_PORT:-}" 30094 8294)"
 PROMETHEUS_PORT="$(cluster_port "${KUBERNETES_DEMO_PROMETHEUS_PORT:-}" 30090 9290)"
 PROXY_PORT="$(cluster_port "${KUBERNETES_DEMO_PROXY_PORT:-}" 30080 8280)"
-# This demo's page on the docs site, which shows its layout and code
+# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
+# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
+# between releases the page can lag behind this checkout, or not be there yet.
+README_PATH="demos/kubernetes/README.md"
 PAGE_URL="https://prometheus-proxy.com/kubernetes-demo/"
 DASHBOARD_URL="http://localhost:$DASHBOARD_PORT/dashboard"
 PROMETHEUS_URL="http://localhost:$PROMETHEUS_PORT"
@@ -147,7 +152,8 @@ print_urls() {
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo "  kubectl:          kubectl --context kind-$MONITORING ...   kubectl --context kind-$TARGET ..."
   echo
-  echo "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
+    "release: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 clusters | add-service | delete-agent-pod | change-config ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -169,7 +175,8 @@ version_at_least() {
 # Whether version $1 (x.y.z) is later than $2.
 version_after() { [[ "$1" != "$2" ]] && version_at_least "$1" "$2"; }
 
-# The latest release: the version the docs give, whose images are on Docker Hub.
+# The release the docs give: the latest, or, from a version bump until the release is out, the next, whose images
+# aren't on Docker Hub yet.
 latest_release() { "$MAKE" -s --no-print-directory -C "$REPO_DIR" site-version; }
 
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
@@ -223,8 +230,8 @@ create_cluster() {
   bold "Creating the $name cluster"
   if ! kind create cluster --name "$name" --config "$rendered" --wait 2m; then
     rm -f "$rendered"
-    die "kind couldn't create $name. If a port is taken, run '$MAKE_NAME down', then move the port as the Kubernetes" \
-      "Demo page says: ${PAGE_URL}#running-it"
+    die "kind couldn't create $name. If a port is taken, run '$MAKE_NAME down', then move the port as the Quick Start" \
+      "in $README_PATH says, or the docs site's page for the latest release: ${PAGE_URL}#running-it"
   fi
   rm -f "$rendered"
   if [[ -n "$previous" ]]; then
@@ -457,9 +464,9 @@ check_up() {
   check_tools
 }
 
-# The proxy and agent of the latest release, unless it predates what the demo shows.
+# The proxy and agent of the release the docs give, unless it predates what the demo shows or isn't on Docker Hub yet.
 cmd_up() {
-  local release image
+  local release image answer
   check_up
   release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
   if ! version_after "$release" "$NEEDS_RELEASE_AFTER"; then
@@ -468,11 +475,19 @@ cmd_up() {
     start_demo local
     return
   fi
-  # A cluster that can't pull an image only says so as its pod waits, so check that both are there first.
+  # A cluster that can't pull an image only says so as its pod waits, so check that both are there first. Docker Hub's
+  # answer that it has no such image means the release isn't out yet, as from a version bump until its release; the
+  # images in this Docker don't count, since each cluster pulls its own.
   for image in "${RELEASED_IMAGES[@]}"; do
-    docker manifest inspect "$image:$release" >/dev/null 2>&1 ||
-      die "can't find $image:$release on Docker Hub; check the network, or run '$MAKE_NAME up-local' to build" \
-        "the images from this checkout"
+    answer="$(docker manifest inspect "$image:$release" 2>&1 >/dev/null)" && continue
+    if [[ "$answer" == *"no such manifest"* ]]; then
+      wrap "" "" "Release $release, which the docs give, isn't on Docker Hub yet, so the demo runs the proxy and" \
+        "agent built from this checkout, which takes a JDK 17 or later."
+      start_demo local
+      return
+    fi
+    die "can't find $image:$release on Docker Hub; check the network, or run '$MAKE_NAME up-local' to build the" \
+      "images from this checkout"
   done
   bold "Installing the demo with the proxy and agent of release $release, from Docker Hub"
   # The charts' own images, at the release rather than the chart's appVersion, which is the same once it's bumped.
@@ -841,7 +856,8 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. To start from another part, run" \
     "$MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
+    "${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

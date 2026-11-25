@@ -69,8 +69,8 @@ versions of some of the agent's libraries, older than the agent's own (`./demo.s
 spring-boot-demo-check` (in CI's `consumer-check` job) builds it against the snapshot `consumer-check` publishes, the
 starter's included, and runs its `RoasteryAgentTest`, which starts the agent against a proxy in the same JVM and scrapes
 through it, so a change to the starter, or a Spring Boot release that breaks the agent at runtime, fails there. Its
-`prometheus-proxy.version` is a release version literal; while the latest release predates what the demo shows,
-`demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` build the library from the checkout.
+`prometheus-proxy.version` is a release version literal; while the release the docs give predates what the demo shows
+(`demo.sh`'s `NEEDS_RELEASE_AFTER`) or isn't on Docker Hub yet, `make up` builds the library from the checkout.
 
 The plain Kotlin demo's oven, `demos/plain-kotlin/app`, is a Gradle project of its own, like the coffee shop: a plain
 Kotlin program with no framework or HTTP server that takes orders from a Redis queue (through Jedis, whose version is in
@@ -254,20 +254,25 @@ per-section `assign*` function it belongs to.
 
 Releases follow `docs/RELEASE.md`: after the version bump and changelogs are merged, `make release` publishes to Maven
 Central and Docker Hub, gated by `make release-check` (clean, up-to-date `master` on which every check, and each CI
-job `RELEASE_REQUIRED_JOBS` lists, passed; a dated section for the version in both changelogs; the version, and not
-the previous one, in every bumped file; every demo's `NEEDS_RELEASE_AFTER` below the version; not already
-published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors step 2's list of hard-coded version literals; keep
-the two in step. Step 2 raises each demo's `NEEDS_RELEASE_AFTER` to the new version, so `make up` builds from the
-checkout while the release isn't published, and the last change before `make release` lowers it again
-(`_check-demos-pull-release`), so `make up` from the release's tag pulls its images.
+job `RELEASE_REQUIRED_JOBS` lists, passed; both changelogs' sections for the version dated the day it runs
+(`_check-changelogs`), so the last change before `make release` dates them; the version, and not the previous one, in
+every bumped file (`_check-version-files`); every demo's `NEEDS_RELEASE_AFTER` below the version
+(`_check-demos-pull-release`); not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors step 2's list
+of hard-coded version literals; keep the two in step. A demo's `NEEDS_RELEASE_AFTER` isn't one: it's the newest release
+that lacks what the demo shows, and `make up` runs the release the docs give only once it's later and its images are on
+Docker Hub (`published` in each `demo.sh` but the Kubernetes demo's, whose clusters pull the images, so its `cmd_up`
+asks Docker Hub alone), building from the checkout until then, so neither a bump nor a release changes it
+(`DemoReleaseGateTest`).
 
 `make release` ends by pushing the release tag (`make release-tag`), which the docs' `git clone --branch` commands
-check out, and deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), the only run
-that deploys it: a push to `master` builds the site and the KDocs as a check, without deploying, so the live site
-describes the last release until the next one, docs changes merged in between included (`CiHygieneTest` pins this).
-`make gh-docs` by hand deploys `master` as it is, unreleased pages included. `make site-version` prints the version the
-site shows as its image tag and Maven coordinate, the one step 2 bumps, which `bin/docker-*.sh` and the demos run; not
-`gradle.properties`, which can hold a `-SNAPSHOT` (`SiteVersionTest`). CI's `docs-site` job
+check out, creating the GitHub release on it with the JARs the Quick Start downloads and `RELEASE_NOTES.md`'s section
+as its notes (`make github-release`), and deploying the docs site (`make gh-docs`, a `workflow_dispatch` of
+`docs.yml`), the only run that deploys it: a push to `master` builds the site and the KDocs as a check, without
+deploying, so the live site describes the last release until the next one, docs changes merged in between included
+(`CiHygieneTest` pins this), which is why each demo prints its README (`README_PATH`) beside its page. `make gh-docs`
+by hand deploys `master` as it is, unreleased pages included. `make site-version` prints the version the site shows as
+its image tag and Maven coordinate, the one step 2 bumps, which `bin/docker-*.sh` and the demos run once Docker Hub has
+it; not `gradle.properties`, which can hold a `-SNAPSHOT` (`SiteVersionTest`). CI's `docs-site` job
 (`make build-site`) builds the site on every pull request; it's named so as not to share a name with the `build`
 check the branch protection requires.
 

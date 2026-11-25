@@ -13,7 +13,7 @@
         versions versions-all kdocs clean-site check-site upgrade-site build-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _check-maven-central-env _require-version _require-gradle-version _tla-tools \
-        _check-demos-pull-release
+        _check-demos-pull-release _check-changelogs _check-version-files github-release github-release-notes
 
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
 # The snapshot targets' version: VERSION with one -SNAPSHOT suffix, whether or not gradle.properties already has it.
@@ -77,10 +77,12 @@ RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml
 	security.yml/image-scan (agent);security.yml/codeql;zizmor.yml/code-scanning
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
-# Where site-version looks: the docs site's pages, and the snippet directories zensical.toml's snippets base_path
-# names. Its last entry, the repo root, gives the site examples/, grafana/, and sources from the demos' apps, the Ktor
-# plugin's and Spring Boot starter's tests, and src/test/kotlin/hosts, none of which names a version.
-SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
+# Where site-version looks: the docs site's pages, the snippet directories zensical.toml's snippets base_path names, and
+# examples/, which its last entry, the repo root, gives the site, and whose cloud-proxy/docker-compose.yml the Cloud
+# Platforms page shows with an image tag. The rest the repo root gives the site, grafana/ and sources from the demos'
+# apps, the Ktor plugin's and Spring Boot starter's tests, and src/test/kotlin/hosts, names no version
+# (SiteVersionTest checks every file a page includes).
+SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website examples
 
 # The customer demos, whose Prometheus configs and rules check-rules validates: the basics demo, with the proxy's
 # dashboard and Grafana; the network between the agents and the proxies; nginx between them; the Helm charts deployed on
@@ -620,13 +622,11 @@ docker-verify: _require-version  ## Check both published VERSION images carry ev
 	done
 
 # Publishes nothing: it fails unless this checkout is fit to publish VERSION. The local checks run first, then the
-# network ones (GitHub's CI checks for HEAD, Maven Central, Docker Hub). A bumped file also fails if it still has the
-# previous release's version (the CHANGELOG section below VERSION's) where step 2 bumps it: an image tag or the Maven
-# coordinate, a Maven <version>, a chart's version or appVersion, a git clone's --branch, or the backticked examples
-# in docker.md, docs/RELEASE.md, and the skill. Historical mentions, such as "Version 4.3.0 (released ...)", don't
-# match. And every CI check passing isn't enough, since with [skip ci] or a disabled workflow a lone third-party check
-# can be the whole list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD and passed. And every demo's
-# NEEDS_RELEASE_AFTER must be below VERSION (_check-demos-pull-release).
+# network ones (GitHub's CI checks for HEAD, Maven Central, Docker Hub). Both changelogs must date VERSION's section the
+# day it runs (_check-changelogs), and every file step 2 bumps must name VERSION and no longer the previous release
+# where step 2 bumps it (_check-version-files). Every CI check passing isn't enough, since with [skip ci] or a disabled
+# workflow a lone third-party check can be the whole list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD
+# and passed. And every demo's NEEDS_RELEASE_AFTER must be below VERSION (_check-demos-pull-release).
 release-check: _require-version _check-gpg-env _check-maven-central-env _check-demos-pull-release  ## Fail unless this checkout is fit to publish VERSION
 	@case "$(VERSION)" in *SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
 		echo "ERROR: $(VERSION) is a pre-release; make release publishes final versions" >&2; exit 1;; esac
@@ -637,18 +637,7 @@ release-check: _require-version _check-gpg-env _check-maven-central-env _check-d
 	@git fetch -q origin $(RELEASE_BRANCH) \
 		&& [ "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/$(RELEASE_BRANCH))" ] \
 		|| { echo "ERROR: HEAD is not origin/$(RELEASE_BRANCH); pull or push first" >&2; exit 1; }
-	@grep -qE '^## \[$(VERSION)\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$$' CHANGELOG.md \
-		|| { echo "ERROR: CHANGELOG.md has no dated '## [$(VERSION)] - YYYY-MM-DD' section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
-	@awk -v h='## $(VERSION)' '$$0 == h { f = 1; next } f && NF { ok = /^_Released [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_$$/; exit } END { exit !ok }' RELEASE_NOTES.md \
-		|| { echo "ERROR: RELEASE_NOTES.md has no '## $(VERSION)' section starting '_Released YYYY-MM-DD_' (step 3 of docs/RELEASE.md)" >&2; exit 1; }
-	@missing=$$(for f in $(RELEASE_VERSION_FILES); do grep -qF '$(VERSION)' "$$f" || echo "  $$f"; done); \
-	[ -z "$$missing" ] || { printf 'ERROR: not bumped to $(VERSION) (step 2 of docs/RELEASE.md):\n%s\n' "$$missing" >&2; exit 1; }
-	@prev=$$(awk -v h='## [$(VERSION)]' 'f && /^## \[/ { sub(/^## \[/, ""); sub(/\].*/, ""); print; exit } index($$0, h) == 1 { f = 1 }' CHANGELOG.md); \
-	[ -n "$$prev" ] || { echo "ERROR: CHANGELOG.md has no release section below [$(VERSION)]" >&2; exit 1; }; \
-	p=$$(printf '%s' "$$prev" | sed 's/\./\\./g'); \
-	stale=$$(grep -nE "(prometheus-(proxy|agent)|$(MAVEN_ARTIFACTS_PATTERN)):$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal|--branch $$p( |\$$)|/prometheus-proxy/$$p/" \
-		$(RELEASE_VERSION_FILES) | sed 's/^/  /'); \
-	[ -z "$$stale" ] || { printf 'ERROR: still at the previous version, %s (step 2 of docs/RELEASE.md):\n%s\n' "$$prev" "$$stale" >&2; exit 1; }
+	@$(MAKE) --no-print-directory _check-changelogs _check-version-files
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
 	[ -z "$$tagged" ] || [ "$$tagged" = "$$(git rev-parse HEAD)" ] \
 		|| { echo "ERROR: tag $(VERSION) points at another commit" >&2; exit 1; }
@@ -692,14 +681,15 @@ _confirm-release:
 	@printf 'Continue? [y/N] ' && read ans && [ "$$ans" = "y" ] || { echo "Nothing published."; exit 1; }
 
 # Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check, the
-# full test suite (whose container tests build the images and scrape through them), and the release build. Steps 4-6 and
-# 8 of docs/RELEASE.md. Step 8 ends by pushing the release tag, which the docs' `git clone --branch VERSION` commands
-# check out, and then gh-docs, once the images check out: a push to master doesn't deploy the docs site, so the site
-# shows the previous release until this deploys the new one, by which time its clone commands' tag exists. Everything is
-# published by then, so a failure to start that deploy is reported without hiding the next steps. The GitHub release
-# (step 7) and the Homebrew tap (step 9) are printed as next steps. After a partial release, finish with the remaining
-# targets: release-check refuses a version already published.
-release:  ## Gate, test, build, publish VERSION to Maven Central and Docker Hub (asks first), then deploy the docs
+# full test suite (whose container tests build the images and scrape through them), and the release build. Steps 4-8 of
+# docs/RELEASE.md. Step 8 ends by pushing the release tag, which the docs' `git clone --branch VERSION` commands check
+# out, then creating the GitHub release on it (step 7), with the JARs the Quick Start downloads, and then gh-docs: a
+# push to master doesn't deploy the docs site, so the site shows the previous release until this deploys the new one, by
+# which time its clone commands' tag and its download links' release exist. Everything is published by then, so a
+# failure to start that deploy is reported without hiding the next steps. The Homebrew tap (step 9) is printed as the
+# next step. After a partial release, finish with the remaining targets: release-check refuses a version already
+# published.
+release:  ## Gate, test, build, publish VERSION to Maven Central, Docker Hub, and GitHub (asks first), deploy the docs
 	$(MAKE) release-check
 	$(MAKE) all-tests
 	$(MAKE) distro
@@ -708,25 +698,74 @@ release:  ## Gate, test, build, publish VERSION to Maven Central and Docker Hub 
 	$(MAKE) docker-push
 	$(MAKE) docker-verify
 	$(MAKE) release-tag
+	$(MAKE) github-release
 	@if $(MAKE) --no-print-directory gh-docs; then \
 		docs="Started the docs site deploy; make gh-status shows the run."; \
 	else \
 		docs="WARNING: could not start the docs site deploy; run make gh-docs."; \
 	fi; \
-	prev=$$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null); \
 	echo; \
-	echo "Published $(VERSION) to Maven Central and Docker Hub. $$docs"; \
+	echo "Published $(VERSION) to Maven Central, Docker Hub, and GitHub. $$docs"; \
 	echo "Next (steps 7 and 9 of docs/RELEASE.md):"; \
-	echo "  1. Create the GitHub release (tag $(VERSION), title v$(VERSION)) with a summary that ends with"; \
-	echo "     **Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/$$prev...$(VERSION)"; \
-	echo "     gh release create $(VERSION) --verify-tag --title v$(VERSION) --notes-file <notes> \\"; \
-	echo "       build/libs/prometheus-agent.jar build/libs/prometheus-proxy.jar build/libs/prometheus-proxy-$(VERSION)-sources.jar"; \
+	echo "  1. Read the GitHub release's notes, from RELEASE_NOTES.md; gh release edit $(VERSION) --notes-file <notes>"; \
+	echo "     replaces them"; \
 	echo "  2. make homebrew-formulae, then commit and push the tap"
 
+# The JARs the GitHub release carries, which distro builds: the fat JARs, which the Quick Start's JAR tab downloads and
+# make homebrew-formulae hashes, and the sources JAR.
+GITHUB_RELEASE_ASSETS = build/libs/prometheus-agent.jar build/libs/prometheus-proxy.jar \
+	build/libs/prometheus-proxy-$(VERSION)-sources.jar
+
+# The notes github-release gives the GitHub release, written beside the JARs.
+GITHUB_RELEASE_NOTES := build/github-release-notes.md
+
+# Step 7 of docs/RELEASE.md: VERSION's GitHub release, on the tag release-tag pushed, titled vVERSION, with
+# github-release-notes' notes and the JARs. make release runs it before gh-docs, so the deployed Quick Start's download
+# links work from the start. A release already there, from a run that stopped partway or one made by hand, keeps its
+# notes and gets the JARs again. The notes are written on a line of their own, since make -n runs a line that names
+# $(MAKE), and a dry run mustn't reach gh.
+github-release: _require-version  ## Create VERSION's GitHub release, with its notes and JARs (make release runs it)
+	@for f in $(GITHUB_RELEASE_ASSETS); do \
+		[ -f "$$f" ] || { echo "ERROR: $$f is missing; make distro builds it" >&2; exit 1; }; \
+	done
+	@mkdir -p $(dir $(GITHUB_RELEASE_NOTES)) && $(MAKE) -s --no-print-directory github-release-notes >$(GITHUB_RELEASE_NOTES)
+	@if gh release view '$(VERSION)' >/dev/null 2>&1; then \
+		gh release upload '$(VERSION)' --clobber $(GITHUB_RELEASE_ASSETS) \
+			&& echo "Attached the JARs to the GitHub release $(VERSION), which was there already"; \
+	else \
+		gh release create '$(VERSION)' --verify-tag --title 'v$(VERSION)' --notes-file $(GITHUB_RELEASE_NOTES) \
+			$(GITHUB_RELEASE_ASSETS) \
+			&& echo "Created the GitHub release $(VERSION)"; \
+	fi
+
+# The notes github-release gives VERSION's GitHub release: RELEASE_NOTES.md's section for VERSION, without its
+# _Released_ line and with its headings a level up, then the full changelog's link, from the release section below
+# VERSION's in CHANGELOG.md. GitHub shows a release's line breaks as written, so each paragraph and list item goes on
+# one line; a fenced block stays as it is.
+github-release-notes: _require-version  ## Print the notes github-release gives VERSION's GitHub release
+	@prev=$$(awk -v h='## [$(VERSION)]' 'f && /^## \[/ { sub(/^## \[/, ""); sub(/\].*/, ""); print; exit } index($$0, h) == 1 { f = 1 }' CHANGELOG.md); \
+	[ -n "$$prev" ] || { echo "ERROR: CHANGELOG.md has no release section below [$(VERSION)]" >&2; exit 1; }; \
+	awk -v h='## $(VERSION)' ' \
+		function out(s) { if (gap && shown) print ""; gap = 0; print s; shown = 1 } \
+		function flush() { if (buf != "") out(buf); buf = "" } \
+		!f { f = ($$0 == h); next } \
+		/^## / || /^---$$/ { exit } \
+		fence { print; if ($$0 ~ /^ *```/) fence = 0; next } \
+		/^ *```/ { flush(); out($$0); fence = 1; next } \
+		!shown && buf == "" && /^_Released .*_$$/ { next } \
+		NF == 0 { flush(); gap = 1; next } \
+		/^#/ { flush(); sub(/^#/, ""); out($$0); next } \
+		/^ *([-*+]|[0-9]+\.) / { flush(); buf = $$0; next } \
+		{ line = $$0; sub(/^ +/, "", line); buf = (buf == "" ? line : (buf " " line)) } \
+		END { flush(); exit !(f && shown) }' RELEASE_NOTES.md \
+		|| { echo "ERROR: RELEASE_NOTES.md has no '## $(VERSION)' section to give the GitHub release" >&2; exit 1; }; \
+	echo; \
+	echo "**Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/$$prev...$(VERSION)"
+
 # Tags HEAD as VERSION, as the earlier releases' lightweight tags are, and pushes the tag. make release runs it once
-# everything is published, before it deploys the docs site, whose `git clone --branch VERSION` commands need the tag;
-# the GitHub release (step 7) then attaches to it. A tag already on HEAD, from a release that stopped partway, is pushed
-# again; one on another commit fails, as release-check does.
+# everything is published, before it creates the GitHub release on it and deploys the docs site, whose
+# `git clone --branch VERSION` commands need the tag. A tag already on HEAD, from a release that stopped partway, is
+# pushed again; one on another commit fails, as release-check does.
 release-tag: _require-version  ## Tag HEAD as VERSION and push the tag (make release runs it before deploying the docs)
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
 	if [ -z "$$tagged" ]; then \
@@ -828,20 +867,60 @@ _check-maven-central-env:
 _require-version:
 	@[ -n "$(VERSION)" ] || { echo "ERROR: Could not determine project version from gradle.properties" >&2; exit 1; }
 
-# Fails unless every demo's NEEDS_RELEASE_AFTER is below VERSION. A demo's `make up` pulls the release its docs name
-# only when that release is after NEEDS_RELEASE_AFTER, and builds from the checkout otherwise, so step 2 of
-# docs/RELEASE.md raises it to the new version while the release isn't published. Left there, `make up` from the
-# release's tag would build from source, needing a JDK, and say the release predates the demo. sort -V orders
-# versions as the demos' version_after does.
+# Fails unless every demo's NEEDS_RELEASE_AFTER is a release below VERSION. It names the newest release that lacks
+# what the demo shows: a demo's `make up` runs the release its docs give once that release is after NEEDS_RELEASE_AFTER
+# and its images are on Docker Hub, and builds from the checkout otherwise. Set to VERSION or later, `make up` from the
+# release's tag would build from source, needing a JDK, and say the release predates the demo. A demo whose value
+# can't be read, one NEEDS_RELEASE_AFTER=x.y.z at the start of a line, fails too, rather than pass unchecked. sort -V
+# orders versions as the demos' version_after does.
 _check-demos-pull-release: _require-version
 	@late=$$(for demo in $(DEMOS); do \
-			n=$$(sed -n 's/^NEEDS_RELEASE_AFTER=//p' "demos/$$demo/demo.sh"); \
-			[ -n "$$n" ] || continue; \
-			{ [ "$$n" != '$(VERSION)' ] && [ "$$(printf '%s\n%s\n' "$$n" '$(VERSION)' | sort -V | head -n 1)" = "$$n" ]; } \
-				|| echo "  demos/$$demo/demo.sh: NEEDS_RELEASE_AFTER=$$n"; \
+			f="demos/$$demo/demo.sh"; \
+			n=$$(sed -n 's/^NEEDS_RELEASE_AFTER=//p' "$$f" 2>/dev/null); \
+			case "$$n" in (''|*[!0-9.]*) ok=;; (*) ok=$$(echo "$$n" | grep -xE '[0-9]+\.[0-9]+\.[0-9]+');; esac; \
+			if [ -z "$$ok" ]; then \
+				echo "  $$f: no NEEDS_RELEASE_AFTER=x.y.z line"; \
+			elif [ "$$n" = '$(VERSION)' ] || [ "$$(printf '%s\n%s\n' "$$n" '$(VERSION)' | sort -V | head -n 1)" != "$$n" ]; then \
+				echo "  $$f: NEEDS_RELEASE_AFTER=$$n"; \
+			fi; \
 		done); \
-	[ -z "$$late" ] || { printf 'ERROR: not below $(VERSION), so make up from the release would build from source ' >&2; \
-		printf '(step 2 of docs/RELEASE.md):\n%s\n' "$$late" >&2; exit 1; }
+	[ -z "$$late" ] || { printf 'ERROR: set NEEDS_RELEASE_AFTER to the newest release that lacks what the demo shows, ' >&2; \
+		printf 'one below $(VERSION), or make up from the release would build from source:\n%s\n' "$$late" >&2; \
+		exit 1; }
+
+# Both changelogs' sections for VERSION, dated RELEASE_DATE, the day it runs: step 3 of docs/RELEASE.md dates them in
+# the last change merged before make release, so a release cut on a day other than the one its changelogs give stops
+# here, naming the date they give.
+RELEASE_DATE ?= $(shell date +%F)
+_check-changelogs: _require-version
+	@found=$$(sed -n 's/^## \[$(VERSION)\] - \([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)$$/\1/p' CHANGELOG.md | head -n 1); \
+	[ -n "$$found" ] || { echo "ERROR: CHANGELOG.md has no dated '## [$(VERSION)] - YYYY-MM-DD' section" \
+		"(step 3 of docs/RELEASE.md)" >&2; exit 1; }; \
+	[ "$$found" = '$(RELEASE_DATE)' ] || { echo "ERROR: CHANGELOG.md dates $(VERSION) $$found, not $(RELEASE_DATE)," \
+		"the day of the release (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+	@found=$$(awk -v h='## $(VERSION)' '$$0 == h { f = 1; next } f && NF { if ($$0 ~ /^_Released [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_$$/) print substr($$0, 11, 10); exit }' RELEASE_NOTES.md); \
+	[ -n "$$found" ] || { echo "ERROR: RELEASE_NOTES.md has no '## $(VERSION)' section starting" \
+		"'_Released YYYY-MM-DD_' (step 3 of docs/RELEASE.md)" >&2; exit 1; }; \
+	[ "$$found" = '$(RELEASE_DATE)' ] || { echo "ERROR: RELEASE_NOTES.md dates $(VERSION) $$found, not" \
+		"$(RELEASE_DATE), the day of the release (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+
+# The files step 2 of docs/RELEASE.md bumps (RELEASE_VERSION_FILES): each must name VERSION, and none may still have the
+# previous release, PREVIOUS_RELEASE, where step 2 bumps it: an image tag or a Maven coordinate, a Maven <version> or
+# the Spring Boot demo's <prometheus-proxy.version>, a chart's version or appVersion, a git clone's --branch, the
+# backticked examples in docker.md, docs/RELEASE.md, and the skill, the tag in a raw.githubusercontent.com link, or a
+# GitHub release's page or download link, as the Quick Start's JAR tab has. Historical mentions, such as "Version 4.3.0
+# (released ...)", don't match. PREVIOUS_RELEASE is the release section below VERSION's in CHANGELOG.md unless it's
+# given; given as VERSION, it lists every line of these files this catches (ReleaseCheckTest).
+_check-version-files: _require-version
+	@missing=$$(for f in $(RELEASE_VERSION_FILES); do grep -qF '$(VERSION)' "$$f" || echo "  $$f"; done); \
+	[ -z "$$missing" ] || { printf 'ERROR: not bumped to $(VERSION) (step 2 of docs/RELEASE.md):\n%s\n' "$$missing" >&2; exit 1; }
+	@prev='$(PREVIOUS_RELEASE)'; \
+	[ -n "$$prev" ] || prev=$$(awk -v h='## [$(VERSION)]' 'f && /^## \[/ { sub(/^## \[/, ""); sub(/\].*/, ""); print; exit } index($$0, h) == 1 { f = 1 }' CHANGELOG.md); \
+	[ -n "$$prev" ] || { echo "ERROR: CHANGELOG.md has no release section below [$(VERSION)]" >&2; exit 1; }; \
+	p=$$(printf '%s' "$$prev" | sed 's/\./\\./g'); \
+	stale=$$(grep -nE "(prometheus-(proxy|agent)|$(MAVEN_ARTIFACTS_PATTERN)):$$p([^0-9.]|\$$)|version>$$p</|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal|--branch $$p( |\$$)|/prometheus-proxy/$$p/|/releases/(tag|download)/$$p([/)]|\$$)" \
+		$(RELEASE_VERSION_FILES) | sed 's/^/  /'); \
+	[ -z "$$stale" ] || { printf 'ERROR: still at the previous version, %s (step 2 of docs/RELEASE.md):\n%s\n' "$$prev" "$$stale" >&2; exit 1; }
 
 _require-gradle-version:
 	@[ -n "$(GRADLE_VERSION)" ] || { echo "ERROR: Could not determine gradle version from gradle/libs.versions.toml" >&2; exit 1; }

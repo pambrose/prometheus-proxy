@@ -286,9 +286,23 @@ All notable changes to this project are documented in this file.
 - `make helm-lint` fails when either chart, with its dashboard on, doesn't have it listen on the pod's loopback by
   default, and `DocsExamplesTest` when a compose file (`etc/compose`, a demo's) or a compose snippet in the docs
   publishes a port on anything but `127.0.0.1`
-- `make release-check` refuses a release while any demo's `NEEDS_RELEASE_AFTER` isn't below the version, which
-  would leave `make up` from the release's tag building the proxy and agent from source, and step 2 of
-  `docs/RELEASE.md` says when to raise and lower it
+- A demo's `make up` runs the release the docs give only once its images are on Docker Hub, and builds the proxy and
+  agent from the checkout until then, so `make up` on `master` works from a version bump until the release is out,
+  and no demo changes on release day: `NEEDS_RELEASE_AFTER` names the newest release that lacks what the demo shows
+  (4.6.0 in every demo), and `make release-check` refuses a release while any demo's value isn't below the version,
+  or can't be read
+- `make release-check` requires both changelogs' sections for the version to be dated the day it runs, and its
+  stale-version check now catches the Quick Start's JAR release links and the Spring Boot demo's
+  `prometheus-proxy.version`. Its checks of the checkout are targets of their own (`_check-changelogs`,
+  `_check-version-files`, `_check-demos-pull-release`), which `ReleaseCheckTest` runs, and `DemoReleaseGateTest` runs
+  each demo's choice with a stubbed `docker`
+- `make release` creates the GitHub release itself (`make github-release`), with the JARs and `RELEASE_NOTES.md`'s
+  section as its notes (`make github-release-notes` prints them), before it deploys the docs site, so the Quick Start's
+  JAR downloads work as soon as the site shows the release
+- `make site-version` reads `examples/` too, whose cloud-proxy compose file the Cloud Platforms page shows with an image
+  tag, and `SiteVersionTest` checks that no other file a page includes names a version
+- `bin/docker-agent.sh` and `bin/docker-proxy.sh` say when Docker Hub has no image of the version the docs give yet,
+  rather than leave it to `docker run`'s pull error
 - CodeScene no longer rates the Kotlin sources on Primitive Obsession, String Heavy Function Arguments, Excess Number of
   Function Arguments, or Global Conditionals, which flagged the code's intended shape and pushed changes into
   workarounds; its function-level rules (Complex Method, Bumpy Road Ahead, Complex Conditional, nesting, Large Method)
@@ -479,8 +493,9 @@ All notable changes to this project are documented in this file.
   moves to `docs/archive/`, since all 43 of its findings are resolved, and `docs/security-agent-authentication.md`
   links it there
 - Each demo's README and page has a What This Demo Shows table, a row for each part of its tour, with what it shows
-  and why, linked from `make up` and `make tour`. The demos point to their pages on the docs site, where they named
-  README files, and the pages drop their What You Need sections, which the Demos page says once
+  and why, linked from `make up` and `make tour`. The demos point to their READMEs and to their pages on the docs site,
+  which describe the latest release, so a demo run from `master` between releases still names a guide that matches
+  it, and the pages drop their What You Need sections, which the Demos page says once
 - Every numbered step of the demos' tours shows something. The Spring Boot demo's part 4 shows Actuator reporting the
   agent UNKNOWN and the roastery UP while the proxy is away
 - Each demo's table of URLs names the variable that moves each port

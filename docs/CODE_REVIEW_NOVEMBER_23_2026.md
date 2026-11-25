@@ -1,8 +1,9 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 36 fixed, 36 open (8 medium, 64 low, no high); #25 is partly fixed.
+**Status:** 72 issues — 41 fixed, 31 open (8 medium, 64 low, no high).
 
-**Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
+**Progress:** Wave A (steps 2, 3, and 16, in #550–#552) and Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
+#555–#561).
 
 **Date:** 2026-11-23; rechecked twice on 2026-11-24
 
@@ -46,12 +47,12 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ⬜      |
 | 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ⬜      |
 | 24 | The starter's `Target.toString` shows URL query values such as an `api_key`                          | Security   | low      | ✅      |
-| 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ⬜      |
+| 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ✅      |
 | 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ✅      |
 | 27 | The quick-start compose file publishes the agent, scrape, and admin ports on every interface         | CI/build   | low      | ✅      |
 | 28 | `--tests=<spec>` runs the whole suite unfiltered, and `unitTest --tests X` fails                     | CI/build   | low      | ⬜      |
 | 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ⬜      |
-| 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ⬜      |
+| 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ✅      |
 | 31 | The starter page's YAML sets no `authority`, so the docs' own certificate fails the handshake        | Docs       | medium   | ✅      |
 | 32 | The upgrade notes miss that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`               | Docs       | low      | ✅      |
 | 33 | The Embedded Agent page gives `agent.logLevel` a default an embedded agent doesn't use               | Docs       | low      | ✅      |
@@ -82,13 +83,13 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ⬜      |
 | 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ⬜      |
 | 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ⬜      |
-| 61 | `release-check`'s stale-version check misses the Quick Start's JAR download links                    | CI/build   | low      | ⬜      |
-| 62 | Both changelogs date 4.7.0 2026-11-23, and `release-check` accepts any date                          | CI/build   | low      | ⬜      |
+| 61 | `release-check`'s stale-version check misses the Quick Start's JAR download links                    | CI/build   | low      | ✅      |
+| 62 | Both changelogs date 4.7.0 2026-11-23, and `release-check` accepts any date                          | CI/build   | low      | ✅      |
 | 63 | The basics demo promises an alert that a late thaw never fires                                       | CI/build   | low      | ✅      |
 | 64 | The agent page says `--proxy` and `PROXY_HOSTNAME` apply only without `endpoints`                    | Docs       | low      | ✅      |
 | 65 | Two diagram descriptions split a hyphenated name across a line                                       | Docs       | low      | ✅      |
 | 66 | Nothing checks the settings tables' options, variables, links, or gRPC defaults                      | Tests      | low      | ⬜      |
-| 67 | On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have     | CI/build   | low      | ⬜      |
+| 67 | On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have     | CI/build   | low      | ✅      |
 | 68 | `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap                           | CI/build   | low      | ⬜      |
 | 69 | The changelogs describe the home page #546 replaced, and miss four commits' changes                  | Docs       | low      | ✅      |
 | 70 | The release skill still lists `index.md`, and a design-check exemption covers a deleted class        | Docs       | low      | ⬜      |
@@ -146,7 +147,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 
 | Step | Status | Issues                       | PR theme                                                              | Touches                                                                                                                       | Why here                                                                                                                                                                                         |
 |------|--------|------------------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1    | ⬜      | #25, #30, #61, #62, #67      | Release checks that miss nothing, and demos that pull a published release | `demos/*/demo.sh`, the demo READMEs, `bin/docker-*.sh`, `Makefile` (`release-check`, `_check-demos-pull-release`, `SITE_VERSION_SOURCES`, `release`), `docs/RELEASE.md`, the publishing-release skill, a new `misc/` spec | No longer blocks the 4.7.0 tag: #537's `_check-demos-pull-release` refuses a release until the demos are lowered. A gate on whether the release's images exist drops that release-day edit and keeps `master`'s `make up` right between the bump and the publish. For 4.7.0 itself, set both changelogs' date in the release's last change (#62). #67 is the demos' links to a site that, between releases, is the last release's. |
+| 1    | ✅ #561 | #25, #30, #61, #62, #67      | Release checks that miss nothing, and demos that pull a published release | `demos/*/demo.sh`, the demo READMEs, `bin/docker-*.sh`, `Makefile` (`release-check`, `_check-demos-pull-release`, `SITE_VERSION_SOURCES`, `release`), `docs/RELEASE.md`, the publishing-release skill, a new `misc/` spec | No longer blocks the 4.7.0 tag: #537's `_check-demos-pull-release` refuses a release until the demos are lowered. A gate on whether the release's images exist drops that release-day edit and keeps `master`'s `make up` right between the bump and the publish. For 4.7.0 itself, set both changelogs' date in the release's last change (#62). #67 is the demos' links to a site that, between releases, is the last release's. |
 | 2    | ✅ #550 | #8, #24, #31                 | A Spring Boot starter that runs on the Spring Boot it names           | `agent/AgentMetrics.kt`, `Agent.kt` (`connectOutcome`), `spring-boot-starter/` (`PrometheusProxyAgentProperties`, the website YAML), `spring-boot-starter.md`, `embedded-agent.md` | The starter is new in 4.7.0; fixing it before the tag means no release ships it broken. A starter test at Spring Boot 4.0's or 4.1.0's Prometheus client pins #8.                                 |
 | 3    | ✅ #551 | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
 | 4    | ✅ #557 | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
@@ -1325,7 +1326,7 @@ finds none of its secrets in the properties' `toString`.
 
 ## 🏗️ CI, build, packaging, and demos
 
-### 25. ⬜ Every release moves each demo's `NEEDS_RELEASE_AFTER` by hand, twice, and until the release is published `master`'s `make up` says a release that isn't out "predates this demo", then can't pull it
+### 25. ✅ Every release moves each demo's `NEEDS_RELEASE_AFTER` by hand, twice, and until the release is published `master`'s `make up` says a release that isn't out "predates this demo", then can't pull it
 
 **Severity:** low (medium at `56b1c355`; found by both the build and the documentation passes) · **Confidence:**
 confirmed by trace and by running `make _check-demos-pull-release` with several `VERSION`s.
@@ -1395,6 +1396,8 @@ publishing-release skill, and AGENTS.md have the release lower it in the last ch
 release tag pulls its images. Still open: the value is edited twice per release by hand, `master`'s `make up` and
 `bin/docker-*.sh` mishandle the unpublished release between the bump and the publish, and the guard skips a demo it
 can't parse and has no test.
+
+**Resolution:** Fixed in #561. Each `demo.sh` checks whether the release the docs give is published, by an image Docker already has or Docker Hub's answer, only whose "no such manifest" means no, and `make up` builds from the checkout until it is, saying why; the Kubernetes demo asks Docker Hub alone, as its clusters pull the images. `NEEDS_RELEASE_AFTER` keeps its name and meaning, the newest release that lacks what the demo shows, rather than becoming the first that has it, and is 4.6.0 in all seven demos, so no bump or release moves it; `_check-demos-pull-release` stays as a guard, now failing on a value it can't read. `bin/docker-*.sh` say a release isn't on Docker Hub yet. `DemoReleaseGateTest` runs each `cmd_up` with a stubbed `docker`.
 
 ### 26. ✅ Both charts' dashboards listen on every pod interface, so keeping them off the Service doesn't keep them private
 
@@ -1522,7 +1525,7 @@ own list in `docs/TESTING.md`.
 
 **Tests:** none beyond the build: after the change, editing `docs/TESTING.md` makes the next `./gradlew unitTest` run.
 
-### 30. ⬜ `make site-version` doesn't scan `examples/cloud-proxy/docker-compose.yml`, which the site shows with an image tag, though its comment says nothing outside its sources names a version
+### 30. ✅ `make site-version` doesn't scan `examples/cloud-proxy/docker-compose.yml`, which the site shows with an image tag, though its comment says nothing outside its sources names a version
 
 **Severity:** low · **Confidence:** confirmed from the files.
 
@@ -1543,7 +1546,9 @@ guarantee and the wrong comment.
 **Tests:** a `SiteVersionTest` case that every snippet a page includes with `--8<--` is under `SITE_VERSION_SOURCES` or
 names no version.
 
-### 61. ⬜ `release-check`'s stale-version check, which #542 extended to the raw config links, misses the Quick Start's JAR download links, so a bump that skips them passes and the site sends JAR readers to the previous release
+**Resolution:** Fixed in #561. `SITE_VERSION_SOURCES` includes `examples`, and `SiteVersionTest` checks every file a page includes.
+
+### 61. ✅ `release-check`'s stale-version check, which #542 extended to the raw config links, misses the Quick Start's JAR download links, so a bump that skips them passes and the site sends JAR readers to the previous release
 
 **Severity:** low · **Confidence:** confirmed by replaying the Makefile's regex on the lines left at the previous
 version:
@@ -1585,7 +1590,9 @@ the raw link and the image tag are caught, the three JAR lines are not.
 run it on the tree with `PREV` set to the current version, the way `SiteVersionTest` runs `make site-version`: it must
 name `getting-started.md:16`, `:19`, and `:20`, which fails today.
 
-### 62. ⬜ Both changelogs say 4.7.0 was released on 2026-11-23, a day that passed without the release, and `make release-check` accepts any date
+**Resolution:** Fixed in #561. The stale check, now `_check-version-files` with a `PREVIOUS_RELEASE` override, catches the Quick Start's `releases/tag|download` links, and the Spring Boot demo's `<prometheus-proxy.version>`, which wasn't listed here; `ReleaseCheckTest` checks it catches every version mention but the historical ones. In place of placeholder notes, `make release` creates the GitHub release itself (`make github-release`) between the tag and the docs deploy, with `RELEASE_NOTES.md`'s section and the JARs, so the download links work from the start.
+
+### 62. ✅ Both changelogs say 4.7.0 was released on 2026-11-23, a day that passed without the release, and `make release-check` accepts any date
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1608,6 +1615,8 @@ name `getting-started.md:16`, `:19`, and `:20`, which fails today.
 release cut after the day its changelogs were dated is caught before it publishes.
 
 **Tests:** none practical; `make release-check` is the check.
+
+**Resolution:** Fixed in #561. `_check-changelogs` refuses a release unless both changelogs date its section the day it runs, naming the date they give, and `docs/RELEASE.md` step 3 dates them in the last change merged before `make release`. 4.7.0's sections keep 2026-11-23 until that change.
 
 ### 63. ✅ `agent-freeze agent-east` promises that DemoAgentEvicted fires once agent-east is back, but the rule looks back two minutes, so a thaw more than about a minute after the eviction never fires it
 
@@ -1646,7 +1655,7 @@ suggest `agent-freeze` of agent-west-2 to see the alert.
 **Resolution:** Fixed in #552. The agent-east branch says to thaw within a minute of the eviction, why, and to freeze agent-west-2
 instead to see the alert fire.
 
-### 67. ⬜ On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have: three demos' pages answer 404, and no page has `#what-this-demo-shows`
+### 67. ✅ On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have: three demos' pages answer 404, and no page has `#what-this-demo-shows`
 
 **Severity:** low · **Confidence:** confirmed with `curl` against prometheus-proxy.com on 2026-11-24: `/ktor-demo/`,
 `/nginx-demo/`, and `/plain-kotlin-demo/` answer 404; `/basics-demo/` and `/kubernetes-demo/` answer 200, with
@@ -1679,6 +1688,8 @@ the top of demos/<name>/README.md, or of the demo's page". Or print the page lin
 
 **Tests:** with the README path printed, `DemoTourTablesTest` can require each `${PAGE_URL}#anchor` a script prints to
 be an anchor of the README too (see #72).
+
+**Resolution:** Fixed in #561. `make up`, `make tour`, and the tours name the demo's README, which matches the checkout, beside the docs site's page for the latest release.
 
 ### 68. ⬜ `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap, though only the harness specs read the profile, so the run can grow to 32g of test heap beside Gradle's 4g
 
