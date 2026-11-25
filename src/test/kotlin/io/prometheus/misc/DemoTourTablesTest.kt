@@ -117,8 +117,8 @@ class DemoTourTablesTest : StringSpec() {
       }
     }
 
-    // A Markdown file isn't readable without a viewer, so a demo points its reader only to its page on the site: make up
-    // and the tour printed the README's path beside it. A comment, for whoever edits the script, may name one.
+    // A Markdown file isn't readable without a viewer, so a demo points its reader only to its page on the site:
+    // make up and the tour printed the README's path beside it. A comment, for whoever edits the script, may name one.
     "each demo should point to its website page, never to a Markdown file" {
       demos.forEach { demo ->
         withClue(demo.name) {
