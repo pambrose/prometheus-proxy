@@ -68,10 +68,8 @@ ON_DEMAND=(--profile misconfigured)
 # The most ovens `scale` runs.
 MAX_OVENS=5
 
-# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
-# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
-# between releases the page can lag behind this checkout, or not be there yet.
-README_PATH="demos/plain-kotlin/README.md"
+# This demo's page on the docs site, which shows its layout and what each part of its tour shows. The demo points only
+# there, never to a raw Markdown file, which isn't readable without a viewer.
 PAGE_URL="https://prometheus-proxy.com/plain-kotlin-demo/"
 DASHBOARD_URL="http://localhost:${PLAIN_KOTLIN_DEMO_DASHBOARD_PORT:-8694}/dashboard"
 GRAFANA_URL="http://localhost:${PLAIN_KOTLIN_DEMO_GRAFANA_PORT:-3600}"
@@ -157,8 +155,7 @@ print_urls() {
   echo "  Prometheus's targets:   $PROMETHEUS_URL/targets"
   echo "  The proxy's discovery:  $PROXY_URL/discovery"
   echo
-  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
-    "release: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 sockets | rush | scale 3 | no-proxy ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -756,8 +753,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
     "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
-    "${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 
@@ -884,7 +880,7 @@ cmd_tour() {
   if part 1 "A worker, such as a queue consumer, a scheduler, or a daemon, often has no HTTP server at all, so" \
     "there's nothing for Prometheus to scrape. Here each oven is a plain Kotlin program, with the agent embedded" \
     "in it, which reads the oven's metrics in-process and sends them out to the proxy."; then
-    instruct "What runs in this demo, as the diagram at the top of $README_PATH draws it" \
+    instruct "What runs in this demo, as the diagram at the top of its page draws it: ${PAGE_URL}" \
       "A bakery's oven, a plain Kotlin program with no framework and no HTTP server, bakes the orders a counter" \
       "pushes onto a Redis queue, about one and a half a second. The prometheus-proxy agent runs inside the oven's" \
       "JVM. Beside the proxy are Prometheus and Grafana, as on a proxy host."
@@ -895,8 +891,8 @@ cmd_tour() {
       "agent's own metrics, each at a path named after the oven's container. startIfConfigured().use { } runs the" \
       "oven whether or not the agent started, and stops the agent after it. On a SIGTERM, the shutdown hook above" \
       "it stops the oven and keeps the JVM up until main returns: the oven finishes the order it's baking, then" \
-      "use { } stops the agent. The Worker's Code, in $README_PATH, walks through it, as does the docs site's page" \
-      "for the latest release: ${PAGE_URL}#the-workers-code"
+      "use { } stops the agent. The Worker's Code, on the demo's page, walks through it:" \
+      "${PAGE_URL}#the-workers-code"
   fi
 
   if part 2 "Prometheus scrapes the proxy at the paths the oven's agent registered, and Grafana shows what it" \

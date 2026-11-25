@@ -75,10 +75,8 @@ SHUTDOWN_SECS=10
 # (proxy.internal.streamKeepAliveSecs).
 DEFAULT_KEEPALIVE_SECS=30
 
-# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
-# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
-# between releases the page can lag behind this checkout, or not be there yet.
-README_PATH="demos/nginx/README.md"
+# This demo's page on the docs site, which shows its layout and what each part of its tour shows. The demo points only
+# there, never to a raw Markdown file, which isn't readable without a viewer.
 PAGE_URL="https://prometheus-proxy.com/nginx-demo/"
 DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 # The same dashboard, through nginx (nginx/dashboard-*.conf).
@@ -175,8 +173,7 @@ print_urls() {
   echo "  Prometheus:               $PROMETHEUS_URL"
   echo "  Proxy discovery:          $PROXY_URL/discovery"
   echo
-  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
-    "release: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 nginx-log | nginx-long-timeouts | nginx-workers | keepalive 10 | dashboard-host ...  (no" \
     "arguments for help)"
@@ -642,8 +639,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. To start from another part, run" \
     "$MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
-    "${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

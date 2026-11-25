@@ -68,10 +68,8 @@ CERTS_DIR="$REPO_DIR/testing/certs"
 # The services only a scenario starts, so down and status cover them too.
 ON_DEMAND=(--profile deploy)
 
-# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
-# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
-# between releases the page can lag behind this checkout, or not be there yet.
-README_PATH="demos/ktor/README.md"
+# This demo's page on the docs site, which shows its layout and what each part of its tour shows. The demo points only
+# there, never to a raw Markdown file, which isn't readable without a viewer.
 PAGE_URL="https://prometheus-proxy.com/ktor-demo/"
 APP_URL="http://localhost:${KTOR_DEMO_APP_PORT:-8390}"
 DASHBOARD_URL="http://localhost:${KTOR_DEMO_DASHBOARD_PORT:-8394}/dashboard"
@@ -181,8 +179,7 @@ print_urls() {
   echo "  1.1's, after a deploy:  $NEXT_AGENT_DASHBOARD_URL"
   echo "  Agent's /debug:         $AGENT_ADMIN_URL/debug"
   echo
-  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
-    "release: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 rush | break-machine | deploy | proxy-stop ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -486,8 +483,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
     "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
-    "${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 
@@ -649,7 +645,7 @@ cmd_tour() {
   if part 1 "An app on a platform such as ECS, Cloud Run, or Azure Container Apps can't be scraped by a Prometheus" \
     "outside the platform without opening its metrics to the internet. Here the agent runs inside the app instead," \
     "and connects out to the proxy."; then
-    instruct "What runs in this demo, as the diagram at the top of $README_PATH draws it" \
+    instruct "What runs in this demo, as the diagram at the top of its page draws it: ${PAGE_URL}" \
       "The coffee shop is a Ktor app, with built-in customers who order over HTTP on their own. The" \
       "prometheus-proxy agent runs inside it, started from the app's own code: one container, one JVM. Outside it" \
       "are the proxy," \

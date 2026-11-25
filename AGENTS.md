@@ -294,7 +294,8 @@ check out, creating the GitHub release on it with the JARs the Quick Start downl
 as its notes (`make github-release`), and deploying the docs site (`make gh-docs`, a `workflow_dispatch` of
 `docs.yml`), the only run that deploys it: a push to `master` builds the site and the KDocs as a check, without
 deploying, so the live site describes the last release until the next one, docs changes merged in between included
-(`CiHygieneTest` pins this), which is why each demo prints its README (`README_PATH`) beside its page. `make gh-docs`
+(`CiHygieneTest` pins this). A demo points its reader only to its page on the site (`PAGE_URL`), which describes the
+release its `make up` runs, never to a Markdown file, which isn't readable without a viewer (`DemoTourTablesTest`). `make gh-docs`
 by hand deploys `master` as it is, unreleased pages included. `make site-version` prints the version the site shows as
 its image tag and Maven coordinate, the one step 2 bumps, which `bin/docker-*.sh` and the demos run once Docker Hub has
 it; not `gradle.properties`, which can hold a `-SNAPSHOT` (`SiteVersionTest`). CI's `docs-site` job

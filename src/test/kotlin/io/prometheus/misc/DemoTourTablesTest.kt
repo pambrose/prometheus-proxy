@@ -117,6 +117,20 @@ class DemoTourTablesTest : StringSpec() {
       }
     }
 
+    // A Markdown file isn't readable without a viewer, so a demo points its reader only to its page on the site: make up
+    // and the tour printed the README's path beside it. A comment, for whoever edits the script, may name one.
+    "each demo should point to its website page, never to a Markdown file" {
+      demos.forEach { demo ->
+        withClue(demo.name) {
+          demo.script
+            .lines()
+            .filterNot { it.trimStart().startsWith("#") }
+            .filter { MARKDOWN_FILE.containsMatchIn(it) }
+            .shouldBeEmpty()
+        }
+      }
+    }
+
     // demo.sh prints links to sections of its page, ${PAGE_URL}#running-it among them, and a section renamed on the
     // page leaves the link landing at the page's top.
     "every section of its page a demo.sh links to should be one the page has" {
@@ -160,6 +174,7 @@ class DemoTourTablesTest : StringSpec() {
     private val TOUR_PARTS =
       Regex("""^TOUR_PARTS=\(\n(.*?)\n\)""", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))
     private val TOUR_PART = Regex("""^\s+"\d+ (.+)"$""", RegexOption.MULTILINE)
+    private val MARKDOWN_FILE = Regex("""\.md\b""")
     private val PAGE_URL = Regex("""^PAGE_URL="https://prometheus-proxy\.com/([a-z-]+)/"$""", RegexOption.MULTILINE)
 
     // A link to a section of the demo's page: ${PAGE_URL}#running-it, or $PAGE_URL#running-it
