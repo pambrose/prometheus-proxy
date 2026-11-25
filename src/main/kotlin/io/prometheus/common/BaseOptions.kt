@@ -714,8 +714,10 @@ abstract class BaseOptions protected constructor(
   }
 
   /**
-   * Resolves [logLevel] from CLI > [envVar] > [configDefault] and applies it. When the resolved value is
-   * empty the level from `logback.xml` is left in place. [role] is used only for log/exception text.
+   * Resolves [logLevel] from CLI > [envVar] > [configDefault] and applies it. When the resolved value is empty the
+   * level the logging configuration gives is left in place: the standalone proxy and agent's `logback.xml` gives info,
+   * and an embedded agent's loggers follow its application's configuration. [role] is used only for log/exception
+   * text.
    *
    * An embedded agent shares its host application's logging, so it sets the level of the `io.prometheus` loggers
    * only; setting the root logger's would change the host's own logging too.
@@ -726,13 +728,22 @@ abstract class BaseOptions protected constructor(
     configDefault: String,
   ) {
     logLevel = resolveStringOption(logLevel, envVar, configDefault)
-    if (logLevel.isNotEmpty()) {
-      logger.info { "$role.logLevel: $logLevel" }
-      Utils.setLogLevel(role, logLevel, loggerName = if (embedded) Utils.PROJECT_LOGGER_NAME else ROOT_LOGGER_NAME)
+    if (logLevel.isEmpty()) {
+      logger.info { "$role.logLevel: $unsetLogLevel" }
     } else {
-      logger.info { "$role.logLevel: info" }
+      logger.info { "$role.logLevel: $logLevel" }
+      Utils.setLogLevel(role, logLevel, loggerName = logLevelLoggerName)
     }
   }
+
+  // The logger logLevel sets: an embedded agent's io.prometheus, since setting the root's would change its host's own
+  // logging too, and the standalone proxy and agent's root
+  private val logLevelLoggerName: String get() = if (embedded) Utils.PROJECT_LOGGER_NAME else ROOT_LOGGER_NAME
+
+  // The level an empty logLevel leaves: the standalone proxy and agent's logback.xml gives info, and an embedded
+  // agent's loggers follow its application's logging configuration
+  private val unsetLogLevel: String
+    get() = if (embedded) "unset, the application's logging configuration sets it" else "info"
 
   private fun readConfig(
     envConfig: String,

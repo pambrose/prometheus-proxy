@@ -78,9 +78,10 @@ All notable changes to this project are documented in this file.
   in place of its own lifecycle code, and no longer serves `/metrics`, its Basic Auth, or `METRICS_USER` and
   `METRICS_PASSWORD`; `./demo.sh peek` shows the app has no `/metrics`. It reads its proxy's settings with
   `fromEnvironment()` and serves the agent's own metrics with `agentMetricsAt`, without `METRICS_ENABLED` or port 8083
-- Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`
-  and `proxy-up`, the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which
-  port-forwards to the agent's
+- Every demo turns on its agents' dashboards, but for the nginx demo's 4.6.0 agent and the plain Kotlin demo's ovens,
+  which listen on no port, and shows the agent's side in its tour; the basics demo adds `proxy-down` and `proxy-up`,
+  the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which port-forwards to
+  the agent's dashboard
 - The proxy counts more of what happens to its agents: `proxy_agent_disconnects_total` (by `reason`: eviction,
   termination, stream_terminated), `proxy_agent_connect_refusals_total`, `proxy_agent_auth_failures_total`,
   `proxy_path_rejections_total` (every refusal, by `cause`), `proxy_binding_mismatches_total`, and
@@ -206,6 +207,10 @@ All notable changes to this project are documented in this file.
   embedding app's own SLF4J provider: Spring Boot failed to start an app on Log4j2, or ignored its Log4j2 config. The
   fat JARs and the images still run with it. An app that logged only through the Logback the agent brought adds its
   own, and `agent.logLevel` sets a level only through Logback, warning otherwise
+- The agent reads `DASHBOARD_ENABLED`, `DASHBOARD_PORT`, `DASHBOARD_PATH`, `DASHBOARD_HOST`, `DASHBOARD_USERNAME`,
+  `DASHBOARD_PASSWORD`, and `METRICS_PROXY_PATH`, which through 4.6.0 only the proxy read, or nothing did. An agent
+  whose environment sets them, such as one sharing the proxy's, now opens its dashboard on port 8095 or serves its
+  metrics at that path, and a value it can't parse, such as an empty `DASHBOARD_PORT`, fails its start
 - `sendHeartBeat` calls are no longer traced
 - The unimplemented `internal.zipkin.grpcReportingEnabled` setting is removed; a config that sets it still loads
 - `BuildConfig.BUILD_TIME` and the release date the version and the dashboards show are the time of the commit the
@@ -338,10 +343,9 @@ All notable changes to this project are documented in this file.
   block's Copy and Select buttons show while the pointer is over it, on its own color, where the end of its first line
   showed through them, and the screenshots' lightbox is GLightbox 3.3.1 served from the site, where the theme fetched
   whichever 3.x was newest from unpkg
-- The docs site's home page says what the project does in one line, draws it in another (Prometheus and the proxy on
-  one side of the firewall, the agent on the other), gives the Docker commands to try it, a block for each of the three
-  terminals they run in, and offers three ways on: a demo, the Quick Start, and onboarding a team. It dropped its list of eleven benefits, its use cases, and its six
-  cards, and its JAR tab, which ran a jar it never downloaded
+- The docs site's home page is the sidebar's first item, Home. It keeps its diagram, benefits, and use cases, and ends
+  with three ways on: installing it, a demo, and onboarding a team. Its Quick Start tabs are gone, whose CLI tab ran a
+  jar it never downloaded, and so are its six cards. Every heading on the site and in the READMEs is title case
 - The docs site's CLI Reference groups its settings by what they configure (ports, admin and metrics, dashboard, TLS,
   gRPC, and the rest), in tables whose columns line up, stacks each setting's option over its environment variable,
   and gives each row an anchor named by its config key (`#agent.scrapeTimeoutSecs`), marked when a link lands on it.
@@ -375,9 +379,9 @@ All notable changes to this project are documented in this file.
 - The docs site's lists with a code block in them, a procedure's steps or a demo's scenarios, give their code the
   column's width, where it was held to the reading measure and scrolled sideways. A card's link underlines only the
   page's name, and the screenshots' lightbox sets its caption on the dashboard's dark surface, where it was a white bar
-- The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
-  environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
-  login page's 401 as the proxy answering
+- The basics demo's tour ends with a part on the dashboard's login: `./demo.sh login` restarts the proxy with a
+  dashboard password in its environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it.
+  Its readiness checks take a login page's 401 as the proxy answering
 - The Embedded Agent page lists each way to run an embedded agent, and each setting's name in every way of giving it,
   the builder, a config key, the starter and plugin, and an environment variable, with which one wins, and the
   settings that have no builder method. The Monitoring page compares an agent's metrics port with its proxy path, and
@@ -415,6 +419,18 @@ All notable changes to this project are documented in this file.
   high), each with a status, and a 17-step fix plan in waves of steps that can run in parallel. The November 11 review
   moves to `docs/archive/`, since all 43 of its findings are resolved, and `docs/security-agent-authentication.md`
   links it there
+- Each demo's README and page has a What This Demo Shows table, a row for each part of its tour, with what it shows
+  and why, linked from `make up` and `make tour`. The demos point to their pages on the docs site, where they named
+  README files, and the pages drop their What You Need sections, which the Demos page says once
+- Every numbered step of the demos' tours shows something. The Spring Boot demo's part 4 shows Actuator reporting the
+  agent UNKNOWN and the roastery UP while the proxy is away
+- Each demo's table of URLs names the variable that moves each port
+- Corrections from the November 23 review: `agent.metrics.proxyPath` in the README, `llms.txt`, and the metrics guides,
+  whose port self-scrape turns the port on; a target's own 404, and the 408, in the Quick Start's Verify step; the
+  security doc's account of a displaced agent; the Embedded Agent page's `logLevel` default and what a refused
+  `PROMETHEUS_*` value shows; the agent dashboard's Helm commands without a namespace; the proxy's zipped-size limit
+  in Troubleshooting, Production, and the proxy's configuration page; `-D` precedence in `llms.txt`; and the check
+  order of agent auth's path globs
 
 ### Dependencies
 

@@ -20,8 +20,8 @@ _Released 2026-11-23_
   Prometheus would get.
 - **What happened to the agent.** The agent's dashboard has an Activity view: the agent connecting, losing its
   connection and why, failing over, and its paths registered or refused, in order, so you can see what happened while
-  nobody was watching. The agent's Helm chart can turn the dashboard on (`dashboard.enabled`), and every demo now shows
-  its agents' dashboards.
+  nobody was watching. The agent's Helm chart can turn the dashboard on (`dashboard.enabled`), and every demo but the
+  plain Kotlin demo, whose ovens listen on no port, now shows its agents' dashboards.
 - **Every setting, on both dashboards.** A new Settings view on the proxy's dashboard and the agent's shows every setting
   the process is running with, from its ports, authentication, and TLS to its limits and timeouts, so you can check
   them without reading the startup log. Tokens, passwords, and private keys show only as set or not set.
@@ -141,6 +141,12 @@ _Released 2026-11-23_
   wherever your app's do, through its own SLF4J provider. If your app logged only through the Logback the agent
   brought, add `ch.qos.logback:logback-classic` to it. The standalone proxy and agent, and their images, still log
   with Logback.
+- **The agent reads the dashboard's variables, and `METRICS_PROXY_PATH`.** `DASHBOARD_ENABLED`, `DASHBOARD_PORT`,
+  `DASHBOARD_PATH`, `DASHBOARD_HOST`, `DASHBOARD_USERNAME`, and `DASHBOARD_PASSWORD` were the proxy's alone through
+  4.6.0, and nothing read `METRICS_PROXY_PATH`. An agent whose environment sets them, such as one that shares the
+  proxy's env file, now opens its own dashboard on port 8095, without a login unless `DASHBOARD_PASSWORD` is set too,
+  or serves its metrics at that path, and a value it can't parse, such as an empty `DASHBOARD_PORT`, stops it
+  starting. Check an agent's environment before you upgrade it.
 - **An embedded agent stops when your app stops it.** An agent started with `startAsyncAgent()` or
   `EmbeddedAgentConfig` no longer registers a JVM shutdown hook, which on SIGTERM stopped it at the same time as the
   app's own shutdown, in no set order. Stop it with `shutdown()` or `close()` where your app stops its own services;
@@ -179,12 +185,15 @@ _Released 2026-11-23_
   docs site's Demos page gives them.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
+- **The demos' tours.** Each demo opens its tour with a table of what each part shows and why, every step shows
+  something, and `make up` links to the demo's page on the docs site.
 - **The docs site.** It takes the dashboard's look, its warning and danger colors included, follows your light or
   dark setting, loads no web font, and has no chat widget. Its sidebar is regrouped into seven sections, with a Demos
   page listing every demo; each heading has a link of its own; and the reference tables no longer break a flag or key
-  in the middle. Its home page is short: what the project does, the Docker commands to try it, and three ways on. The
-  configuration pages give each setting's key, option, variable, and default in one row, as the CLI Reference does,
-  grouped by what it configures, and a link can open a setting's row by its key. The Security page walks through onboarding a team onto a shared proxy, start to finish.
+  in the middle. Its home page shows how the proxy works and ends with three ways on: install it, try a demo, or
+  onboard a team. The configuration pages give each setting's key, option, variable, and default in one row, as the
+  CLI Reference does, grouped by what it configures, and a link can open a setting's row by its key. The Security page
+  walks through onboarding a team onto a shared proxy, start to finish.
 
 ## 4.6.0
 

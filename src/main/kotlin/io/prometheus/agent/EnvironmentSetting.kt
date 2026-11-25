@@ -37,7 +37,8 @@ internal enum class EnvironmentSetting(
   // What the agent throws for [value] in this setting as it starts, its message in the agent's words, or null when it
   // takes it: an endpoint it can't parse, or a certificate it can't read, checked as the agent checks them. It takes
   // any token or authority as it starts: the proxy refuses a wrong token once the agent connects, and a wrong authority
-  // fails the TLS handshake. The message never holds the value, which can be a token or a certificate.
+  // fails the TLS handshake. The message quotes an endpoint it can't parse, as the agent's parser does, but never holds
+  // a certificate, and no token is checked here.
   fun rejection(value: String): Throwable? =
     runCatching {
       when (this) {

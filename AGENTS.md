@@ -149,7 +149,7 @@ Only these types are part of the supported, documented public API. Everything el
     `PROMETHEUS_PROXY_AUTHORITY`, which nothing else reads. Its `internal` overload takes the lookup function, so
     tests can call it, as with `EnvVars`' parsing. The builder remembers which values it read, until code sets the same
     key, and `start()` checks them first with the agent's own parsers (`EnvironmentSetting`), so a value the agent
-    refuses names its variable as well as its setting, and never the value.
+    refuses names its variable as well as its setting, and never a certificate (an endpoint it can't parse is quoted).
   - `agentMetricsAt(path, labels)` sets `agent.metrics.proxyPath` and `agent.metrics.proxyPathLabels`, which a
     standalone agent sets in its config, or with `--metrics_proxy_path` / `METRICS_PROXY_PATH`
     (`AgentOptions.metricsProxyPath`). The agent serves its own metric families there in-process

@@ -78,12 +78,12 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
 === "Helm"
 
     ```bash
-    helm upgrade prometheus-agent ./charts/prometheus-agent --namespace monitoring --reuse-values \
-      --set dashboard.enabled=true
-    kubectl -n monitoring port-forward deploy/prometheus-agent 8095
+    helm upgrade prometheus-agent ./charts/prometheus-agent --reuse-values --set dashboard.enabled=true
+    kubectl port-forward deploy/prometheus-agent 8095
     ```
 
-    The chart keeps the port off its Service, so you reach it with `kubectl port-forward`;
+    Add `--namespace` and `-n` if you installed the agent in one, as the chart's README does in `monitoring`. The
+    chart keeps the port off its Service, so you reach it with `kubectl port-forward`;
     `dashboard.login.existingSecret` names a Secret holding the login's password.
 
 Then open `http://<agent-host>:8095/dashboard`.

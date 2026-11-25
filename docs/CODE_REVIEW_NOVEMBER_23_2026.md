@@ -1,8 +1,8 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 4 fixed, 68 open (8 medium, 64 low, no high); #25 and #39 are partly fixed.
+**Status:** 72 issues — 20 fixed, 52 open (8 medium, 64 low, no high); #25 is partly fixed.
 
-**Progress:** Wave A: step 2 in #550, and step 3 in #551.
+**Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
 
 **Date:** 2026-11-23; rechecked twice on 2026-11-24
 
@@ -53,17 +53,17 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ⬜      |
 | 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ⬜      |
 | 31 | The starter page's YAML sets no `authority`, so the docs' own certificate fails the handshake        | Docs       | medium   | ✅      |
-| 32 | The upgrade notes miss that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`               | Docs       | low      | ⬜      |
-| 33 | The Embedded Agent page gives `agent.logLevel` a default an embedded agent doesn't use               | Docs       | low      | ⬜      |
-| 34 | The docs say a refused `PROMETHEUS_*` value is never shown, but an endpoint is                       | Docs       | low      | ⬜      |
-| 35 | `agent.metrics.proxyPath` is missing from the README, `llms.txt`, and the Grafana docs               | Docs       | low      | ⬜      |
-| 36 | The security doc says a displaced agent is invalidated; it stays connected                           | Docs       | low      | ⬜      |
-| 37 | The Quick Start says a 404 means an unregistered path, but a target's own 404 looks the same         | Docs       | low      | ⬜      |
-| 38 | The Agent Dashboard page's Helm commands use a namespace the site's agent installs don't use         | Docs       | low      | ⬜      |
-| 39 | The README and changelogs say every demo turns on its agents' dashboards                             | Docs       | low      | ⬜      |
-| 40 | A check order, a `make up` claim, and an unnamed size limit on the deployment and security pages     | Docs       | low      | ⬜      |
-| 41 | The README and `llms.txt` miss `PROMETHEUS_PROXY_AUTHORITY` and misstate `-D` precedence             | Docs       | low      | ⬜      |
-| 42 | The metrics docs' counter count, alert list, and chunk threshold are wrong                           | Docs       | low      | ⬜      |
+| 32 | The upgrade notes miss that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`               | Docs       | low      | ✅      |
+| 33 | The Embedded Agent page gives `agent.logLevel` a default an embedded agent doesn't use               | Docs       | low      | ✅      |
+| 34 | The docs say a refused `PROMETHEUS_*` value is never shown, but an endpoint is                       | Docs       | low      | ✅      |
+| 35 | `agent.metrics.proxyPath` is missing from the README, `llms.txt`, and the Grafana docs               | Docs       | low      | ✅      |
+| 36 | The security doc says a displaced agent is invalidated; it stays connected                           | Docs       | low      | ✅      |
+| 37 | The Quick Start says a 404 means an unregistered path, but a target's own 404 looks the same         | Docs       | low      | ✅      |
+| 38 | The Agent Dashboard page's Helm commands use a namespace the site's agent installs don't use         | Docs       | low      | ✅      |
+| 39 | The README and changelogs say every demo turns on its agents' dashboards                             | Docs       | low      | ✅      |
+| 40 | A check order, a `make up` claim, and an unnamed size limit on the deployment and security pages     | Docs       | low      | ✅      |
+| 41 | The README and `llms.txt` miss `PROMETHEUS_PROXY_AUTHORITY` and misstate `-D` precedence             | Docs       | low      | ✅      |
+| 42 | The metrics docs' counter count, alert list, and chunk threshold are wrong                           | Docs       | low      | ✅      |
 | 43 | `docs/packages.md`, `ConfigLoadException`'s KDoc, and `KDOC_SUMMARY.md` describe 4.6.0               | Docs       | low      | ⬜      |
 | 44 | AGENTS.md and `docs/TESTING.md` name a deploy check that's gone, and misdescribe `make all-tests`    | Docs       | low      | ⬜      |
 | 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ⬜      |
@@ -84,15 +84,15 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ⬜      |
 | 61 | `release-check`'s stale-version check misses the Quick Start's JAR download links                    | CI/build   | low      | ⬜      |
 | 62 | Both changelogs date 4.7.0 2026-11-23, and `release-check` accepts any date                          | CI/build   | low      | ⬜      |
-| 63 | The basics demo promises an alert that a late thaw never fires                                       | CI/build   | low      | ⬜      |
-| 64 | The agent page says `--proxy` and `PROXY_HOSTNAME` apply only without `endpoints`                    | Docs       | low      | ⬜      |
-| 65 | Two diagram descriptions split a hyphenated name across a line                                       | Docs       | low      | ⬜      |
+| 63 | The basics demo promises an alert that a late thaw never fires                                       | CI/build   | low      | ✅      |
+| 64 | The agent page says `--proxy` and `PROXY_HOSTNAME` apply only without `endpoints`                    | Docs       | low      | ✅      |
+| 65 | Two diagram descriptions split a hyphenated name across a line                                       | Docs       | low      | ✅      |
 | 66 | Nothing checks the settings tables' options, variables, links, or gRPC defaults                      | Tests      | low      | ⬜      |
 | 67 | On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have     | CI/build   | low      | ⬜      |
 | 68 | `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap                           | CI/build   | low      | ⬜      |
-| 69 | The changelogs describe the home page #546 replaced, and miss four commits' changes                  | Docs       | low      | ⬜      |
+| 69 | The changelogs describe the home page #546 replaced, and miss four commits' changes                  | Docs       | low      | ✅      |
 | 70 | The release skill still lists `index.md`, and a design-check exemption covers a deleted class        | Docs       | low      | ⬜      |
-| 71 | The Kubernetes demo's docs say its agent dashboard port is set once, but nothing keeps it            | Docs       | low      | ⬜      |
+| 71 | The Kubernetes demo's docs say its agent dashboard port is set once, but nothing keeps it            | Docs       | low      | ✅      |
 | 72 | `DemoTourTablesTest` misses a stale README heading and `demo.sh`'s page anchors                      | Tests      | low      | ⬜      |
 
 ---
@@ -161,7 +161,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 13   | ⬜      | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
 | 14   | ⬜      | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
 | 15   | ⬜      | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
-| 16   | ⬜      | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
+| 16   | ✅ #552 | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
 | 17   | ⬜      | #43, #44, #45, #70           | Maintainer docs that describe what shipped                            | `docs/packages.md`, `docs/KDOC_SUMMARY.md`, `ConfigLoadException`'s KDoc, AGENTS.md, `docs/TESTING.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, the publishing-release skill, `.impeccable/config.json`, `extra.css` | No behavior change. Last, so they describe what the earlier steps settle.                                                                                                                        |
 
 ### What can run in parallel
@@ -179,7 +179,7 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 
 | Wave | Status | Steps                       | Waits for                                    |
 |------|--------|-----------------------------|----------------------------------------------|
-| A    | ⬜      | 2, 3, 16                    | nothing; all before the 4.7.0 tag            |
+| A    | ✅      | 2, 3, 16                    | nothing; all before the 4.7.0 tag            |
 | B    | ⬜      | 1, 4, 6, 9, 11, 13, 15      | 4 on 2                                       |
 | C    | ⬜      | 5, 7, 8, 10, 12, 14         | 5 and 12 on 4; 7 on 6; 8 and 10 on 9; 14 on 3 |
 | D    | ⬜      | 17                          | the code steps (2–12)                        |
@@ -1589,7 +1589,7 @@ release cut after the day its changelogs were dated is caught before it publishe
 
 **Tests:** none practical; `make release-check` is the check.
 
-### 63. ⬜ `agent-freeze agent-east` promises that DemoAgentEvicted fires once agent-east is back, but the rule looks back two minutes, so a thaw more than about a minute after the eviction never fires it
+### 63. ✅ `agent-freeze agent-east` promises that DemoAgentEvicted fires once agent-east is back, but the rule looks back two minutes, so a thaw more than about a minute after the eviction never fires it
 
 **Severity:** low · **Confidence:** plausible: the rule's window, the sample gap, and the eviction timing are traced
 from the demo's configs, not run; whether it fires depends on when the reader thaws.
@@ -1622,6 +1622,9 @@ two minutes and the panel five, so a longer freeze leaves both without the evict
 suggest `agent-freeze` of agent-west-2 to see the alert.
 
 **Tests:** none; scenario text.
+
+**Resolution:** Fixed in #552. The agent-east branch says to thaw within a minute of the eviction, why, and to freeze agent-west-2
+instead to see the alert fire.
 
 ### 67. ⬜ On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have: three demos' pages answer 404, and no page has `#what-this-demo-shows`
 
@@ -1716,7 +1719,7 @@ name the proxy's certificate is issued to, as `fromEnvironment()` defaults it.
 comment saying why. `StarterExamplesTest` binds it with `PROMETHEUS_PROXY_CERT` set, and finds
 `overrideAuthority=prometheus-proxy`, or the name `PROMETHEUS_PROXY_AUTHORITY` gives.
 
-### 32. ⬜ The upgrade notes don't say that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`, which a 4.6.0 agent ignored
+### 32. ✅ The upgrade notes don't say that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`, which a 4.6.0 agent ignored
 
 **Severity:** low · **Confidence:** confirmed by trace that 4.7.0 reads them and 4.6.0 didn't; whether a deployment is
 affected depends on its environment.
@@ -1746,7 +1749,10 @@ can't parse, such as an empty `DASHBOARD_PORT`, fails its start."
 
 **Tests:** none practical; it's an upgrade note.
 
-### 33. ⬜ The Embedded Agent page gives `agent.logLevel` a default of `info`, but an embedded agent sets no level, and the startup log says `info` regardless
+**Resolution:** Fixed in #552. Upgrading from 4.6.x, and both changelogs' Behavior Changes, name the seven variables, and say what
+an agent whose environment sets them now does, and that a value it can't parse fails its start.
+
+### 33. ✅ The Embedded Agent page gives `agent.logLevel` a default of `info`, but an embedded agent sets no level, and the startup log says `info` regardless
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1768,7 +1774,13 @@ agent logging DEBUG says `agent.logLevel: info` at startup.
 **Tests:** drop `agent.logLevel` from `WebsiteConfigKeysTest`'s exemptions for the Embedded Agent page, so the table's
 default is checked against `config.conf`.
 
-### 34. ⬜ The Embedded Agent page and `fromEnvironment()`'s KDoc say a refused `PROMETHEUS_*` value is never shown, but an endpoint is quoted, as the page's own example shows
+**Resolution:** Fixed in #552. The Embedded Agent page's row gives `""`, and says that unset, the loggers follow the application's
+logging. An embedded agent with no level logs `agent.logLevel: unset, the application's logging configuration sets
+it`, where it said `info` (`BaseOptions.unsetLogLevel`), which a new `AgentOptionsTest` test checks.
+`WebsiteConfigKeysTest` exempts `logLevel` on the CLI Reference only, so the Embedded Agent page's default is checked
+against `config.conf`.
+
+### 34. ✅ The Embedded Agent page and `fromEnvironment()`'s KDoc say a refused `PROMETHEUS_*` value is never shown, but an endpoint is quoted, as the page's own example shows
 
 **Severity:** low (found by both the documentation and the tests passes) · **Confidence:** confirmed by trace.
 
@@ -1795,7 +1807,11 @@ Or strip the value from the endpoint rejection and change `EnvironmentSettingTes
 **Tests:** `EmbeddedAgentConfigTest` (or wherever `fromEnvironment` is tested) already builds these failures; assert
 the certificate's message omits the PEM, which is the guarantee worth keeping.
 
-### 35. ⬜ `agent.metrics.proxyPath` (new in 4.7.0) is missing from the README, `llms.txt`, Grafana's prerequisite, and `docs/metrics-and-grafana.md`, whose self-scrape snippet also points at a port that's off by default
+**Resolution:** Fixed in #552, by narrowing the texts: the page, `fromEnvironment()`'s KDoc, `EnvironmentSetting`'s comment,
+AGENTS.md, and `docs/TESTING.md` say a refused value never shows a certificate, and that an endpoint is quoted. The
+certificate's guarantee was already tested (`EnvironmentSettingTest`).
+
+### 35. ✅ `agent.metrics.proxyPath` (new in 4.7.0) is missing from the README, `llms.txt`, Grafana's prerequisite, and `docs/metrics-and-grafana.md`, whose self-scrape snippet also points at a port that's off by default
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1828,7 +1844,13 @@ in its own job and through the proxy, at its `agent.metrics.proxyPath` (or a pat
 **Tests:** `DashboardMetricNamesTest` reads `metrics-and-grafana.md`'s promql blocks; a `misc/` check that every hocon
 block registering a `localhost:8083` (or `:8082`) URL also sets `metrics.enabled = true` would catch the snippet.
 
-### 36. ⬜ `docs/security-agent-authentication.md` still says a displaced agent is invalidated and must reconnect, but since 4.7.0 it stays connected and its reclaim is refused while the other agent holds the path
+**Resolution:** Fixed in #552. `agent.metrics.proxyPath` (`--metrics_proxy_path`, `METRICS_PROXY_PATH`) is in the README's New
+Features and Built-in Metrics, `llms.txt`'s embedded paragraph and options table, the Grafana prerequisite, and
+`docs/metrics-and-grafana.md`, which leads with it and adds `metrics.enabled = true` to the port form. The new
+`DocsCodeBlocksTest` fails on a docs HOCON block that scrapes `localhost:8083` without turning the port on, as the
+metrics guide's did.
+
+### 36. ✅ `docs/security-agent-authentication.md` still says a displaced agent is invalidated and must reconnect, but since 4.7.0 it stays connected and its reclaim is refused while the other agent holds the path
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1853,7 +1875,10 @@ too, until the attacker's agent disconnects or is evicted, or the real agent res
 
 **Tests:** none; prose.
 
-### 37. ⬜ The Quick Start's Verify step says a `404` means no agent registered the path, but a target's own 404 comes back as 404 too
+**Resolution:** Fixed in #552. Step 4 and Availability say the legitimate agent stays connected without the path, is told who holds
+it, and has its reclaims refused until the attacker's agent leaves or the real agent restarts.
+
+### 37. ✅ The Quick Start's Verify step says a `404` means no agent registered the path, but a target's own 404 comes back as 404 too
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1875,7 +1900,10 @@ timeout."
 
 **Tests:** none; prose.
 
-### 38. ⬜ The Agent Dashboard page's Helm tab upgrades and port-forwards in `monitoring`, where the agent chart's README installs the agent, but the site's own agent installs are in the current namespace
+**Resolution:** Fixed in #552. The 404 item adds the target's own 404 and the `curl` check, and a `408 Request Timeout` item
+follows it.
+
+### 38. ✅ The Agent Dashboard page's Helm tab upgrades and port-forwards in `monitoring`, where the agent chart's README installs the agent, but the site's own agent installs are in the current namespace
 
 **Severity:** low · **Confidence:** confirmed from the docs and Helm's per-namespace releases.
 
@@ -1896,7 +1924,10 @@ in the current namespace, like the site's installs, or all of them in `monitorin
 
 **Tests:** none; prose.
 
-### 39. ⬜ The README and the changelogs say every demo turns on its agents' dashboards, but the plain Kotlin demo's ovens have none
+**Resolution:** Fixed in #552. The Helm tab drops `--namespace monitoring` and `-n monitoring`, and says to add them for an agent
+installed in a namespace, as the chart's README does.
+
+### 39. ✅ The README and the changelogs say every demo turns on its agents' dashboards, but the plain Kotlin demo's ovens have none
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1919,7 +1950,10 @@ the stopped ovens' paths listed as `gone` for an hour while `/discovery` drops t
 `change-config` counts the JVM and process series it adds instead of the stale 30-to-200 figure. The README and both
 changelogs still say every demo turns on its agents' dashboards.
 
-### 40. ⬜ Deployment and security pages: a check order, a `make up` claim, and a size limit no page names
+**Resolution:** Fixed in #552. The README and both changelogs leave out the plain Kotlin demo's ovens, which listen on no port, and
+the changelog's entry, which ended mid-sentence, is finished.
+
+### 40. ✅ Deployment and security pages: a check order, a `make up` claim, and a size limit no page names
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1947,7 +1981,12 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** none; prose.
 
-### 41. ⬜ `README.md` and `llms.txt`: `fromEnvironment()`'s fourth variable, and `-D` precedence
+**Resolution:** Fixed in #552. The security page says the globs run once a path's form and size have passed; the Advanced page says
+`make up` runs nginx on its stock timeouts and `nginx-shutdown-timeout` adds `worker_shutdown_timeout`; and
+`maxZippedContentSizeMBytes` is in Troubleshooting's 502 section, Production's sizing table, and the proxy page's
+Content Size Limits, which now says which limit fails a scrape with which status.
+
+### 41. ✅ `README.md` and `llms.txt`: `fromEnvironment()`'s fourth variable, and `-D` precedence
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1967,7 +2006,10 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** none; prose.
 
-### 42. ⬜ `monitoring.md` and `docs/metrics-and-grafana.md`: a counter count, the alert list, and the chunk threshold
+**Resolution:** Fixed in #552. The README's example names `PROMETHEUS_PROXY_AUTHORITY`, with a sentence on its default, and
+`llms.txt` gives the precedence with `-D` after the JAR above the file and JVM system properties below it.
+
+### 42. ✅ `monitoring.md` and `docs/metrics-and-grafana.md`: a counter count, the alert list, and the chunk threshold
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1985,6 +2027,9 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** `DashboardMetricNamesTest` could check that every `alert:` name in `grafana/alerts.yml` appears in
 `metrics-and-grafana.md`.
+
+**Resolution:** Fixed in #552: three `agent_filter_*` counters, the full alert list, and the chunk threshold as a gzipped body that
+reaches `chunkContentSizeKbs`. The alert list stays descriptive, so no names test was added.
 
 ### 43. ⬜ The API summaries for maintainers describe 4.6.0: `docs/packages.md`, `ConfigLoadException`'s KDoc, and `docs/KDOC_SUMMARY.md`
 
@@ -2049,7 +2094,7 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** none; prose.
 
-### 64. ⬜ The Agent Configuration page lists `--proxy` and `PROXY_HOSTNAME` under `agent.proxy.hostname`, "used when `endpoints` is empty", but both replace `endpoints`
+### 64. ✅ The Agent Configuration page lists `--proxy` and `PROXY_HOSTNAME` under `agent.proxy.hostname`, "used when `endpoints` is empty", but both replace `endpoints`
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2077,7 +2122,9 @@ Helm it never applies: the agent chart always sets `PROXY_HOSTNAME`, from its re
 
 **Tests:** None; this is a description. #66's checks pin the row's option and variable, not its wording.
 
-### 65. ⬜ Two diagrams' descriptions break a hyphenated name across lines, so a screen reader reads "agent- west-2" and "the prometheus- agent chart"
+**Resolution:** Fixed in #552, with the description this finding gives.
+
+### 65. ✅ Two diagrams' descriptions break a hyphenated name across lines, so a screen reader reads "agent- west-2" and "the prometheus- agent chart"
 
 **Severity:** low · **Confidence:** confirmed by trace: Mermaid keeps the line break of a multi-line `accDescr` (it
 drops only the indentation after it) in the SVG's `desc`, which `diagrams.js` copies into the hidden description, where
@@ -2103,7 +2150,10 @@ keep it so.
 
 **Tests:** that check, which fails on today's two pages.
 
-### 69. ⬜ 4.7.0's changelog and release notes describe the home page #546 replaced, and nothing records what #543, #546, #548, and #549 changed
+**Resolution:** Fixed in #552. Both lines wrap before the name. `DocsCodeBlocksTest` fails on a line of an `accDescr` that ends
+with a word broken at its hyphen, as both pages' did.
+
+### 69. ✅ 4.7.0's changelog and release notes describe the home page #546 replaced, and nothing records what #543, #546, #548, and #549 changed
 
 **Severity:** low (found by all three third-pass reviews) · **Confidence:** confirmed from the files. In
 `4830930e..5c9f0a24` only #547 touched `CHANGELOG.md` (`:249-250`), and no commit touched `RELEASE_NOTES.md`.
@@ -2163,6 +2213,9 @@ tagged, so all of it can still be fixed before it's published.
 
 **Tests:** none; prose.
 
+**Resolution:** Fixed in #552, with the wording this finding gives: the home-page entry and sentence, the login part, three new
+CHANGELOG entries, and a release-notes bullet for the demos' tours.
+
 ### 70. ⬜ #546 removed the home page's version and flow line, but two configs still name them: the publishing-release skill lists `index.md` as a version file, and `.impeccable/config.json` exempts all of `extra.css` for `.pp-flow__wall`
 
 **Severity:** low (the skill's part found by all three third-pass reviews) · **Confidence:** confirmed from the files.
@@ -2197,7 +2250,7 @@ today, but it would hide a real side-tab accent added to `extra.css` later.
 `RELEASE_VERSION_FILES` as `make -s` prints it, the way `SiteVersionTest` runs `make site-version`. It fails today on
 `index.md`.
 
-### 71. ⬜ The Kubernetes demo's page and README put `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` under "set its variable for the `make up` that creates the clusters … You set it once", but nothing reads it there or keeps it
+### 71. ✅ The Kubernetes demo's page and README put `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` under "set its variable for the `make up` that creates the clusters … You set it once", but nothing reads it there or keeps it
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2235,6 +2288,9 @@ this variable alone.
   `save_ports` and `load_saved_ports` use `docker/.env`, so "set it once" holds for it too.
 
 **Tests:** none for the docs fix, which is prose.
+
+**Resolution:** Fixed in #552, in the docs: the page and the README set aside the agent dashboard's variable from "set it once",
+and say nothing keeps it.
 
 ---
 

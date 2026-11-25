@@ -353,7 +353,7 @@ application's logging config.
 - **EnvironmentSettingTest** — a value `fromEnvironment()` read that the agent refuses as it starts: an endpoint it
   can't parse names `PROMETHEUS_PROXY` and `agent.proxy.endpoints`, and a certificate that isn't PEM, or PEM with no
   certificate in it, names `PROMETHEUS_PROXY_CERT` and `agent.tls.trustCertCollectionPem`, with the agent's reason and
-  never the value, as `start()` throws it and `startIfConfigured()` logs it; no token or authority refused as the agent
+  never the certificate, as `start()` throws it and `startIfConfigured()` logs it; no token or authority refused as the agent
   starts; a setting the agent's own variable sets not checked; and one set from code after `fromEnvironment()`, by a
   builder method or `setting()`, keeping the agent's own message
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
@@ -852,6 +852,10 @@ These support helpers also live here (not test classes themselves):
   table that names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their
   parts' sections of its Guided Tour, a page's rows link only to sections the page has, and each `demo.sh`'s
   `PAGE_URL`, which `make up` and `make tour` print, is its page
+- **DocsCodeBlocksTest** — the fenced blocks of the docs site's pages, the maintainer docs, and the READMEs: every
+  HOCON block that has an agent scrape its own metrics port, `localhost:8083`, turns the port on too, as it's off by
+  default; and no line of a Mermaid diagram's `accDescr`, the text a screen reader gives for it, ends with a word broken
+  at its hyphen
 - **DocsExamplesTest** — every `examples/*.conf` loads through `AgentOptions` and `ProxyOptions` (a discovery
   targets file through `FileDiscoverySource`) with labels service discovery can serve; `simple.conf` fetches the
   proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; and no `docker run`

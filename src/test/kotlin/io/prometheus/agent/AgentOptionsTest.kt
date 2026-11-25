@@ -38,6 +38,7 @@ import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
 import io.prometheus.common.agentOptionsFromConfig
+import io.prometheus.common.captureLogs
 import io.prometheus.common.shouldBeRejected
 import io.prometheus.common.testConfigVals
 import org.slf4j.LoggerFactory
@@ -782,6 +783,16 @@ class AgentOptionsTest : StringSpec() {
       val config =
         ConfigFactory.parseString($$"agent.name = in-memory\nagent.name = ${?PROMETHEUS_PROXY_UNSET_TEST_VAR}")
       AgentOptions(config).agentName shouldBe "in-memory"
+    }
+
+    // Its loggers follow the application's logging configuration, not the standalone agent's logback.xml, which gives
+    // info, so its startup log says so rather than info
+    "an embedded agent with no logLevel should log that the application's logging sets it" {
+      val logged =
+        captureLogs("io.prometheus.common") { AgentOptions(ConfigFactory.parseString("agent.name = in-memory")) }
+
+      ("agent.logLevel: unset, the application's logging configuration sets it" in logged.map { it.formattedMessage })
+        .shouldBeTrue()
     }
 
     "an in-memory config with an unresolved substitution should throw ConfigLoadException" {

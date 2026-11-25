@@ -154,7 +154,7 @@ agent {
 
 | Setting / CLI Option / Env Var                                                                          | Default     | Description                                                            |
 |:--------------------------------------------------------------------------------------------------------|:------------|:-----------------------------------------------------------------------|
-| [`agent.proxy.hostname`](../cli-reference.md#agent.proxy.hostname)<br>`--proxy, -p`<br>`PROXY_HOSTNAME` | "localhost" | The proxy's host, or `host:port`; used when `endpoints` is empty       |
+| [`agent.proxy.hostname`](../cli-reference.md#agent.proxy.hostname)<br>`--proxy, -p`<br>`PROXY_HOSTNAME` | "localhost" | The proxy's host, or `host:port`, used when `endpoints` is empty. `--proxy` and `PROXY_HOSTNAME` also take a comma-separated list, and replace `endpoints` ([below](#proxy-failover)) |
 | `agent.proxy.port`                                                                                      | 50051       | The proxy's port, and the port of an `endpoints` entry that names none |
 | `agent.proxy.endpoints`                                                                                 | []          | Proxies to fail over between, in order ([below](#proxy-failover))      |
 

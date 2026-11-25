@@ -192,8 +192,9 @@ the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spr
   anything.
 - **A value the agent refuses names its variable.** A `PROMETHEUS_PROXY` endpoint the agent can't parse, or a
   `PROMETHEUS_PROXY_CERT` it can't read as a certificate, fails `start()`, or has `startIfConfigured()` log, with the
-  variable, the setting, and the agent's reason, never the value: `Invalid configuration: PROMETHEUS_PROXY, read by
-  fromEnvironment() for agent.proxy.endpoints: Invalid port in 'proxy:abc': 'abc' is not a valid integer`. The agent
+  variable, the setting, and the agent's reason: `Invalid configuration: PROMETHEUS_PROXY, read by fromEnvironment() for
+  agent.proxy.endpoints: Invalid port in 'proxy:abc': 'abc' is not a valid integer`. An endpoint it can't parse is
+  quoted, as here, but never a certificate, and no token is checked as the agent starts. The agent
   takes any token or authority as it starts: a token the proxy refuses is logged once the agent connects
   ([Troubleshooting](troubleshooting.md#unauthenticated-missing-or-invalid-agent-token)), and a wrong authority fails
   the TLS handshake.
@@ -332,7 +333,7 @@ A config file or a `Config` takes the place of the second and third: its keys, t
 | `agent.http.trustStorePath`            | ""      | A trust store for HTTPS targets signed by a private CA, with `agent.http.trustStorePassword`                           |
 | `agent.transportFilterDisabled`        | false   | Set it, as on the proxy, when [nginx fronts the proxy](advanced.md#nginx-reverse-proxy)                                |
 | `agent.admin.enabled`                  | false   | The admin endpoints, on `agent.admin.port`, and `/debug` with `agent.admin.debugEnabled` ([Admin and Debug Endpoints](#admin-and-debug-endpoints)) |
-| `agent.logLevel`                       | info    | The level of the agent's `io.prometheus` loggers, and no others ([Logging](#logging))                                  |
+| `agent.logLevel`                       | ""      | The level of the agent's `io.prometheus` loggers, and no others; unset, they follow your application's logging ([Logging](#logging)) |
 | `agent.metrics.standardExportsEnabled` | false   | The process metrics, one of the [JVM metric groups](monitoring.md#jvm-metrics), which the agent's metrics port serves |
 
 An embedded agent's JVM metrics are usually its app's, which its own registry, such as Micrometer's, keeps and serves:

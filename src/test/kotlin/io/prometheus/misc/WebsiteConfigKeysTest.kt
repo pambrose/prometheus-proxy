@@ -99,8 +99,10 @@ class WebsiteConfigKeysTest : StringSpec() {
     // A key the reference config doesn't declare is left to the check above.
     "every proxy and agent config key default in the website's tables should be the one config/config.conf has" {
       val defaults =
-        WebsitePages.prose.mapValues { (_, prose) ->
-          documentedDefaults(prose).filter { (key, _) -> reference.hasPath(key) && key !in NOT_CONFIG_DEFAULTS }
+        WebsitePages.prose.mapValues { (page, prose) ->
+          documentedDefaults(prose).filter { (key, _) ->
+            reference.hasPath(key) && key !in NOT_CONFIG_DEFAULTS_ON_PAGE[page].orEmpty()
+          }
         }
       defaults.values.flatten().shouldNotBeEmpty()
       defaults
@@ -128,8 +130,9 @@ class WebsiteConfigKeysTest : StringSpec() {
     // PROXY_HOSTNAME; the agent's own key is agent.proxy.hostname.
     private val NOT_KEYS_ON_PAGE = mapOf("getting-started.md" to setOf("proxy.hostname"))
 
-    // Keys whose documented default is the effective one rather than the declared one: an empty logLevel leaves the
-    // level logback.xml sets, info, which the CLI reference gives.
-    private val NOT_CONFIG_DEFAULTS = setOf("proxy.logLevel", "agent.logLevel")
+    // Keys whose documented default on the page named is the effective one rather than the declared one: an empty
+    // logLevel leaves the level the standalone proxy and agent's logback.xml sets, info, which the CLI reference gives.
+    // The Embedded Agent page gives the declared one, since an embedded agent's loggers follow its application's.
+    private val NOT_CONFIG_DEFAULTS_ON_PAGE = mapOf("cli-reference.md" to setOf("proxy.logLevel", "agent.logLevel"))
   }
 }
