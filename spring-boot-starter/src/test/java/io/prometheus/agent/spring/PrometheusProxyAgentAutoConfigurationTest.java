@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -301,6 +302,32 @@ class PrometheusProxyAgentAutoConfigurationTest {
         .run(context -> {
           assertThat(context).hasNotFailed();
           assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isFalse();
+        });
+  }
+
+  // The builder's stopTimeout, which caps how long the app's shutdown waits for the agent's stop: Spring's own phase
+  // timeout doesn't, as stop() waits for it
+  @Test
+  void theStopTimeoutIsThirtySecondsUnlessThePropertySetsAnother() {
+    runner.run(context -> assertThat(config(context)).contains("stopTimeout=30s"));
+    runner
+        .withPropertyValues("prometheus-proxy.agent.stop-timeout=5s")
+        .run(context -> assertThat(config(context)).contains("stopTimeout=5s"));
+  }
+
+  // The builder's onFailure, which startIfConfigured tells: a customizer adds one, as it makes any other setting
+  @Test
+  void aCustomizersOnFailureIsToldWhyTheAgentCouldNotStart() throws IOException {
+    List<String> reasons = new CopyOnWriteArrayList<>();
+    runner
+        .withPropertyValues(
+            "prometheus-proxy.agent.proxy=localhost:" + freePort(),
+            "prometheus-proxy.agent.settings.scrapeTimeoutSecs=soon")
+        .withBean(PrometheusProxyAgentCustomizer.class, () -> builder ->
+            builder.onFailure((reason, e) -> reasons.add(reason)))
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(reasons).singleElement().asString().contains("scrapeTimeoutSecs");
         });
   }
 

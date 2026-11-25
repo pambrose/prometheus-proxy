@@ -20,6 +20,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.server.config.ApplicationConfig
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
+import kotlin.time.Duration
 
 // The prometheus-proxy.agent section of the app's configuration file, or one of its paths entries, read through Ktor's
 // ApplicationConfig, so HOCON, YAML, and a MapApplicationConfig read alike. Each value is read as text, as YAML and a
@@ -33,6 +34,13 @@ internal class FileSettings(
     string(key)?.let { it.toBooleanStrictOrNull() ?: invalid("$SECTION.$key must be true or false: $it") }
 
   fun int(key: String): Int? = string(key)?.let { it.toIntOrNull() ?: invalid("$SECTION.$key must be a number: $it") }
+
+  // A duration of more than zero, in Kotlin's format or ISO 8601's, such as 10s or PT10S
+  fun positiveDuration(key: String): Duration? =
+    string(key)?.let { value ->
+      Duration.parseOrNull(value)?.takeIf { it.isPositive() }
+        ?: invalid("$SECTION.$key must be a duration of more than zero, such as 10s: $value")
+    }
 
   // A section of keys and values, such as labels, its nested keys joined with dots
   fun stringMap(key: String): Map<String, String> = section(key).mapValues { it.value.toString() }
@@ -66,6 +74,7 @@ internal class FileSettings(
   }
 
   private fun features(builder: EmbeddedAgentConfig.Builder) {
+    positiveDuration("stop-timeout")?.also { builder.stopTimeout = it }
     boolean("consolidated")?.also { builder.consolidated = it }
     int("metrics-port")?.also { builder.agentMetricsPort = it }
     metricsProxyPath(builder)

@@ -21,6 +21,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.config.MapApplicationConfig
@@ -93,6 +94,25 @@ class PrometheusProxyAgentPluginTest : StringSpec() {
 
         application.prometheusProxyAgent.shouldBeNull()
       }
+    }
+
+    // The builder's onFailure, which startIfConfigured tells, with why as it logs it: a certificate the agent can't
+    // read
+    "a setting the agent rejects is passed to the agent block's onFailure, with why, and the app runs on" {
+      val reasons = mutableListOf<String>()
+      testApplication {
+        application {
+          install(PrometheusProxyAgent) {
+            rejectedSettings()
+            agent { onFailure { reason, _ -> reasons += reason } }
+          }
+        }
+        startApplication()
+
+        application.prometheusProxyAgent.shouldBeNull()
+      }
+
+      reasons.single() shouldContain "trustCertCollectionPem"
     }
 
     // Ktor rethrows what an ApplicationStarted handler throws, so the app's start fails

@@ -21,6 +21,7 @@ package website
 
 // --8<-- [start:embedded-kotlin-shutdown]
 import io.prometheus.agent.embeddedAgent
+import kotlin.time.Duration.Companion.seconds
 
 fun main(args: Array<String>) {
   val worker = Worker(args)
@@ -40,6 +41,8 @@ fun main(args: Array<String>) {
   embeddedAgent {
     // The agent's settings
     fromEnvironment()
+    // Its stop, as use { } ends, fits inside the hook's 25 seconds
+    stopTimeout = 20.seconds
   }.startIfConfigured().use { worker.run() }
 }
 // --8<-- [end:embedded-kotlin-shutdown]

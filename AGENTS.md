@@ -109,11 +109,12 @@ agent with a Ktor app and serves the `PrometheusRegistry` it's given in-process.
 `prometheus-proxy.agent` section of the app's config file, read through Ktor's `ApplicationConfig` by the starter's
 property names (`FileSettings`), then the install block's. `AgentLifecycle` starts the agent on `ApplicationStarted`,
 begins its stop on `ApplicationStopPreparing` on a thread of its own, so the engine's grace period stays the app's, and
-waits for it on `ApplicationStopping`; keep that split. Ktor raises `ApplicationStarted` before the engine binds, and an
+waits for it on `ApplicationStopping`, as long as the settings' `stopTimeout` lets the handle's `shutdown()` (30
+seconds unless the file's `stop-timeout` or an agent block sets another), and a second more; keep that split. Ktor raises `ApplicationStarted` before the engine binds, and an
 engine that can't bind throws without disposing the app, so no stop event comes: the embedded agent's daemon thread is
 what lets that app's JVM exit (`ServerBindFailureTest`). Once the file and the install block have made the settings, it
 starts the agent only where `EmbeddedAgentConfig.namesProxy()` says they name a proxy, a required agent with `start()`,
-and any other with `startIfConfigured()`, which logs a failure itself. Its POM puts the agent and `ktor-server-core` at
+and any other with `startIfConfigured()`, which logs a failure itself and tells the settings' `onFailure` handlers. Its POM puts the agent and `ktor-server-core` at
 compile scope, since its API names their types (the `PrometheusRegistry` it takes comes with the agent's), and
 `make consumer-check` resolves it as a Ktor app does (the consumer check's `ktor` profile) and compiles the docs site's
 Ktor Plugin examples, which `KtorPluginExamplesTest` runs.
@@ -153,7 +154,15 @@ Only these types are part of the supported, documented public API. Everything el
   - `start()` starts the agent, and throws on a setting the agent rejects or a start that fails.
   - `startIfConfigured()` returns null in those cases instead, logging why, and also when no proxy is set, as
     `namesProxy()` tells (the builder's `proxy`, a `setting()` of `proxy.endpoints` or `proxy.hostname`, or
-    `PROXY_HOSTNAME`), which the Ktor plugin and the Spring Boot starter read too.
+    `PROXY_HOSTNAME`), which the Ktor plugin and the Spring Boot starter read too. A start that fails is told to each
+    handler the builder's `onFailure` added, then to the call's own `onFailure`, each guarded, so a handler that throws
+    is logged; `start()` tells none of them. They're code, so they reach `EmbeddedAgentConfig`, not the `Config` tree,
+    as `source()`'s paths do, and the Ktor plugin's `agent { }` blocks and the starter's customizers add them.
+  - `stopTimeout` (a Kotlin `Duration`; `stopTimeout(java.time.Duration)` from Java) is the handle's, not the agent's,
+    so it isn't in the tree either: `start()` gives it to the `EmbeddedAgentInfo` (`withStopTimeout`), whose
+    `shutdown()` then stops the agent on a daemon thread and waits at most that long. Unset, it waits for as long as
+    the stop takes. The Ktor plugin sets 30 seconds before the file's `stop-timeout` and the agent blocks, and the
+    starter sets its `stop-timeout` property's, 30 seconds by default.
   - `fromEnvironment()` reads `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and
     `PROMETHEUS_PROXY_AUTHORITY`, which nothing else reads. Its `internal` overload takes the lookup function, so
     tests can call it, as with `EnvVars`' parsing. The builder remembers which values it read, until code sets the same

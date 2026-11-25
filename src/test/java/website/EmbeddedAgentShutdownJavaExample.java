@@ -18,6 +18,7 @@ package website;
 
 import io.prometheus.agent.EmbeddedAgentConfig;
 import io.prometheus.agent.EmbeddedAgentInfo;
+import java.time.Duration;
 
 // The Embedded Agent page's program that runs until it's stopped, as a queue consumer does: the hook that has SIGTERM
 // stop its work first, and its agent after it. Worker, below the snippet, is a stand-in for the program's work.
@@ -44,6 +45,8 @@ public class EmbeddedAgentShutdownJavaExample {
       EmbeddedAgentConfig.builder()
         // The agent's settings
         .fromEnvironment()
+        // Its stop, as try-with-resources ends, fits inside the hook's 25 seconds
+        .stopTimeout(Duration.ofSeconds(20))
         .build();
     // Null when the agent stays off, which try-with-resources takes: the worker runs either way
     try (EmbeddedAgentInfo agent = config.startIfConfigured()) {

@@ -43,6 +43,8 @@ import java.io.File
 import java.net.URI
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempFile
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 // The settings as one line, the form FromEnvironmentMain prints them in.
 private fun EmbeddedAgentConfig.rendered() = toConfig().root().render(ConfigRenderOptions.concise())
@@ -601,6 +603,29 @@ class EmbeddedAgentConfigTest : StringSpec() {
     }
 
     // As a setting the agent rejects throws ConfigLoadException when it starts, so does a value the builder rejects.
+    // The handle's, not the agent's: a standalone agent has no use for it, so the tree a file would hold leaves it out
+    "the stop timeout is unset unless set, from Kotlin or Java, and isn't in the tree" {
+      embeddedAgent {}.stopTimeout shouldBe null
+
+      val fromKotlin = embeddedAgent { stopTimeout = 5.seconds }
+      val fromJava = EmbeddedAgentConfig.builder().stopTimeout(5.seconds.toJavaDuration()).build()
+
+      fromKotlin.stopTimeout shouldBe 5.seconds
+      fromJava.stopTimeout shouldBe 5.seconds
+      fromKotlin.toConfig() shouldBe embeddedAgent {}.toConfig()
+      fromKotlin.toString() shouldContain "stopTimeout=5s"
+      embeddedAgent { stopTimeout = null }.stopTimeout shouldBe null
+    }
+
+    // Thread.join(0) waits for as long as the stop takes, so a zero timeout would be none at all
+    "a stop timeout of zero or less throws ConfigLoadException" {
+      shouldThrow<ConfigLoadException> { embeddedAgent { stopTimeout = 0.seconds } }.message shouldBe
+        "A stop timeout must be more than zero: 0s"
+      shouldThrow<ConfigLoadException> {
+        EmbeddedAgentConfig.builder().stopTimeout(java.time.Duration.ofSeconds(-1))
+      }.message shouldBe "A stop timeout must be more than zero: -1s"
+    }
+
     "a blank path, a port out of range, or a URL with no scheme throws ConfigLoadException" {
       shouldThrow<ConfigLoadException> { embeddedAgent { agentMetricsAt(path = "/") } }
       shouldThrow<ConfigLoadException> { embeddedAgent { agentMetricsAt(path = " / ") } }

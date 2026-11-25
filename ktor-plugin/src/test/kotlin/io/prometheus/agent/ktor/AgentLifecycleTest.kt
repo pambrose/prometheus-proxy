@@ -44,6 +44,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 // The lifecycle's events raised by hand on an app's monitor, with the agent's start replaced: whether the agent starts,
 // what a failure does, and that it stops once, whichever events come.
@@ -236,7 +239,7 @@ class AgentLifecycleTest : StringSpec() {
       val app = TestApp()
       val release = CountDownLatch(1)
       every { app.agent.shutdown() } answers { release.await() }
-      app.lifecycle(proxy = "localhost:50051", stopTimeoutMillis = 50)
+      app.lifecycle(proxy = "localhost:50051", stopTimeout = 50.milliseconds)
       app.started()
 
       app.events.raise(ApplicationStopping, app.application)
@@ -305,7 +308,8 @@ class AgentLifecycleTest : StringSpec() {
       proxy: String?,
       failure: Exception? = null,
       started: Boolean = true,
-      stopTimeoutMillis: Long = 5_000,
+      // The agent block's, shorter than the plugin's default, so a spec whose agent never stops doesn't wait 30 seconds
+      stopTimeout: Duration = 5.seconds,
       // The file's prometheus-proxy.agent section, by its keys
       file: Map<String, String> = emptyMap(),
       configure: PrometheusProxyAgentConfig.() -> Unit = {},
@@ -313,10 +317,11 @@ class AgentLifecycleTest : StringSpec() {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig(*file.toList().toTypedArray())).apply {
         proxy?.also { agent { this.proxy = it } }
       }
+      config.agent { this.stopTimeout = stopTimeout }
       config.configure()
       // The settings of each launch, a failed one's included
       val launches = mutableListOf<EmbeddedAgentConfig>()
-      AgentLifecycle(application = application, config = config, stopTimeoutMillis = stopTimeoutMillis) { settings ->
+      AgentLifecycle(application = application, config = config) { settings ->
         launches += settings
         failure?.also { throw it }
         agent.takeIf { started }

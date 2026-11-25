@@ -6,7 +6,37 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `EmbeddedAgentConfig.Builder.onFailure(handler)`, a `BiConsumer<String, Exception>`: a handler `startIfConfigured()`
+  tells of a start that fails, once it has logged it, with the same reason and what the start threw. Each call adds
+  one, and they run in turn, before the call's own `onFailure`; one that throws is logged, and the next still runs.
+  `start()` tells none of them. The Ktor plugin's `agent { }` blocks and the Spring Boot starter's customizers add them
+  as they make any other setting
+- `EmbeddedAgentConfig.Builder.stopTimeout` (`stopTimeout(java.time.Duration)` from Java): how long the started agent's
+  `EmbeddedAgentInfo.shutdown()` and `close()` wait for its stop. Once it's up, the call returns, with a warning, and the
+  agent goes on stopping on a daemon thread; a stop that fails within it throws, as one without it does, and one that
+  fails after it is logged. Unset, the
+  default, it waits for as long as the stop takes, as before; zero or less throws `ConfigLoadException`. It's the
+  handle's, so `toConfig()` leaves it out, and `toString()` shows it
+- The Ktor plugin's `stop-timeout` key, which sets the agent's `stopTimeout`. The plugin sets 30 seconds before the file
+  and the `agent { }` blocks, so its wait for the agent's stop stays as long as it was; `AgentLifecycle` waits for the
+  handle's `shutdown()` a second past it, where it waited 30 seconds itself
+- The Spring Boot starter's `prometheus-proxy.agent.stop-timeout` property, 30 seconds by default, which sets the
+  agent's `stopTimeout`. Through 4.7.0 the starter's stop waited for as long as the agent's took: Spring's phase
+  timeout doesn't cut short a `stop()` that waits
+
+### Changed
+
+- `startIfConfigured(onFailure)` guards its `onFailure` as it does the builder's handlers: one that throws is logged,
+  and the start still returns null, where it threw out of the call
+
 ### Documentation
+
+- The Embedded Agent page's builder table and `EmbeddedAgentInfo` section give `onFailure` and `stopTimeout`, its
+  failure example adds the handler to the builder, and its shutdown examples set a stop timeout inside the hook's wait.
+  The Ktor Plugin page has a new A Failed Start, and the Stop section, with an example the examples spec runs, and the
+  Spring Boot Starter page the `stop-timeout` property and a customizer's `onFailure`
 
 - `examples/simple.conf` and the basics, network, and Kubernetes demos' agents serve their own metrics through the
   proxy with `agent.metrics.proxyPath`, in-process, where each scraped its own port, `localhost:8083`, as a path; all

@@ -16,6 +16,7 @@
 
 package io.prometheus.agent.spring;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,6 +105,12 @@ public class PrometheusProxyAgentProperties {
    * without it.
    */
   private boolean required;
+
+  /**
+   * How long the app's shutdown waits for the agent to stop. Once it's up, the app stops anyway, with a warning, and the
+   * agent goes on stopping on a thread of its own. It must be more than zero.
+   */
+  private Duration stopTimeout = Duration.ofSeconds(30);
 
   /**
    * Any other agent setting, keyed by its path under agent, such as scrapeTimeoutSecs or http.clientTimeoutSecs. It
@@ -259,6 +266,14 @@ public class PrometheusProxyAgentProperties {
     this.required = required;
   }
 
+  public Duration getStopTimeout() {
+    return stopTimeout;
+  }
+
+  public void setStopTimeout(Duration stopTimeout) {
+    this.stopTimeout = stopTimeout;
+  }
+
   public Map<String, String> getSettings() {
     return settings;
   }
@@ -275,7 +290,7 @@ public class PrometheusProxyAgentProperties {
         + ", path=" + path + ", labels=" + labels + ", source=" + source + ", paths=" + paths
         + ", consolidated=" + consolidated + ", metricsPort=" + metricsPort + ", metricsProxyPath=" + metricsProxyPath
         + ", metricsProxyPathLabels=" + metricsProxyPathLabels + ", dashboard=" + dashboard
-        + ", required=" + required + ", settings=" + settings.keySet() + "]";
+        + ", required=" + required + ", stopTimeout=" + stopTimeout + ", settings=" + settings.keySet() + "]";
   }
 
   // A secret as toString shows it

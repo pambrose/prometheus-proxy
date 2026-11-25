@@ -30,6 +30,8 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.util.function.BiConsumer
+import kotlin.time.Duration
+import kotlin.time.toKotlinDuration
 
 /**
  * An embedded agent's settings, built in code with typed methods rather than as a config file, and started with
@@ -73,6 +75,14 @@ class EmbeddedAgentConfig private constructor(
   private val sources: List<AgentPathManager.PathConfig>,
   // The values fromEnvironment set, by the variable each came from, that nothing set after it.
   private val readFromEnvironment: Map<EnvironmentSetting, String>,
+  // The handlers onFailure added, which startIfConfigured tells of a start that fails.
+  private val failureHandlers: List<BiConsumer<in String, in Exception>>,
+  /**
+   * How long the started agent's [shutdown][EmbeddedAgentInfo.shutdown] waits for it to stop, or null, for as long as
+   * the stop takes ([Builder.stopTimeout]). It's the handle's, not the agent's, so [toConfig]'s tree doesn't hold it.
+   */
+  @get:JvmSynthetic
+  val stopTimeout: Duration?,
 ) {
   /**
    * The settings as the `Config` tree a config file would hold, rooted at `agent`. The paths [source][Builder.source]
@@ -108,6 +118,7 @@ class EmbeddedAgentConfig private constructor(
   ): EmbeddedAgentInfo {
     EnvironmentSetting.check(readFromEnvironment, env)
     return Agent.startEmbedded(exitOnMissingConfig = false, logBanner = logBanner) { agentOptions() }
+      .withStopTimeout(stopTimeout)
   }
 
   /**
@@ -119,15 +130,16 @@ class EmbeddedAgentConfig private constructor(
    * environment variable names one. Without one, as on a developer's machine, the agent stays off, with an INFO line
    * that says so. A start that fails, for a setting the agent rejects ([ConfigLoadException]) or for anything else,
    * such as its admin port being in use or its start taking over 30 seconds, is logged at ERROR with why, which holds
-   * no token, password, or PEM, and is given to [onFailure].
+   * no token, password, or PEM, and is given to each handler the builder's [onFailure][Builder.onFailure] added, in
+   * turn, then to [onFailure]. A handler that throws is logged, and the next still runs.
    *
    * The handle is [AutoCloseable], and Kotlin's `use` and Java's try-with-resources both take a null one, so a program
    * that runs while its agent does reads as `startIfConfigured().use { worker.run() }`, which runs the worker whether
    * or not the agent started, and stops the agent after it.
    *
    * @param logBanner When `true` (default), logs the agent's ASCII banner and version on startup.
-   * @param onFailure Called after a failed start is logged, with why, as the log line gives it, and what the start
-   *   threw, for an app that reports such a failure elsewhere; none by default.
+   * @param onFailure Called after a failed start is logged, and after the builder's handlers, with why, as the log line
+   *   gives it, and what the start threw, for an app that reports such a failure elsewhere; none by default.
    * @return the agent's handle, or null when it stays off.
    */
   @JvmOverloads
@@ -154,8 +166,23 @@ class EmbeddedAgentConfig private constructor(
       // (IllegalStateException), or anything else the start throws
       val reason = failureReason(e)
       logger.error { "The Prometheus agent could not start, so it stays off: $reason" }
-      onFailure?.accept(reason, e)
+      (failureHandlers + listOfNotNull(onFailure)).forEach { handler -> tell(handler, reason, e) }
       null
+    }
+  }
+
+  // Tells [handler] why the start failed. One that throws is logged: the start returns null whatever it meets, and
+  // Kotlin can throw a checked exception undeclared, so Exception is caught, not only RuntimeException.
+  @Suppress("TooGenericExceptionCaught")
+  private fun tell(
+    handler: BiConsumer<in String, in Exception>,
+    reason: String,
+    e: Exception,
+  ) {
+    try {
+      handler.accept(reason, e)
+    } catch (thrown: Exception) {
+      logger.warn(thrown) { "An onFailure handler threw, given: $reason" }
     }
   }
 
@@ -190,7 +217,8 @@ class EmbeddedAgentConfig private constructor(
         ""
       else
         sources.joinToString(prefix = ", sources={", postfix = "}") { "${it.path}=${it.url}" }
-    return "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())}$shownSources)"
+    val shownStopTimeout = stopTimeout?.let { ", stopTimeout=$it" }.orEmpty()
+    return "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())}$shownSources$shownStopTimeout)"
   }
 
   /**
@@ -211,6 +239,35 @@ class EmbeddedAgentConfig private constructor(
     private val sources = mutableListOf<AgentPathManager.PathConfig>()
     private val readFromEnvironment = linkedMapOf<EnvironmentSetting, String>()
     private val settings = linkedMapOf<String, Any>()
+    private val failureHandlers = mutableListOf<BiConsumer<in String, in Exception>>()
+
+    /**
+     * How long the started agent's [shutdown][EmbeddedAgentInfo.shutdown], and its `close()`, wait for it to stop.
+     * Once it's up, the call returns, with a warning in the log, and the agent goes on stopping on a daemon thread of
+     * its own, so a host's shutdown fits the window its platform gives it, such as Cloud Run's 10 seconds after
+     * SIGTERM. Null, the default, waits for as long as the stop takes. One of zero or less throws
+     * [ConfigLoadException]. It's the handle's, so the tree [toConfig][EmbeddedAgentConfig.toConfig] gives doesn't hold
+     * it.
+     */
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    var stopTimeout: Duration? = null
+      set(value) {
+        if (value != null && !value.isPositive()) invalid("A stop timeout must be more than zero: $value")
+        field = value
+      }
+
+    /** Sets [stopTimeout]; null waits for as long as the stop takes. */
+    fun stopTimeout(timeout: java.time.Duration?): Builder = apply { stopTimeout = timeout?.toKotlinDuration() }
+
+    /**
+     * Adds [handler], which [startIfConfigured][EmbeddedAgentConfig.startIfConfigured] tells of a start that fails,
+     * once it has logged it: with why, as the log line gives it, which holds no token, password, or PEM, and what the
+     * start threw. It suits an app that reports such a failure somewhere else too, such as a chat channel. Each handler
+     * added runs, in turn; one that throws is logged, and the next still runs. [start][EmbeddedAgentConfig.start]
+     * doesn't call them: it throws, for its caller to handle.
+     */
+    fun onFailure(handler: BiConsumer<in String, in Exception>): Builder = apply { failureHandlers += handler }
 
     /** The agent's name, as the proxy's dashboard and logs show it (`agent.name`). */
     @get:JvmSynthetic
@@ -557,7 +614,13 @@ class EmbeddedAgentConfig private constructor(
           ->
           tree.withValue("agent.$key", ConfigValueFactory.fromAnyRef(value))
         }
-      return EmbeddedAgentConfig(config, sources.toList(), readFromEnvironment.toMap())
+      return EmbeddedAgentConfig(
+        config = config,
+        sources = sources.toList(),
+        readFromEnvironment = readFromEnvironment.toMap(),
+        failureHandlers = failureHandlers.toList(),
+        stopTimeout = stopTimeout,
+      )
     }
 
     // A path's labels as the JSON pathConfigs takes, or null for none.

@@ -6,6 +6,20 @@
 
 _Not yet released_
 
+### Added
+
+- **An app can be told when its agent can't start.** `startIfConfigured()` logs a failed start and leaves the agent off,
+  so the app runs on; the builder's new `onFailure(handler)` now hands the app the same reason too, to send wherever
+  someone will see it, such as a chat channel. In Kotlin's `embeddedAgent { }` it reads `onFailure { reason, cause ->
+  }`, and the Ktor plugin's `agent { }` blocks and the Spring Boot starter's customizers add one the same way. Several
+  can be added, and one that throws is logged without failing the start.
+- **An agent's stop can be capped.** The builder's new `stopTimeout` caps how long the agent's `shutdown()` waits for
+  it to stop; once it's up, `shutdown()` returns, with a warning, and the agent goes on stopping on its own. Set it
+  inside the shutdown window the app's platform gives it, such as Cloud Run's 10 seconds after `SIGTERM`. Unset, the
+  default, it waits as long as the stop takes, as before. The Ktor plugin takes it from its `stop-timeout` key, and the
+  Spring Boot starter from its new `prometheus-proxy.agent.stop-timeout` property; both default to 30 seconds, which
+  the plugin waited already, and which now caps the starter's stop, which waited for as long as the agent's took.
+
 ### Documentation
 
 - **The examples serve the agent's metrics without a port.** `examples/simple.conf`, which the Quick Start runs, has

@@ -20,6 +20,11 @@ import io.ktor.server.config.ApplicationConfig
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import kotlin.time.Duration.Companion.seconds
+
+// How long the app's disposal waits for the agent's stop unless the file or an agent block says otherwise: as long as
+// Spring waits for a lifecycle phase to stop, and the Spring Boot starter's default
+private const val DEFAULT_STOP_TIMEOUT_SECONDS = 30
 
 /**
  * The [PrometheusProxyAgent] plugin's settings. Each starts from the `prometheus-proxy.agent` section of the app's
@@ -31,8 +36,9 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
  * The file's section takes the Spring Boot starter's property names: `proxy`, `token`, `trust-certificate`,
  * `authority`, `client-certificate`, `client-key`, `name`, `consolidated`, `metrics-port`, `metrics-proxy-path`,
  * `metrics-proxy-path-labels`, `dashboard.port`, `dashboard.host`, `dashboard.username`, `dashboard.password`, `paths`
- * (a list of targets, each with `path`, `url`, `username`, `password`, and `labels`), and `settings`, any other agent
- * setting by its key; and [enabled], [required], [path], and [labels] here. A blank value counts as unset, as an unset
+ * (a list of targets, each with `path`, `url`, `username`, `password`, and `labels`), `stop-timeout` (the builder's
+ * `stopTimeout`, 30 seconds unless the file or an [agent] block sets another), and `settings`, any other agent setting
+ * by its key; and [enabled], [required], [path], and [labels] here. A blank value counts as unset, as an unset
  * environment variable gives.
  */
 class PrometheusProxyAgentConfig internal constructor(
@@ -80,10 +86,12 @@ class PrometheusProxyAgentConfig internal constructor(
     agentBlocks += block
   }
 
-  // The settings the agent starts with: the file's, then the registry at its path, then each agent block. Read as the
-  // agent starts, so a file value that isn't valid fails the start, as a setting the agent rejects does.
+  // The settings the agent starts with: the plugin's stop timeout, the file's, then the registry at its path, then each
+  // agent block. Read as the agent starts, so a file value that isn't valid fails the start, as a setting the agent
+  // rejects does.
   internal fun builder(): EmbeddedAgentConfig.Builder {
     val builder = EmbeddedAgentConfig.builder()
+    builder.stopTimeout = DEFAULT_STOP_TIMEOUT_SECONDS.seconds
     fileSettings.applyTo(builder)
     registry?.also { registry ->
       val servedAt = path

@@ -41,8 +41,8 @@ With that, the app gets:
 
 - **An agent that starts and stops with the app.** It starts once every module of the app has loaded, and begins
   stopping as soon as the server does, before the server drains the requests in flight: the agent disconnects, the
-  proxy drops its paths, and no scrape reaches an app that's going away. The app's shutdown waits for it, up to 30
-  seconds, without taking that time from the server's grace period. In development mode, a reload stops the old app's
+  proxy drops its paths, and no scrape reaches an app that's going away. The app's shutdown waits for it, up to the
+  agent's `stopTimeout`, 30 seconds by default, without taking that time from the server's grace period. In development mode, a reload stops the old app's
   agent and starts the new one's.
 - **Its metrics at the proxy's `/my_app_metrics`,** read from the registry for each scrape, in the format Prometheus
   asks for, and with the agent's limits and the path's filter, as
@@ -54,7 +54,8 @@ With that, the app gets:
   agent's own `PROXY_HOSTNAME`, as on a developer's machine or in `testApplication`, the agent logs a line and stays
   off. A setting it rejects, such as an unreadable certificate, is
   logged, and the agent stays off, without stopping the app. Set `required = true` to have the app fail to start
-  instead, then without a proxy too.
+  instead, then without a proxy too, or add an `onFailure` handler in the `agent { }` block to have the app told why
+  ([below](#a-failed-start-and-the-stop)).
 
 The `agent { }` block takes the agent's [`EmbeddedAgentConfig.Builder`](embedded-agent.md#embeddedagentconfig), with a
 typed method for each setting, such as a certificate the app reads from a secret store, and `agentMetricsAt(path)`,
@@ -63,6 +64,26 @@ as the file's `metrics-proxy-path` does.
 As with any embedded agent, the agent's own environment variables, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, take
 precedence over its settings, and `PROXY_HOSTNAME` alone starts it, so give the app's other names, as
 `fromEnvironment()`'s `PROMETHEUS_` ones are.
+
+## A Failed Start, and the Stop
+
+Both are the agent's own settings, the builder's, so they go in the `agent { }` block, as for any
+[embedded agent](embedded-agent.md#embeddedagentconfig).
+
+An agent that can't start stays off while the app runs on, and the plugin logs why. A handler the block adds with
+`onFailure { reason, cause -> }` is told too, with the reason the log gives, which holds no token, password, or PEM,
+and what the start threw, so the app can send it wherever someone will see it, such as a chat channel. It isn't told of
+a `required` agent's failure, which fails the app's start, nor of an agent left off on purpose, not `enabled` or without
+a proxy, nor of a failure before the agent's settings are complete, such as a value in the file the plugin can't read,
+which is only logged. A handler that throws is logged, without failing the app's start.
+
+`stopTimeout` is how long the app's shutdown waits for the agent's stop, 30 seconds unless the file's `stop-timeout` or
+the block sets another: set it inside the shutdown window the app's platform gives, such as Cloud Run's 10 seconds
+after `SIGTERM`. Once it's up, the app stops anyway, with a warning, and the agent goes on stopping on its own.
+
+```kotlin
+--8<-- "ktor-plugin/src/test/kotlin/website/KtorPluginExample.kt:on-failure"
+```
 
 ## Settings in application.conf
 
@@ -104,6 +125,7 @@ environment variable gives:
 | `dashboard.port`, `.host`  |                            | The [agent's dashboard](agent-dashboard.md), off without a port, listening on every interface unless `host` names one, such as `127.0.0.1`                                    |
 | `dashboard.password`       |                            | Requires a login to the dashboard, as `dashboard.username` (`admin` by default)                                                                                               |
 | `required`                 | `false`                    | Whether the app fails to start when the agent can't, or has no proxy                                                                                                          |
+| `stop-timeout`             | `30s`                      | The agent's `stopTimeout`: how long the app's shutdown waits for its stop, more than zero, in Kotlin's duration format or ISO 8601's, such as `10s` or `PT10S`                |
 | `settings.<key>`           |                            | Any other [agent setting](configuration/agent.md), by its key under `agent`, such as `settings.scrapeTimeoutSecs = 20`. It takes precedence over the keys above              |
 | `enabled`                  | `true`                     | Whether to run the agent at all                                                                                                                                               |
 

@@ -171,8 +171,9 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     }
   }
 
-  // What the agent serves of its own: consolidated mode, its metrics, and its dashboard
+  // What the agent serves of its own: consolidated mode, its metrics, and its dashboard; and how long its stop may take
   private void features(EmbeddedAgentConfig.Builder builder) {
+    builder.stopTimeout(properties.getStopTimeout());
     if (properties.isConsolidated()) {
       builder.consolidated(true);
     }
