@@ -296,7 +296,7 @@ and frees its resources.
 | File | What it sets up |
 |---|---|
 | `app/` | The oven: a Gradle project of its own, outside the repository's build, which reads the repository's version catalog (`settings.gradle.kts`). `Main.kt` is its `main`, with the agent, `Oven.kt` the oven and its menu and metrics, and `OrderQueue.kt` the Redis queue, through Jedis. With `-PlocalProxy` it builds against this checkout's library (a composite build), as `make up-local` and CI do. |
-| `app/src/main/resources/logback.xml` | The oven's logging, which is its agent's too, since the library carries no Logback configuration: INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which would bury the lines `startIfConfigured()` logs |
+| `app/src/main/resources/logback.xml` | The oven's logging, which is its agent's too, since the library brings neither an SLF4J provider nor a configuration (the oven's build adds Logback): INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which would bury the lines `startIfConfigured()` logs |
 | `app/Dockerfile` | Builds the oven's image: compiled inside Docker against the latest release (`make up`), or from the build on the host (`make up-local`), on the Temurin JRE, whose shell `demo.sh sockets` reads `/proc` with |
 | `counter/counter.sh` | The counter: the trickle of orders, and a rush |
 | `docker/compose.yml` | The services, their ports, their images, the ovens' settings, and the misconfigured ovens' |

@@ -13,7 +13,7 @@ public API, `EmbeddedAgentConfig`, `MetricsSource`, and `EmbeddedAgentInfo` (bel
 
 #### `Agent` (`src/main/kotlin/io/prometheus/Agent.kt`)
 
-Comprehensive KDoc (~87 lines) covering:
+Comprehensive KDoc (~92 lines) covering:
 
 - **Class Purpose**: Prometheus Agent for firewall-crossing metrics collection
 - **Architecture**: Connection management, path registration, scrape processing, concurrent scraping, heartbeat, metrics
@@ -27,7 +27,7 @@ Comprehensive KDoc (~87 lines) covering:
 
 #### `Proxy` (`src/main/kotlin/io/prometheus/Proxy.kt`)
 
-Comprehensive KDoc (~94 lines) covering:
+Comprehensive KDoc (~99 lines) covering:
 
 - **Class Purpose**: Prometheus Proxy for metrics collection across firewalls
 - **Architecture**: HTTP service, gRPC service, request routing, service discovery, agent management, health monitoring
@@ -231,5 +231,5 @@ Configuration (in `build.gradle.kts` via `configureDokka()`):
 - Includes package docs from `docs/packages.md`
 - Documents `public` visibility only (`documentedVisibilities(VisibilityModifier.Public)`), so the `internal` classes
   above carry KDoc for readers of the source but don't appear in the generated site
-- Suppresses generated gRPC classes (`io.prometheus.grpc.*`)
+- Suppresses the generated gRPC classes (`io.prometheus.grpc.*`) and the generated `ConfigVals.java`
 - Source links point to the GitHub repository

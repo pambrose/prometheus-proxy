@@ -254,7 +254,7 @@ is a system built by subtraction, and the remaining elements are load-bearing.
 
 A cool blue-grey neutral family carrying a single warm accent and a three-tier status palette — the
 accent is the only warm hue in the system, which is why it can be used so sparingly and still be seen.
-(The Row Links' brand marks carry their tools' own colors, which are not tokens and stay inside the mark.)
+(The bar's logo and the Row Links' brand marks carry their own colors, which are not tokens and stay inside the mark.)
 
 Every token exists as a light/dark pair; the frontmatter carries both (`accent` / `accent-dark`). The
 light theme is `:root`; the dark theme is an override that applies under `prefers-color-scheme: dark` unless
@@ -265,8 +265,9 @@ dark ground, not algorithmically dimmed. The page follows the system by default;
 ### Primary
 
 - **Burnt Orange** (`accent`): The only warm hue on the surface, and deliberately the rarest. It draws
-  edge of the current item (the selected row's 2px left edge, and the 2px line along the current tab's
-  bottom) and the 2px focus-visible outline. That is the complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
+  the edge of the current item (the selected row's 2px left edge, the 2px line along the current tab's
+  bottom, and the one along the Theme Picker's button for the theme in force) and the 2px focus-visible outline.
+  That is the complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
   themes differ in character rather than only in value — against black it reads as a lit filament
   rather than as rust.
 
@@ -338,7 +339,8 @@ clears 3:1.
 | `crit` on `surface` (departed row path cell) | 5.84:1 | 5.21:1 |
 | `ink` on `surface` | 17.81:1 | 14.61:1 |
 
-Non-text: LEDs and the beacon measure 4.57–6.88:1 against every ground they sit on, and the `accent`
+Non-text: LEDs and the beacon measure 4.57–6.88:1 against every ground they sit on at rest (4.16:1 at the least on a
+hovered row's `surface-3`, computed from the tokens), and the `accent`
 current-item edge 4.83:1 light / 6.37:1 dark against `surface`, and 4.10:1 / 5.83:1 against the
 `surface-2` of the current tab's fill above it and the strip below it.
 
@@ -514,7 +516,7 @@ A `<button>` styled as a full-width list row, so it is keyboard-operable by cons
 - **Shape:** square (`0`), full-bleed, `10px 15px` padding (`16px` on the left, so with the `2px` edge the text sits
   `18px` in), `line-soft` bottom divider.
 - **Structure:** two lines — an LED plus the agent name, followed by a neutral Tag naming its identity when
-  it registered as one, then `address · N paths` in Caption/`ink-3`.
+  it registered as one, then `address · N paths` in Meta/`ink-3`.
 - **Rest:** transparent background.
 - **Hover:** background steps to `surface-3`. No transition.
 - **Focus:** `2px solid accent` outline, `outline-offset: -2px` so the ring sits *inside* the row and
@@ -621,9 +623,9 @@ ninth, Identity, after Agent(s) whenever agent auth is on; and Links last whenev
 
 ### Path Search
 
-The one form in the system, above the Path Table and the Activity Table on `surface-2` with a `line` bottom border,
-so it reads as part of the table's header rather than a separate panel. One component on both: the label and the
-placeholder name what it filters, and the form submits to its own layout's route.
+The one form in the system that takes input, above the Path Table and the Activity Table on `surface-2` with a `line`
+bottom border, so it reads as part of the table's header rather than a separate panel. One component on both: the
+label and the placeholder name what it filters, and the form submits to its own layout's route.
 
 - **Input:** a `type="search"` field, square (it holds content), `surface` ground, `line` border, Body
   type in `ink` with an `ink-3` placeholder. Focus is the standard `2px solid accent` ring.
@@ -781,7 +783,8 @@ nothing, so they are links, not buttons.
 - **Rest:** a name is the dimmed column's `ink-3`, underlined `2px` below the text so a link reads as one among plain
   supporting facts. Not the accent, which stays on focus rings and the current item (see The Two Places Rule).
 - **Mark:** the tool's own, a `16px` Simple Icons mark in a `24px` target like the Copy Button's, in the brand's color
-  rather than a token: the one warm hue on the page besides the accent, confined to the mark. Painted through the mark
+  rather than a token, as the bar's logo is: with the logo, the one warm hue on the page besides the accent, confined to
+  the mark. Painted through the mark
   as a CSS mask, as the Copy Button's glyphs are, but fetched from the proxy rather than inlined, so a push carries only
   the link's class. Measured against `surface-2`, a hovered row's ground, at WCAG 1.4.11's 3:1 for a non-text mark,
   since the name is also in the link's tooltip and `aria-label`: Prometheus `#E6522C` at 3.18:1 light and 4.27:1
@@ -877,27 +880,30 @@ assistive tech and in its tooltip, which the server renders, since nothing about
 
 A visually-hidden `role="status" aria-live="polite"` region, written by the WebSocket lifecycle
 handlers: *"Connection to the proxy lost. Reconnecting."* and, on recovery from a real outage,
-*"Connection to the proxy restored."* The Copy Button writes its result there too, once per click, and
-the Path Search its match count, on either table, once per change of filter.
+*"Connection to the proxy restored."*, naming the agent on the agent's dashboard. The Copy Button writes its result
+there too, once per click, the Scrape Button its result, the Theme Picker the theme chosen, and the Path Search its
+match count, on either table, once per change of filter.
 
 It exists because the beacon reports connection state through color and a change of rhythm, and
 neither reaches a screen reader — without it the page simply goes silently stale, which is the exact
 failure this dashboard exists to make impossible to miss. Deliberately **outside every out-of-band
 region**: a live region the push loop rewrote would re-announce itself on every frame. Scoped to the
-connection and the result of a copy click for the same reason — announcing pushed counters would make
-it unusable.
+connection and the viewer's own acts, a copy, a scrape, a theme, or a filter, for the same reason — announcing pushed
+counters would make it unusable.
 
 ### Empty States
 
 Plain sentences in `ink-3`, no illustration, no icon, no call to action. Three variants: inline
-(`14px 15px`), padded (`22px 18px`), and the `gone` variant which renders in `crit` for "Agent X is no
-longer connected." Copy states the fact and, where useful, the next action in the same breath —
+(`14px 15px`), padded (`22px 18px`), and the `gone` variant which renders in `crit` for "orders-agent is no
+longer connected", the agent named as the other layouts name it, from the newest activity line or scrape of it the
+proxy still holds, or "The selected agent" when it holds none (on the agent's dashboard, "/orders_metrics is no longer
+configured, discovered, or registered"). Copy states the fact and, where useful, the next action in the same breath —
 "Select an agent to see its paths and recent scrapes."
 
 ### Not yet in the system
 
 Recorded so future work doesn't assume otherwise: there are **no dialogs, no toasts, and no
-destructive actions**, and the Path Search is the only form. The one action, the Scrape Button, changes
+destructive actions**, and the Path Search is the only form that takes input. The one action, the Scrape Button, changes
 nothing on the proxy, so it borrowed the Copy Button's shape rather than defining an action button. PRODUCT.md
 records that control actions that do change the proxy are a planned direction; when they arrive they will
 need a genuinely new component vocabulary (destructive confirmation, action button, disabled state), and
@@ -962,7 +968,7 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
 ### Do:
 
 - **Do** use the monospace stack for every new element. Hierarchy comes from size (15 / 12.5 / 11.5 /
-  11 / 10.5 / 10), weight (400 / 600 / 640), case, and color — never from a second family.
+  10.5 / 10), weight (400 / 600 / 640), case, and color — never from a second family.
 - **Do** reach for a hairline or a tonal step when something needs to separate. `line` between
   regions, `line-soft` between rows.
 - **Do** give every new region header the engraved Label treatment: 10px, uppercase, `0.09em`, weight

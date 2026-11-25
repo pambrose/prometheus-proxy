@@ -183,9 +183,11 @@ Tests are located in `src/test/kotlin/io/prometheus/` and organized by component
 ```
 src/test/kotlin/io/prometheus/
 ├── agent/          # Agent component tests
+│   ├── dashboard/  # Agent dashboard tests
 │   ├── discovery/  # Path-discovery tests
 │   └── filter/     # Metric-filter tests
 ├── common/         # Shared utility and metrics tests, plus the test-only support most specs share
+│   └── dashboard/  # What both dashboards share: server, login, sessions, theme, Settings
 ├── proxy/          # Proxy component tests
 │   └── dashboard/  # Dashboard renderer tests and fixtures
 ├── misc/           # Cross-cutting tests (config classes, options, packaging, CI, the docs' names)
@@ -227,7 +229,8 @@ netty-tcnative native, Netty, protobuf, and every module of the Prometheus Java 
 `gradle/libs.versions.toml` pins, the registry model and the text formats among them, Logback isn't resolved, for the
 agent alone, a Ktor app with the Ktor plugin, or a Spring Boot app with the starter (each would displace the host
 application's own SLF4J provider), and no jar on the classpath carries a `logback.xml`, which would replace the host
-application's logging config.
+application's logging config. For the Ktor app, it also fails unless every Ktor module resolves at the catalog's
+version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile.
 
 ## Test Categories
 
@@ -494,9 +497,6 @@ Three support helpers also live here (not test classes themselves):
   connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents; a forward
   span is tagged with its request's queue wait before the send, so a scrape that ends while the send waits keeps it,
   and is annotated as sent only while its scrape still awaits the result
-- **ProxyServiceMessages** — what an agent sends `ProxyServiceImpl`, for the specs that call its RPCs directly:
-  `resultFrom`, `chunkedHeaderFrom`, `chunkFor`, `transferFrom` (a header, one chunk, and a summary), and
-  `onConnection`, which runs a call on the connection the transport filter assigned an agentId to
 - **ProxyServiceImplMetricsTest** — what each RPC counts, read from real collectors (`CountingProxyMetrics`): a
   connect only once accepted, and a refused one as a refusal by reason (a `transportFilterDisabled` mismatch, the
   `maxAgentsPerIdentity` limit); a heartbeat only once accepted; every path rejection by its cause, not only a path's
@@ -753,14 +753,17 @@ Three support helpers also live here (not test classes themselves):
   built but never started, reading them from the path history and the activity log's lines with their change count,
   and the eviction delay only while the stale-agent check runs
 
-One support helper also lives here (not a test class itself):
+Two support helpers also live here (not test classes themselves):
 
+- **ProxyServiceMessages** — what an agent sends `ProxyServiceImpl`, for the specs that call its RPCs directly:
+  `resultFrom`, `chunkedHeaderFrom`, `chunkFor`, `transferFrom` (a header, one chunk, and a summary), and
+  `onConnection`, which runs a call on the connection the transport filter assigned an agentId to
 - **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `departedPathView`,
-  `departure`, `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, `iconLinks` (a
-  Prometheus and a Grafana link shown as icons), and `renderFullPage` for the
-  page a GET serves, shared by `ProxyDashboardHtmlTest`, `DashboardScriptTest`, `PathColumnsHtmlTest`,
-  `PathTableHtmlTest`, `PathLinkTest`, `ActivityHtmlTest`, `RowFilterTest`, and `ProxySnapshotTest`, so a test names
-  only the field it is about
+  `departure`, `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, `labelsOf` (a
+  path's labels as the proxy keeps them once it registers), `scrapeResponse` (an agent's successful answer),
+  `iconLinks` (a Prometheus and a Grafana link shown as icons), and `renderFullPage` for the page a GET serves, shared
+  by every spec in `dashboard/` but `ProxySettingsTest`, and by `PathHistoryTest` and `ProxyWebDashboardTest`, so a
+  test names only the field it is about
 
 ### Unit Tests — Common (`common/`)
 
@@ -786,7 +789,7 @@ One support helper also lives here (not a test class itself):
   level, `info` when unset; and where the config came from (`configShown`): a file, a URL with its credentials redacted, in memory, or the
   built-in defaults
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
-- **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
+- **ConstantsTest** — Constant values (BLANK_AGENT_ID_MSG, BLANK_PATH_MSG, EMPTY_INSTANCE)
 - **DashboardLoginTest** (`dashboard/`) — a dashboard's login read from a request's `Authorization` header: the right
   pair accepted; no header, a wrong username or password, a prefix of either, another scheme, a value that isn't
   base64, or one with no colon refused, never thrown on; the scheme matched in any case; a split at the first colon,
@@ -896,7 +899,7 @@ One support helper also lives here (not a test class itself):
   contexts from PEM, from a mix of PEM and files, and, with no PEM, from common-utils' file builders (MockK); malformed
   PEM armor refused without its content; and the options resolve each `*Pem` setting, turn TLS on with it, log only
   whether it is set, and, embedded, throw `ConfigLoadException`
-- **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
+- **UtilsTest** — Utility functions: parseHostPort, parseEndpointList, sanitizeUrl, appendQueryParams, toJsonElement,
   setLogLevel, exceptionDetails; failureKey, which keys a failure by its gRPC status code, wrapped or not, and one
   without a status by its class, and its message only when asked; setLogLevel without Logback warning and setting
   nothing, and no main class but `LogbackLevels` naming a Logback class, since the library leaves Logback to the app
@@ -912,7 +915,9 @@ These support helpers also live here (not test classes themselves):
 - **TestCerts** — the repository's test certificates (`testing/certs`): their paths, text, and base64, for the specs
   that give TLS material as PEM
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
-  fragment merged with the reference config, and `ProxyOptions` from a temp config file
+  fragment merged with the reference config, and `ProxyOptions` / `AgentOptions` from a temp config file; and
+  `shouldBeRejected`, the `ConfigLoadException` an embedded agent throws for a setting it rejects, with the
+  `IllegalArgumentException` that rejected it as its cause
 - **SettingsTestSupport** (`dashboard/`) — lookups into a Settings view's groups (`group`, `value`) and all of its text
   (`text`), to search for a secret, shared by `CommonSettingsTest`, `ProxySettingsTest`, and `AgentSettingsTest`
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
@@ -927,7 +932,8 @@ These support helpers also live here (not test classes themselves):
   and `CountingProxyMetrics`, a relaxed `ProxyMetrics` whose counters are real, unregistered collectors, so a spec reads
   what a call counted (a relaxed mock's labeled counter can't be incremented: its `labelValues` answers a plain
   `DataPoint`); `CountingAgentMetrics`, the agent's counterpart, its collectors labeled `launch_id` first; and
-  `registeredMetricNames()` / `registeredSnapshot<T>(name)`, what the default registry holds
+  `registeredMetricNames()` / `registeredSnapshot<T>(name)` / `registeredCounts(name, label)`, what the default
+  registry holds
 - **DeadlineExceeded** — `deadlineExceeded(elapsed)`, a `DEADLINE_EXCEEDED` `StatusException` described as
   grpc-java describes one, elapsed time included, for the specs that check a repeating failure is compared by its
   status code rather than its message
@@ -963,15 +969,16 @@ These support helpers also live here (not test classes themselves):
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
   `examples`, `testing`, `etc/compose`, each demo's `demos/<name>/config`, the container suite's agent configs, and the
   bundled `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON ignores a key it
-  doesn't know; a list's entries are checked against the fields its schema entry gives, as for `proxy.auth` and
-  `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'. The same goes for
-  every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a string literal,
-  which HOCON ignores just the same; a key built at run time isn't seen. So does every key an
-  `EmbeddedAgentConfig.setting()` call spells out, which the builder doesn't check, in the tests, the main sources,
-  both subprojects, the demos' apps, the docs site's pages, the READMEs, `docs`, and `llms.txt`, but for the
-  wrong-case keys `EmbeddedAgentConfigTest` gives on purpose; and every setting in a fenced HOCON block of those docs,
-  with the snippet-file sections the docs site includes in it, checked as a proxy or agent config, a discovery targets
-  file, or a lone list entry such as an `agent.filters` entry; a block that doesn't parse fails too
+  doesn't know, and each one the repo ships (in `examples`, `etc/compose`, and the demos) loads over the bundled
+  defaults as the proxy and agent load it; a list's entries are checked against the fields its schema entry gives, as
+  for `proxy.auth` and `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'.
+  The same goes for every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a
+  string literal, which HOCON ignores just the same; a key built at run time isn't seen. So does every key an
+  `EmbeddedAgentConfig.setting()` call spells out, which the builder doesn't check, in the tests, the main sources, both
+  subprojects, the demos' apps, the docs site's pages, the READMEs, `docs`, and `llms.txt`, but for the wrong-case keys
+  `EmbeddedAgentConfigTest` gives on purpose; and every setting in a fenced HOCON block of those docs, with the
+  snippet-file sections the docs site includes in it, checked as a proxy or agent config, a discovery targets file, or a
+  lone list entry such as an `agent.filters` entry; a block that doesn't parse fails too
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
   `proxy.dashboard.links`); a config that still sets the retired `proxy.dashboard.recentScrapesQueueSize` loads
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
@@ -1209,7 +1216,8 @@ mechanism that the standard suite cannot reach:
 - **HarnessHelpersTest** — `awaitPortFree()` returns on a port of the spec's own and fails when a port stays taken,
   `awaitPortReady()` fails on a port nothing listens on, held for the test by a socket bound but not listening, so no
   other process can take it meanwhile, and `HarnessConstants.localConfigFile()` fails for a missing test config rather
-  than fetching one from GitHub
+  than fetching one from GitHub; `startProxy()` and `startAgent()` bind the `HARNESS_*` ports, not the product
+  defaults; and `setupProxyAndAgent()` fails, naming why, and stops the proxy it started, when the agent never connects
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
 - **EmbeddedAgentScrape** — `withEmbeddedAgentScraped()`, which starts a proxy, a scrape target, which can demand
   Basic Auth, and an agent built with `embeddedAgent { }`, waits until the proxy serves the target's metrics, and tears

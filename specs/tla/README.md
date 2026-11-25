@@ -24,9 +24,10 @@ launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path 
 its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path,
 telling the agent again that it's taken. Invalidating a connection drops its unread notices, as `invalidate()` does,
 whether the proxy removed it or a registration of its own launch orphaned it.
-Heartbeats, stream keepalives, chunking, metrics, and the event bus are abstracted away, and so are the notice that a
-path is free and the waiting list that sends it, which only bring a reclaim forward. Agent-side failover is in
-`AgentFailover.tla`.
+Heartbeats, stream keepalives, chunking, metrics, and the event bus are abstracted away, and so are a path's form and
+size checks and the proxy's limits (paths per agent and per identity, labels per path, agents per identity), and the
+notice that a path is free and the waiting list that sends it, which only bring a reclaim forward. Agent-side failover
+is in `AgentFailover.tla`.
 
 It is a model of the code, not the code: when you change one of those classes, update the matching action.
 

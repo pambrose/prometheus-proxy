@@ -15,9 +15,9 @@ checkout. It first runs `make release-check`, which publishes nothing and fails 
   `CHANGELOG.md`, and `_Released YYYY-MM-DD_` under `## VERSION` in `RELEASE_NOTES.md`), which the last change merged
   before `make release` sets (step 3);
 - every file step 2 lists mentions the version, and none still has the previous release's version where step 2
-  bumps it (an image tag, the Maven coordinate or `<version>`, a chart's `version` or `appVersion`, a `git clone`'s
-  `--branch`, the backticked examples, the tag in a `raw.githubusercontent.com` link, or a GitHub release's page or
-  download link, as the Quick Start's JAR tab has);
+  bumps it (an image tag, the Maven coordinate or `<version>`, the Spring Boot demo's `<prometheus-proxy.version>`, a
+  chart's `version` or `appVersion`, a `git clone`'s `--branch`, the backticked examples, the tag in a
+  `raw.githubusercontent.com` link, or a GitHub release's page or download link, as the Quick Start's JAR tab has);
 - every demo's `NEEDS_RELEASE_AFTER` is below the version, so `make up` from the release's tag pulls the release's
   images instead of building the proxy and agent from source (step 2);
 - the version isn't a pre-release, its tag (if one exists) points at this commit, and none of the agent, the Spring

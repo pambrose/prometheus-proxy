@@ -5,7 +5,7 @@ token, and/or mutual TLS. The agent port is still **unauthenticated by default**
 partly implemented.
 **Severity:** High when no authentication is configured and the agent port is reachable
 **Component:** Proxy gRPC service (agent-facing port, default `50051`)
-**Identified:** 2026-06 code review · **Updated:** 2026-09 (per-agent identities, call binding, and reflection off by default)
+**Identified:** 2026-06 code review · **Updated:** 2026-11 (per-agent identities, call binding, reflection off by default, and limits per identity)
 
 > This document tracks a security limitation in the proxy's agent-facing gRPC interface. It was first recorded as
 > a design gap: the proxy performed no application-level agent authentication. Since then the proxy has gained a
@@ -123,8 +123,8 @@ The original finding is exploitable when **all** of the following hold:
    deployment this port is exposed only to trusted agents inside the firewall; the exposure is what elevates this
    to High.
 2. **No mutual TLS** — the proxy does not require agents to present a client certificate. TLS is opt-in:
-   `isTlsEnabled` requires both `certChainFilePath` and `privateKeyFilePath`, and both default to empty, i.e.
-   plaintext.
+   `isTlsEnabled` requires both a certificate chain and a private key, each as a file (`certChainFilePath`,
+   `privateKeyFilePath`) or as PEM (`certChainPem`, `privateKeyPem`), and all four default to empty, i.e. plaintext.
 3. **No agent authentication, or a token the attacker holds** — no token or identities are configured, or the
    attacker holds a token whose identity is authorized for the target path (for example the shared
    `proxy.agentToken`).
@@ -173,9 +173,9 @@ token — joining still answers a fraction of scrape requests with fabricated da
 - **Pre-shared agent token** — set the same secret on both sides with `--agent_token` / `AGENT_TOKEN` /
   `proxy.agentToken` (proxy) and `agent.agentToken` (agent). The proxy rejects any call with a missing or
   unrecognized token. It authenticates agents but does not scope what they may register.
-- **Mutual TLS** — set the proxy's `trustCertCollectionFilePath` together with the TLS certificate and key so the
-  proxy requires a valid client certificate, and provision agents with certificates. See the `tls { … }` blocks in
-  `config/config.conf`.
+- **Mutual TLS** — set the proxy's `trustCertCollectionFilePath` (or `trustCertCollectionPem`) together with the TLS
+  certificate and key so the proxy requires a valid client certificate, and provision agents with certificates. See
+  the `tls { … }` blocks in `config/config.conf`.
 - **Network segmentation** — restricting port `50051` to trusted agents (firewall rules, a private network, a
   service mesh) removes the reachability precondition, and should be treated as a hard requirement for any
   plaintext deployment.
