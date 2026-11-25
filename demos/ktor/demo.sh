@@ -57,16 +57,21 @@ save_ports() {
 # is built either way, against the latest release (up) or this checkout (up-local).
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/ktor-app:local)
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
-# The demo shows what came after this release (the agent's own dashboard), so until a later one is out, up builds
-# everything from this checkout, as up-local does.
-NEEDS_RELEASE_AFTER=4.7.0
+# The newest release that lacks something the demo shows (the Ktor plugin, and the agent's own dashboard). up runs
+# the release the docs give (make site-version) once it's later than this and its proxy image is on Docker Hub,
+# and otherwise builds everything from this checkout, as up-local does, so nothing here changes with a release.
+# When the demo comes to use something no release has yet, set this to the latest release on Docker Hub.
+NEEDS_RELEASE_AFTER=4.6.0
 # The secrets the demo's containers read (compose.yml), which up writes the first time it runs.
 ENV_FILE="$DEMO_DIR/docker/.env"
 CERTS_DIR="$REPO_DIR/testing/certs"
 # The services only a scenario starts, so down and status cover them too.
 ON_DEMAND=(--profile deploy)
 
-# This demo's page on the docs site, which shows its layout and code
+# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
+# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
+# between releases the page can lag behind this checkout, or not be there yet.
+README_PATH="demos/ktor/README.md"
 PAGE_URL="https://prometheus-proxy.com/ktor-demo/"
 APP_URL="http://localhost:${KTOR_DEMO_APP_PORT:-8390}"
 DASHBOARD_URL="http://localhost:${KTOR_DEMO_DASHBOARD_PORT:-8394}/dashboard"
@@ -176,7 +181,8 @@ print_urls() {
   echo "  1.1's, after a deploy:  $NEXT_AGENT_DASHBOARD_URL"
   echo "  Agent's /debug:         $AGENT_ADMIN_URL/debug"
   echo
-  echo "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
+    "release: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 rush | break-machine | deploy | proxy-stop ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -252,8 +258,24 @@ version_after() {
   return 1
 }
 
-# The latest release: the version the docs give, whose images are on Docker Hub and whose library is on Maven Central.
+# The release the docs give: the latest, or, from a version bump until the release is out, the next, whose proxy
+# image and library aren't published yet. make release publishes the library to Maven Central before it pushes
+# the images to Docker Hub, so a release whose proxy image is there has its library there too.
 latest_release() { "$MAKE" -s --no-print-directory -C "$REPO_DIR" site-version; }
+
+# Whether a release's images are published: published <version> <image>... Docker has them already, since a
+# release's images don't change and a demo started again without a network connection uses them, or Docker Hub has
+# them. Only Docker Hub's answer that it has no such image says no, as from a version bump until its release is out;
+# when Docker Hub can't be reached, the pull says so.
+published() {
+  local release="$1" image answer
+  shift
+  for image in "$@"; do
+    docker image inspect "$image:$release" >/dev/null 2>&1 && continue
+    answer="$(docker manifest inspect "$image:$release" 2>&1 >/dev/null)" && continue
+    [[ "$answer" != *"no such manifest"* ]] || return 1
+  done
+}
 
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 
@@ -312,17 +334,21 @@ pull_proxy() {
   docker tag "$released" "${IMAGES[0]}"
 }
 
-# The latest release's proxy and library, unless it predates what the demo shows.
+# The release the docs give, its proxy and library, unless it predates what the demo shows or isn't published yet.
 cmd_up() {
   local release
   check_tools
   release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
-  if version_after "$release" "$NEEDS_RELEASE_AFTER"; then
-    start_demo "$release"
-  else
+  if ! version_after "$release" "$NEEDS_RELEASE_AFTER"; then
     wrap "" "" "The latest release, $release, predates this demo, so it builds the library, the proxy, and the coffee" \
       "shop from this checkout, which takes a JDK 17 or later."
     start_demo
+  elif ! published "$release" "$RELEASED_PROXY_IMAGE"; then
+    wrap "" "" "Release $release, which the docs give, isn't published yet, so the demo builds the library, the" \
+      "proxy, and the coffee shop from this checkout, which takes a JDK 17 or later."
+    start_demo
+  else
+    start_demo "$release"
   fi
 }
 
@@ -460,7 +486,8 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
     "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
+    "${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 
@@ -622,7 +649,7 @@ cmd_tour() {
   if part 1 "An app on a platform such as ECS, Cloud Run, or Azure Container Apps can't be scraped by a Prometheus" \
     "outside the platform without opening its metrics to the internet. Here the agent runs inside the app instead," \
     "and connects out to the proxy."; then
-    instruct "What runs in this demo, as the diagram at the top of its website page draws it: $PAGE_URL" \
+    instruct "What runs in this demo, as the diagram at the top of $README_PATH draws it" \
       "The coffee shop is a Ktor app, with built-in customers who order over HTTP on their own. The" \
       "prometheus-proxy agent runs inside it, started from the app's own code: one container, one JVM. Outside it" \
       "are the proxy," \

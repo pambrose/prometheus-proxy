@@ -86,12 +86,15 @@ class EmbeddedAgentConfig private constructor(
 
   /**
    * Starts an agent with these settings, as [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]
-   * does with a `Config`, and returns its handle once it has started.
+   * does with a `Config`, and returns its handle once it has started. It runs on a daemon thread, so it doesn't keep
+   * the JVM running: stop it with the handle once the work that needs it is done.
    *
    * @param logBanner When `true` (default), logs the agent's ASCII banner and version on startup.
    * @throws ConfigLoadException when a setting is invalid. One that [fromEnvironment][Builder.fromEnvironment] read is
    *   named by its variable, such as `PROMETHEUS_PROXY_CERT`, as well as its setting.
-   * @throws IllegalStateException if the agent fails to start.
+   * @throws IllegalStateException if the agent fails to start, as when a port it opens is in use, or doesn't start
+   *   within 30 seconds. Either way, what it had opened is released: one that's still starting stops as soon as
+   *   its startup ends, and never connects.
    * @see startIfConfigured for an agent that stays off without a proxy, and keeps the app running when it can't start.
    */
   @JvmOverloads
@@ -115,8 +118,8 @@ class EmbeddedAgentConfig private constructor(
    * [fromEnvironment][Builder.fromEnvironment] reads from `PROMETHEUS_PROXY`, or the agent's own `PROXY_HOSTNAME`
    * environment variable names one. Without one, as on a developer's machine, the agent stays off, with an INFO line
    * that says so. A start that fails, for a setting the agent rejects ([ConfigLoadException]) or for anything else,
-   * such as its admin port being in use, is logged at ERROR with why, which holds no token, password, or PEM, and is
-   * given to [onFailure].
+   * such as its admin port being in use or its start taking over 30 seconds, is logged at ERROR with why, which holds
+   * no token, password, or PEM, and is given to [onFailure].
    *
    * The handle is [AutoCloseable], and Kotlin's `use` and Java's try-with-resources both take a null one, so a program
    * that runs while its agent does reads as `startIfConfigured().use { worker.run() }`, which runs the worker whether
@@ -147,8 +150,8 @@ class EmbeddedAgentConfig private constructor(
     return try {
       launch()
     } catch (e: Exception) {
-      // A setting the agent rejects (ConfigLoadException), a failure to start (IllegalStateException), or a checked
-      // exception, which Kotlin throws undeclared, such as the start timing out
+      // A setting the agent rejects (ConfigLoadException), a failure to start, the start timing out included
+      // (IllegalStateException), or anything else the start throws
       val reason = failureReason(e)
       logger.error { "The Prometheus agent could not start, so it stays off: $reason" }
       onFailure?.accept(reason, e)
@@ -156,9 +159,18 @@ class EmbeddedAgentConfig private constructor(
     }
   }
 
-  // Whether the settings name a proxy: the builder's, a setting() of the proxy's endpoints or host name, or the agent's
-  // own PROXY_HOSTNAME, which takes precedence over them. Without one, the agent would try localhost.
-  private fun namesProxy(env: (String) -> String?): Boolean =
+  /**
+   * Whether these settings name a proxy for the agent to connect to: with the builder's [proxy][Builder.proxy], which
+   * [fromEnvironment][Builder.fromEnvironment] reads from `PROMETHEUS_PROXY`, with a [setting][Builder.setting] of
+   * `proxy.endpoints` or `proxy.hostname`, or with the agent's own `PROXY_HOSTNAME` environment variable, which takes
+   * precedence over them. Without one, the agent would try a proxy on localhost. [startIfConfigured] starts the agent
+   * only when this is true; an app that decides for itself, as the Ktor plugin and the Spring Boot starter do, reads it
+   * once its settings are complete.
+   */
+  fun namesProxy(): Boolean = namesProxy(System::getenv)
+
+  // namesProxy, with the environment PROXY_HOSTNAME is read from, which tests give.
+  internal fun namesProxy(env: (String) -> String?): Boolean =
     !env(EnvVars.PROXY_HOSTNAME.name).isNullOrBlank() ||
       PROXY_KEYS.any { key ->
         config.hasPath(key) &&
@@ -279,8 +291,8 @@ class EmbeddedAgentConfig private constructor(
      *
      * A value the agent refuses as it starts, an endpoint it can't parse or a certificate it can't read, fails
      * [start][EmbeddedAgentConfig.start] with a [ConfigLoadException] that names the variable as well as the setting,
-     * such as `PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem: …`, and never
-     * the value.
+     * such as `PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem: …`. An endpoint
+     * it can't parse is quoted in the message, but never a certificate.
      */
     fun fromEnvironment(): Builder = fromEnvironment(System::getenv)
 

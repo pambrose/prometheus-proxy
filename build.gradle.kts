@@ -10,8 +10,10 @@ import kotlinx.kover.gradle.plugin.dsl.AggregationType
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import kotlinx.kover.gradle.plugin.dsl.GroupingEntityType
 import org.gradle.api.file.ArchiveOperations
+import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -84,11 +86,17 @@ val releaseDate =
   }
 
 val basePackage = "io.prometheus"
-val displayName = "Prometheus Proxy"
+// The KDoc site's module name, which docs/packages.md's "# Module" heading must match. Not displayName, which inside a
+// Project extension is Project.displayName ("root project 'prometheus-proxy'"), so packages.md never reached the site.
+val dokkaModuleName = "Prometheus Proxy"
 val repoUrl = "https://github.com/pambrose/prometheus-proxy"
 val harnessConfigEnv = "HARNESS_CONFIG"
 val generatedSourcesDir = "build/generated"
 val detektConfigDir = "$projectDir/config/detekt"
+
+// The two Test tasks a run of every spec is split between (configureTestPartitions).
+val UNIT_TEST_TASK = "unitTest"
+val HARNESS_TEST_TASK = "harnessTest"
 
 // Coverage floors enforced by koverVerify; see configureCoverage() for why these values.
 val MIN_LINE_COVERAGE_PCT = 95
@@ -126,6 +134,13 @@ pambroseTesting {
 
 // The platforms netty-tcnative-boringssl-static has natives for (see dependencies).
 val tcnativeClassifiers = listOf("linux-x86_64", "linux-aarch_64", "osx-x86_64", "osx-aarch_64", "windows-x86_64")
+
+// What the standalone proxy and agent run with, beyond what the library publishes: Logback, their SLF4J provider. It's
+// on the main runtime classpath, which the fat JARs take, but not in runtimeElements, which the POM and the Gradle module
+// metadata publish, so an app that embeds the agent keeps its own provider (November 23 review, #9): a Logback the agent
+// brought displaced it, and had Spring Boot fail to start an app on Log4j2, or ignore its Log4j2 config.
+val standaloneRuntimeOnly = configurations.dependencyScope("standaloneRuntimeOnly")
+configurations.runtimeClasspath { extendsFrom(standaloneRuntimeOnly.get()) }
 
 dependencies {
   implementation(libs.kotlin.reflect)
@@ -186,10 +201,14 @@ dependencies {
   implementation(libs.zipkin.brave)
 
   implementation(libs.kotlin.logging)
-  implementation(libs.logback.classic) // compile-time: Utils.setLogLevel uses Logback's Level/Logger
+  // Utils.setLogLevel sets a level through Logback when the app's SLF4J provider is Logback, which the library leaves to
+  // the app; the standalone proxy and agent run with it (standaloneRuntimeOnly), and so do the tests
+  compileOnly(libs.logback.classic)
+  add(standaloneRuntimeOnly.name, libs.logback.classic)
   runtimeOnly(libs.slf4j.jul) // jul-to-slf4j bridge: installed at runtime, no compile-time references
 
   testImplementation(libs.kaml)
+  testImplementation(libs.logback.classic)
   testImplementation(libs.kotest)
   testImplementation(libs.lincheck)
   testImplementation(libs.mockk)
@@ -324,6 +343,9 @@ fun Project.configureKotlin() {
 }
 
 fun Project.configureTesting() {
+  val testConfigFiles = testConfigFiles()
+  val checkedFiles = checkedFiles()
+
   tasks.withType<Test>().configureEach {
     // Main code compiles for Java 17 (`jvm` in libs.versions.toml), the floor the published artifact supports, but
     // the tests run on Java 25 (`testJvm`), the runtime the Docker images ship.
@@ -342,6 +364,15 @@ fun Project.configureTesting() {
     // input, and so is whether the container specs run; a run that enables them always runs, since they test Docker
     // images Gradle can't see.
     inputs.property(harnessConfigEnv, harnessConfig.orEmpty())
+
+    // Nor does it count the files a spec opens, only the classpath, so a change that edited only a workflow, the
+    // Makefile, or docs/TESTING.md passed on the result of the run before it, up to date, or from the build cache after
+    // a clean. The files the specs read are inputs of the tasks that run those specs; the docs, CI, and demo files only
+    // of unitTest (and test), so an edit to them doesn't rerun the harness specs.
+    inputs.files(testConfigFiles).withPropertyName("testConfigFiles").withPathSensitivity(PathSensitivity.RELATIVE)
+    if (name != HARNESS_TEST_TASK)
+      inputs.files(checkedFiles).withPropertyName("checkedFiles").withPathSensitivity(PathSensitivity.RELATIVE)
+
     val runContainerTests = providers.environmentVariable("RUN_CONTAINER_TESTS").orNull == "true"
     inputs.property("runContainerTests", runContainerTests)
     if (runContainerTests) {
@@ -350,14 +381,17 @@ fun Project.configureTesting() {
       // The images are built from the fat JARs, so the specs never test stale ones.
       dependsOn("agentJar", "proxyJar")
       // A run of only the container specs runs several at a time (ContainerTestsConfig); one with any other spec
-      // doesn't, since those share the JVM's default registry and log capture.
-      if (testsOnlyContainerSpecs()) {
+      // doesn't, since those share the JVM's default registry and log capture. harnessTest never does: it holds only
+      // the harness specs, which share fixed ports.
+      if (name != HARNESS_TEST_TASK && testsOnlyContainerSpecs()) {
         systemProperty("kotest.framework.config.fqn", "io.prometheus.containers.support.ContainerTestsConfig")
       }
     }
 
     // Scale the test JVM heap to the harness load. LARGE+ generates multi-MB scrape payloads
     // and runs them through 2000+ sequential calls; the default 512m heap OOMs in bodyAsText().
+    // Only the harness specs read the profile, so unitTest, which runs beside harnessTest, keeps 1g: given the profile's
+    // heap too, the two JVMs could take 32g at XXLARGE.
     // An explicit -PtestMaxHeapSize=… (or TEST_MAX_HEAP_SIZE env var) overrides the load-based default —
     // useful for large `make scaling-tests` runs, which can hold thousands of scrape bodies at once.
     val testMaxHeapOverride =
@@ -365,7 +399,7 @@ fun Project.configureTesting() {
         ?: providers.environmentVariable("TEST_MAX_HEAP_SIZE").orNull
     maxHeapSize =
       testMaxHeapOverride
-        ?: when (harnessConfig?.uppercase()) {
+        ?: when (if (name == UNIT_TEST_TASK) null else harnessConfig?.uppercase()) {
           "XXLARGE" -> "16g"
           "XLARGE" -> "4g"
           "LARGE" -> "2g"
@@ -384,29 +418,68 @@ fun Project.configureTesting() {
   configureTestPartitions()
 }
 
+// The files outside the source sets that the specs read, by the tasks whose specs read them (configureTesting); see
+// "Test Inputs" in docs/TESTING.md. A directory is taken whole, so a spec that reads a new file in it is covered.
+
+// The test configs and TLS certificates the harness specs and others load.
+fun Project.testConfigFiles(): FileCollection = files(fileTree("config/test-configs"), fileTree("testing"))
+
+// What the specs that check the docs, CI, and demos against the code read: misc/, TestingGuideTest among them, and
+// TestPortsTest. Not the code reviews, which no spec reads, or what a demo's build or demo.sh writes.
+fun Project.checkedFiles(): FileCollection =
+  files(
+    "Makefile",
+    "README.md",
+    "CHANGELOG.md",
+    "RELEASE_NOTES.md",
+    "AGENTS.md",
+    "llms.txt",
+    "gradle.properties",
+    "settings.gradle.kts",
+    "config/config.conf",
+    fileTree(".github"),
+    fileTree("docs") { exclude("**/CODE_REVIEW_*.md") },
+    fileTree("website/prometheus-proxy/docs"),
+    "website/prometheus-proxy/zensical.toml",
+    fileTree("demos") { exclude("**/build/**", "**/.gradle/**", "**/.kotlin/**", "**/target/**", "*/docker/.env*") },
+    fileTree("examples"),
+    fileTree("etc"),
+    fileTree("grafana"),
+    fileTree("bin"),
+    fileTree("logback"),
+    fileTree("src/shadow/resources"),
+    // The sources' text, which some specs scan, comments and KDoc included, the docs site's snippet files beside the
+    // test sources, which nothing compiles, and the subprojects', whose specs and port constants are checked too.
+    fileTree("src/main/kotlin"),
+    fileTree("src/test/kotlin"),
+    fileTree("src/test/java"),
+    fileTree("ktor-plugin/src"),
+    fileTree("spring-boot-starter/src"),
+  )
+
 // The harness specs bind fixed ports (TestPorts' HARNESS_* ports, and each spec's own), so they run one at a time; the
 // other specs bind none of theirs, which TestPortsTest checks. A run of every spec therefore splits them between two
 // Test tasks, unitTest and harnessTest, which Gradle runs at the same time, each in a JVM of its own, so neither shares
 // the default registry or a log capture with the other. test runs neither itself, only both, so `./gradlew test`, check,
 // build, and the Kover tasks still run every spec. A run that names specs with --tests, as IntelliJ's do, or excludes
-// test with -x test, leaves test as it was: the specs it runs, in one JVM, or none.
-// Whether the command line names specs with --tests, and every one it names is a container spec, as `make
-// container-tests`, `make scaling-tests`, and container-tests.yml do.
+// test with -x test, leaves test as it was: the specs it runs, in one JVM, or none. Either partition can still be named
+// on its own, filtered or not, as `./gradlew unitTest --tests …` is.
+
+// The specs the command line names with --tests, in either form Gradle takes: `--tests X` and `--tests=X`.
+fun Project.namedSpecs(): List<String> =
+  gradle.startParameter.taskRequests.flatMap { request ->
+    request.args.zipWithNext().filter { (option, _) -> option == "--tests" }.map { (_, spec) -> spec } +
+      request.args.filter { it.startsWith("--tests=") }.map { it.removePrefix("--tests=") }
+  }
+
+// Whether the command line names specs, and every one it names is a container spec, as `make container-tests`,
+// `make scaling-tests`, and container-tests.yml do.
 fun Project.testsOnlyContainerSpecs(): Boolean {
-  val named =
-    gradle.startParameter.taskRequests.flatMap { request ->
-      request.args.zipWithNext().filter { (option, _) -> option == "--tests" }.map { (_, spec) -> spec } +
-        request.args.filter { it.startsWith("--tests=") }.map { it.removePrefix("--tests=") }
-    }
+  val named = namedSpecs()
   return named.isNotEmpty() && named.all { it.startsWith("io.prometheus.containers.") }
 }
 
 fun Project.configureTestPartitions() {
-  val startParameter = gradle.startParameter
-  val testsNamed = startParameter.taskRequests.any { "--tests" in it.args }
-  val testExcluded = startParameter.excludedTaskNames.any { it == "test" || it == ":test" }
-  if (testsNamed || testExcluded) return
-
   // Partitioned by class file, which picks the specs Gradle hands Kotest, rather than by test filter: Kotest takes a
   // filter's include patterns and ignores its excludes, so an excluding filter ran every spec.
   val harnessClasses = "io/prometheus/harness/**"
@@ -425,8 +498,17 @@ fun Project.configureTestPartitions() {
     selectClasses()
   }
 
-  val unitTest = registerPartition("unitTest", "Runs every spec outside the harness.") { exclude(harnessClasses) }
-  val harnessTest = registerPartition("harnessTest", "Runs the harness specs, one at a time.") { include(harnessClasses) }
+  val unitTest = registerPartition(UNIT_TEST_TASK, "Runs every spec outside the harness.") { exclude(harnessClasses) }
+  val harnessTest =
+    registerPartition(HARNESS_TEST_TASK, "Runs the harness specs, one at a time.") { include(harnessClasses) }
+
+  val testExcluded = gradle.startParameter.excludedTaskNames.any { it == "test" || it == ":test" }
+  if (namedSpecs().isNotEmpty() || testExcluded) {
+    // test runs as it is. The Kover tasks leave the partitions out, as they'd otherwise run them whole: `./gradlew
+    // build -x test` would run every spec.
+    kover { currentProject { instrumentation { disabledForTestTasks.addAll(UNIT_TEST_TASK, HARNESS_TEST_TASK) } } }
+    return
+  }
 
   tasks.test {
     enabled = false
@@ -591,20 +673,23 @@ fun Project.configureJars() {
 
 fun Project.configureDokka() {
   dokka {
-    moduleName.set(displayName)
+    moduleName.set(dokkaModuleName)
 
     dokkaPublications.html {
       outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
-      includes.from("docs/packages.md")
     }
 
     pluginsConfiguration.html {
       homepageLink.set(repoUrl)
-      footerMessage.set(displayName)
+      footerMessage.set(dokkaModuleName)
     }
 
     dokkaSourceSets.main {
       documentedVisibilities(VisibilityModifier.Public)
+
+      // The module's and packages' descriptions. A source set's includes, since a publication's are for a multi-module
+      // page, which a single module has none of.
+      includes.from("docs/packages.md")
 
       // Agent and Proxy extend common-utils' AbstractGenericService, whose private dropwizardExports field has a type from
       // a runtime-only dependency, DropwizardExports, which the compile classpath Dokka reads lacks. Nothing public

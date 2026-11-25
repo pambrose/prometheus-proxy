@@ -317,7 +317,7 @@ The `agent_scrape_*` counters and latency histogram count only Prometheus's scra
 its outcome, which the dashboard shows to whoever asked. Neither it nor a [Scrape now](agent-dashboard.md#scrape-now) on
 the agent's own dashboard counts in the `agent_filter_*` counters, and the agent's own counts in none of these.
 
-The two `agent_filter_*` counters only create series for paths that have a filter configured, so
+The three `agent_filter_*` counters only create series for paths that have a filter configured, so
 they are absent entirely unless [metric filtering](configuration/agent.md#metric-filtering) is in
 use. See that section for what the filter does and does not drop.
 

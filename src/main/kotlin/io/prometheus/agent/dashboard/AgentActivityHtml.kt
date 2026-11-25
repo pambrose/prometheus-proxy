@@ -23,6 +23,7 @@ import io.prometheus.common.dashboard.DashboardPage.DASH
 import io.prometheus.common.dashboard.DashboardPage.renderFilters
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.RowFilter.Companion.pathAsShown
 import io.prometheus.common.dashboard.TableColumn
 import io.prometheus.common.dashboard.TableText
 import io.prometheus.common.dashboard.columnHeaders
@@ -41,11 +42,11 @@ import io.prometheus.common.dashboard.activityEventCell
 import io.prometheus.common.dashboard.activityPathsCell
 
 /**
- * Whether the agent's Activity view shows [entry]: its event, its paths, and its detail are what it shows, and it is a
- * problem when an operator has to act on it ([AgentActivityKind.isProblem]).
+ * Whether the agent's Activity view shows [entry]: its event, its paths, with their slashes, and its detail are what it
+ * shows, and it is a problem when an operator has to act on it ([AgentActivityKind.isProblem]).
  */
 internal fun RowFilter.matches(entry: AgentActivityEntry): Boolean =
-  matches(entry.kind.isProblem) { listOf(entry.kind.label, entry.detail) + entry.paths }
+  matches(entry.kind.isProblem) { listOf(entry.kind.label, entry.detail) + entry.paths.map(::pathAsShown) }
 
 /**
  * The agent dashboard's Activity view: what happened to the agent's connection, paths, discovery, and filters, newest

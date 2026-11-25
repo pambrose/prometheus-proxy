@@ -279,6 +279,31 @@ object TestPorts {
   const val AGENT_FAILED_SHUTDOWN_ADMIN_PORT = 9707
   const val AGENT_FAILED_SHUTDOWN_METRICS_PORT = 9708
 
+  // AgentStartupTest: a dashboard port the spec holds open, and the admin and metrics servers the agent's failed start
+  // must stop, through startSync() and through the embedded entry point; and the admin server of an agent whose start
+  // times out, and its dashboard's port, which the case's mock keeps unbound (November 23 review, #5 and #12).
+  const val AGENT_FAILED_DASHBOARD_TAKEN_PORT = 9715
+  const val AGENT_FAILED_DASHBOARD_ADMIN_PORT = 9716
+  const val AGENT_FAILED_DASHBOARD_METRICS_PORT = 9717
+  const val EMBEDDED_FAILED_DASHBOARD_TAKEN_PORT = 9718
+  const val EMBEDDED_FAILED_DASHBOARD_ADMIN_PORT = 9719
+  const val AGENT_START_TIMEOUT_ADMIN_PORT = 9709
+  const val AGENT_START_TIMEOUT_DASHBOARD_PORT = 9762
+
+  // DashboardPushTest: a DashboardServer per case, serving a site the spec stands in for, with no proxy or agent.
+  const val DASHBOARD_PUSH_CHANGE_PORT = 11410
+  const val DASHBOARD_PUSH_COLLECT_FAILURE_PORT = 11411
+  const val DASHBOARD_PUSH_LOGOUT_PORT = 11412
+  const val DASHBOARD_PUSH_STALLED_LOGOUT_PORT = 11413
+  const val DASHBOARD_PUSH_STALLED_EXPIRY_PORT = 11414
+  const val DASHBOARD_PUSH_OVERFLOW_PORT = 11415
+
+  // DashboardResponsesTest: a DashboardServer per case, serving a site the spec stands in for, with no proxy or agent.
+  const val DASHBOARD_RESPONSES_FRAMING_PORT = 11430
+  const val DASHBOARD_RESPONSES_CACHING_PORT = 11431
+  const val DASHBOARD_RESPONSES_ORIGIN_LOG_PORT = 11432
+  const val DASHBOARD_RESPONSES_HOST_LOG_PORT = 11433
+
   // InProcessZipkinTest: the HTTP port of each case's proxy, and a Zipkin port nothing listens on, which the reporter
   // fails to send to without holding up startup, a scrape, or shutdown.
   const val ZIPKIN_UNREACHABLE_PORT = 9710
@@ -298,6 +323,10 @@ object TestPorts {
   // numbers.
   const val KTOR_PLUGIN_PROXY_HTTP_PORT = 11402
   const val KTOR_PLUGIN_PROXY_AGENT_PORT = 11403
+
+  // The Ktor plugin's ServerBindFailureTest: the port it holds while an app in a JVM of its own fails to bind it
+  // (November 23 review, #10). Its test repeats the number.
+  const val KTOR_PLUGIN_TAKEN_PORT = 11404
 
   // First port of the block each standard harness suite registers scrape targets on (startPort + i)
   const val HARNESS_DEFAULT_START_PORT = 9600

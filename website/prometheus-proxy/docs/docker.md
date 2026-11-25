@@ -86,9 +86,15 @@ These run in the background under a restart policy, as described in
 --8<-- "DockerExamples.txt:docker-compose-full"
 ```
 
+The agent reaches the proxy over the compose network, so the agents' gRPC port, 50051, isn't published, and the
+other ports are published on the host's `127.0.0.1` only: nothing in this stack asks for a token or a login, and a port
+Docker publishes on every interface gets past the host's firewall, such as ufw or firewalld. For agents on other hosts,
+the proxy publishes 50051 and requires a token and TLS, as the compose file in
+[Where to Run the Proxy](cloud-platforms.md#where-to-run-the-proxy) does.
+
 For a stack you can start as-is, [`etc/compose/proxy.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/etc/compose/proxy.yml)
-runs a proxy, an agent, and a Prometheus server that scrapes the proxy's and agent's own metrics through the proxy.
-From a checkout of the repository:
+runs a proxy, an agent, and a Prometheus server that scrapes the proxy's and agent's own metrics through the proxy,
+with its ports published the same way. From a checkout of the repository:
 
 ```bash
 docker compose -f etc/compose/proxy.yml up

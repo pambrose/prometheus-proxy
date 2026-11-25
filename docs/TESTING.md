@@ -14,6 +14,10 @@ This document describes the test suite structure and how to run tests for the pr
 # Run specific test class
 ./gradlew test --tests "ProxyServiceImplTest"
 
+# Run one spec outside the harness, or the harness specs alone, in their partition's JVM
+./gradlew unitTest --tests "io.prometheus.misc.TestingGuideTest"
+./gradlew harnessTest
+
 # Run a single test method
 ./gradlew test --tests "io.prometheus.proxy.ProxyServiceImplTest.someTestMethod"
 
@@ -31,15 +35,32 @@ and the Kover tasks still run every spec; each task's reports are under `build/r
 `build/test-results/<task>`. A spec that starts a proxy and an agent through `HarnessSetup` or `TestUtils`, or binds a
 `HARNESS_*` port, belongs in `harness/`, which `TestPortsTest` checks, or it could collide with a harness spec running
 alongside it. A run that names specs with `--tests`, IntelliJ's among them, or excludes `test` with `-x test`, isn't
-split: `test` runs the specs it names in one JVM, as before. To recompute coverage from the last run without rerunning
-it, exclude both partitions: `./gradlew koverVerify koverVerifyPerClass -x unitTest -x harnessTest`.
+split: `test` runs the specs it names in one JVM, as before, whether the command line gives `--tests X` or
+`--tests=X`. Either partition can still be named, filtered or not: `./gradlew unitTest --tests …` runs only the specs
+it names outside the harness. Only the harness JVM takes a harness profile's heap (`-PharnessConfig`); `unitTest` keeps
+1g, since only the harness specs read the profile. To recompute coverage from the last run without rerunning it,
+exclude both partitions: `./gradlew koverVerify koverVerifyPerClass -x unitTest -x harnessTest`.
+
+### Test Inputs
+
+Gradle reruns a `Test` task when its classpath changes, not when a file its specs open does, so the files the specs
+read are inputs of the tasks that run them (`testConfigFiles()` and `checkedFiles()` in `build.gradle.kts`). Without
+them, a change that edited only a workflow, the `Makefile`, or this document passed on the result of the run before
+it, up to date, or from the build cache after a clean. Every `Test` task takes the configs in `config/test-configs`
+and the certificates in `testing`. `unitTest` (and `test`) also takes what the specs that check the docs, CI, and demos
+read: the top-level `Makefile`, `README.md`, `AGENTS.md`, changelogs, `llms.txt`, `gradle.properties`, and
+`settings.gradle.kts`; `config/config.conf`; `.github`; `docs` (not the code reviews); the docs site's pages and
+`zensical.toml`; `demos` (not what a demo's build or `demo.sh` writes); `examples`, `etc`, `grafana`, `bin`, `logback`,
+and `src/shadow/resources`; and the text of the sources, main and test, both subprojects' included, and of the docs
+site's snippet files beside the test sources. An edit to any of them reruns `unitTest`, but not the harness specs. A
+spec that reads a file outside those needs it added there.
 
 ### Make Targets
 
 ```bash
 make tests            # All checks (lint + tests), rerunning the tests; the container tests are SKIPPED
 make medium-tests     # `make tests` with the MEDIUM harness profile (a load run; the default is MINI, as in CI)
-make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 16g test heap)
+make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 16g for the harness JVM)
 make nh-tests         # Every spec outside the harness (`./gradlew unitTest`)
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
@@ -49,16 +70,20 @@ make tla-checks       # Model-check the TLA+ specs in specs/tla with their quick
 make tla-checks-full  # The quick TLA+ checks plus the slower reconnect config
 make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
-make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests`
-                      #   (container-tests already includes ContainersScalingTest's default table)
+make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests` +
+                      #   `make tla-checks-full` (container-tests already includes ContainersScalingTest's
+                      #   default table)
 make consumer-check   # Publish to the local Maven repository at a throwaway -consumer-check-SNAPSHOT
                       #   version, then build etc/consumer-check, a Maven project that embeds the agent
                       #   (see below); needs mvn
+make spring-boot-demo-check     # Build and test the Spring Boot demo's roastery against the same artifact,
+                                #   at Spring Boot's versions (CI's consumer-check job); needs mvn
 make ktor-demo-check  # Build the Ktor demo's coffee shop against this checkout (CI's consumer-check job)
 make plain-kotlin-demo-check    # Build the plain Kotlin demo's oven against this checkout (CI's consumer-check job)
-make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, the docs
-                      #   site (`make build-site`), the consumer check and the demos built against it, and the
-                      #   build job (`make ci-build`: MINI tests + coverage floors); needs Docker
+make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules (`make check-rules`), Helm
+                      #   charts (`make helm-lint`), the docs site (`make build-site`), the consumer check and
+                      #   the demos built against it, and the build job (`make ci-build`: MINI tests +
+                      #   coverage floors); needs Docker
 ```
 
 The suite builds its proxy and agent images under stable tags, so runs reuse them and a clean run now
@@ -199,8 +224,10 @@ resolution checks and the examples' compile see what an application that depends
 fails unless the examples compile there (a public type's supertype at runtime scope broke the Java one, and the
 `PrometheusRegistry` the builder's `source()` takes has to be at compile scope), Maven resolves Jackson, every
 netty-tcnative native, Netty, protobuf, and every module of the Prometheus Java client at the versions
-`gradle/libs.versions.toml` pins, the registry model and the text formats among them, and no jar on the classpath
-carries a `logback.xml`, which would replace the host application's logging config.
+`gradle/libs.versions.toml` pins, the registry model and the text formats among them, Logback isn't resolved, for the
+agent alone, a Ktor app with the Ktor plugin, or a Spring Boot app with the starter (each would displace the host
+application's own SLF4J provider), and no jar on the classpath carries a `logback.xml`, which would replace the host
+application's logging config.
 
 ## Test Categories
 
@@ -211,11 +238,24 @@ carries a `logback.xml`, which would replace the host application's logging conf
   gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
   cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
   `agent_dashboard_scrapes_total` counts instead; and a call the proxy refuses with `UNAUTHENTICATED` after a connect
-  logged at ERROR, naming where the token is set, and another status at INFO, as before
+  logged at ERROR, naming where the token is set, and another status at INFO, as before; a connection task's JVM
+  `Error` failing the connection's scope, which stops the agent, rather than ending the connection quietly; and a
+  connection's results it can't send counted as dropped
+- **AgentStartupTest** — a start that fails or takes too long releases what the agent opened: a dashboard that fails
+  to start, on a port the spec holds, stops the admin, metrics, and Zipkin services and removes the JVM shutdown hook,
+  through `startSync()` and through `startAsyncAgent(Config)`, and a release step that throws (a MockK constructor
+  mock) is attached to the failure while the rest still run; and a start that times out, its dashboard's start held
+  by a MockK constructor mock, throws at once, then stops without connecting as soon as its startup ends; and an
+  embedded agent's service thread a daemon, which can't keep its host's JVM up, even in a start that never ends, and a
+  directly started agent's not
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling;
   a connect counted once the proxy registered the agent, a refused registration as rejected; each endpoint advance and
   each heartbeat sent counted, by outcome; a scrape request's wait for its scrape recorded, not a dashboard's; and a
-  result counted as sent once a writer takes it, and as dropped when the stream fails first;
+  result counted as sent once a writer takes it, and as dropped when the stream fails first, the results the producer
+  hadn't forwarded included, with no ERROR logged when the other writer is the one that failed; a JVM `Error` in a
+  heartbeat or a response stream propagated, not taken for a transient failure; a connect after failed ones dialing an
+  in-process proxy started meanwhile at once, rather than waiting out gRPC's backoff, and the channel's backoff reset
+  only after a failed connect;
   channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel a
   reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status code
   (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses with
@@ -259,8 +299,10 @@ carries a `logback.xml`, which would replace the host application's logging conf
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
 - **AgentContextTest** — Agent context unique ID generation, validity, invalidation, ScrapeRequestWrapper management
 - **AgentContextManagerTest** — Context management: add/remove, concurrent access, chunked contexts
-- **AgentConnectionContextTest** — Connection state, close/drain behavior, concurrent scrape request handling; and the
-  first of its tasks' failures kept as what ended it
+- **AgentConnectionContextTest** — Connection state, close/drain behavior, concurrent scrape request handling; the
+  first of its tasks' failures kept as what ended it; and what it can't send handed to `onUndeliveredResult`, which
+  the agent counts as dropped: each result still queued when the producer drops them after a close, once, and one the
+  producer takes just as it's cancelled, but not one offered after the close, whose scrape counts it
 - **AgentConnectionContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the agent's
   scrape-request backlog count, kept as `AgentGrpcService` and the scrape loop keep it, never goes negative and returns
   to zero once the connection closes -- including a queued request `close()` drains and a sender blocked on a full
@@ -273,7 +315,9 @@ carries a `logback.xml`, which would replace the host application's logging conf
   until the path returns to the file; a static path whose retries fail in transport backs off as a rejected one does,
   and still registers once the proxy accepts it; a lookup strips a requested path's leading slashes, and only them; and
   for the activity feed, a path registered, refused once with the proxy's reason, and unregistered, static or
-  discovered, paths refused for one cause one line, and filters failing open for different reasons apart
+  discovered, paths refused for one cause one line, and filters failing open for different reasons apart; and a JVM
+  `Error` in a static path's retry, a discovered path's registration or unregister, or a reclaim propagated, not
+  isolated as the path's failure
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
@@ -300,7 +344,9 @@ carries a `logback.xml`, which would replace the host application's logging conf
   counts under `launch_id` alone, and an agent's series goes when its metrics close while another agent's stays; the
   connection, path, discovery, and dashboard series registered; `agent_build_info`'s launch ID, name, and version; an
   agent's counters with a known set of labels at zero from the start, discovery's and the dashboard's only when it has
-  them; and the sampled gauges reporting the connection, the endpoint, the paths by source, and the dashboard's pages
+  them; the sampled gauges reporting the connection, the endpoint, the paths by source, and the dashboard's pages; and
+  AGENTS.md's `PER_LAUNCH` rule for every agent metric, read from the private `COLLECTORS`: each takes `launch_id` as
+  its first label, and closing one agent's metrics takes its series from every family while another agent's stay
 - **AgentBacklogDriftTest** — scrapeRequestBacklogSize drift when sendScrapeRequestAction fails
 - **HttpClientCacheTest** — HTTP client caching with TTL/idle eviction, keyed by auth credentials
 - **HttpClientCacheCancellationTest** — a scrape cancelled while the client cache is busy still releases its client,
@@ -322,18 +368,22 @@ carries a `logback.xml`, which would replace the host application's logging conf
   `pathConfigs` entry; `source()` with a `PrometheusRegistry` serves it through `MetricsSource.of`, with or without
   labels; `fromEnvironment()` sets the proxy, the token, and the certificate from the `PROMETHEUS_` variables, read
   through a lookup a spec gives, trimmed, the authority `prometheus-proxy` without `PROMETHEUS_PROXY_AUTHORITY`, a blank
-  or unset variable leaving its setting alone, and a builder method called after it taking precedence; and
+  or unset variable leaving its setting alone, and a builder method called after it taking precedence, and without a
+  lookup reads the process's environment, which a JVM of its own, given all four variables, shows; and
   `agentMetricsAt()` gives an agent built from it, never started, an in-process path served by the agent's own metrics
   source, named as `agent.metrics.proxyPath`'s in a startup message, and its metrics collected with their port off; it
   sets `agent.metrics.proxyPath` and its labels, so it shows in `toString()` and `toConfig()`, an agent started from
-  that tree serves it, and it moves when called again
+  that tree serves it, and it moves when called again; an agent started embedded with it registers none of the JVM
+  metric groups in the default registry, even with their `agent.metrics` settings on, where one built from the same
+  settings directly does
 - **MetricsSourceTest** — a path served by a `MetricsSource`: scraped in-process in the content type the source names
   (the text format when it names none), asked in a text format the scrape accepts for the families named with
   `name[]`, filtered, refused past `maxContentLengthMBytes` whether written in arrays or a byte at a time, interrupted
   at the scrape timeout, failed when the source throws, an `Error` or its own cancellation or interrupt included, and
-  logged as a failed scrape of `in-process`, not an HTTP request; every byte kept when it writes from several threads
-  at once; read by the dashboard's fetch, which counts nothing; a call that ignores the interrupt times out on time,
-  and the source isn't called again until it returns; and the docs site's worker, in Kotlin and in Java, doing its work
+  logged as a failed scrape of `in-process`, not an HTTP request, but a `VirtualMachineError` propagating; every byte
+  kept when it writes from several threads at once; read by the dashboard's fetch, which counts nothing; a call that
+  ignores the interrupt times out on time, holds neither another path's source nor the service's `close()`, and the
+  source isn't called again until it returns; and the docs site's worker, in Kotlin and in Java, doing its work
 - **RegistryMetricsSourceTest** — a `PrometheusRegistry` served in-process (`MetricsSource.of`, from Kotlin and from
   Java): written in the text format or OpenMetrics, as the scrape accepts, and only the families it names; a source of
   the default registry leaving out the agent metrics while an agent collects them, named or not, and serving it all
@@ -344,14 +394,15 @@ carries a `logback.xml`, which would replace the host application's logging conf
   not, with only its own agent series
 - **StartIfConfiguredTest** — `EmbeddedAgentConfig.startIfConfigured()`: off, with one INFO line, without a proxy; on
   with the builder's proxy, a `setting()` of the endpoints or the host name, or `PROXY_HOSTNAME`, and off with a blank
-  one; a start that fails, a checked exception included, returning null, logged at ERROR with its cause's message,
+  one, the rule the public `namesProxy()` gives too; a start that fails, a checked exception included, returning null,
+  logged at ERROR with its cause's message,
   and given to `onFailure` with why and what was thrown; why read along the cause chain, each message once, with a
   URL's credentials masked; and real failed starts, a key, a certificate, a setting, a wrong-typed token, a duplicate
   path, a dashboard password, and an admin port in use, saying why without the token, a password, or a PEM
 - **EnvironmentSettingTest** — a value `fromEnvironment()` read that the agent refuses as it starts: an endpoint it
   can't parse names `PROMETHEUS_PROXY` and `agent.proxy.endpoints`, and a certificate that isn't PEM, or PEM with no
   certificate in it, names `PROMETHEUS_PROXY_CERT` and `agent.tls.trustCertCollectionPem`, with the agent's reason and
-  never the value, as `start()` throws it and `startIfConfigured()` logs it; no token or authority refused as the agent
+  never the certificate, as `start()` throws it and `startIfConfigured()` logs it; no token or authority refused as the agent
   starts; a setting the agent's own variable sets not checked; and one set from code after `fromEnvironment()`, by a
   builder method or `setting()`, keeping the agent's own message
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
@@ -370,6 +421,9 @@ carries a `logback.xml`, which would replace the host application's logging conf
   dropped; the settings it's given, and only whether a token is set; no discovery while it is off;
   with the dashboard on, each path's recorded scrapes, newest first, its strip's runs, and the history's size; and
   with it off, no history, and Scrape now as its setting says
+- **AgentDashboardServiceTest** (`dashboard/`) — the agent dashboard's site as the push loop reads it, from an agent
+  built but never started: a write to the activity feed one of its changes, which wake the loop, and the feed's count
+  at the start not one
 - **AgentDashboardHtmlTest** (`dashboard/`) — the agent dashboard's markup: a path, a reason, and a URL escaped; a
   refused path's reason and "not until the agent reconnects"; a retry's wait as a countdown, and one already due as the
   next retry; an en dash for missing labels; the empty and gone detail panes; a failing connection's endpoints, each
@@ -380,9 +434,11 @@ carries a `logback.xml`, which would replace the host application's logging conf
   scrape from the proxy's dashboard marked; and the Scrape now button in the pushed detail pane, its result panel
   outside every push on the Paths view alone, and neither with Scrape now off; and the Activity view: newest first, a
   problem a crit tag and news a warn one, a run counted and its paths named, escaped, its search and column guide,
-  filtered with a count, its empty state, and its push carrying the table out of band, or not when told; the Settings
-  view's groups, escaped, none of them on the Connection view, and its push carrying them out of band, or not when
-  told; and the stored theme applied in the page's head, with the theme picker in the bar and in no push
+  filtered with a count, a path matched with its slash, its empty state, and its push carrying the table out of band,
+  or not when told; its column guide explaining each header in the header's order, after the search and ahead of the
+  table, and in no view's push; the Settings view's groups, escaped, none of them on the Connection view, and its push
+  carrying them out of band, or not when told; the polite live region on every view's page and in no push; and the
+  stored theme applied in the page's head, with the theme picker in the bar and in no push
 - **AgentSettingsTest** (`dashboard/`) — the agent's Settings view (`AgentSettings`), from an agent built but never
   started: its groups in order; what it resolved, its endpoints, the client timeout the deprecated `cioTimeoutSecs` set,
   its trust store and TLS files, and its login's username; the defaults with nothing configured; discovery's file and
@@ -401,8 +457,9 @@ carries a `logback.xml`, which would replace the host application's logging conf
   its paths again, and reconciles nothing before the first; a successful read, including an empty one, reconciles the
   desired set; a repeating failure logs one WARN, compared by gRPC status code, or by class and message without one, so
   timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news; a
-  read's failure told to the activity feed when it is new or changes, not while it repeats; and every reconcile reported
-  for the agent's metrics by whether it succeeded
+  read's failure told to the activity feed when it is new or changes, not while it repeats; every reconcile reported
+  for the agent's metrics by whether it succeeded; and a JVM `Error` from the read or the reconcile propagated, not
+  logged as a failed tick
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved;
   and why a filter lets a scrape through unfiltered, told once per cause
@@ -434,7 +491,9 @@ Three support helpers also live here (not test classes themselves):
   or not, marks the agent that sent it active (with the transport filter disabled, only when sent as the identity the
   agent connected as), and a late result doesn't count as a completed request; with the transport filter disabled, a
   scrape-request stream that names an agentId before it is assigned neither streams nor removes the context another identity then
-  connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents
+  connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents; a forward
+  span is tagged with its request's queue wait before the send, so a scrape that ends while the send waits keeps it,
+  and is annotated as sent only while its scrape still awaits the result
 - **ProxyServiceMessages** — what an agent sends `ProxyServiceImpl`, for the specs that call its RPCs directly:
   `resultFrom`, `chunkedHeaderFrom`, `chunkFor`, `transferFrom` (a header, one chunk, and a summary), and
   `onConnection`, which runs a call on the connection the transport filter assigned an agentId to
@@ -463,7 +522,8 @@ Three support helpers also live here (not test classes themselves):
   per-path metrics, and shown on `/debug` and the dashboard under the path's registered key, with its query unchanged,
   and the blitz, favicon, and unknown-path answers see it with one slash; a blitz path configured with a leading slash is answered at `/path`
   and `//path` and can't be registered; the route logs a client's path and query cut and escaped; a scrape that
-  throws counts as `internal_error`; and the defaults of `ResponseResults`, the route's answer
+  throws counts as `internal_error`; a scrape's span begins a trace of its own at the proxy's sample rate, whatever B3
+  or `traceparent` headers the request carries; and the defaults of `ResponseResults`, the route's answer
 - **ScrapeDispatchTest** — sending a scrape to a path's agents and merging their answers, which the scrape route and
   the dashboard's scrape-now share: each outcome `submitScrapeRequest` labels (the agent disconnecting before or during
   the scrape, the proxy's timeout or one it is given, the in-flight limit, the agent's backlog cap, the proxy stopping,
@@ -475,27 +535,43 @@ Three support helpers also live here (not test classes themselves):
   its `ScrapeSpec`'s query, headers, and origin (Prometheus or the dashboard) to the agent; an Authorization header
   sent without TLS is warned about once; `ScrapeHeaders` reads Prometheus's scrape timeout; and `mergeResponseResults`
   and `mergeContentTexts` pick the merged status and content type, keep one `# EOF` at the end, and add no blank line
-  for a failed agent
+  for a failed agent; each agent of a consolidated path gets a forward span under the scrape's, carried in its own
+  request, a forward that timed out or found its agent gone ends as an error tagged with how, a scrape without a trace
+  gets none and sends none, and a forward span shows the agent's name cut and escaped
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
   with more than one segment among them, and an unregistration; removing an agent returns how many paths it served;
   a path whose last agent unregisters it or disconnects is recorded as departed, with the agent, identity, target, and
   source its entry showed, a consolidated path only once its last agent goes, and a registration forgets it; a path
-  the scrape port serves itself is refused, the blitz path also when it was configured with leading slashes
-- **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
-  and agent removal race on the real code the TLA+ `ProxyRegistry` spec models; no path is left on a removed agent,
-  `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, and a
-  consolidated path never takes an agent of another identity
+  the scrape port serves itself is refused, the blitz path also when it was configured with leading slashes; a path
+  with more than `maxLabelsPerPath` labels is refused, and an accepted one keeps a single, parsed copy of its labels;
+  the agents of one identity are refused past `maxPathsPerIdentity` together, agents with no identity sharing one
+  limit, the count follows each way a path leaves, and a redeploy at the limit still takes over its own paths; and the
+  80% warnings of `maxPathsPerAgent` and `maxPathsPerIdentity` come once until the count falls below 70%, an agent
+  that leaves starting over
+- **NearLimitWarningsTest** — when the proxy warns that a count nears its limit: as it reaches 80%, and again only
+  once it has fallen below 70%, for each key on its own; the first whole count past 80% of a small limit, never for a
+  limit of 0, and without overflow near `Int.MAX_VALUE`
+- **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, reclaims,
+  unregistration, and agent removal race on the real code the TLA+ `ProxyRegistry` spec models, among agents of
+  several launches, one of them reconnected and one predating path notices; no reclaim takes a path from a live agent
+  of another launch (`ReclaimNeverDisplaces`), or is refused as held without one, no path is left on a removed agent,
+  `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, a consolidated
+  path never takes an agent of another identity, and an invalidated agent holds no unread notices
+  (`InvalidatedHasNoNotices`); each agent waiting on a path reads notices, waits once, is of another launch than the
+  path's agent, is still connected, and, while valid, has a notice about the path, and no agent has a notice about a
+  path it serves
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
-  queue
+  queue; and a scrape request, or a path notice, queued just as its wait times out returned by that wait, not lost
+  (`lateArrival`)
 - **AgentContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the scrape-request
   hand-off -- write, read, invalidate -- from three threads under model checking and stress; each write's outcome
   must fit a sequential order, and no accepted request may be stranded after invalidate
 - **AgentContextManagerTest** — Proxy's AgentContextManager: add/remove contexts, chunked context management, concurrent
   access; a conditional removal takes only the context it is given; concurrent adds never pass an identity's
   agent limit, a removal frees a slot, and a refused add logs a WARN, and goes in the activity feed, at most once a
-  minute for each identity
+  minute for each identity; and an identity's 80% warning comes once until its count falls below 70%
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs);
   an eviction that finds the context already removed isn't counted
 - **RemovalReasonTest** — why the proxy removed an agent's context: each reason logs as its string always did, only an
@@ -575,9 +651,10 @@ Three support helpers also live here (not test classes themselves):
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: the Log out button only with a login and in no push,
   the Agents view (an agent row's htmx attributes and its one id across the page and the pushes, never a region's; the
-  selected agent marked current; an explicit gone state for a selected agent that disconnected, a prompt when none is
-  selected, and a placeholder for one not yet registered;
-  failover markers; an agent's uptime; an empty proxy said to be empty), the detail's Recent scrapes (the selected
+  selected agent marked current; an explicit gone state for a selected agent that disconnected, naming it through
+  `agentLabel` from a scrape or activity line and never by its id, a prompt when none is selected, and a placeholder
+  for one not yet registered; failover markers; an agent's uptime; the eviction countdown only while the stale-agent
+  check runs; an empty proxy said to be empty), the detail's Recent scrapes (the selected
   agent's alone from a shared path's history, its latest across its paths, newest first, at most the cap, which the
   header counts), the pushes (top-level out-of-band regions, only those of the session's layout, the status bar alone
   for a session with no known layout, and the view stamp on the frame's first tag, which an agent-supplied value can't
@@ -633,8 +710,9 @@ Three support helpers also live here (not test classes themselves):
   Simple Icons bump that drops a brand), and each colour clearing 3:1 on `--surface-2` in both themes
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
-  agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
-  states; the form at the view's own route; the column guide (every header explained in its order, Identity only
+  agent, and an agent not yet registered named by `agentLabel`; the Identity column while agent auth is on; escaped
+  values; the search, its match count, and its empty states, a path matched with its slash and an agent by its label;
+  the form at the view's own route; the column guide (every header explained in its order, Identity only
   while agent auth is on, every problem kind named in Event's explanation, and the panel outside every push); and the
   push carrying the status bar and the table, out of band, or the status bar alone, still the frame's first tag, when
   the page already shows the table
@@ -650,10 +728,12 @@ Three support helpers also live here (not test classes themselves):
   asking for text and marked as the dashboard's, so the agent leaves it out of its scrape metrics
 - **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
   name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
-  departed path's agent and identity, from its departure or its last scrape; "problems only" keeping failing and
+  departed path's agent and identity, from its departure or its last scrape; a path matched with its slash, as its row
+  shows it, and an agent not yet registered by its label, not its placeholder; "problems only" keeping failing and
   departed paths; both having to match; browser input
   trimmed and cut, never inside a surrogate pair; a filter read from a URL's query; an activity line matched by its
-  event, agent, identity, paths, or detail, and its problems kept; and identity labels
+  event, agent, identity, paths, or detail, its paths with their slashes and its agent by its label, and its problems
+  kept; and identity labels
 - **ProxyDashboardServiceTest** (`dashboard/`) — the value a push compares to leave out an Activity table the page
   already shows (`ActivityTable`): equal for an unchanged feed and the same message, different on a change of the
   feed, the search, "Problems only", or the message, and none for another layout; and the settings, sent once a message
@@ -668,8 +748,10 @@ Three support helpers also live here (not test classes themselves):
   with its departure's agent, identity, target, and source; a departure's attribution over the last scrape's, which
   names the agent and identity when there is no departure; and no gone row for a path the path map still holds; an
   agent's scrapes (`scrapesOf`), its latest across every path's history, live or gone, newest first and at most the
-  cap, none for an agent with none or no longer connected, and worked out once per snapshot; and `collect`, from a proxy
-  built but never started, reading them from the path history and the activity log's lines with their change count
+  cap, none for an agent with none or no longer connected, and worked out once per snapshot; a gone agent's name
+  (`goneAgentName`), its newest activity line's or scrape's, and none for a connected agent; and `collect`, from a proxy
+  built but never started, reading them from the path history and the activity log's lines with their change count,
+  and the eviction delay only while the stale-agent check runs
 
 One support helper also lives here (not a test class itself):
 
@@ -691,6 +773,11 @@ One support helper also lives here (not a test class itself):
 - **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution; in a forked JVM, a
   standalone agent or proxy whose config URL carries credentials exits 1 on a setting it rejects, with one log line
   and no credentials or uncaught stack trace
+- **ChannelsTest** — `receiveCatchingWithin`, every wait that ends in a keepalive: an element that comes as the wait
+  times out returned and the channel left empty (`lateArrival`), where a receive inside `withTimeoutOrNull` loses it;
+  null once the timeout passes with nothing, the channel left to the next wait; an element already queued returned at
+  once, even with no time to wait; the channel's closing returned with its cause; and an infinite timeout waiting with
+  none
 - **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
 - **CommonSettingsTest** (`dashboard/`) — the Settings groups both dashboards share (`CommonSettings`): the About
   group with only the keys of the `-D` overrides; each TLS file named and a PEM only as set; the admin endpoints, the
@@ -711,13 +798,35 @@ One support helper also lives here (not a test class itself):
   port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host, `allowedOrigins`, foreign
   or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS rebinding; and changes waking the
   push loop at once, then at most once an interval, with the latest
+- **DashboardPushTest** (`dashboard/`) — `DashboardServer`'s push loop over real sockets, serving a site the spec
+  stands in for, with no proxy or agent, and ticking once an hour, so a frame comes only from the wake each case tests,
+  within 5 seconds: a change pushing a fresh snapshot to every page at once; a collect that throws logged once at ERROR,
+  the loop pushing at its next wake; a Log out naming no session, 100 of them, collecting and pushing nothing, and one
+  naming a session closing its page (`VIOLATED_POLICY`) and no other; a page whose socket never reads, after a frame
+  larger than every buffer, holding up no other page's pushes when Log out or the push loop (its login past its age)
+  closes it; and, on a 50 ms tick, such a page closed once its buffer is full, giving up its `maxSessions` slot
+- **DashboardResponsesTest** (`dashboard/`) — what `DashboardServer` answers over real sockets, serving a site the spec
+  stands in for, with no proxy or agent: every response refusing framing once (`frame-ancestors 'none'` and
+  `X-Frame-Options: DENY`), a page, a fragment, an action, an asset, a brand mark beside its own `sandbox` policy, the
+  root's redirect, `/session`, a foreign Origin's and a foreign Host's 403, a 404, and a 500 included; without a login,
+  no `Cache-Control` on a page, and the assets' year-long one; with a login, `no-store` once on every response but the
+  assets, the login page, a 303 to it, a 401, a 404, and a 500 included; and an `Origin`, then a `Host`, of `ESC[2J`
+  and 5,000 characters more, sent twice from one address over a raw socket, since the HTTP client refuses a control
+  character, refused with 403 and logged at INFO and then DEBUG, the escape written out and the line under 400
+  characters
+- **DashboardServiceTest** (`dashboard/`) — a dashboard's service lifecycle over a mocked `DashboardServer`: a
+  server that fails to start stopped, so Ktor's shutdown hook and application don't outlive it, with a stop that
+  fails attached to the start's failure; and a server that starts stopped only when the service stops
 - **DashboardSessionsTest** (`dashboard/`) — a dashboard's login-page sessions: a new one valid and a token never
   issued, null, or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request,
   which a request restarts, and a check that isn't a request doesn't; 7 days after it began however recently used;
-  ended by removal; the least recently used dropped past the cap; and an expired one forgotten
+  ended by removal, which says whether there was one; the least recently used dropped past the cap; and an expired one
+  forgotten
 - **DashboardThemeTest** (`dashboard/`) — the dashboards' theme: a dark rule written for the system's dark preference
   unless the page is set to light and for a page set to dark, with a selector or at `:root`; the tokens' dark colours
-  under both, and the browser's own widgets following the choice; the head's script applying only a stored light or
+  under both, and the browser's own widgets following the choice; every text colour (`--ink`, `--ink-2`, `--ink-3`,
+  `--ok`, `--warn`, `--crit`) clearing 4.5:1 on `--surface-2` in each token block, and a hovered row's address line
+  on `--surface-3`; the head's script applying only a stored light or
   dark; and the theme picker offering light, dark, and auto, each named for its theme, marking the theme in force from
   the page's `data-theme` with the icon buttons' glyphs, and sharing the bar's end with Log out in one box
 - **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,
@@ -746,6 +855,9 @@ One support helper also lives here (not a test class itself):
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
   Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume
+- **NonFatalTest** — `runCatchingNonFatal`, which the agent's connection tasks and per-path calls catch failures
+  with: a result, or an exception as a failure, returned, but a JVM `Error` (`OutOfMemoryError`, `StackOverflowError`,
+  `AssertionError`) and a `CancellationException` rethrown
 - **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel, the proxy's and the agent's: the status, path,
   facts, and start of the body; a body's families and samples shown only when it is in a text format, its content type
   either way; a cut body and an EOF named; an agent's size after its filter, and a cut body as the filtered one's
@@ -755,7 +867,10 @@ One support helper also lives here (not a test class itself):
 - **ScrapeTracingTest** — a scrape's spans, the proxy's scrape and forward spans and the agent's fetch span, form one
   trace, the fetch joining it through the context the proxy sends; at a sample rate of 0 none is kept, the agent's
   included; a context that carries no trace begins one at the agent's rate; a rate keeps exactly its share; a heartbeat
-  is never sampled and every other gRPC call is at the rate; a span's outcome, status, and error tags; `traced`
+  is never sampled and every other gRPC call is at the rate; a call served, over an in-process server, is sampled at the
+  serving side's rate whatever its metadata's trace says (sampled, not sampled, or debug, a heartbeat included), and
+  still joins the caller's trace; an extracted trace loses its decision and keeps its IDs and extra fields; a span's
+  outcome, status, and error tags; `traced`
   finishing its span with what the block returned, a cancellation, or the error it threw, and running the block alone
   without a span; and closing closes the process's tracing
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
@@ -772,7 +887,9 @@ One support helper also lives here (not a test class itself):
   outside the ephemeral range the OS hands out to outgoing connections; and none a spec binds is a host port a demo
   publishes (its `docker/compose.yml` ports, its kind configs' `hostPort`s, and its `demo.sh` port defaults), so a
   spec run while a demo is up doesn't reach the demo's container. The constants that mirror the product defaults skip
-  the 32768 and demo checks, by name, since no spec binds them on the host
+  the 32768 and demo checks, by name, since no spec binds them on the host. Each port constant in the subprojects'
+  tests (`*_PORT = <n>`, in Kotlin or Java), which can't use `TestPorts`, is a `TestPorts` port that no root test
+  source uses, as `STARTER_PROXY_*` and `KTOR_PLUGIN_PROXY_*` are, so a subproject's spec never binds a harness port
 - **TlsMaterialTest** — TLS material given as PEM text (`*Pem` settings, `*_PEM` env vars): a value is read as PEM,
   as base64 of PEM (wrapped in lines or not), or as PEM on one line with literal `\n` escapes, and anything else is
   refused without the value in the message; a file and a PEM for the same material are refused; server and client
@@ -781,7 +898,8 @@ One support helper also lives here (not a test class itself):
   whether it is set, and, embedded, throw `ConfigLoadException`
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails; failureKey, which keys a failure by its gRPC status code, wrapped or not, and one
-  without a status by its class, and its message only when asked
+  without a status by its class, and its message only when asked; setLogLevel without Logback warning and setting
+  nothing, and no main class but `LogbackLevels` naming a Logback class, since the library leaves Logback to the app
 
 These support helpers also live here (not test classes themselves):
 
@@ -801,8 +919,9 @@ These support helpers also live here (not test classes themselves):
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 - **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,
   optionally at a lower level, restoring the logger's appenders and level afterward
-- **TracingMocks** — `collectInto(spans)`, a span handler that keeps each span a Tracing finishes, for the specs that
-  read what was traced
+- **TracingMocks** — `collectInto(spans)`, a span handler that keeps a copy of each span a Tracing finishes, as it was
+  when it finished, for the specs that read what was traced, and `collectingScrapeTracing(spans)`, a `ScrapeTracing`
+  whose spans land there
 - **MetricsMocks** — `mockProxyForMetrics()` / `mockAgentForMetrics()`, mocks that stub only what `ProxyMetrics`
   and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`;
   and `CountingProxyMetrics`, a relaxed `ProxyMetrics` whose counters are real, unregistered collectors, so a spec reads
@@ -814,6 +933,10 @@ These support helpers also live here (not test classes themselves):
   status code rather than its message
 - **DaemonAwait** — `awaitOnDaemonThread { … }`, which runs a block on a daemon thread and suspends until it
   returns, so the spec's timeout can fail a CPU-bound call, such as a backtracking regex, that ignores cancellation
+- **LateArrival** — `lateArrival(wait, arrive)`, what a timed wait returns when something arrives just as its timeout
+  passes: on runBlocking's one thread, the wait suspends, the arrival runs while the thread is held, and the thread
+  stays held past the timeout, so the wait's resumption and its timeout meet without a race, and a wait that takes an
+  element and is then cancelled by its timeout loses it every time
 - **Lincheck** — the Kotest tag every `*LincheckTest` carries, which the default test run excludes
 
 ### Unit Tests — Misc (`misc/`)
@@ -828,13 +951,27 @@ These support helpers also live here (not test classes themselves):
   uploads and deploys the site only from the `workflow_dispatch` `make release` starts with `make gh-docs`, so a hung
   job gives its check back, what CI runs changes only with a diff here, and a push to `master` leaves the live site
   alone
+- **CliReferenceTest** — the CLI Reference's tables against the code: each row's options are all the names of one
+  JCommander `@Parameter` of its role's options or `BaseOptions`, and every option has a row; each row's variable is
+  one its role's options read (an `EnvVars` entry they import), every one they read has a row, and every `EnvVars`
+  entry is read by one role or the other; each row's `<span id>` is its key; each option sets its row's key, the
+  options built from it equal to those built from `-D<key>=<value>` (`true` for a flag); each variable is read in the
+  options' source by the call that takes its row's option's field, or, without an option, names its key's last part;
+  each configuration page row that links to the CLI Reference links to its key's row and gives its option, variable,
+  and default, and a configuration page's row for a key that has an option or a variable links to it; and every link
+  to the CLI Reference, from any page, lands on an anchor it has
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
   `examples`, `testing`, `etc/compose`, each demo's `demos/<name>/config`, the container suite's agent configs, and the
   bundled `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON ignores a key it
   doesn't know; a list's entries are checked against the fields its schema entry gives, as for `proxy.auth` and
   `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'. The same goes for
   every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a string literal,
-  which HOCON ignores just the same; a key built at run time isn't seen
+  which HOCON ignores just the same; a key built at run time isn't seen. So does every key an
+  `EmbeddedAgentConfig.setting()` call spells out, which the builder doesn't check, in the tests, the main sources,
+  both subprojects, the demos' apps, the docs site's pages, the READMEs, `docs`, and `llms.txt`, but for the
+  wrong-case keys `EmbeddedAgentConfigTest` gives on purpose; and every setting in a fenced HOCON block of those docs,
+  with the snippet-file sections the docs site includes in it, checked as a proxy or agent config, a discovery targets
+  file, or a lone list entry such as an `agent.filters` entry; a block that doesn't parse fails too
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
   `proxy.dashboard.links`); a config that still sets the retired `proxy.dashboard.recentScrapesQueueSize` loads
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
@@ -845,15 +982,29 @@ These support helpers also live here (not test classes themselves):
   closed after the spec, which must leave none of their shared collectors registered
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
   compilation, and native memory export flags each turn on only their own MetricsConfig field
-- **DemoTourTablesTest** — each demo's README and its page on the docs site open with a What This Demo Shows
-  table that names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their
-  parts' sections of its Guided Tour, a page's rows link only to sections the page has, and each `demo.sh`'s
-  `PAGE_URL`, which `make up` and `make tour` print, is its page
+- **DemoReleaseGateTest** — each demo's `make up` (its `demo.sh`'s `cmd_up`, run with a stubbed `docker` and
+  `start_demo`) builds from the checkout while the release the docs give is no later than its `NEEDS_RELEASE_AFTER`,
+  or while Docker Hub answers that it has no image of the release, and runs the release once Docker Hub has it; the
+  Docker demos also run a release whose images Docker has without asking Docker Hub, and leave a Docker Hub they can't
+  reach to the pull, while the Kubernetes demo, whose clusters pull the images themselves, stops. Each demo's
+  `NEEDS_RELEASE_AFTER` is a release no later than the docs', and its `README_PATH`, which it prints beside its page on
+  the docs site, is its README
+- **DemoTourTablesTest** — each demo's README and its page on the docs site have a What This Demo Shows table that
+  names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
+  of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the
+  table; each `demo.sh`'s `PAGE_URL`, which `make up` and `make tour` print, is its page, and every section of the page
+  it links to (`${PAGE_URL}#running-it`) is one the page has
+- **DocsCodeBlocksTest** — the fenced blocks of the docs site's pages, the maintainer docs, and the READMEs: every
+  HOCON block that has an agent scrape its own metrics port, `localhost:8083`, turns the port on too, as it's off by
+  default; and no line of a Mermaid diagram's `accDescr`, the text a screen reader gives for it, ends with a word broken
+  at its hyphen
 - **DocsExamplesTest** — every `examples/*.conf` loads through `AgentOptions` and `ProxyOptions` (a discovery
   targets file through `FileDiscoverySource`) with labels service discovery can serve; `simple.conf` fetches the
-  proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; and no `docker run`
+  proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; no `docker run`
   command in the README, `llms.txt`, or the website's pages and snippets combines `--rm` with `--restart`, which
-  Docker refuses
+  Docker refuses; and every port a compose file publishes (`etc/compose`, each demo's `docker/compose.yml`, and the
+  compose snippets in those docs) is on `127.0.0.1`, since Docker publishes past the host's firewall. The cloud-proxy
+  example, which publishes the agents' port with a token and TLS, isn't read
 - **HomebrewFormulaTest** — every line of the Homebrew formulae in `etc/homebrew`, with the version and checksum
   `make homebrew-formulae` fills in, fits within 118 characters, the limit of the `brew style` check the tap's CI runs
   and this repository's 120 doesn't hold a formula to
@@ -867,18 +1018,36 @@ These support helpers also live here (not test classes themselves):
   dashboards' tabs and bars show its small-size cut, `favicon.svg`; the dashboards carry both inline
   (`DashboardLogo.LOGO_SVG` and `SMALL_LOGO_SVG`) as the same markup
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
+- **ReleaseCheckTest** — the parts of `make release-check` that read the checkout, run as `make` runs them:
+  `_check-version-files`, given the version as the previous one, names every line of the files step 2 of
+  `docs/RELEASE.md` bumps that gives the version (the Quick Start's JAR links among them), but `llms.txt`'s release
+  annotations and the README's New Features summary, and passes the tree as it is; `_check-changelogs` passes only on
+  the day both changelogs date a release, and names the date a changelog gives; and `_check-demos-pull-release`
+  refuses a release at or below a demo's `NEEDS_RELEASE_AFTER`, or a demo whose value it can't read (in a temporary
+  copy of the demos). `make github-release-notes` gives a release's `RELEASE_NOTES.md` section with each paragraph and
+  list item on one line, its headings a level up, and the full changelog's link last. Step 2 of `docs/RELEASE.md` and
+  the publishing-release skill name the website pages `RELEASE_VERSION_FILES` lists, no more and no fewer
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here
   instead of only in the container suite
 - **SiteVersionTest** — `make site-version` prints the version the docs site's image tags and Maven coordinate give:
   the Docker examples' tag, a release version, whatever `gradle.properties` holds. It skips `latest` and a full stop
-  after a tag, and fails when the site gives two versions or none, the Spring Boot starter's coordinate counted. `bin/docker-*.sh` read their version from it, not
-  from `gradle.properties`, whose `-SNAPSHOT` between releases has no image
+  after a tag, and fails when the site gives two versions or none, the Spring Boot starter's coordinate counted. Every
+  file a page includes with `--8<--` is under the directories it reads, or names no version. `bin/docker-*.sh` read
+  their version from it, not from `gradle.properties`, whose `-SNAPSHOT` between releases has no image, and, run with a
+  stubbed `docker`, say so when Docker Hub has no image of it rather than leave it to `docker run`
 - **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
-  document, and every support file under `src/test` is named somewhere in it
+  document, every spec of a subproject that `settings.gradle.kts` includes (`ktor-plugin`, `spring-boot-starter`) in
+  its subproject's section, and every support file under `src/test`, the subprojects' included, somewhere in it.
+  Every `make` target it names is in the `Makefile`, or, for a demo's own (`make up`), in every demo's; every job
+  `make ci` runs (`CI_JOBS`) is named here, and `make all-tests`' entry names every target it runs
 - **WebsiteConfigKeysTest** — every `proxy.` and `agent.` config key the website's pages name is in
-  `config/config.conf`, since HOCON ignores a key it doesn't know, and every default the pages' tables give for one
-  is the one `config/config.conf` declares
+  `config/config.conf`, since HOCON ignores a key it doesn't know; and the default the pages' tables give for a key is
+  the number, boolean, or string `config/config.conf` declares, or a tscfg spec's default (`double | 1.0`), and, for a
+  setting it leaves to gRPC (`long | -1`), gRPC's own: `GrpcUtil`'s server and client keepalive defaults, the server
+  builder's handshake timeout, and `INT_MAX` for a limit that's off; and the two gRPC defaults `ProxyOptions` names for
+  the startup log and the dashboard are gRPC's. A list's or an object's default isn't checked, nor the `logLevel` the
+  CLI Reference gives
 
 One support helper also lives here (not a test class itself):
 
@@ -927,12 +1096,12 @@ mechanism that the standard suite cannot reach:
   the regions each view asks for; connected, one path registered and one refused, with the proxy's reason, the detail
   pane as a page and as htmx's fragment, the connection's endpoint, connects, and token, and the root's redirect; a
   scrape through the proxy in the path's strip and Recent scrapes, and Scrape now fetching the target from the agent
-  through the path's filter, recorded nowhere, refused without the page's header or for a path the agent doesn't know,
-  saying why, and working with the proxy down; with Scrape now off, no button and no route; with a password, the login
-  page under the agent's name and a cookie named for the agent; and no dashboard without `--dashboard`; and its Activity
-  view showing the agent connecting and a refused path, filtered, and pushing the disconnect, with the failure that
-  ended it, and failing connects to an open page when the proxy stops; and, with the agent's metrics on, its connect, its
-  refused path, its disconnect, and its dashboard sign-in counted
+  through the path's filter, recorded nowhere, not framed, refused without the page's header or for a path the agent
+  doesn't know, saying why, and working with the proxy down; with Scrape now off, no button and no route; with a
+  password, the login page under the agent's name, not cached or framed, and a cookie named for the agent; and no
+  dashboard without `--dashboard`; and its Activity view showing the agent connecting and a refused path, filtered, and
+  pushing the disconnect, with the failure that ended it, and failing connects to an open page when the proxy stops;
+  and, with the agent's metrics on, its connect, its refused path, its disconnect, and its dashboard sign-in counted
 - **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
   replacing and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy
@@ -998,33 +1167,33 @@ mechanism that the standard suite cannot reach:
   proxy's server spans arrive under their configured service names, in one trace, a scrape's scrape, forward, and fetch
   spans form a trace of their own, and an agent that heartbeats reports no heartbeat span; and at a sample rate of 0,
   neither side reports a span
-- **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
-  selection round-trip, both layouts, the versioned asset and brand icon routes (a year's `max-age`, an icon served as
+- **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push, selection
+  round-trip, both layouts, the versioned asset and brand icon routes (a year's `max-age`, an icon served as
   `image/svg+xml` with `nosniff` and a `sandbox` CSP, and a 404 off the allowlist or without the version), a registered
-  path's target, source, and the config's links built from its job label, one of them an icon the page's head gives
-  its mark, a root-mounted base path, with `allowedHosts` set a 403 on every route
-  for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
-  topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
-  the retired recent-scrapes queue held, an agent's identity in both layouts with the path search filtering from the URL
-  and over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and
-  a session kept open through a push that fails to render, and a scrape-now against a stub target returning what it
-  had while the proxy's and the agent's scrape metrics, the History, and the agent's Recent scrapes stay as
-  Prometheus's scrape left them and the agent counts it in `agent_dashboard_scrapes_total`, refused within its
-  cooldown, for an unknown path, saying why, without htmx's header, or from another origin, and absent when off; and an Activity
+  path's target, source, and the config's links built from its job label, one of them an icon the page's head gives its
+  mark, a root-mounted base path, with `allowedHosts` set a 403 on every route for a request naming an unknown host, an
+  agent's page and detail fragment not framed, page GETs and WebSocket messages rendering the cached snapshot while a
+  topology change still shows on the next page, a gone path staying in the path layout after more scrapes than the
+  retired recent-scrapes queue held, an agent's identity in both layouts with the path search filtering from the URL and
+  over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and a
+  session kept open through a push that fails to render, and a scrape-now against a stub target returning what it had,
+  not framed, while the proxy's and the agent's scrape metrics, the History, and the agent's Recent scrapes stay as
+  Prometheus's scrape left them and the agent counts it in `agent_dashboard_scrapes_total`, refused within its cooldown,
+  for an unknown path, saying why, without htmx's header, or from another origin, and absent when off; and an Activity
   page sent its table over a real socket in the first frame rendered from its message, left out of the ticks after it
   while nothing is recorded, and sent again for a new message and once an agent's connection is recorded
 - **ProxyWebDashboardLoginTest** — the dashboard with a password set, split from ProxyWebDashboardTest, a proxy per
   spec: a page navigation without a session sent to the login page with its path as `next`, and anything else (the
   WebSocket handshake, the scrape action, an asset, `/session`) a 401 with no `WWW-Authenticate`; the login page, not
-  cached or framed; a wrong login answered with the alert, and one WARN for two, never naming the
-  username; a right one setting the session cookie (`HttpOnly`, `SameSite=Lax`, the base's `Path`, 7 days, `Secure`
-  from an https origin) and returning to `next`, never off-site; the dashboard, its WebSocket, and `/session` working
-  with the cookie; Log out ending the session; a foreign origin refused on the login and Log out forms; an oversized or
+  cached or framed; a wrong login answered with the alert, and one WARN for two, never naming the username; a right one
+  setting the session cookie (`HttpOnly`, `SameSite=Lax`, the base's `Path`, 7 days, `Secure` from an https origin) and
+  returning to `next`, never off-site; the dashboard, not cached or framed, its WebSocket, and `/session` working with
+  the cookie; Log out ending the session; a foreign origin refused on the login and Log out forms; an oversized or
   chunked login body refused; Basic Auth for scripts; past 10 wrong logins from one address, every login from it refused
   with a 429 and `Retry-After`, the right one included, from the form or as Basic Auth; an open page's WebSocket closed
-  once its session ends (`VIOLATED_POLICY`), without waiting for a reconnect; a browser's saved Basic
-  login (a request with `Sec-Fetch-Mode`) ignored, the page, `/session`, and the WebSocket included, and not logged as
-  wrong; a root mount's login at `/login`; with no password, no login page and no Log out; and each login counted in
+  once its session ends (`VIOLATED_POLICY`), without waiting for a reconnect; a browser's saved Basic login (a request
+  with `Sec-Fetch-Mode`) ignored, the page, `/session`, and the WebSocket included, and not logged as wrong; a root
+  mount's login at `/login`; with no password, no login page and no Log out; and each login counted in
   `proxy_dashboard_logins_total` by outcome, a script's right Basic Auth not counted as a sign-in
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
@@ -1140,7 +1309,8 @@ agent runs with what it gets in an app. They run twice: `test` at the Spring Boo
 `oldestSpringBootTest`, which `test` runs too, at the oldest it supports (`spring-boot-oldest` in
 `libs.versions.toml`, Spring Boot 4.0's last release), with kotlinx-coroutines and the Prometheus client set as the
 Spring Boot Starter page tells such an app to set them. A run that names tests with `--tests` filters `test` alone,
-and leaves `oldestSpringBootTest` out. `TestingGuideTest` reads only the root project's specs, so name new ones here.
+and leaves `oldestSpringBootTest` out. `TestingGuideTest` fails on a spec of the starter's that isn't named here, or a
+support file that isn't named in this document.
 
 - **PrometheusProxyAgentAutoConfigurationTest** — the auto-configuration, through `ApplicationContextRunner`: the agent
   stays off without a proxy, starts and stops with the context with one, and isn't made with `enabled=false`; each
@@ -1150,9 +1320,11 @@ and leaves `oldestSpringBootTest` out. `TestingGuideTest` reads only the root pr
   with its build's version) and path (`<app>_metrics`, or `application_metrics`); the registry served, or not with
   `source=none` or no `PrometheusRegistry` bean; `settings` keys keeping their case from a properties file, and losing
   it from an environment variable; customizers running after the properties in their order, a builder method of one
-  replacing a property but not a `settings` entry, which only its `setting()` replaces; `start()` on a running agent
+  replacing a property but not a `settings` entry, which only its `setting()` replaces; a customizer's proxy, or a
+  `settings` key's, starting the agent with no `proxy` property, a required one too; `start()` on a running agent
   keeping it; the started line naming no proxy, which a customizer can change; `required` failing the
-  app without a proxy, on a bad setting, or on a customizer's failure, a checked exception included, and the app
+  app without a proxy, on a bad setting, on a setting only the agent rejects as it starts (a certificate it can't
+  read), which only `start()` reaches, or on a customizer's failure, a checked exception included, and the app
   running without the agent otherwise, whatever stopped it: a setting the builder or the agent rejects, a certificate
   it can't read, a `settings` key its config can't hold, or a customizer that throws; and the `prometheusAgent` health
   indicator, from its own auto-configuration: UNKNOWN while off or connecting, turned off by
@@ -1169,23 +1341,26 @@ and leaves `oldestSpringBootTest` out. `TestingGuideTest` reads only the root pr
 - **StarterExamplesTest** — the Spring Boot Starter page's examples: `website/application.yml`, in the test resources,
   reads the agent's settings from the environment, and with `PROMETHEUS_PROXY_CERT` checks the proxy's certificate
   against the name `fromEnvironment()` does, `PROMETHEUS_PROXY_AUTHORITY` or `prometheus-proxy`; and
-  `website.AgentCustomizations`, with its stand-ins **SecretStore** and **BatchJobs**, sets the certificate and serves
-  a second registry.
+  **AgentCustomizations** (`website.AgentCustomizations`), with its stand-ins **SecretStore** and **BatchJobs**, sets
+  the certificate and serves a second registry.
 
 ### Ktor Plugin Tests (`ktor-plugin/`)
 
 The Ktor plugin is a Kotlin subproject, with Kotest specs under `ktor-plugin/src/test/kotlin/`. `./gradlew
 :ktor-plugin:test` runs them, and so does `build`; the root project aggregates their coverage, so the coverage floors
-count them. `TestingGuideTest` reads only the root project's specs, so name new ones here.
+count them. `TestingGuideTest` fails on a spec of the plugin's that isn't named here, or a support file that isn't named
+in this document.
 
 - **AgentLifecycleTest** — the lifecycle's events raised by hand on a mocked app's monitor, with the agent's start
   replaced: the app's `ApplicationStarted` starts the agent and puts its handle in the app's attributes, and another
   app's, as a development-mode reload gives, doesn't; the agent stays off when disabled or without a proxy, and a
-  required one fails the start; a start that throws leaves the agent off, or, when required, fails the app's start with
+  required one fails the start; a proxy that only the file's `settings` or an agent block's `setting()` names starts
+  it; a start that throws leaves the agent off, or, when required, fails the app's start with
   the exception, a checked one wrapped, and a start that returns none, as `startIfConfigured()` does for a failure,
-  leaves it off; `ApplicationStopPreparing` begins the stop without waiting for it, and `ApplicationStopping` stops an
-  agent the engine didn't, and gives up waiting at its timeout, once whichever come; an agent that fails to stop
-  doesn't fail the app's; and the handlers are gone once the app stops.
+  leaves it off; `ApplicationStopPreparing` begins the stop without waiting for it, and `ApplicationStopping` waits for
+  that stop, its agent's `shutdown()` held until the disposal is in its join, stops an agent the engine didn't, and
+  gives up waiting at its timeout, once whichever come; an agent that fails to stop doesn't fail the app's; and the
+  handlers are gone once the app stops.
 - **PrometheusProxyAgentConfigTest** — `prometheus-proxy.agent` in HOCON, YAML (`full-section.yaml`), and a
   `MapApplicationConfig` builds the tree the same builder calls do, `metrics-proxy-path` and its labels included; a blank
   value, such as YAML's empty default for an unset environment variable (`unset-proxy.yaml`), counts as unset; the
@@ -1199,6 +1374,10 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
   proxy in the same JVM on fixed ports that the root project's `TestPorts` lists (`KTOR_PLUGIN_PROXY_*`): the proxy
   serves the app's meter and Micrometer's JVM metrics at `/ktor_app_metrics`, its service discovery has the path's
   labels, the handle reports the connection, and once the app stops, the proxy no longer has the path.
+- **ServerBindFailureTest** — an app on the CIO engine with the plugin (**TakenPortApp**), run in a JVM of its own,
+  whose port the spec holds (`KTOR_PLUGIN_TAKEN_PORT` in the root project's `TestPorts`): its start fails with the
+  `BindException` after the agent started, and the JVM exits with status 1, its app disposed by Ktor's shutdown hook,
+  rather than run on with its agent.
 - **KtorPluginExamplesTest** — the Ktor Plugin page's examples, in `website/KtorPluginExample.kt` and the test
   resources' `website/application.conf`: the module runs without the agent where `PROMETHEUS_PROXY` isn't set, and its
   health route says so; the file starts the agent with the environment's proxy and the file's name, and leaves it off

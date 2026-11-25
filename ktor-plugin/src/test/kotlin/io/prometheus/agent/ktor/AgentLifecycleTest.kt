@@ -39,9 +39,11 @@ import io.mockk.verify
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.common.ConfigLoadException
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 // The lifecycle's events raised by hand on an app's monitor, with the agent's start replaced: whether the agent starts,
 // what a failure does, and that it stops once, whichever events come.
@@ -91,7 +93,30 @@ class AgentLifecycleTest : StringSpec() {
       app.lifecycle(proxy = null) { required = true }
 
       shouldThrow<IllegalStateException> { app.started() }.message shouldBe
-        "prometheus-proxy.agent.proxy isn't set, and prometheus-proxy.agent.required is true"
+        "No proxy is set (prometheus-proxy.agent.proxy or PROXY_HOSTNAME), and prometheus-proxy.agent.required is true"
+    }
+
+    // The agent's own rule, EmbeddedAgentConfig.namesProxy(), read once the file and the blocks have made the settings:
+    // the plugin read only the builder's proxy, so a proxy from a settings key, or the agent's PROXY_HOSTNAME, left the
+    // agent off, and failed a required one's app (November 23 review, #11)
+    "a proxy the file's settings name starts the agent, a required one too, without a proxy key" {
+      val app = TestApp()
+      val launches =
+        app.lifecycle(proxy = null, file = mapOf("settings.proxy.hostname" to "proxy.example.com")) { required = true }
+
+      app.started()
+
+      launches.single().toString() shouldContain "hostname=proxy.example.com"
+      app.application.prometheusProxyAgent shouldBeSameInstanceAs app.agent
+    }
+
+    "a proxy an agent block sets with setting() starts the agent" {
+      val app = TestApp()
+      val launches = app.lifecycle(proxy = null) { agent { setting("proxy.endpoints", listOf("proxy.example.com")) } }
+
+      app.started()
+
+      launches.single().toString() shouldContain "endpoints=[proxy.example.com]"
     }
 
     "a path without a registry still starts the agent" {
@@ -130,14 +155,15 @@ class AgentLifecycleTest : StringSpec() {
       shouldThrow<ConfigLoadException> { app.started() }.message shouldBe "bad certificate"
     }
 
+    // Kotlin can throw a checked exception undeclared, which Ktor would pass on as it is
     "a checked exception from a required agent's start fails the app's start too" {
       val app = TestApp()
-      app.lifecycle(proxy = "localhost:50051", failure = TimeoutException("too slow")) { required = true }
+      app.lifecycle(proxy = "localhost:50051", failure = IOException("unreachable")) { required = true }
 
       val thrown = shouldThrow<IllegalStateException> { app.started() }
 
       thrown.message shouldBe "The Prometheus agent could not start"
-      thrown.cause?.message shouldBe "too slow"
+      thrown.cause?.message shouldBe "unreachable"
     }
 
     "the engine's stop begins the agent's without waiting for it, and the app's disposal doesn't stop it again" {
@@ -159,6 +185,28 @@ class AgentLifecycleTest : StringSpec() {
       release.countDown()
       app.events.raise(ApplicationStopping, app.application)
       verify(exactly = 1) { app.agent.shutdown() }
+    }
+
+    // AGENTS.md's split: the engine's stop begins the agent's, and the app's disposal waits for it, so the engine
+    // doesn't finish disposing while the agent still stops. The agent's stop ends only once the disposal is waiting in
+    // its join, so without the join, the disposal returns first, every time (November 23 review, #54).
+    "the app's disposal waits for the agent's stop the engine began" {
+      val app = TestApp()
+      val release = CountDownLatch(1)
+      val stopped = AtomicBoolean(false)
+      every { app.agent.shutdown() } answers {
+        release.await()
+        stopped.set(true)
+      }
+      app.lifecycle(proxy = "localhost:50051")
+      app.started()
+      app.events.raise(ApplicationStopPreparing, mockk<ApplicationEnvironment>())
+      releaseOnceJoining(waiter = Thread.currentThread(), release = release)
+
+      app.events.raise(ApplicationStopping, app.application)
+
+      // Read as soon as the disposal returns
+      stopped.get() shouldBe true
     }
 
     "an app disposed without the engine stopping still stops the agent" {
@@ -222,6 +270,22 @@ class AgentLifecycleTest : StringSpec() {
     }
   }
 
+  // Opens [release] once [waiter] waits in Thread.join, the wait under test, or after 5 seconds without it, so the
+  // agent's stop ends either way.
+  private fun releaseOnceJoining(
+    waiter: Thread,
+    release: CountDownLatch,
+  ) = thread(isDaemon = true) {
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+
+    fun joining() = waiter.stackTrace.any { it.className == "java.lang.Thread" && it.methodName == "join" }
+
+    while (!joining() && System.nanoTime() < deadline) {
+      Thread.sleep(10)
+    }
+    release.countDown()
+  }
+
   // An app's monitor and attributes, its agent's handle, and the lifecycle under test
   private class TestApp {
     val events = Events()
@@ -242,9 +306,11 @@ class AgentLifecycleTest : StringSpec() {
       failure: Exception? = null,
       started: Boolean = true,
       stopTimeoutMillis: Long = 5_000,
+      // The file's prometheus-proxy.agent section, by its keys
+      file: Map<String, String> = emptyMap(),
       configure: PrometheusProxyAgentConfig.() -> Unit = {},
     ): List<EmbeddedAgentConfig> {
-      val config = PrometheusProxyAgentConfig(MapApplicationConfig()).apply {
+      val config = PrometheusProxyAgentConfig(MapApplicationConfig(*file.toList().toTypedArray())).apply {
         proxy?.also { agent { this.proxy = it } }
       }
       config.configure()

@@ -88,8 +88,9 @@ Example Nginx and proxy configuration files are available in the repository:
 
 - [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf)
 - [`nginx/nginx-proxy.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)
-- The nginx Demo's configs, [`demos/nginx/nginx/`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx/nginx),
-  with TLS, the dashboard, and `worker_shutdown_timeout`, which `make up` in `demos/nginx` runs
+- The nginx Demo's configs, [`demos/nginx/nginx/`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx/nginx):
+  `make up` in `demos/nginx` runs nginx with TLS and the dashboard on its stock timeouts, and
+  `./demo.sh nginx-shutdown-timeout` adds `worker_shutdown_timeout`
 
 ### TLS at nginx
 
@@ -301,9 +302,10 @@ agent or the proxy.
 | `fetch`   | Agent       | The agent's request to the target                         | `path`, `http.url`, `outcome`, `http.status_code`, `gzipped`, `chunked`, `bytes.raw`, `bytes.filtered`, `filter.lines_dropped`, `retries` |
 
 A `scrape` span's remote endpoint is the address the request came from, which Zipkin shows as the span's client, so a
-trace says which Prometheus scraped. A path several agents serve has a `forward` span for each. Each `forward` span is
-annotated `sent to agent` when the request reaches the agent's stream, and `queue.wait_ms` is how long, in
-milliseconds, it waited in the agent's queue until then. `outcome` is the scrape counters' label (see
+trace says which Prometheus scraped. A path several agents serve has a `forward` span for each. A `forward` span's
+`queue.wait_ms` is how long, in milliseconds, the request waited in the agent's queue before the proxy sent it, and the
+span is annotated `sent to agent` once the agent's stream takes it. A scrape that ends first, as one that times out on
+an agent that has stopped reading can, has the wait but not the annotation. `outcome` is the scrape counters' label (see
 [Monitoring](monitoring.md)), and a span whose scrape failed is tagged as an error, which Zipkin shows in red.
 `bytes.raw` and `bytes.filtered` are the payload's size before and after the path's
 [metric filter](configuration/agent.md#metric-filtering), and `filter.lines_dropped`, on a path with a filter, the
@@ -323,8 +325,10 @@ connection closes, lasting as long as it did; each scrape's own trace shows the 
 
 **Sampling.** `sampleRate` is the share of traces each side keeps: 1.0, the default, keeps every one, 0.1 one in ten,
 and 0 none. It takes 0, or from 0.01 to 1, and anything else fails startup. The proxy decides for each scrape, and the
-agent follows the decision the proxy sends, so a scrape's trace is kept whole or not at all; each side's rate applies
-to its gRPC calls too.
+agent follows the decision the proxy sends, so a scrape's trace is kept whole or not at all. Each side's rate applies
+to its gRPC calls too: the agent's to the calls it makes, and the proxy's to the calls it serves, whatever trace
+headers a call carries, so no caller can have the proxy keep more of them than its rate, or trace a heartbeat. With
+different rates, Zipkin can show a call with one side's half only.
 
 Start Zipkin before the proxy and agents. Spans sent while it can't be reached are dropped: the reporter warns once,
 then logs further failures only at the `FINE` level, so after that first warning, lost spans leave nothing in the

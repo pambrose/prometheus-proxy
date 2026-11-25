@@ -84,7 +84,7 @@ agent is connected, report [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagent
 `proxyEndpoint` somewhere that doesn't fail the check, such as a detail of the app's status page; the Spring Boot Demo
 reports them in Actuator's health as UNKNOWN, not DOWN.
 
-Give the app's Logback configuration the line the standalone agent has for gRPC's internal logging; see
+Give the app's logging configuration the level the standalone agent sets for gRPC's internal logging; see
 [Logging](embedded-agent.md#logging).
 
 ### Packaging the App

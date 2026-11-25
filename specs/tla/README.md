@@ -21,7 +21,9 @@ on every run, so after a version bump the old one is replaced rather than run. T
 agentId, which only the identity check binds.
 It also models path notices and reclaims: the notice `takeOverPath` queues for a displaced connection of another
 launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path as taken over, which it keeps across
-its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path.
+its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path,
+telling the agent again that it's taken. Invalidating a connection drops its unread notices, as `invalidate()` does,
+whether the proxy removed it or a registration of its own launch orphaned it.
 Heartbeats, stream keepalives, chunking, metrics, and the event bus are abstracted away, and so are the notice that a
 path is free and the waiting list that sends it, which only bring a reclaim forward. Agent-side failover is in
 `AgentFailover.tla`.
@@ -44,6 +46,7 @@ connection's launch, so the others cover both cases without relabelings that che
 | `AnswerFromOwner` | Only the agent a scrape was sent to can answer it, even when another agent names it before it is tracked |
 | `ModesNeverMix` | Consolidated and non-consolidated agents never share a path |
 | `StreamIdentity` | With the transport filter disabled, a scrape-request stream reads, and as it ends removes, only a context of its caller's identity, even when it named the agentId before that context was registered |
+| `InvalidatedHasNoNotices` | An invalidated connection, removed or orphaned, holds no unread notices, which `invalidate()` clears and `queuePathNotice` refuses after it |
 | `EveryScrapeFinishes` | With the handler timeout off, every started scrape still finishes |
 | `ReclaimNeverDisplaces` | A reclaim never takes a path from a live connection of another launch, so two agents with the same exclusive path never swap it back and forth |
 | `DisplacedReclaims` | An agent told its path was taken over takes it back once no connection holds it, on whichever connection it has then, unless another takes it first or that connection is invalidated |
@@ -105,6 +108,15 @@ reports `ReconnectReclaims` violated by a displaced agent reconnecting and regis
 holds the path; with two, as in `ProxyRegistryReclaim.cfg`, a reconnect never meets an agent of another launch, so
 `ReconnectReclaims` holds there trivially. It sets `Modes = {FALSE}`, leaving out consolidated connections, which are
 never told and never reclaim: with them it took several times as long. The other configs set `Modes = {TRUE, FALSE}`.
+
+`InvalidatedHasNoNotices` holds trivially in `ProxyRegistry.cfg` and `ProxyRegistrySafety.cfg`, which send no notices.
+In the reclaim and reconnect configs it checks that a removed connection loses its notices, but never meets an orphan
+holding one: with one path, an orphan is a connection that served the path until its own launch took it, and serving a
+path forgets the notice about it. An orphan with a notice about another path takes two paths and three connections.
+With `Paths = {p1, p2}` in `ProxyRegistryReconnect.cfg` and the orphan's notices kept, as the model kept them before
+November 23 #1's fix, TLC reports the invariant violated in seconds, at depth 12, but that model is too large to check
+in full: in five minutes, without its temporal properties, TLC passed 60 million distinct states, at depth 25, with 15
+million still queued.
 
 ## AgentFailover
 

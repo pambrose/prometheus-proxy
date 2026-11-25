@@ -105,7 +105,9 @@ A login starts a session, which the browser keeps in a cookie. It ends after 24 
 the login, or with **Log out**, the exit icon at the end of the top bar. The proxy keeps sessions in memory, so a
 restart signs everyone out; a page left open then goes to the login page by itself. The cookie is `HttpOnly`,
 `SameSite=Lax`, named for the dashboard's port (so two proxies on one host keep their own), and `Secure` when the
-browser reached the dashboard over `https`, as through a reverse proxy.
+browser reached the dashboard over `https`, as through a reverse proxy. With a login set, the dashboard tells the
+browser to keep none of its pages (`Cache-Control: no-store`), so a page behind the login isn't kept to be shown again
+after Log out.
 
 A script sends the login with each request as HTTP Basic Auth instead, and needs no session. A browser can't: it always
 gets the login page, even with a Basic login it saved for the dashboard's address earlier, so Log out signs it out.
@@ -119,8 +121,9 @@ login from that address, or from any, with a 429, the right password included, u
 is a minute old. So a guesser can't try passwords in parallel. Behind a reverse proxy every login comes from the
 proxy's address, so the first limit is everyone's, and during an attack the real users wait out the minute too.
 
-A page left open when its session ends, by Log out in another tab, by expiring, or by a proxy restart, stops getting
-updates within a couple of seconds, and goes to the login page.
+A page left open when its session ends goes to the login page: at once after Log out in another tab, within one
+refresh interval (`proxy.dashboard.refreshIntervalSecs`, 2 seconds by default) after the session expires, and once the
+proxy is back after a restart.
 
 The proxy logs the username and that a password is set, never the password. It logs a wrong login at WARN, with the
 address it came from, at most once a minute for each address, and logs reaching the limit. It refuses to start with an
@@ -218,7 +221,7 @@ Agents are listed on the left. Selecting one shows, on the right:
 | | |
 |---|---|
 | **Identity** | agent name, remote address, host name, the [auth identity](security/index.md) it connected as, launch ID, consolidated flag |
-| **Liveness** | uptime, idle time, scrape backlog depth, seconds until stale-agent eviction |
+| **Liveness** | uptime, idle time, scrape backlog depth, and, while the [stale-agent check](configuration/proxy.md#internal-settings) runs, seconds until it evicts the agent |
 | **Paths** | every path this agent has registered, and whether a path is shared with other agents |
 | **Recent scrapes** | this agent's latest 25 scrapes across its paths, newest first, with status, duration and payload size |
 
@@ -233,9 +236,9 @@ reverse proxy, not the agent. Before 4.3.0 it read `Unknown` for every agent.
 Selection lives in the URL, so a view of one agent is a link you can bookmark or share.
 
 The page updates **live over a WebSocket** — an agent connecting, disconnecting, or registering a path
-appears without a refresh. If the agent you are looking at disconnects, the panel says so explicitly
-rather than silently freezing on stale data. (The top-bar **live** indicator that reflects the
-connection itself is described under [The status bar](#the-status-bar).)
+appears without a refresh. If the agent you are looking at disconnects, the panel says so explicitly,
+naming the agent as the other views do, rather than silently freezing on stale data. (The top-bar **live**
+indicator that reflects the connection itself is described under [The status bar](#the-status-bar).)
 
 ## The Paths Layout
 
@@ -265,9 +268,10 @@ URL's user info and query values before sending it to the proxy, so a URL that c
 
 ### Searching and Filtering
 
-A search box above the table keeps only the rows whose path, agent, target URL or identity contains what you type,
-ignoring case, so `team-a` shows one team's paths. **Problems only** keeps the paths whose last scrape failed or whose
-agent has gone. Both apply as you type, and while either is on, the table says how many of the paths it is showing.
+A search box above the table keeps only the rows whose path, agent, target URL or identity contains what you type, as
+the row shows it, ignoring case, so `team-a` shows one team's paths, and `/payments_metrics`, copied from Prometheus,
+finds that path. **Problems only** keeps the paths whose last scrape failed or whose agent has gone. Both apply as you
+type, and while either is on, the table says how many of the paths it is showing.
 
 The search goes into the page's URL, as `/dashboard/paths?q=team-a&problems=1`, so a filtered view is a link you can
 bookmark or send. Pressing Enter in the box does the same as typing, and the form works as a plain link without the
@@ -399,7 +403,7 @@ What the proxy did with its agents and their paths, newest first:
 | `registered` / `unregistered` | an agent added a path, or removed one; re-registering a path it already serves isn't news |
 | `taken over` | an agent took a path another agent of the same identity was serving, as a redeploy does |
 | `scraped now` | a browser scraped a path with [Scrape now](#scrape-now), with the result and the browser's address |
-| `rejected` | the proxy refused a path, with its reason: one its identity may not register, a malformed or overlong path, a path another identity holds, a consolidated agent and a path that isn't (or the reverse), or one past the agent's `maxPathsPerAgent` |
+| `rejected` | the proxy refused a path, with its reason: one its identity may not register, a malformed or overlong path, a path another identity holds, a consolidated agent and a path that isn't (or the reverse), one with more than `maxLabelsPerPath` labels, or one past the agent's `maxPathsPerAgent` or its identity's `maxPathsPerIdentity` |
 | `refused` | an identity was already at `proxy.internal.maxAgentsPerIdentity`, so a connect was turned away |
 | `bad token` | a call came with no agent token or an unknown one, naming the host it came from |
 
@@ -514,7 +518,7 @@ Without a [login](#login), anyone who can reach the dashboard's port can read it
 network, or bind it to a private address with `proxy.dashboard.host`; without a login, the proxy warns at startup
 when the dashboard listens on all interfaces.
 
-A browser inside that network can still be used to reach it. The dashboard guards against the two ways a
+A browser inside that network can still be used to reach it. The dashboard guards against the three ways a
 web page can do that:
 
 - **A WebSocket from another site.** Browsers let any page open a WebSocket to any address, so the
@@ -527,6 +531,15 @@ web page can do that:
   dashboard by in `proxy.dashboard.allowedHosts` and it refuses any other host name with a 403, on every
   route; IP addresses, `localhost`, and the hosts in `allowedOrigins` are always allowed. This check is off
   until you set it.
+- **Framing.** A page can show the dashboard in a frame, hidden under content of its own, and steer a viewer's
+  clicks onto Scrape now or Log out; the frame's requests come from the dashboard's own page, so the Origin check
+  passes them. Every response the dashboard sends forbids framing (`Content-Security-Policy: frame-ancestors 'none'`,
+  and `X-Frame-Options: DENY` for older browsers), so no page, on any site, can frame it.
+
+The dashboard logs a request it refuses for its `Origin` or `Host` at INFO, naming the setting that would allow it, at
+most once a minute for each address the requests come from, and the rest at DEBUG. It cuts the header to 270
+characters, the longest a real one can be, and escapes its control characters, since a client sends it before any
+login.
 
 The Activity layout shows the address each call with a bad token came from, so anyone who can read the dashboard
 can see who has tried the agent port.
@@ -540,8 +553,9 @@ another site can't add without the proxy's permission, so a link or form elsewhe
 A login doesn't replace either guard, so the dashboard keeps both with a login set, and checks the Origin of the login
 and Log out forms as well.
 
-Open pages, one WebSocket each, are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that
-stops reading or sends an oversized message is disconnected. Neither list stops someone who can reach the port
+Open pages, one WebSocket each, are also capped at `proxy.dashboard.maxSessions` (default 50). A client that sends an
+oversized message is disconnected, and so is one that stops reading, once 32 updates are waiting for it, which frees its
+place under the cap; no one client can hold up the others' updates. Neither list stops someone who can reach the port
 directly; a login does. Both are lists, so set them in a config file; see
 [Dashboard configuration](configuration/proxy.md#dashboard).
 

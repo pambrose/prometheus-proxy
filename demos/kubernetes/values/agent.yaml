@@ -16,9 +16,10 @@ discovery:
   existingConfigMap: agent-targets
   reconcileIntervalSecs: 5
 
-# The agent's own dashboard, on the chart's port, 8095, in the agent's pod. The chart leaves it off the agent's Service,
-# and pp-target maps no port to the host, so `demo.sh agent-dashboard` reaches it with kubectl port-forward. It runs
-# without its login, as the proxy's does here, so the agent logs a warning about it at startup.
+# The agent's own dashboard, on the chart's port, 8095, in the agent's pod. The chart has it listen on the pod's
+# loopback only and leaves it off the agent's Service, and pp-target maps no port to the host, so `demo.sh
+# agent-dashboard` reaches it with kubectl port-forward, which connects to that loopback. It runs without its login, as
+# the proxy's does here, but on the loopback the agent logs no warning about it.
 dashboard:
   enabled: true
 

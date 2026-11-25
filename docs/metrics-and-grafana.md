@@ -35,7 +35,9 @@ proxy.metrics {
 | Env    | `METRICS_ENABLED=true`         |
 | Config | `agent.metrics.enabled = true` |
 
-Default endpoint: `http://agent-host:8083/metrics`
+Default endpoint: `http://agent-host:8083/metrics`. Since 4.7.0, the agent can serve its metrics through the proxy
+instead, at a path of its own, read in-process, with no port: `agent.metrics.proxyPath`, `--metrics_proxy_path`, or
+`METRICS_PROXY_PATH` (see [Prometheus Scrape Configuration](#prometheus-scrape-configuration)).
 
 ### JVM Metrics
 
@@ -283,7 +285,7 @@ Prometheus ─── HTTP GET ──→ Proxy                        Agent
 
 ### Chunk Metrics
 
-Large responses (> `chunkContentSizeKbs`) are split into chunks with CRC32
+A response whose gzipped body reaches `chunkContentSizeKbs` (default 32 KB) is split into chunks with CRC32
 checksums. Two metrics track integrity issues:
 
 - `proxy_chunk_validation_failures_total` — incremented when a chunk or summary
@@ -321,9 +323,10 @@ Two dashboards are included in `grafana/`:
 | `prometheus-proxy.json`  | Prometheus Proxy  | Proxy health, throughput, latency, errors        |
 | `prometheus-agents.json` | Prometheus Agents | Agent health, scrape activity, per-agent latency |
 
-`grafana/alerts.yml` holds Prometheus alerting rules for the same metrics (success rate, P99 latency, connected
-agents, backlogs, oversized payloads, evictions, agent connect failures, and the proxy itself being down). Add it to Prometheus' `rule_files`
-and tune the thresholds; `make check-rules` validates it with `promtool`.
+`grafana/alerts.yml` holds Prometheus alerting rules for the same metrics: success rate, P99 latency, connected
+agents, backlogs, oversized payloads, evictions, refused agent tokens and paths, agent connect failures and
+disconnects, failing discovery, an agent off its primary proxy, and the proxy itself being down. Add it to Prometheus'
+`rule_files` and tune the thresholds; `make check-rules` validates it with `promtool`.
 
 ### Requirements
 
@@ -381,13 +384,22 @@ Both dashboards use template variables:
 ## Prometheus Scrape Configuration
 
 The proxy runs next to Prometheus, so Prometheus scrapes its metrics port directly. The agents sit behind firewalls,
-so scrape each agent's metrics the same way as any other target: give the agent a path for its own `/metrics`, and
-scrape that path through the proxy.
+so Prometheus scrapes each agent's metrics through the proxy, at a path of the agent's own. Since 4.7.0, the agent
+serves them at that path itself, read in-process, with no metrics port to open:
 
 ```hocon
 agent {
+  metrics.proxyPath = cluster_a_agent_metrics
+}
+```
+
+Or the agent turns on its metrics port and scrapes it through a path of its own, as it did before 4.7.0:
+
+```hocon
+agent {
+  metrics.enabled = true
   pathConfigs: [
-    # ... the agent's targets, plus its own metrics:
+    # ... the agent's targets, plus its own metrics, from its own port:
     { name: "Agent metrics", path: cluster_a_agent_metrics, url: "http://localhost:8083/metrics" }
   ]
 }

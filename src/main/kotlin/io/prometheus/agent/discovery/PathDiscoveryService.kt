@@ -16,7 +16,7 @@
 
 package io.prometheus.agent.discovery
 
-import com.pambrose.common.util.runCatchingCancellable
+import io.prometheus.common.runCatchingNonFatal
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.agent.AgentPathManager
@@ -101,9 +101,9 @@ internal class PathDiscoveryService(
     logger.info { "Path discovery completed" }
   }
 
-  // One poll-and-reconcile tick. runCatchingCancellable rethrows CancellationException (so
-  // disconnect/shutdown ends the loop) but swallows a read/parse or per-reconcile failure, so a bad
-  // tick logs rather than killing discovery. A failed read reconciles the last list read successfully instead: a
+  // One poll-and-reconcile tick. runCatchingNonFatal rethrows CancellationException (so disconnect/shutdown ends the
+  // loop), and a JVM Error, which stops the agent (November #7), but swallows a read/parse or per-reconcile failure, so
+  // a bad tick logs rather than killing discovery. A failed read reconciles the last list read successfully instead: a
   // no-op while those paths are still registered, and it registers them again after a reconnect cleared them.
   // A missing or malformed file fails every tick, so a failure is logged in full at WARN only when it differs from
   // the last one, and at DEBUG while it repeats; the next success is logged at INFO. A failure with a gRPC status is
@@ -111,8 +111,8 @@ internal class PathDiscoveryService(
   // a WARN on every poll (November #39). One without a status is compared by class and message: a file's parse error
   // names its line, so an edit that trades one error for another is news.
   internal suspend fun reconcileOnce() {
-    val read = runCatchingCancellable { source.read() }.onSuccess { lastGoodPaths = it }
-    runCatchingCancellable {
+    val read = runCatchingNonFatal { source.read() }.onSuccess { lastGoodPaths = it }
+    runCatchingNonFatal {
       (read.getOrNull() ?: lastGoodPaths)?.let { pathManager.reconcileDiscoveredPaths(it) }
       read.getOrThrow()
     }.onSuccess {

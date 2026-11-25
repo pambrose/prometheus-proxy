@@ -294,12 +294,50 @@ internal object ProxyDashboardHtml {
     }
     val agent = snapshot.agent(selectedId)
     if (agent == null) {
-      // The selected agent disconnected. Say so explicitly rather than leaving a stale pane or a blank
-      // one -- a silently frozen detail view is exactly what makes an operator distrust a dashboard.
-      div("empty pad gone") { +"Agent $selectedId is no longer connected" }
+      goneAgent(snapshot, selectedId)
       return
     }
 
+    agentHero(agent, snapshot.evictAfterSecs)
+
+    div("section") {
+      span { +"Registered paths" }
+      span { +"${agent.paths.size}" }
+    }
+    if (agent.paths.isEmpty()) {
+      div("empty pad") { +"This agent has registered no paths" }
+    } else {
+      agent.paths.forEach { path ->
+        div("kv") {
+          span("k") { +"/${path.path}" }
+          span("v") {
+            +if (path.agentIds.size > 1) "shared with ${path.agentIds.size - 1} other agent(s)" else "${path.labels}"
+          }
+        }
+      }
+    }
+
+    recentScrapes(snapshot.scrapesOf(agent.agentId))
+  }
+
+  // The selected agent disconnected. Say so explicitly rather than leaving a stale pane or a blank one -- a silently
+  // frozen detail view is exactly what makes an operator distrust a dashboard. Named as the other views named it, never
+  // by its id, a counter none of them shows.
+  private fun DIV.goneAgent(
+    snapshot: ProxySnapshot,
+    agentId: String,
+  ) {
+    val shown = snapshot.goneAgentName(agentId)?.let(::agentLabel) ?: "The selected agent"
+    div("empty pad gone") { +"$shown is no longer connected" }
+  }
+
+  // The detail's head: the agent's name and state, how it reached this proxy when it has failover configured, and a
+  // line of what else to know about it. [evictAfterSecs] is the snapshot's: null while the stale-agent check doesn't
+  // run, when the line has no countdown.
+  private fun DIV.agentHero(
+    agent: AgentView,
+    evictAfterSecs: Long?,
+  ) {
     div("hero") {
       div("hero-title") {
         span(if (agent.isValid) "led ok" else "led crit") {}
@@ -321,29 +359,12 @@ internal object ProxyDashboardHtml {
           "up ${humanize(Clock.System.now() - agent.connectTime)}",
           "idle ${agent.inactivity.inWholeSeconds}s",
           "backlog ${agent.backlogSize}",
-          "evicted in ${agent.evictionCountdownSecs(snapshot.maxAgentInactivitySecs)}s",
+          // Only while the stale-agent check runs: with it off, no agent is ever evicted, and an idle one read
+          // "evicted in 0s" for as long as it stayed.
+          evictAfterSecs?.let { "evicted in ${agent.evictionCountdownSecs(it)}s" },
         ).joinToString(" · ")
       }
     }
-
-    div("section") {
-      span { +"Registered paths" }
-      span { +"${agent.paths.size}" }
-    }
-    if (agent.paths.isEmpty()) {
-      div("empty pad") { +"This agent has registered no paths" }
-    } else {
-      agent.paths.forEach { path ->
-        div("kv") {
-          span("k") { +"/${path.path}" }
-          span("v") {
-            +if (path.agentIds.size > 1) "shared with ${path.agentIds.size - 1} other agent(s)" else path.labels
-          }
-        }
-      }
-    }
-
-    recentScrapes(snapshot.scrapesOf(agent.agentId))
   }
 
   // The detail's Recent scrapes: a header carrying their count as data too, for demos/basics/bin/screenshots.sh,

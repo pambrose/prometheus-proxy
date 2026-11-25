@@ -30,10 +30,13 @@ import io.kotest.matchers.string.shouldNotContain
 import brave.Span
 import brave.Tracing
 import brave.handler.MutableSpan
+import com.google.protobuf.Empty
 import com.pambrose.common.concurrent.await
+import com.pambrose.common.dsl.GrpcDsl.server
 import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.util.zip
 import com.pambrose.common.util.hostInfo
+import io.grpc.ManagedChannel
 import io.grpc.Metadata
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -42,7 +45,6 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -52,7 +54,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
-import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -85,6 +86,7 @@ import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -99,7 +101,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
-import java.lang.reflect.InvocationTargetException
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.util.concurrent.CountDownLatch
@@ -726,6 +727,57 @@ class AgentGrpcServiceTest : StringSpec() {
           }
 
         events.filter { it.level == Level.WARN }.map { it.formattedMessage }.single() shouldContain "primary:1"
+      }
+    }
+
+    // An agent with one proxy keeps its channel between attempts, and once a connect failed, the channel dialed again
+    // only on gRPC's backoff, which grows to 2 minutes, failing each call in between at once: after a long outage the
+    // agent found its proxy up to 2 minutes after it was back, though it tried every reconnectPauseSecs (November #60).
+    "a connect after failed ones should dial the proxy at once, not wait out gRPC's backoff" {
+      val serverName = "agent-connect-backoff-${System.nanoTime()}"
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, serverName)
+      val proxy =
+        server(inProcessServerName = serverName) {
+          addService(
+            object : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
+              override suspend fun connectAgent(request: Empty): Empty = EMPTY_INSTANCE
+            },
+          )
+        }
+      try {
+        // No proxy yet: the first call's dial fails, the channel backs off for about a second, and the calls made
+        // while it waits fail at once.
+        repeat(3) { service.connectAgent().shouldBeFalse() }
+        proxy.start()
+
+        service.connectAgent().shouldBeTrue()
+      } finally {
+        service.shutDown()
+        proxy.shutdownNow().awaitTermination()
+      }
+    }
+
+    // A channel EndpointFailover just built, as on the first attempt or after a connection that registered, has no
+    // backoff to reset; one whose connect failed has.
+    "connectAgent should reset the channel's connect backoff only after a failed connect" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val builtChannel = service.channel
+        val channel = mockk<ManagedChannel>(relaxed = true)
+        service.channel = channel
+        try {
+          service.connectAgent().shouldBeTrue()
+          verify(exactly = 0) { channel.resetConnectBackoff() }
+
+          coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws StatusException(Status.UNAVAILABLE)
+          service.connectAgent().shouldBeFalse()
+          verify(exactly = 0) { channel.resetConnectBackoff() }
+
+          service.connectAgent().shouldBeFalse()
+          verify(exactly = 1) { channel.resetConnectBackoff() }
+        } finally {
+          service.channel = builtChannel
+        }
       }
     }
 
@@ -1536,6 +1588,54 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // A heartbeat's JVM Error read as a transient failure, so an agent out of heap reconnected rather than stop
+    // (November #7).
+    "sendHeartBeat should rethrow a JVM Error rather than report a transient failure" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.sendHeartBeat(any(), any()) } throws OutOfMemoryError("test")
+
+        shouldThrow<OutOfMemoryError> { service.sendHeartBeat() }
+      }
+    }
+
+    // A response stream's JVM Error, where the large allocations are, ended only the connection, and the agent
+    // reconnected (November #7).
+    "a JVM Error in a response stream should propagate, and still end the connection's streams" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.writeResponsesToProxy(any(), any()) } throws OutOfMemoryError("test")
+        coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
+          arg<Flow<ChunkedScrapeResponse>>(0).collect()
+          EMPTY_INSTANCE
+        }
+        val connectionContext = AgentConnectionContext(128)
+
+        shouldThrow<OutOfMemoryError> {
+          withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(service.agent, connectionContext) }
+        }
+        connectionContext.connected.shouldBeFalse()
+      }
+    }
+
+    // The Error cancels the connection's tasks, and a producer cancelled before it had run never reached the finally
+    // block that ends the connection: on a busy machine, the spec above found it still open. Cancelled before any task
+    // runs, the producer never does.
+    "a connection whose tasks are cancelled before the producer runs should still end, dropping its queued results" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, _ ->
+        val agent = service.agent.countsDroppedResults()
+        val connectionContext = countingConnectionContext(agent).withResults(2)
+
+        coroutineScope {
+          launch {
+            cancel()
+            service.writeResponsesToProxyUntilDisconnected(agent, connectionContext)
+          }
+        }
+
+        connectionContext.connected.shouldBeFalse()
+        verify(exactly = 2) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
+      }
+    }
+
     "registerAgent should throw on empty agentId" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       every { agent.agentId } returns ""
@@ -1721,7 +1821,9 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
-    "processScrapeResults should count a result as dropped when the response channel has closed" {
+    // The connection is over, which isn't the producer's own failure: it returns, where the exception it threw logged
+    // an ERROR with a stack trace (November #6).
+    "processScrapeResults should count a result as dropped, and return, when the response channel has closed" {
       withService("localhost:$PROXY_AGENT_PORT") { service ->
         val connectionContext = AgentConnectionContext(128)
         // A sibling writer's closeAll() has already closed the response channels.
@@ -1741,12 +1843,8 @@ class AgentGrpcServiceTest : StringSpec() {
         )
         connectionContext.close()
 
-        val thrown =
-          shouldThrowAny {
-            callProcessScrapeResults(service, service.agent, connectionContext, nonChunkedChannel, chunkedChannel)
-          }
-        ((thrown as? InvocationTargetException)?.targetException ?: thrown)
-          .shouldBeInstanceOf<ClosedSendChannelException>()
+        callProcessScrapeResults(service, service.agent, connectionContext, nonChunkedChannel, chunkedChannel)
+
         // The only count is the "dropped" one, which the channel makes of the message it couldn't take.
         verify(exactly = 1) { service.agent.countScrapeResult(any()) }
         verify(exactly = 1) { service.agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
@@ -2283,6 +2381,95 @@ class AgentGrpcServiceTest : StringSpec() {
         verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
         verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
       }
+    }
+
+    // What the scrapes finished just before a writer's stream failed, still queued for the producer, counted neither as
+    // sent nor as dropped: the producer ended at the first send to the cancelled channel, leaving the rest unread, and
+    // agent_scrape_result_count_total fell short of agent_scrape_request_count_total (November #6).
+    "results the producer hadn't forwarded when a writer failed should each count as dropped" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val agent = service.agent.countsDroppedResults()
+        coEvery { mockStub.writeResponsesToProxy(any(), any()) } coAnswers {
+          arg<Flow<ScrapeResponse>>(0).first()
+          throw StatusException(Status.UNAVAILABLE)
+        }
+        coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
+          arg<Flow<ChunkedScrapeResponse>>(0).collect()
+          EMPTY_INSTANCE
+        }
+        val connectionContext = countingConnectionContext(agent).withResults(3)
+        // The producer forwards the first result, then waits until the writer's failure has ended the connection.
+        every { agent.markMsgSent() } answers { awaitDisconnect(connectionContext) }
+
+        withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(agent, connectionContext) }
+
+        verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
+        verify(exactly = 2) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
+      }
+    }
+
+    // When the other writer is the one that failed, the producer's send to the closed channel threw a
+    // ClosedSendChannelException, which read as an UNKNOWN status and logged an ERROR with a stack trace for an
+    // ordinary disconnect (November #6).
+    "a result the producer can't forward after the other writer failed should count as dropped, and log no ERROR" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val agent = service.agent.countsDroppedResults()
+        val forwarded = CompletableDeferred<Unit>()
+        coEvery { mockStub.writeResponsesToProxy(any(), any()) } coAnswers {
+          arg<Flow<ScrapeResponse>>(0).collect()
+          EMPTY_INSTANCE
+        }
+        coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
+          forwarded.await()
+          throw StatusException(Status.UNAVAILABLE)
+        }
+        val connectionContext = countingConnectionContext(agent).withResults(3)
+        every { agent.markMsgSent() } answers {
+          forwarded.complete(Unit)
+          awaitDisconnect(connectionContext)
+        }
+        // A scrape request still queued has the failed writer's closeAll() decrement the backlog, slowly here. With the
+        // response channels closed after the connection, the producer, going on once the connection read as closed,
+        // forwarded the other two results while they were still open, and the other writer sent all three.
+        connectionContext.sendScrapeRequestAction { error("never run") }
+        every { agent.decrementBacklog(1) } answers { Thread.sleep(500) }
+
+        val errors =
+          captureLogs<AgentGrpcService> {
+            withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(agent, connectionContext) }
+          }.filter { it.level == Level.ERROR }
+
+        errors.map { it.formattedMessage } shouldBe emptyList()
+        verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
+        verify(exactly = 2) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
+      }
+    }
+  }
+
+  // Has [this] mocked agent count a result updateScrapeResultCounter is given, as the Agent does, so a spec can verify
+  // each result's count through countScrapeResult, however it was counted.
+  private fun Agent.countsDroppedResults(): Agent =
+    also { every { it.updateScrapeResultCounter(any(), any()) } answers { callOriginal() } }
+
+  // A connection context that counts a result it can't send as dropped, as newConnectionContext builds one.
+  private fun countingConnectionContext(agent: Agent): AgentConnectionContext =
+    AgentConnectionContext(128) { agent.updateScrapeResultCounter(it, AgentMetrics.RESULT_DROPPED) }
+
+  // [this] connection context with [count] non-gzipped results queued for the proxy.
+  private fun AgentConnectionContext.withResults(count: Int): AgentConnectionContext =
+    also {
+      repeat(count) { id ->
+        sendScrapeResults(
+          ScrapeResults(srAgentId = "test-agent-123", srScrapeId = id.toLong(), srContentAsText = "metric 1"),
+        ).shouldBeTrue()
+      }
+    }
+
+  // Blocks the calling thread, as a producer busy with a result does, until [connectionContext] is closed.
+  private fun awaitDisconnect(connectionContext: AgentConnectionContext) {
+    val deadline = TimeSource.Monotonic.markNow() + 5.seconds
+    while (connectionContext.connected && deadline.hasNotPassedNow()) {
+      Thread.sleep(10)
     }
   }
 

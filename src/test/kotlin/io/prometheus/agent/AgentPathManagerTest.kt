@@ -1496,6 +1496,48 @@ class AgentPathManagerTest : StringSpec() {
       manager.hasRejectedStaticPaths.shouldBeTrue()
     }
 
+    // Each path's call was isolated, JVM Errors included, so an agent out of heap or stack in one path's registration
+    // logged a failed path and ran on, in the state the Error left it in (November #7). An Error now propagates, from
+    // each of the four isolated calls, to fail the connection and stop the agent.
+    "a JVM Error retrying a rejected static path should propagate" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws OutOfMemoryError("test")
+
+      shouldThrow<OutOfMemoryError> { manager.retryRejectedStaticPaths() }
+    }
+
+    "a JVM Error registering a discovered path should propagate from the reconcile" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } throws StackOverflowError("test")
+
+      shouldThrow<StackOverflowError> {
+        manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/m", "{}")])
+      }
+    }
+
+    "a JVM Error unregistering a stale discovered path should propagate from the reconcile" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/m", "{}")])
+      coEvery { agent.grpcService.unregisterPathOnProxy(any()) } throws OutOfMemoryError("test")
+
+      shouldThrow<OutOfMemoryError> { manager.reconcileDiscoveredPaths(emptyList()) }
+    }
+
+    "a JVM Error reclaiming a taken-over path should propagate" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { agent.grpcService.reclaimPathOnProxy(any(), any(), any(), any()) } throws OutOfMemoryError("test")
+      clock += 10.seconds
+
+      shouldThrow<OutOfMemoryError> { manager.reclaimTakenOverPaths() }
+    }
+
     // A retry that kept timing out logged a WARN with its stack trace on every tick, since nothing compared it with the
     // last failure, and a deadline's description carries its elapsed time anyway (November #42). A failure with a gRPC
     // status is compared by its code, as #39 does for a discovered path; the full description is still logged.

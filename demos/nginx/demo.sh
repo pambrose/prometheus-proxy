@@ -58,9 +58,11 @@ save_ports() {
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 # Their releases on Docker Hub, in the same order, which up pulls at the latest release.
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
-# The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
-# checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.7.0
+# The newest release that lacks something the demo shows. up runs the release the docs give (make site-version)
+# once it's later than this and its images are on Docker Hub, and otherwise builds the proxy and agent from this
+# checkout, as up-local does, so nothing here changes with a release. When the demo comes to use something no
+# release has yet, set this to the latest release on Docker Hub.
+NEEDS_RELEASE_AFTER=4.6.0
 
 # nginx's config variants (nginx/): the agents' entrance, agents-<variant>.conf, and the dashboard's,
 # dashboard-<variant>.conf, each copied into conf.d as agents.conf or dashboard.conf.
@@ -73,7 +75,10 @@ SHUTDOWN_SECS=10
 # (proxy.internal.streamKeepAliveSecs).
 DEFAULT_KEEPALIVE_SECS=30
 
-# This demo's page on the docs site, which shows its layout and code
+# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
+# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
+# between releases the page can lag behind this checkout, or not be there yet.
+README_PATH="demos/nginx/README.md"
 PAGE_URL="https://prometheus-proxy.com/nginx-demo/"
 DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 # The same dashboard, through nginx (nginx/dashboard-*.conf).
@@ -170,7 +175,8 @@ print_urls() {
   echo "  Prometheus:               $PROMETHEUS_URL"
   echo "  Proxy discovery:          $PROXY_URL/discovery"
   echo
-  echo "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
+    "release: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 nginx-log | nginx-long-timeouts | nginx-workers | keepalive 10 | dashboard-host ...  (no" \
     "arguments for help)"
@@ -422,8 +428,23 @@ version_after() {
   return 1
 }
 
-# The latest release: the version the docs give, whose images are on Docker Hub.
+# The release the docs give: the latest, or, from a version bump until the release is out, the next, whose images
+# aren't on Docker Hub yet.
 latest_release() { "$MAKE" -s --no-print-directory -C "$REPO_DIR" site-version; }
+
+# Whether a release's images are published: published <version> <image>... Docker has them already, since a
+# release's images don't change and a demo started again without a network connection uses them, or Docker Hub has
+# them. Only Docker Hub's answer that it has no such image says no, as from a version bump until its release is out;
+# when Docker Hub can't be reached, the pull says so.
+published() {
+  local release="$1" image answer
+  shift
+  for image in "$@"; do
+    docker image inspect "$image:$release" >/dev/null 2>&1 && continue
+    answer="$(docker manifest inspect "$image:$release" 2>&1 >/dev/null)" && continue
+    [[ "$answer" != *"no such manifest"* ]] || return 1
+  done
+}
 
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 
@@ -467,17 +488,21 @@ pull_images() {
   done
 }
 
-# The proxy and agent of the latest release, unless it predates what the demo shows.
+# The proxy and agent of the release the docs give, unless it predates what the demo shows or isn't on Docker Hub yet.
 cmd_up() {
   local release
   check_tools
   release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
-  if version_after "$release" "$NEEDS_RELEASE_AFTER"; then
-    start_demo "$release"
-  else
+  if ! version_after "$release" "$NEEDS_RELEASE_AFTER"; then
     wrap "" "" "The latest release, $release, predates this demo, so it runs the proxy and agent built from this" \
       "checkout, which takes a JDK 17 or later."
     start_demo
+  elif ! published "$release" "${RELEASED_IMAGES[@]}"; then
+    wrap "" "" "Release $release, which the docs give, isn't on Docker Hub yet, so the demo runs the proxy and agent" \
+      "built from this checkout, which takes a JDK 17 or later."
+    start_demo
+  else
+    start_demo "$release"
   fi
 }
 
@@ -617,7 +642,8 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. To start from another part, run" \
     "$MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
+    "${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 
@@ -1148,7 +1174,7 @@ main() {
       "site's page can't use it, and refuses this one with 403."
     watch_for
     point "Reload the dashboard through nginx: it's still 'reconnecting...': $NGINX_DASHBOARD_URL"
-    point "The proxy logs each refusal, 'Refused a dashboard request from origin', naming the address the browser" \
+    point "The proxy logs the refusal, 'Refused a dashboard request from origin', naming the address the browser" \
       "opened, and the setting that would allow it, proxy.dashboard.allowedOrigins. To see it, run $0 logs proxy"
     point "In the Paths view, click the scrape button, the circular arrow beside /storefront_metrics: the result" \
       "says 'Origin not allowed', since the button sends a POST: $NGINX_DASHBOARD_URL/paths"

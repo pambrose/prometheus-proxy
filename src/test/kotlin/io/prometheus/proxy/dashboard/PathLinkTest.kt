@@ -29,6 +29,7 @@ import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.common.dashboard.DashboardCss
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
+import io.prometheus.proxy.dashboard.DashboardFixtures.labelsOf
 import io.prometheus.proxy.dashboard.DashboardFixtures.pathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 import kotlin.math.pow
@@ -60,7 +61,7 @@ class PathLinkTest : StringSpec() {
   // The URL a job-label link gives the orders path registered with this job.
   private fun jobUrl(job: String) = urlFor("https://p.example.com/graph?job={label.job}", orders.withJob(job))
 
-  private fun PathView.withJob(job: String) = copy(labels = """{"job": "$job"}""")
+  private fun PathView.withJob(job: String) = copy(labels = labelsOf("""{"job": "$job"}"""))
 
   // The message a template is refused with.
   private fun refusal(url: String): String = shouldThrow<IllegalArgumentException> { link(url) }.message.orEmpty()
@@ -117,7 +118,7 @@ class PathLinkTest : StringSpec() {
     }
 
     // An agent supplied the labels: anything that isn't a JSON object of plain values gives no label rather than an
-    // exception during a push.
+    // exception during a push. The proxy keeps them as it parsed them at registration, which pathView does too.
     "a path's labels should be read tolerantly, keeping the plain values" {
       pathView(labels = """{"job": "orders", "port": 8080, "up": true, "a": null, "b": {}, "c": []}""")
         .labelValues shouldBe mapOf("job" to "orders", "port" to "8080", "up" to "true")

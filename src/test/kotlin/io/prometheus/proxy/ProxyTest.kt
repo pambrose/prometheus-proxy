@@ -365,9 +365,10 @@ class ProxyTest : StringSpec() {
       buildWarnings.shouldBeEmpty()
     }
 
-    // The path's entry keeps what service discovery serves, parsed and filtered once by October #24's rules, beside the
-    // labels as the agent sent them, which the dashboard and /debug show.
-    "addPath should keep the labels service discovery serves, filtered once, beside the labels as sent" {
+    // The path's entry keeps the labels parsed once: those with a value, which the dashboard shows and its links read,
+    // the ones service discovery leaves out included, such as a reserved job, and what service discovery serves,
+    // filtered by October #24's rules. It no longer keeps the labels as sent too.
+    "addPath should keep the labels parsed once, and the ones service discovery serves" {
       val proxy =
         createTestProxy(
           "-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT",
@@ -375,15 +376,15 @@ class ProxyTest : StringSpec() {
         )
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
-      val labels = """{"count":1,"__scheme__":"https","hostName":"x","job":"j","a-b":"dash","team":"web"}"""
+      val labels = """{"count":1,"__scheme__":"https","hostName":"x","job":"j","a-b":"dash","team":"web","o":{}}"""
 
       proxy.pathManager.addPath("metrics", labels, agentContext).shouldBeNull()
 
       val info = proxy.pathManager.getAgentContextInfo("metrics").shouldNotBeNull()
-      info.labels shouldBe labels
+      info.labels.keys shouldBe setOf("count", "__scheme__", "hostName", "job", "a-b", "team")
       info.sdLabels shouldBe JsonObject(mapOf("team" to JsonPrimitive("web")))
       proxy.pathManager.addPath("blank", "", agentContext).shouldBeNull()
-      proxy.pathManager.getAgentContextInfo("blank").shouldNotBeNull().sdLabels shouldBe JsonObject(emptyMap())
+      proxy.pathManager.getAgentContextInfo("blank").shouldNotBeNull().labels shouldBe JsonObject(emptyMap())
     }
 
     "a path with no reserved agent labels should register without a warning" {

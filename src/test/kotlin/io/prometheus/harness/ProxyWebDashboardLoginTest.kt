@@ -265,6 +265,9 @@ class ProxyWebDashboardLoginTest : StringSpec() {
         val token = loggedIn()
         page("/dashboard", token).apply {
           status shouldBe HttpStatusCode.OK
+          // Behind a login, a page is never kept in the browser's cache, to be shown again after Log out, or framed.
+          headers[HttpHeaders.CacheControl] shouldBe "no-store"
+          headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
           bodyAsText() shouldContain """id="${DashboardPage.LOGOUT_ID}""""
         }
         sessionStatus(token) shouldBe HttpStatusCode.NoContent
@@ -374,7 +377,8 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     }
 
     // The login is checked when a page's WebSocket opens; a socket outlives that, so the push loop closes one whose
-    // session has ended, and Log out wakes it at once. The page then asks for its session and gets the login page.
+    // session has ended, and Log out closes its own at once. The page then asks for its session and gets the login
+    // page.
     "an open dashboard's WebSocket should close when its session ends" {
       withProxy {
         val token = loggedIn()

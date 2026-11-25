@@ -105,6 +105,9 @@ Version 4.7.0 adds:
 - **Metrics without an endpoint** - an app that embeds the agent hands it its metrics registry, with
   `source(path, registry)`, or a `MetricsSource` that writes its metrics, so it serves no `/metrics` endpoint; and
   `agentMetricsAt(path)` serves the agent's own metrics the same way, with no port
+- **Agent metrics without a port** - `agent.metrics.proxyPath` (`--metrics_proxy_path`, `METRICS_PROXY_PATH`) serves
+  a standalone agent's own metrics, its JVM metrics included, through the proxy at that path, read in-process, with no
+  metrics port to open
 - **Simpler embedding** - `fromEnvironment()` reads the proxy, its token, and its certificate from the app's
   environment, and `startIfConfigured()` starts the agent only where there's a proxy, keeping the app running if it
   can't start
@@ -539,7 +542,8 @@ store that can't be loaded), the embedded `startAsyncAgent` / `startSyncAgent` e
 `exitProcess`; credentials in a config URL are redacted from it. Stand-alone agents (run from the CLI) still log the
 reason and exit with code 1. If the agent then fails to start (for example, its admin or metrics port is already in
 use), `startAsyncAgent` throws `IllegalStateException` with the startup failure as its cause, after releasing everything
-the agent had opened.
+the agent had opened. The agent runs on a daemon thread, so it doesn't keep the JVM running: your application's own
+threads do, and a `main()` that only starts the agent and returns ends it.
 
 An application that holds the agent's settings itself, such as a token, the proxy's certificate, or credentials for
 its own `/metrics`, can build them in code instead of in a file, with `embeddedAgent { }` (or
@@ -548,12 +552,14 @@ its own `/metrics`, can build them in code instead of in a file, with `embeddedA
 [Cloud Platforms](https://prometheus-proxy.com/cloud-platforms/) page builds an app on ECS, Cloud Run,
 or Azure Container Apps around it. A program with no HTTP server needs a few lines: the builder reads the proxy and its
 credentials from the environment, serves a `PrometheusRegistry` and the agent's own metrics in-process, and
-`startIfConfigured()` leaves the agent off where there's no proxy:
+`startIfConfigured()` leaves the agent off where there's no proxy. With `PROMETHEUS_PROXY_CERT` set, the agent checks
+the proxy's certificate against the name in `PROMETHEUS_PROXY_AUTHORITY`, or `prometheus-proxy` without it, rather
+than the host it dials:
 
 ```kotlin
 embeddedAgent {
   name = "worker-$version"
-  fromEnvironment() // PROMETHEUS_PROXY, PROMETHEUS_AGENT_TOKEN, PROMETHEUS_PROXY_CERT
+  fromEnvironment() // PROMETHEUS_PROXY, PROMETHEUS_AGENT_TOKEN, PROMETHEUS_PROXY_CERT, PROMETHEUS_PROXY_AUTHORITY
   source(path = "worker_metrics", registry = PrometheusRegistry.defaultRegistry)
   agentMetricsAt(path = "worker_agent_metrics")
 }.startIfConfigured().use { worker.run() }
@@ -561,9 +567,9 @@ embeddedAgent {
 
 Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
 and each series carries its agent's `launch_id`. An embedded agent's `logLevel` sets only the `io.prometheus` loggers,
-so it leaves your application's own logging alone. Your application's Logback configuration also configures the
-agent's loggers, since the library jar carries none of its own; the standalone agent's sets `io.grpc.internal` to WARN,
-which you may want too.
+so it leaves your application's own logging alone. The agent logs through SLF4J and brings no provider or configuration
+of its own, so your application's logging, Logback or another provider, configures the agent's loggers too; the
+standalone agent's sets `io.grpc.internal` to WARN, which you may want too.
 
 To debug an embedded agent, start by turning on its admin endpoints and its `/debug` page, which are off unless asked
 for. The agent reads the app's environment itself, so they need no change to the code, and a restart turns them on or
@@ -856,7 +862,8 @@ path's recent scrapes as the agent saw them, a Scrape now button that fetches it
 metric filter, the agent's discovery file, an Activity view of what happened to its connection and paths, and a
 Settings view of every setting it resolved. It is off by default, takes the same login settings as the proxy's (`agent.dashboard.password`, or
 `DASHBOARD_PASSWORD`), and listens on port 8095; the agent's Helm chart turns it on with `dashboard.enabled`, and every
-demo turns it on for its agents, all but the nginx demo's 4.6.0 agent, which predates it:
+demo turns it on for its agents, all but the nginx demo's 4.6.0 agent, which predates it, and the plain Kotlin demo's
+ovens, which listen on no port:
 
 ```bash
 java -jar prometheus-agent.jar --config agent.conf --dashboard    # or DASHBOARD_ENABLED=true / agent.dashboard.enabled
@@ -869,8 +876,10 @@ java -jar prometheus-agent.jar --config agent.conf --dashboard    # or DASHBOARD
 Both proxy and agent expose their own metrics:
 
 - **Proxy metrics:** `http://proxy-host:8082/metrics`
-- **Agent metrics:** `http://agent-host:8083/metrics`. The agent sits behind the firewall, so give it a path for its own
-  metrics and let Prometheus scrape them through the proxy, like any other target
+- **Agent metrics:** the agent sits behind the firewall, so Prometheus scrapes its metrics through the proxy, like any
+  other target. `agent.metrics.proxyPath` (`--metrics_proxy_path`, `METRICS_PROXY_PATH`) serves them at a path of the
+  agent's own, read in-process, with no port; or turn on its metrics port, `http://agent-host:8083/metrics`, and give
+  it a `pathConfigs` entry for that
 - **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`, `/threaddump`
 - **JVM metrics:** off by default; each group is turned on under `proxy.metrics` or `agent.metrics` in the config
   file (`memoryPoolsExportsEnabled`, `garbageCollectorExportsEnabled`, and so on). Version 4.3.0 adds buffer pools

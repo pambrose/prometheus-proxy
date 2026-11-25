@@ -263,6 +263,9 @@ class AgentWebDashboardTest : StringSpec() {
 
         client.post("$base/dashboard/scrape?path=$SCRAPED_PATH") { header(HX_REQUEST_HEADER, "true") }.apply {
           status shouldBe HttpStatusCode.OK
+          // No page on another site may frame the agent's dashboard, to steer a viewer's clicks to this button.
+          headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
+          headers["X-Frame-Options"] shouldBe "DENY"
           bodyAsText().apply {
             this shouldContain """<span class="pill ok">200</span>"""
             this shouldContain "after the filter"
@@ -405,7 +408,11 @@ class AgentWebDashboardTest : StringSpec() {
           status shouldBe HttpStatusCode.SeeOther
           headers[HttpHeaders.Location] shouldBe "/dashboard/login?next=%2Fdashboard"
         }
-        client.get("$base/dashboard/login").bodyAsText() shouldContain "<h1>${AgentDashboardService.LOGIN_HEADING}</h1>"
+        client.get("$base/dashboard/login").apply {
+          bodyAsText() shouldContain "<h1>${AgentDashboardService.LOGIN_HEADING}</h1>"
+          headers[HttpHeaders.CacheControl] shouldBe "no-store"
+          headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
+        }
         client.post("$base/dashboard/login") {
           header(HttpHeaders.Origin, base)
           setBody(

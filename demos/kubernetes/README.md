@@ -69,10 +69,10 @@ To show it without a network connection, run `make up` once beforehand and leave
 
 Each port is the basics demo's plus 200, so the demos can run side by side. kind publishes the ports, through NodePort
 Services in the monitoring cluster, when it creates `pp-monitoring`, so if one is already taken, set its variable from
-the table for the `make up` that creates the clusters, for example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You
-set it once: every command after reads the ports back from the running cluster, which keeps them until `make down`
-deletes it, and `make up` says so if a variable asks for another. The proxy dashboard's link into Prometheus keeps the
-default port (`config/proxy.conf`).
+the table, all but the agent dashboard's, for the `make up` that creates the clusters, for example
+`KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. You set it once: every command after reads the ports back from the
+running cluster, which keeps them until `make down` deletes it, and `make up` says so if a variable asks for another.
+The proxy dashboard's link into Prometheus keeps the default port (`config/proxy.conf`).
 
 Every port binds to `127.0.0.1` only. The dashboard runs without its login, so this setup is for a laptop, not for
 anything shared.
@@ -81,7 +81,8 @@ The agent dashboard's port, 8295, isn't one kind publishes: `pp-target` publishe
 dashboard off the agent's Service. `./demo.sh agent-dashboard` reaches it as the chart's notes tell an operator to,
 with `kubectl --context kind-pp-target -n monitoring port-forward deploy/prometheus-agent 8295:8095`, in the
 foreground. It holds the port only while it runs, on `localhost` only, and `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` moves
-it without recreating a cluster. A port-forward reaches one pod, so once the agent's pod is replaced, as
+it without recreating a cluster. Nothing keeps it, so give it to each `./demo.sh agent-dashboard` and `make tour`, or
+export it in your shell. A port-forward reaches one pod, so once the agent's pod is replaced, as
 `delete-agent-pod` and `change-config` do, it fails at the next request, with `error: lost connection to pod`: run it
 again. The agent's dashboard runs without its login too.
 
@@ -275,7 +276,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 | `app/services_app.py` | The simulated services |
 | `sync/targets_sync.py` | targets-sync |
 | `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
-| `demo.sh` | Creating and deleting the clusters, installing the charts, the scenarios, and `agent-dashboard`. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
+| `demo.sh` | Creating and deleting the clusters, installing the charts, the scenarios, and `agent-dashboard`. Its `NEEDS_RELEASE_AFTER` is the newest release that lacks something the demo shows: until the release the docs give is later and its images are on Docker Hub, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release on Docker Hub when the demo comes to use something no release has yet |
 | `bin/screenshots.sh` | The Kubernetes Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agent's uptime reads in minutes, plays parts 1, 3, and 4, and writes them to `website/prometheus-proxy/docs/images/kubernetes-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
 
 How `make up` wires the two clusters together:
@@ -337,11 +338,11 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
 - **`./demo.sh agent-dashboard` stops with `lost connection to pod`**: the agent's pod was replaced; run it again. If
   it can't listen on 8295, another program holds it: set `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT`. If it says the
   dashboard is off, the agent was installed before the demo turned it on: `make up` upgrades it.
-- The proxy logs warnings at startup that the dashboard has no authentication and that agent tokens cross without
-  TLS, and the agent one that its token crosses without TLS. The agent also logs a WARN that its dashboard has no
-  authentication and listens on all interfaces. All are expected here: the token crosses only Docker's `kind` network
-  on this machine, every published port binds to `127.0.0.1`, and the agent's dashboard is on no Service, so only
-  `kubectl port-forward` reaches it.
+- The proxy logs warnings at startup that the dashboard has no authentication and listens on all interfaces, which
+  its NodePort Service needs, and that agent tokens cross without TLS, and the agent one that its token crosses without
+  TLS. All are expected here: the token crosses only Docker's `kind` network on this machine, and every published port
+  binds to `127.0.0.1`. The agent's dashboard has no login either, but the chart has it listen on its pod's loopback,
+  where only `kubectl port-forward` reaches it, so the agent doesn't warn about it.
 
 ## The Other Demos
 

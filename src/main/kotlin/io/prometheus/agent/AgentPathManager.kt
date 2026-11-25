@@ -17,7 +17,7 @@
 package io.prometheus.agent
 
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
-import com.pambrose.common.util.runCatchingCancellable
+import io.prometheus.common.runCatchingNonFatal
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
@@ -301,15 +301,16 @@ internal class AgentPathManager(
 
   // Retries each static path the proxy rejected as retryable. Static paths are otherwise registered only at connect,
   // but such a rejection can clear while the agent stays connected: the live agent that held the path disconnects.
-  // Each path is isolated, as in reconcileDiscoveredPaths, so no failure ends the connection, whose other tasks
-  // already end it when it is really gone. A transport failure keeps the path for retrying (see staticRetryFailed).
+  // Each path is isolated, as in reconcileDiscoveredPaths, so no failure but a JVM Error, which stops the agent, ends
+  // the connection, whose other tasks already end it when it is really gone. A transport failure keeps the path for
+  // retrying (see staticRetryFailed).
   suspend fun retryRejectedStaticPaths() {
     for ((config, retry) in rejectedStaticPaths.toList()) {
       // Each path waits out its own backoff; see nextBackoff.
       if (!retry.backoff.isDue)
         continue
       val path = config.path.removePrefix("/")
-      runCatchingCancellable { registerStaticPath(config, repeat = true) }
+      runCatchingNonFatal { registerStaticPath(config, repeat = true) }
         .onSuccess { rejection ->
           if (rejection == null)
             logger.info { "Registered static path /$path after the proxy had rejected it" }
@@ -495,7 +496,7 @@ internal class AgentPathManager(
         val current = paths[path] ?: return@withLock
         val tried = current.takenOver ?: return@withLock
         val context = current.context
-        runCatchingCancellable { doRegisterPath(path, context.target, context.labels, context.source) }
+        runCatchingNonFatal { doRegisterPath(path, context.target, context.labels, context.source) }
           .onSuccess { logger.info { "Took back path /$path from the agent that had taken it over" } }
           .onFailure { e -> reclaimFailed(path, context.source, tried, e) }
       }
@@ -576,9 +577,9 @@ internal class AgentPathManager(
    * paths no longer desired, and re-registers a discovered path whose URL or labels changed. A
    * desired path colliding with a [PathSource.STATIC] path, or with a configured static path the proxy
    * rejected, is skipped (static wins). Each per-path operation is isolated, so one failing path does
-   * not abort the rest of the reconcile. A failure is retried on the next call (reconcile is idempotent),
-   * except a rejection: one that can clear waits out its backoff, and one that can't isn't retried as it stands;
-   * see [registerDiscoveredPath].
+   * not abort the rest of the reconcile, unless it fails with a JVM Error, which is rethrown to stop the agent. A
+   * failure is retried on the next call (reconcile is idempotent), except a rejection: one that can clear waits out its
+   * backoff, and one that can't isn't retried as it stands; see [registerDiscoveredPath].
    */
   suspend fun reconcileDiscoveredPaths(desired: List<DiscoveredPath>) =
     pathMutex.withLock {
@@ -655,7 +656,7 @@ internal class AgentPathManager(
     // Forget the failures of paths no longer stale: unregistered, desired again, or no longer discovered.
     staleUnregisterFailures.keys.retainAll(stale)
     for (path in stale) {
-      runCatchingCancellable { doUnregisterPath(path) }
+      runCatchingNonFatal { doUnregisterPath(path) }
         .onSuccess { staleUnregisterFailures -= path }
         .onFailure { e ->
           val failure = failureKey(e)
@@ -708,7 +709,7 @@ internal class AgentPathManager(
     // exclusive path is replaced in place, as every proxy replaces an agent's own registration of one: unregistering it
     // first let an agent waiting on it take it in between. A proxy keeps a consolidated path's labels, so that one is
     // unregistered first, and no agent takes a consolidated path over.
-    runCatchingCancellable {
+    runCatchingNonFatal {
       if (current != null && agent.options.consolidated)
         doUnregisterPath(path)
       doRegisterPath(path, ScrapeTarget(entry.url), entry.labels, PathSource.DISCOVERED, reclaim = current != null)

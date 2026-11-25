@@ -20,6 +20,7 @@ package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
 import io.kotest.assertions.nondeterministic.eventually
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -100,13 +101,39 @@ class MetricsSourceTest : StringSpec() {
   private fun request(
     accept: String = "",
     params: String = "",
+    path: String = "metrics",
   ) = scrapeRequest {
     agentId = "agent-1"
     scrapeId = 1L
-    path = "metrics"
+    this.path = path
     this.accept = accept
     encodedQueryParams = params
     debugEnabled = true
+  }
+
+  // A source stuck in a call that ignores interrupts, as a socket read does, until [release] counts down, which a
+  // daemon thread does after 15 seconds in any case, so a regression fails its test rather than hanging it. [calls]
+  // counts its calls.
+  private fun stuckSource(
+    release: CountDownLatch,
+    calls: AtomicInteger = AtomicInteger(),
+  ): MetricsSource {
+    thread(isDaemon = true) {
+      Thread.sleep(15_000)
+      release.countDown()
+    }
+    return MetricsSource { _, _, out ->
+      calls.incrementAndGet()
+      while (release.count > 0) {
+        try {
+          release.await()
+        } catch (_: InterruptedException) {
+          // Ignored, as a socket read ignores it
+        }
+      }
+      out.write(BODY.toByteArray())
+      TEXT_FORMAT
+    }
   }
 
   // A scrape of /metrics, served by [source], as the proxy asks for it with [request].
@@ -268,29 +295,18 @@ class MetricsSourceTest : StringSpec() {
     }
 
     // A source stuck in a call that ignores interrupts, such as a socket read, mustn't hold its scrape, the agent's
-    // other scrapes, or its shutdown: the scrape times out on time, and the source isn't called again until it returns.
-    "a source that ignores the timeout's interrupt should time out on time, and not be called again until it returns" {
+    // other scrapes, or its shutdown (the next test): the scrape times out on time, another path's source still
+    // answers, and the source isn't called again until it returns.
+    "a source that ignores the timeout's interrupt should time out, leave other paths served, and not be called again" {
       val release = CountDownLatch(1)
       val calls = AtomicInteger()
-      // Let go in any case, so a regression fails the test rather than hanging it.
-      thread(isDaemon = true) {
-        Thread.sleep(15_000)
-        release.countDown()
-      }
       val agent = agent(scrapeTimeoutSecs = 1)
+      agent.pathManager.registerPath("metrics", IN_PROCESS_TARGET, metricsSource = stuckSource(release, calls))
       agent.pathManager.registerPath(
-        "metrics",
+        OTHER_PATH,
         IN_PROCESS_TARGET,
         metricsSource = { _, _, out ->
-          calls.incrementAndGet()
-          while (release.count > 0) {
-            try {
-              release.await()
-            } catch (_: InterruptedException) {
-              // Ignored, as a socket read ignores it
-            }
-          }
-          out.write(BODY.toByteArray())
+          out.write("other_metric 1\n".toByteArray())
           TEXT_FORMAT
         },
       )
@@ -299,6 +315,13 @@ class MetricsSourceTest : StringSpec() {
         val started = TimeSource.Monotonic.markNow()
         service.fetchScrapeUrl(request()).srStatusCode shouldBe 408
         started.elapsedNow() shouldBeLessThan 5.seconds
+
+        // The stuck call holds a thread of its own, so another path's source, called on another, answers while it's
+        // stuck, rather than waiting behind it until its own scrape times out.
+        val other = service.fetchScrapeUrl(request(path = OTHER_PATH))
+        other.srStatusCode shouldBe 200
+        other.srContentAsText shouldContain "other_metric 1"
+        release.count shouldBe 1L
 
         val refused = service.fetchScrapeUrl(request())
         refused.srStatusCode shouldBe 503
@@ -313,6 +336,27 @@ class MetricsSourceTest : StringSpec() {
       }
     }
 
+    // The agent's shutdown closes the service, which cancels the source's call and waits for none of it: a call that
+    // ignores the interrupt holds only its own thread, so the agent stops while the call is still stuck.
+    "a source that ignores the timeout's interrupt shouldn't hold the agent's shutdown" {
+      val release = CountDownLatch(1)
+      val agent = agent(scrapeTimeoutSecs = 1)
+      agent.pathManager.registerPath("metrics", IN_PROCESS_TARGET, metricsSource = stuckSource(release))
+      val service = AgentHttpService(agent)
+      try {
+        service.fetchScrapeUrl(request()).srStatusCode shouldBe 408
+
+        val closing = TimeSource.Monotonic.markNow()
+        service.close()
+        closing.elapsedNow() shouldBeLessThan 5.seconds
+        // Closed while the call was still stuck, not once the daemon thread let it go
+        release.count shouldBe 1L
+      } finally {
+        release.countDown()
+        service.close()
+      }
+    }
+
     // A host's metrics code can throw an Error, such as a Kotlin TODO() or a NoSuchMethodError from a library's
     // version: it fails the scrape, as an exception does, and the agent goes on.
     "a source that throws an Error should fail only its scrape" {
@@ -321,6 +365,18 @@ class MetricsSourceTest : StringSpec() {
       results.srStatusCode shouldBe 503
       results.srFailureReason shouldContain "NotImplementedError: gauge not done"
       results.scrapeCounterMsg shouldBe "failure"
+    }
+
+    // A VirtualMachineError leaves the JVM unfit to go on, so it's the one thing a source throws that doesn't fail only
+    // its scrape, as any other Error does (above): it propagates, as it does from a target's fetch
+    // (AgentHttpServiceTest).
+    "a source that throws a VirtualMachineError should let it propagate, not fail only its scrape" {
+      listOf(OutOfMemoryError("source heap exhausted"), StackOverflowError("source recursed")).forEach { error ->
+        val thrown = shouldThrow<VirtualMachineError> { scraped { _, _, _ -> throw error } }
+
+        thrown::class shouldBe error::class
+        thrown.message shouldBe error.message
+      }
     }
 
     // Thrown by the source itself, as CompletableFuture.join() or BlockingQueue.take() can, not by the scrape's
@@ -392,6 +448,9 @@ class MetricsSourceTest : StringSpec() {
     const val PROTOBUF = "application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited"
     const val OPEN_METRICS = "application/openmetrics-text; version=1.0.0; charset=utf-8"
     const val TEXT_FORMAT = "text/plain; version=0.0.4; charset=utf-8"
+
+    // A second in-process path, beside /metrics
+    const val OTHER_PATH = "other_metrics"
 
     // The threads a source writes from at once, and the single-byte writes each makes
     const val WRITERS = 8

@@ -44,9 +44,14 @@ import io.prometheus.agent.EmbeddedAgentInfo
  * install block's, which take precedence, but not over the file's `settings.<key>` keys (see
  * [PrometheusProxyAgentConfig]).
  *
- * The agent starts once every module of the app has loaded, and only with a proxy: without one it logs a line and
- * stays off, as on a developer's machine. An agent that can't start, such as one given a certificate it can't read, is
- * logged and stays off too, and the app runs without it, unless [required][PrometheusProxyAgentConfig.required] is set.
+ * The agent starts once every module of the app has loaded, and only where its settings name a proxy, as
+ * [EmbeddedAgentConfig.namesProxy][io.prometheus.agent.EmbeddedAgentConfig.namesProxy] tells: the file's `proxy`, the
+ * install block's, a `settings` key of one, or the agent's own `PROXY_HOSTNAME` environment variable. Without one it
+ * logs a line and stays off, as on a developer's machine. An agent that can't start, such as one given a certificate it
+ * can't read, is logged and stays off too, and the app runs without it, unless
+ * [required][PrometheusProxyAgentConfig.required] is set. It starts before the server binds its port, but its thread
+ * doesn't keep the JVM running, so an app whose port is taken still exits, and Ktor's shutdown hook stops the agent;
+ * the servers of its own metrics and admin ports, when they're on, do keep the JVM running.
  *
  * It begins stopping as soon as the server does, before the server drains the requests in flight, so the proxy drops
  * the app's paths and no scrape reaches an app that's going away; the app's disposal waits for it to finish. While it

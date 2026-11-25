@@ -350,8 +350,11 @@ curl -i http://proxy-host.example.com:8080/my_app_metrics
 proxy, the agent is connected and has registered the path, and the agent can reach the target. Any other status says
 which hop failed:
 
-- <span class="pp-status pp-status--crit">404 Not Found</span>: no agent has registered the path. Check the agent's
-  log for the `Registered` line, and that the path matches the agent's `path`.
+- <span class="pp-status pp-status--crit">404 Not Found</span>: no agent has registered the path, or the target itself
+  answered 404. Check the agent's log for the `Registered` line, and that the path matches the agent's `path`; if
+  it's there, check the `url` with `curl` from the agent's host.
+- <span class="pp-status pp-status--crit">408 Request Timeout</span>: the target didn't answer within the agent's
+  scrape timeout.
 - <span class="pp-status pp-status--crit">503 Service Unavailable</span>: the agent has the path, but it couldn't
   reach the target, or it was disconnected. Check the `url` with `curl` from the agent's host.
 

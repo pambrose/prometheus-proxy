@@ -81,7 +81,7 @@ class PathTableHtmlTest : StringSpec() {
   private fun pathWithJob(
     name: String,
     job: String,
-  ) = path(name).copy(labels = """{"job": "$job"}""")
+  ) = path(name).copy(labels = DashboardFixtures.labelsOf("""{"job": "$job"}"""))
 
   // The push for one path whose history has these status codes, newest first, as PathHistory hands them over.
   private fun historyTable(vararg codes: Int) =

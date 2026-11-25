@@ -22,8 +22,10 @@
 (*                           displaced agent of another launch, its       *)
 (*                           delivery, and the agent's reclaim, which the  *)
 (*                           proxy refuses while a live agent of another   *)
-(*                           launch holds the path, on the connection it   *)
-(*                           was told on or one it reconnects with         *)
+(*                           launch holds the path, telling it again, on   *)
+(*                           the connection it was told on or one it       *)
+(*                           reconnects with; invalidate() drops a         *)
+(*                           connection's unread notices                   *)
 (*                                                                         *)
 (* Heartbeats, stream keepalives, chunking, metrics, and the event bus    *)
 (* are abstracted away: a keepalive changes no state, as the reader that  *)
@@ -224,13 +226,19 @@ RegisterLocked(c, p) ==
     /\ LET e       == pathMap[p]
            others  == e.ctxs \ {c}
            already == c \in e.ctxs
-           \* reclaimRejection: a reclaim waits while a live agent of another launch holds the exclusive path.
-           heldByOtherLaunch == \E o \in others : valid[o] /\ launch[o] # launch[c]
-           rejected ==
-               \/ ~valid[c]
+           \* conflictRejection: the path's mode differs, or a live agent of another identity serves it.
+           conflict ==
                \/ e.ctxs # {} /\ e.consolidated # consol[c]
                \/ e.ctxs # {} /\ e.identity # ident[c] /\ \E o \in others : valid[o]
-               \/ CheckHolder /\ <<c, p>> \in regReclaim /\ ~consol[c] /\ heldByOtherLaunch
+           \* reclaimRejection: a reclaim waits while a live agent of another launch holds the exclusive path.
+           heldByOtherLaunch == \E o \in others : valid[o] /\ launch[o] # launch[c]
+           heldOff == CheckHolder /\ <<c, p>> \in regReclaim /\ ~consol[c] /\ heldByOtherLaunch
+           rejected == ~valid[c] \/ conflict \/ heldOff
+           \* lockedRejection reaches reclaimRejection only past the validity and conflict checks, and a reclaim refused
+           \* there is told again that the path is taken (tellHolder). The agent's told can lack the path by then: a
+           \* registration of its own launch, on another connection, may have taken the path back after the reclaim
+           \* started, and lost it again.
+           toldAgain == valid[c] /\ ~conflict /\ heldOff
            \* A displaced agent left with no paths is invalidated inside the lock when it is a stale connection of the
            \* registering agent's launch. One of another launch stays connected without paths: invalidating it only
            \* made it reconnect and displace the registering agent in turn.
@@ -242,7 +250,8 @@ RegisterLocked(c, p) ==
            \* takeOverPath tells each displaced agent of another launch, which stays connected, that the path is taken.
            tellees == IF UseReclaim /\ ~consol[c] THEN {o \in others : valid[o] /\ launch[o] # launch[c]} ELSE {}
        IN IF rejected
-          THEN UNCHANGED <<connVars, pathMap, pathCount, notices, told, heard>>
+          THEN /\ notices' = IF toldAgain THEN [notices EXCEPT ![c] = @ \cup {p}] ELSE notices
+               /\ UNCHANGED <<connVars, pathMap, pathCount, told, heard>>
           ELSE /\ pathMap' = [pathMap EXCEPT ![p] =
                                 [consolidated |-> consol[c],
                                  identity     |-> ident[c],
@@ -251,10 +260,12 @@ RegisterLocked(c, p) ==
                /\ valid' = [x \in Conns |-> IF x \in orphans THEN FALSE ELSE valid[x]]
                /\ draining' = [x \in Conns |-> IF x \in orphans THEN TRUE ELSE draining[x]]
                \* The registering agent forgets an unread notice about the path (forgetPathNotice), and, as the proxy's
-               \* answer reaches it, stops counting the path as taken over.
+               \* answer reaches it, stops counting the path as taken over. An orphan loses its unread notices, as
+               \* invalidate() clears them and ends its notices stream, as RemoveCtx does for a removed context.
                /\ notices' = [x \in Conns |->
                                 IF x \in tellees THEN notices[x] \cup {p}
                                 ELSE IF x = c THEN notices[x] \ {p}
+                                ELSE IF x \in orphans THEN {}
                                 ELSE notices[x]]
                /\ told' = [told EXCEPT ![launch[c]] = @ \ {p}]
                /\ heard' = [heard EXCEPT ![launch[c]] = @ \ {p}]
@@ -581,6 +592,12 @@ AnswerFromOwner ==
 \* A consolidated agent never shares a path with a non-consolidated one.
 ModesNeverMix ==
     \A p \in Paths : \A c \in pathMap[p].ctxs : consol[c] = pathMap[p].consolidated
+
+\* An invalidated connection holds no unread notices, whether it was removed or orphaned: invalidate() clears them and
+\* ends the notices stream, and queuePathNotice refuses a notice once the context is invalid, so no notice reaches an
+\* agent through a connection the proxy has given up on.
+InvalidatedHasNoNotices ==
+    \A c \in Conns : ~valid[c] => notices[c] = {}
 
 \* With the transport filter disabled, a stream reads, and as it ends removes, only a context of its caller's identity,
 \* even when it named the agentId before that context was registered: no stream that is open, or whose finally is

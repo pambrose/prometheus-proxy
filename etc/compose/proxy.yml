@@ -4,16 +4,19 @@
 #   docker compose -f etc/compose/proxy.yml up
 #
 # then open Prometheus at http://localhost:9090 and check that both targets are up under Status > Targets.
-# In a real deployment the agent runs inside the firewall on another host, with PROXY_HOSTNAME set to the proxy.
+#
+# Every port is published on this machine's 127.0.0.1 only, as nothing here asks for a token or a login, and the
+# agents' gRPC port, 50051, not at all: the agent reaches the proxy over the compose network. In a real deployment the
+# agent runs inside the firewall on another host, with PROXY_HOSTNAME set to the proxy, which then publishes 50051 and
+# requires a token and TLS, as examples/cloud-proxy/docker-compose.yml does.
 
 services:
   proxy:
     image: pambrose/prometheus-proxy:4.7.0
     ports:
-      - "8080:8080"    # Scrape port, for Prometheus
-      - "50051:50051"  # gRPC port, for agents
-      - "8082:8082"    # Proxy metrics
-      - "8092:8092"    # Admin endpoints (/ping, /healthcheck)
+      - "127.0.0.1:8080:8080"  # Scrape port, for Prometheus and curl
+      - "127.0.0.1:8082:8082"  # Proxy metrics
+      - "127.0.0.1:8092:8092"  # Admin endpoints (/ping, /healthcheck)
     environment:
       METRICS_ENABLED: "true"
       ADMIN_ENABLED: "true"
@@ -22,8 +25,8 @@ services:
   agent:
     image: pambrose/prometheus-agent:4.7.0
     ports:
-      - "8083:8083"    # Agent metrics
-      - "8093:8093"    # Admin endpoints
+      - "127.0.0.1:8083:8083"  # Agent metrics
+      - "127.0.0.1:8093:8093"  # Admin endpoints
     environment:
       AGENT_CONFIG: /app/agent.conf
       PROXY_HOSTNAME: proxy
@@ -38,7 +41,7 @@ services:
   prometheus:
     image: prom/prometheus:v3.14.0
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:

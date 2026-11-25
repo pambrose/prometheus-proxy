@@ -79,12 +79,17 @@ metrics:
   port: 8083
 
 # The agent's dashboard: its connection to the proxy, each path and why the proxy refused one, each path's recent
-# scrapes, and its activity. The port is not added to the Service; reach it with kubectl port-forward. Unauthenticated
-# unless login.existingSecret names a Secret holding a password (DASHBOARD_PASSWORD), which then requires a login, on
-# the dashboard's login page, with login.username (DASHBOARD_USERNAME). The dashboard serves plain HTTP.
+# scrapes, and its activity, reached with kubectl port-forward. Unauthenticated unless login.existingSecret names a
+# Secret holding a password (DASHBOARD_PASSWORD), which then requires a login, on the dashboard's login page, with
+# login.username (DASHBOARD_USERNAME). The dashboard serves plain HTTP.
 dashboard:
   enabled: false
   port: 8095
+  # The address it listens on (DASHBOARD_HOST). The pod's loopback, 127.0.0.1, is what keeps the dashboard private:
+  # kubectl port-forward connects there, and no other pod can. On every interface, any pod in the cluster could open
+  # it at the pod's address, Service or not. Set 0.0.0.0 only to publish it through a Service of your own, with a
+  # login. This overrides agent.dashboard.host in config; set it to "" to leave the address to that.
+  host: 127.0.0.1
   login:
     username: admin
     existingSecret: ""

@@ -10,9 +10,10 @@ metrics. For the full metric reference and what each panel watches, see
 
 !!! info "Prerequisite"
 
-    Metrics must be enabled (`--metrics` / `METRICS_ENABLED=true`) and a Prometheus datasource
-    must be scraping the proxy's and the agents' internal `/metrics` endpoints, each agent in its
-    own job and through the proxy. See [Scraping Internal Metrics](monitoring.md#scraping-internal-metrics).
+    The proxy's metrics must be enabled (`--metrics` / `METRICS_ENABLED=true`), and a Prometheus
+    datasource must be scraping them and each agent's metrics, each agent in its own job and through
+    the proxy, at its `agent.metrics.proxyPath` (or a path to its metrics port). See
+    [Scraping Internal Metrics](monitoring.md#scraping-internal-metrics).
 
 ## Dashboards
 

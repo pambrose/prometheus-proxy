@@ -1,4 +1,5 @@
 # Every optional feature on, so CI renders and validates each template path.
+# make helm-lint checks that the dashboard, on here at its default host, listens on the pod's loopback.
 config: |
   proxy {
     internal.scrapeRequestTimeoutSecs = 60

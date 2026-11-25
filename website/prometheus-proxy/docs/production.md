@@ -193,6 +193,7 @@ Start from the defaults and adjust against the backlog and latency metrics:
 | `agent.chunkContentSizeKbs`                   | 32      | Raise for large payloads to cut chunk count       |
 | `agent.minGzipSizeBytes`                      | 512     | Lower to compress more aggressively               |
 | `agent.http.maxContentLengthMBytes`           | 10      | Raise for large scrape bodies (guards agent heap) |
+| `proxy.internal.maxZippedContentSizeMBytes`   | 5       | Raise for large payloads sent in chunks           |
 | `proxy.internal.maxUnzippedContentSizeMBytes` | 10      | Raise for large decompressed payloads             |
 | `proxy.internal.maxAgentInactivitySecs`       | 60      | Tune stale-agent eviction window                  |
 

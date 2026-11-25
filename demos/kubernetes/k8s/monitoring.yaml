@@ -95,7 +95,8 @@ spec:
       nodePort: 30090
 ---
 # The proxy's dashboard, on the host's 127.0.0.1:8294. The chart leaves the dashboard out of its Service, since the
-# dashboard has no authentication; here it's published on the laptop's loopback only.
+# dashboard has no authentication; here it's published on the laptop's loopback only. values/proxy.yaml has it listen
+# on the pod's address, which this Service reaches, rather than the chart's loopback.
 apiVersion: v1
 kind: Service
 metadata:

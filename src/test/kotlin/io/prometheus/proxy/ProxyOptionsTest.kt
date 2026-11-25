@@ -641,6 +641,27 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "maxAgentsPerIdentity"
     }
 
+    // maxPathsPerAgent bounds one connection, and an identity may open any number. Every agent shares one identity with
+    // agent auth off, so the default leaves room for a large fleet's paths; a path's labels rarely number more than a
+    // handful.
+    "the paths-per-identity and labels-per-path limits should default to 100000 and 64, and accept 0 for unlimited" {
+      val internal = proxyOptions([]).configVals.proxy.internal
+      internal.maxPathsPerIdentity shouldBe 100_000
+      internal.maxLabelsPerPath shouldBe 64
+      val unlimited =
+        proxyOptions(["-Dproxy.internal.maxPathsPerIdentity=0", "-Dproxy.internal.maxLabelsPerPath=0"])
+          .configVals.proxy.internal
+      unlimited.maxPathsPerIdentity shouldBe 0
+      unlimited.maxLabelsPerPath shouldBe 0
+    }
+
+    "a negative paths-per-identity or labels-per-path limit should be rejected" {
+      for (key in ["maxPathsPerIdentity", "maxLabelsPerPath"]) {
+        val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.$key=-1"]) }
+        exception.message shouldContain key
+      }
+    }
+
     // A reverse proxy whose idle timeout is at or under the default needs a shorter interval; 0 turns keepalives off.
     "the stream keepalive should default to 30 seconds, accept 0 for off, and reject a negative value" {
       proxyOptions([]).configVals.proxy.internal.streamKeepAliveSecs shouldBe 30

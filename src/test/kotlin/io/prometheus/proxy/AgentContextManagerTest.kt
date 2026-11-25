@@ -361,6 +361,33 @@ class AgentContextManagerTest : StringSpec() {
       warning shouldContain "8 agents are connected as identity 'team-a', of the 10"
     }
 
+    // A fleet that hovers at the threshold, its agents reconnecting one at a time, warned on each reconnect that
+    // brought the count back to 80%. It warns again only once the count has fallen below 70%.
+    "an identity's 80% warning should come once, until its count falls below 70%" {
+      val manager = AgentContextManager(isTestMode = true)
+      val contexts = (1..8).map { AgentContext("remote-$it", "team-a") }
+
+      fun add(context: AgentContext) = manager.addAgentContextWithinLimit(context, 10).shouldBeTrue()
+
+      fun remove(context: AgentContext) = manager.removeFromContextManager(context.agentId, RemovalReason.TERMINATION)
+
+      val warnings =
+        captureLogs<AgentContextManager>(Level.WARN) {
+          contexts.forEach(::add)
+          // Down to 7 and back to 8: still warned of.
+          remove(contexts[7])
+          add(AgentContext("remote-9", "team-a"))
+          // Down to 6, below 70%, and back to 8: warned again.
+          remove(contexts[6])
+          remove(contexts[5])
+          add(AgentContext("remote-10", "team-a"))
+          add(AgentContext("remote-11", "team-a"))
+        }.map { it.formattedMessage }.filter { "maxAgentsPerIdentity" in it }
+
+      warnings shouldHaveSize 2
+      warnings.forEach { it shouldContain "8 agents are connected as identity 'team-a', of the 10" }
+    }
+
     // ==================== ChunkedContext Map Tests ====================
 
     "chunkedContextMap should track entries correctly" {

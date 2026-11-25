@@ -49,7 +49,8 @@ internal class EndpointFailover(
       // Never usable, so move to the next endpoint. Keying this on connect alone would send an agent back
       // to a proxy that accepts connections but rejects registration, forever. The rebuild is required: a
       // ManagedChannel is bound to its target address. Guarded on advanceEndpoint() returning true so a
-      // single-endpoint agent keeps reusing its channel and leaning on gRPC's own backoff.
+      // single-endpoint agent keeps reusing its channel, whose backoff AgentGrpcService.connectAgent resets after a
+      // failed connect, so it dials on each attempt.
       !firstAttempt && grpcService.advanceEndpoint() -> {
         grpcService.resetGrpcStubs()
       }

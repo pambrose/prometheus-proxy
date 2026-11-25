@@ -74,11 +74,12 @@ docker run --detach --name prometheus-agent \
 services:
   proxy:
     image: pambrose/prometheus-proxy:4.7.0
+    # Published on this host's loopback only. The agent reaches the gRPC port, 50051, over the compose network, so
+    # it isn't published at all.
     ports:
-      - "8080:8080"    # HTTP scrape port
-      - "50051:50051"  # gRPC agent port
-      - "8082:8082"    # Metrics port
-      - "8092:8092"    # Admin port
+      - "127.0.0.1:8080:8080"  # HTTP scrape port
+      - "127.0.0.1:8082:8082"  # Metrics port
+      - "127.0.0.1:8092:8092"  # Admin port
     environment:
       - ADMIN_ENABLED=true
       - METRICS_ENABLED=true
@@ -89,8 +90,8 @@ services:
   agent:
     image: pambrose/prometheus-agent:4.7.0
     ports:
-      - "8083:8083"    # Metrics port
-      - "8093:8093"    # Admin port
+      - "127.0.0.1:8083:8083"  # Metrics port
+      - "127.0.0.1:8093:8093"  # Admin port
     environment:
       - PROXY_HOSTNAME=proxy
       - ADMIN_ENABLED=true

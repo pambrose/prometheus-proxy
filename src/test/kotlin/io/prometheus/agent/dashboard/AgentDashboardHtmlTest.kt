@@ -382,6 +382,53 @@ class AgentDashboardHtmlTest : StringSpec() {
         "Nothing has happened yet"
     }
 
+    // The Path cell writes a path with its slash, as the proxy and Prometheus do, so a search for it as shown finds it.
+    "the Activity view's search should match a path with its slash, as its row shows it" {
+      activityPage(RowFilter.of("/orders", problemsOnly = false)) shouldContain "Showing 1 of 4 events"
+    }
+
+    // dashboard-constraints.md: the header row and the column guide iterate one list, so a column can't reach the
+    // header without an explanation.
+    "the Activity view's column guide should explain each header, in the header's order" {
+      val page = activityPage()
+      val headers = Regex("<th[^>]*>([^<]*)</th>").findAll(page).map { it.groupValues[1] }.toList()
+      val guide = Regex("<dt>([^<]*)</dt>").findAll(page).map { it.groupValues[1] }.toList()
+
+      headers shouldBe ["Time", "Event", "Path", "Detail"]
+      guide shouldBe headers
+    }
+
+    // dashboard-constraints.md: under the search, where no push reaches it, so it stays open as #activity is replaced.
+    "the Activity view's column guide should follow the search, ahead of the pushed table, and no push carry it" {
+      val page = activityPage()
+      val guide = page.indexOf("""<section class="column-guide" id="${DashboardPage.COLUMN_GUIDE_ID}"""")
+
+      (page.indexOf("</form>") in 0..<guide) shouldBe true
+      (guide < page.indexOf("""id="${AgentDashboardHtml.ACTIVITY_ID}"""")) shouldBe true
+      AgentLayout.entries.forEach { layout ->
+        AgentDashboardHtml.pushFragment(snapshot(activity = activity), AgentView(layout), "/dashboard").apply {
+          this shouldNotContain DashboardPage.COLUMN_GUIDE_ID
+          this shouldNotContain "<dt>"
+        }
+      }
+    }
+
+    // dashboard-constraints.md: the page's one live region, which the page's script writes on a connection change or
+    // the user's own act. In a pushed region it would re-announce itself on every frame.
+    "every view should carry a polite live region, and no push should carry it" {
+      AgentLayout.entries.forEach { layout ->
+        val page = createHTML().html { renderPage(snapshot(activity = activity), AgentView(layout), "/dashboard") }
+        val announcer = Regex("""<div [^>]*id="${DashboardPage.ANNOUNCER_ID}"[^>]*>""").find(page)?.value.orEmpty()
+
+        announcer shouldContain """aria-live="polite""""
+        announcer shouldContain """role="status""""
+      }
+      (AgentLayout.entries.map { AgentView(it, selectedPath = "orders") } + null).forEach { view ->
+        AgentDashboardHtml.pushFragment(snapshot(activity = activity), view, "/dashboard") shouldNotContain
+          DashboardPage.ANNOUNCER_ID
+      }
+    }
+
     // As on the proxy's: a frame carries the feed only when it differs from the one the page shows.
     "a push for the Activity view should carry the feed out of band, or the status bar alone when told to" {
       val view = AgentView(AgentLayout.ACTIVITY, seq = 4)

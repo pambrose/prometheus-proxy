@@ -192,8 +192,9 @@ the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spr
   anything.
 - **A value the agent refuses names its variable.** A `PROMETHEUS_PROXY` endpoint the agent can't parse, or a
   `PROMETHEUS_PROXY_CERT` it can't read as a certificate, fails `start()`, or has `startIfConfigured()` log, with the
-  variable, the setting, and the agent's reason, never the value: `Invalid configuration: PROMETHEUS_PROXY, read by
-  fromEnvironment() for agent.proxy.endpoints: Invalid port in 'proxy:abc': 'abc' is not a valid integer`. The agent
+  variable, the setting, and the agent's reason: `Invalid configuration: PROMETHEUS_PROXY, read by fromEnvironment() for
+  agent.proxy.endpoints: Invalid port in 'proxy:abc': 'abc' is not a valid integer`. An endpoint it can't parse is
+  quoted, as here, but never a certificate, and no token is checked as the agent starts. The agent
   takes any token or authority as it starts: a token the proxy refuses is logged once the agent connects
   ([Troubleshooting](troubleshooting.md#unauthenticated-missing-or-invalid-agent-token)), and a wrong authority fails
   the TLS handshake.
@@ -203,12 +204,15 @@ the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spr
 `start()` throws when the agent can't start, which suits an app that can't run without it. Since 4.7.0,
 `startIfConfigured()` suits one that can, as most can, since their metrics aren't worth an outage:
 
-- **Without a proxy,** neither the builder's `proxy` nor the agent's own `PROXY_HOSTNAME`, as on a developer's machine,
-  it logs one INFO line, `No proxy is set, so the Prometheus agent stays off`, and returns `null`.
-- **A start that fails,** for a setting the agent rejects or for anything else, such as its admin port being in use,
-  is logged at ERROR, `The Prometheus agent could not start, so it stays off:` and why, which holds no token, password,
-  or PEM, and it returns `null`, so the app runs on. To report the failure elsewhere, as to a chat channel, pass
-  `onFailure`, which is given why, as the log line has it, and what was thrown.
+- **Without a proxy,** from the builder's `proxy`, a `setting()` of the proxy's endpoints or host name, or the agent's
+  own `PROXY_HOSTNAME`, as on a developer's machine, it logs one INFO line,
+  `No proxy is set, so the Prometheus agent stays off`, and returns `null`. `namesProxy()` tells whether the settings
+  name one, for an app that decides for itself, as the [Ktor Plugin](ktor-plugin.md) and the
+  [Spring Boot Starter](spring-boot-starter.md) do.
+- **A start that fails,** for a setting the agent rejects or for anything else, such as its admin port being in use
+  or its start taking over 30 seconds, is logged at ERROR, `The Prometheus agent could not start, so it stays off:`
+  and why, which holds no token, password, or PEM, and it returns `null`, so the app runs on. To report the failure
+  elsewhere, as to a chat channel, pass `onFailure`, which is given why, as the log line has it, and what was thrown.
 - **The handle is `AutoCloseable`,** and Kotlin's `use` and Java's try-with-resources both take a `null` one, so a
   program that runs while its agent does reads as `startIfConfigured().use { worker.run() }`: the worker runs whether
   or not the agent started, and the agent stops after it. Write `.use`, not `?.use`, which skips the block for `null`.
@@ -332,7 +336,7 @@ A config file or a `Config` takes the place of the second and third: its keys, t
 | `agent.http.trustStorePath`            | ""      | A trust store for HTTPS targets signed by a private CA, with `agent.http.trustStorePassword`                           |
 | `agent.transportFilterDisabled`        | false   | Set it, as on the proxy, when [nginx fronts the proxy](advanced.md#nginx-reverse-proxy)                                |
 | `agent.admin.enabled`                  | false   | The admin endpoints, on `agent.admin.port`, and `/debug` with `agent.admin.debugEnabled` ([Admin and Debug Endpoints](#admin-and-debug-endpoints)) |
-| `agent.logLevel`                       | info    | The level of the agent's `io.prometheus` loggers, and no others ([Logging](#logging))                                  |
+| `agent.logLevel`                       | ""      | The level of the agent's `io.prometheus` loggers, and no others; unset, they follow your application's logging ([Logging](#logging)) |
 | `agent.metrics.standardExportsEnabled` | false   | The process metrics, one of the [JVM metric groups](monitoring.md#jvm-metrics), which the agent's metrics port serves |
 
 An embedded agent's JVM metrics are usually its app's, which its own registry, such as Micrometer's, keeps and serves:
@@ -385,7 +389,8 @@ wire the agent yourself, run it from a bean, so it starts and stops with the app
 
 ### `Agent.startAsyncAgent()`
 
-Starts the agent in background threads/coroutines.
+Starts the agent in the background, on a daemon thread, and returns once it has started (see
+[`EmbeddedAgentInfo`](#embeddedagentinfo) for how long it runs).
 
 | Parameter             | Type      | Description                                                                                                                              |
 |:----------------------|:----------|:-----------------------------------------------------------------------------------------------------------------------------------------|
@@ -419,11 +424,12 @@ exception that rejected the setting, usually an `IllegalArgumentException`. When
 with credentials, as a Typesafe `ConfigException`'s does for a value read from a config URL, the cause is a stand-in
 `ConfigLoadException` with the redacted message and the original stack trace.
 
-`IllegalStateException` when the agent fails to start (for example, its admin or metrics port is already in
-use), with the startup failure as its cause. A failed start releases everything the agent had opened. Also, before the
-agent is built, when the app's dependency management sets kotlinx-coroutines below 1.11.0 or the Prometheus Java client
-below 1.7.0, as Spring Boot 4.0 and 4.1 do ([In Spring Boot](#in-spring-boot)): its message names the Spring Boot
-property that sets each.
+`IllegalStateException` when the agent fails to start (for example, its admin, metrics, or dashboard port is already
+in use), with the startup failure as its cause, or doesn't start within 30 seconds, with a `TimeoutException` as its
+cause. A failed start releases everything the agent had opened, and an agent still starting when the wait ends stops
+as soon as its startup does, without connecting. Also, before the agent is built, when the app's dependency
+management sets kotlinx-coroutines below 1.11.0 or the Prometheus Java client below 1.7.0, as Spring Boot 4.0 and 4.1
+do ([In Spring Boot](#in-spring-boot)): its message names the Spring Boot property that sets each.
 
 ### `EmbeddedAgentConfig`
 
@@ -464,6 +470,7 @@ path or a port out of range, throws `ConfigLoadException`, as `start()` does for
 |:-------------------------------------|:---------------------|:-------------------------------------------------------------------------------------------------------|
 | `start(logBanner)`                   | `EmbeddedAgentInfo`  | Starts the agent, as `startAsyncAgent(config)` does, and throws as it does; `logBanner` defaults to `true` |
 | `startIfConfigured(logBanner, onFailure)` | `EmbeddedAgentInfo?` | Since 4.7.0, starts the agent where the settings or `PROXY_HOSTNAME` name a proxy, and returns `null` without one, or for a start that fails, which it logs and gives `onFailure`, optional, with why and what was thrown ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
+| `namesProxy()`                       | `Boolean`            | Since 4.7.0, whether the settings or `PROXY_HOSTNAME` name a proxy, the rule `startIfConfigured()` starts by |
 | `toConfig()`                         | `Config`             | The settings as the tree a config file holds, rooted at `agent`, without the paths `source` adds, which are code |
 | `toString()`                         | `String`             | The settings, with the token, passwords, and PEMs shown only as set, a path's credentials masked, and a `source` path as `in-process`, so an app can log them |
 
@@ -493,6 +500,12 @@ connection and background work don't outlive your application. Since 4.7.0, the 
 so it stops when your application stops it, after the work that needs it, not at the same time as your application's
 own hooks; the [Ktor Plugin](ktor-plugin.md) and the [Spring Boot Starter](spring-boot-starter.md) stop it with the
 app.
+
+Since 4.7.0, too, the agent runs on a daemon thread, so it doesn't keep the JVM running: your application's own threads
+do. An application that fails after starting the agent, without stopping it, still exits. So does a program whose
+`main()` starts the agent and returns, at once, ending the agent without draining its scrapes: keep `main()` running
+for as long as the agent is needed, as `startIfConfigured().use { worker.run() }` does. With its admin or metrics port
+on, the agent also runs those ports' servers, whose threads do keep the JVM running until the agent stops.
 
 On SIGTERM, the JVM runs its shutdown hooks and exits without returning from `main()`. So a program that runs until
 it's stopped, as a queue consumer does, adds a hook of its own that ends its work and waits for `main()` to return, by
@@ -562,10 +575,17 @@ loggers only, so it doesn't change your application's own logging. A standalone 
 
 ## Logging
 
-Your application configures the agent's logging. The agent logs through SLF4J to Logback, and the library jar carries
-no Logback configuration, so your own `logback.xml` (or, in Spring Boot, `logback-spring.xml` and the `logging.level`
-properties) applies to the agent's loggers as it does to the rest. With no configuration at all, Logback logs
-everything at DEBUG, gRPC and Netty included.
+Your application configures the agent's logging. The agent logs through SLF4J, and brings neither an SLF4J provider
+nor a configuration, so its loggers go wherever your application's do:
+
+- **With Logback,** your own `logback.xml` (or, in Spring Boot, `logback-spring.xml` and the `logging.level`
+  properties) applies to the agent's loggers as it does to the rest. With no configuration at all, Logback logs
+  everything at DEBUG, gRPC and Netty included.
+- **With another provider,** such as Log4j2, its configuration applies to them instead. The agent's `logLevel` sets a
+  level only through Logback: with another provider, the agent logs a warning and leaves the level to its
+  configuration.
+- **With none,** SLF4J prints a warning that it found no provider, and nothing logs, the agent included. Add one, such
+  as `ch.qos.logback:logback-classic`, at runtime.
 
 The standalone agent's configuration sets `io.grpc.internal` to WARN, so that only gRPC's internal warnings and errors
 reach its log; you may want the same:

@@ -10,11 +10,25 @@ A release that changed nothing an embedding app sees isn't listed; the
 
 ## Upgrading from 4.6.x
 
+- The agent no longer brings Logback. Through 4.6.0, `ch.qos.logback:logback-classic` came with it, at runtime
+  scope, and displaced an application's own SLF4J provider: Spring Boot failed to start an app on Log4j2, or ignored
+  its Log4j2 configuration. The agent's loggers now go to your application's provider. An application that logged
+  through the Logback the agent brought, with no SLF4J provider of its own, now gets SLF4J's warning that it found
+  none, and no logs, so add Logback to it (see [Logging](embedded-agent.md#logging)).
+- The agent reads `DASHBOARD_ENABLED`, `DASHBOARD_PORT`, `DASHBOARD_PATH`, `DASHBOARD_HOST`, `DASHBOARD_USERNAME`,
+  `DASHBOARD_PASSWORD`, and `METRICS_PROXY_PATH` from your application's environment, which through 4.6.0 only the
+  proxy read, or nothing did. If your application sets any of them for its own use, the agent now opens its dashboard
+  on port 8095 or serves its metrics at that path, and a value it can't parse, such as an empty `DASHBOARD_PORT`, fails
+  its start.
 - An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` registers no JVM shutdown hook. Through 4.6.0 it
   did, and on SIGTERM it stopped at the same time as your application's own hooks, in no set order. Stop it with
   `shutdown()` or `close()` where your application stops its own services (see
   [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo)); one that's never stopped ends with the JVM, without draining the scrapes
   in flight.
+- An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` runs on a daemon thread, so it no longer keeps the
+  JVM running. Through 4.6.0 its thread did: an application that failed after starting the agent never exited, and a
+  program whose `main()` only started the agent kept running. That program now exits at once, so keep `main()` running
+  for as long as the agent is needed, or start the agent as the standalone agent does, with `startSyncAgent()`.
 
 ## Upgrading from 4.4.x
 

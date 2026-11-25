@@ -31,7 +31,10 @@ import kotlin.concurrent.thread
 // The agent of one Application, started and stopped by the app's lifecycle events:
 //
 //  - ApplicationStarted, once every module has loaded, starts it. Ktor rethrows what a handler throws, so a required
-//    agent that can't start fails the app's startup.
+//    agent that can't start fails the app's startup. It's raised before the engine binds its port, and an engine that
+//    can't bind throws without disposing the app, so none of the events below come; an embedded agent's thread is a
+//    daemon, so the app's JVM still exits, unless the agent's admin or metrics port is on, and Ktor's shutdown hook
+//    disposes the app, which stops the agent.
 //  - ApplicationStopPreparing, which the engine raises as it stops accepting connections, begins its stop on a thread
 //    of its own: the agent disconnects, and the proxy drops the app's paths, while the server drains the requests in
 //    flight. Stopping here, on the engine's thread, would take the agent's stop, which can last seconds, out of the
@@ -76,15 +79,18 @@ internal class AgentLifecycle(
       launchAgent()
     } catch (e: Exception) {
       // A value in the file the builder rejects (ConfigLoadException), an agent block's own failure, or, for a required
-      // agent, its start's: a setting the agent rejects, or a checked exception, which Kotlin throws undeclared, such
-      // as the start timing out. Any other agent's start logs its own failure and returns null.
+      // agent, its start's: a setting the agent rejects, or a failure to start, its start timing out included
+      // (IllegalStateException). Kotlin can throw a checked exception undeclared, so Exception is caught, not only
+      // RuntimeException. Any other agent's start logs its own failure and returns null.
       failed(e)
     }
   }
 
   private fun launchAgent() {
-    val builder = config.builder()
-    if (builder.proxy.isNullOrBlank()) {
+    // Decided once the file and the agent blocks have made the settings, by the agent's own rule, which
+    // startIfConfigured follows too: a proxy from the builder, a settings key, or the agent's PROXY_HOSTNAME
+    val settings = config.builder().build()
+    if (!settings.namesProxy()) {
       withoutAProxy()
       return
     }
@@ -92,7 +98,6 @@ internal class AgentLifecycle(
       logger.warn {
         "prometheus-proxy.agent.path is ${config.path}, but no registry is set, so the agent serves none there"
       }
-    val settings = builder.build()
     logger.info { "Starting the Prometheus agent with $settings" }
     val started = launch(settings) ?: return
     agent.set(started)
@@ -138,7 +143,7 @@ internal class AgentLifecycle(
 
   private companion object {
     private val logger = logger {}
-    const val PROXY_UNSET = "prometheus-proxy.agent.proxy isn't set"
+    const val PROXY_UNSET = "No proxy is set (prometheus-proxy.agent.proxy or PROXY_HOSTNAME)"
 
     // As long as Spring waits for a lifecycle phase to stop, which is how long the Spring Boot starter's agent gets
     const val STOP_TIMEOUT_MILLIS = 30_000L

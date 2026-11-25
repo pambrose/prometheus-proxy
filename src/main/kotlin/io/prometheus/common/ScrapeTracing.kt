@@ -20,7 +20,9 @@ import brave.Span
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import brave.propagation.Propagation
+import brave.propagation.SamplingFlags
 import brave.propagation.TraceContext
+import brave.propagation.TraceContextOrSamplingFlags
 import brave.rpc.RpcRequest
 import brave.rpc.RpcRequestMatchers.methodEquals
 import brave.rpc.RpcRuleSampler
@@ -40,8 +42,9 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * Both are kept at [sampleRate], except heartbeats, which never are: an idle agent sends one every few seconds, and
  * they buried the calls a trace is wanted for. Nor is the path notices stream, which lasts the connection and carries
- * nothing a trace is wanted for. A scrape's spans are passed from call to call, never put in scope:
- * Brave's current span is thread-local, which a coroutine that moves between threads breaks.
+ * nothing a trace is wanted for. A gRPC call is sampled by the side serving it, whatever its caller's trace headers
+ * say. A scrape's spans are passed from call to call, never put in scope: Brave's current span is thread-local, which a
+ * coroutine that moves between threads breaks.
  *
  * @param tracing the process's tracing, from its Zipkin reporter, which [close] closes
  * @param sampleRate the share of traces kept: 0, or from 0.01 to 1, as the options check
@@ -72,9 +75,18 @@ internal class ScrapeTracing(
       .putRule(Matchers.alwaysMatch<RpcRequest>(), sampler)
       .build()
 
-  /** The tracing the gRPC interceptors use. */
+  /**
+   * The tracing the gRPC interceptors use. A call served joins the trace its metadata names, but is sampled by
+   * [rpcSampler] alone, whatever that trace's decision: see [ServerSampledPropagation].
+   */
   val grpcTracing: GrpcTracing =
-    GrpcTracing.create(RpcTracing.newBuilder(tracing).clientSampler(rpcSampler).serverSampler(rpcSampler).build())
+    GrpcTracing.create(
+      RpcTracing.newBuilder(tracing)
+        .clientSampler(rpcSampler)
+        .serverSampler(rpcSampler)
+        .propagation(ServerSampledPropagation(tracing.propagation()))
+        .build(),
+    )
 
   /** A started span named [name] that begins a trace, kept at the sample rate. */
   fun newTrace(name: String): Span = started(null, name)
@@ -125,6 +137,9 @@ internal class ScrapeTracing(
     /** On a forward span: how long, in milliseconds, the request waited in the agent's queue for its stream. */
     const val TAG_QUEUE_WAIT = "queue.wait_ms"
 
+    /** A forward span's annotation once the agent's stream has taken the request, while its scrape still awaits it. */
+    const val SENT_TO_AGENT = "sent to agent"
+
     /** On a fetch span the agent retried: how many retries it made (`agent.scrapeMaxRetries`). */
     const val TAG_RETRIES = "retries"
 
@@ -169,6 +184,51 @@ internal class ScrapeTracing(
         .also { finish() }
         .getOrThrow()
     }
+
+    /**
+     * [extracted] with no sampling decision, so the process serving the call it came with decides, and with its trace
+     * and span IDs and its extra fields as they were.
+     */
+    internal fun undecided(extracted: TraceContextOrSamplingFlags): TraceContextOrSamplingFlags {
+      val context = extracted.context()
+      val traceIdContext = extracted.traceIdContext()
+      val builder =
+        when {
+          context != null -> {
+            TraceContextOrSamplingFlags.newBuilder(context.toBuilder().debug(false).sampled(null).build())
+          }
+
+          traceIdContext != null -> {
+            TraceContextOrSamplingFlags.newBuilder(traceIdContext.toBuilder().debug(false).sampled(null).build())
+          }
+
+          else -> {
+            TraceContextOrSamplingFlags.newBuilder(SamplingFlags.EMPTY)
+          }
+        }
+      extracted.extra().forEach { builder.addExtra(it) }
+      return builder.build()
+    }
+  }
+}
+
+/**
+ * [delegate], except that a trace extracted from a gRPC call's metadata comes out with no sampling decision (see
+ * [ScrapeTracing.undecided]), so the process serving the call samples it with its own rpcSampler. Brave's server
+ * handler consults the sampler only when the extracted trace hasn't decided, so a caller whose trace headers said
+ * sampled, or debug, had the proxy trace every call it made, heartbeats included, whatever the proxy's sample rate. The
+ * trace and span IDs are kept, so a call still joins its caller's trace. The client side only injects, unchanged.
+ */
+private class ServerSampledPropagation(
+  private val delegate: Propagation<String>,
+) : Propagation<String> {
+  override fun keys(): List<String> = delegate.keys()
+
+  override fun <R> injector(setter: Propagation.Setter<R, String>): TraceContext.Injector<R> = delegate.injector(setter)
+
+  override fun <R> extractor(getter: Propagation.Getter<R, String>): TraceContext.Extractor<R> {
+    val extractor = delegate.extractor(getter)
+    return TraceContext.Extractor { request -> ScrapeTracing.undecided(extractor.extract(request)) }
   }
 }
 
