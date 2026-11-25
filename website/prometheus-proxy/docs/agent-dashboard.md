@@ -78,13 +78,14 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
 === "Helm"
 
     ```bash
-    helm upgrade prometheus-agent ./charts/prometheus-agent --namespace monitoring --reuse-values \
-      --set dashboard.enabled=true
-    kubectl -n monitoring port-forward deploy/prometheus-agent 8095
+    helm upgrade prometheus-agent ./charts/prometheus-agent --reuse-values --set dashboard.enabled=true
+    kubectl port-forward deploy/prometheus-agent 8095
     ```
 
-    The chart keeps the port off its Service, so you reach it with `kubectl port-forward`;
-    `dashboard.login.existingSecret` names a Secret holding the login's password.
+    Add `--namespace` and `-n` if you installed the agent in one, as the chart's README does in `monitoring`. The
+    chart has the dashboard listen on the pod's loopback (`dashboard.host`, `127.0.0.1`) and keeps its port off the
+    Service, so only `kubectl port-forward` reaches it; `dashboard.login.existingSecret` names a Secret holding the
+    login's password.
 
 Then open `http://<agent-host>:8095/dashboard`.
 
@@ -178,8 +179,8 @@ Like events in a burst share a line, such as the agent registering its paths as 
 first few paths. The same event again, such as failing over on every retry through a long outage, adds to the line
 it repeats. An error shows as the first line of its message, up to 200 characters, here and in the other views; the
 agent's log has all of it. The view keeps `activityLogSize` lines (500), in memory, so a restart empties it. The
-search filters by event, path, or detail, and **Problems only** keeps the red lines. The view updates as each line is
-added.
+search filters by event, path, with its slash or without, or detail, and **Problems only** keeps the red lines. The
+view updates as each line is added.
 
 ## The Settings View
 

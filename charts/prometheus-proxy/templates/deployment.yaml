@@ -79,6 +79,10 @@ spec:
               value: {{ .Values.dashboard.enabled | quote }}
             - name: DASHBOARD_PORT
               value: {{ .Values.dashboard.port | quote }}
+            {{- with include "prometheus-proxy.dashboardHost" . }}
+            - name: DASHBOARD_HOST
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.dashboard.login.existingSecret }}
             - name: DASHBOARD_USERNAME
               value: {{ $.Values.dashboard.login.username | quote }}

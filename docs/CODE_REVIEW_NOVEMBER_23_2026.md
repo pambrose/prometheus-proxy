@@ -1,8 +1,9 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 3 fixed, 69 open (8 medium, 64 low, no high); #25 and #39 are partly fixed.
+**Status:** 72 issues — 72 fixed, 0 open (8 medium, 64 low, no high).
 
-**Progress:** Wave A: step 2 in #550.
+**Progress:** all 17 steps: Wave A (steps 2, 3, and 16, in #550–#552), Wave B (steps 1, 4, 6, 9, 11, 13, and 15, in
+#555–#561), Wave C (steps 5, 7, 8, 10, 12, and 14, in #562–#567), and Wave D (step 17, in #568).
 
 **Date:** 2026-11-23; rechecked twice on 2026-11-24
 
@@ -22,78 +23,78 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 
 | #  | Finding                                                                                              | Area       | Severity | Status |
 |----|------------------------------------------------------------------------------------------------------|------------|----------|--------|
-| 1  | `ProxyRegistry.tla` lets an invalidated connection deliver path notices the code drops               | Proxy      | low      | ⬜      |
-| 2  | The forward span loses its queue-wait and "sent" tags when the send outlasts the scrape              | Proxy      | low      | ⬜      |
-| 3  | The 80% path and identity limit warnings repeat each time the count climbs back to the threshold     | Proxy      | low      | ⬜      |
-| 4  | The proto and AGENTS.md misdescribe the path-notices stream's keepalives                             | Proxy      | low      | ⬜      |
-| 5  | A dashboard bind failure leaves the agent's admin and metrics servers running, and `/ping` healthy   | Agent      | medium   | ⬜      |
-| 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ⬜      |
-| 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ⬜      |
+| 1  | `ProxyRegistry.tla` lets an invalidated connection deliver path notices the code drops               | Proxy      | low      | ✅      |
+| 2  | The forward span loses its queue-wait and "sent" tags when the send outlasts the scrape              | Proxy      | low      | ✅      |
+| 3  | The 80% path and identity limit warnings repeat each time the count climbs back to the threshold     | Proxy      | low      | ✅      |
+| 4  | The proto and AGENTS.md misdescribe the path-notices stream's keepalives                             | Proxy      | low      | ✅      |
+| 5  | A dashboard bind failure leaves the agent's admin and metrics servers running, and `/ping` healthy   | Agent      | medium   | ✅      |
+| 6  | Results queued when a writer stream fails are counted neither as sent nor as dropped                 | Agent      | low      | ✅      |
+| 7  | Connection tasks catch JVM `Error`s, so an `OutOfMemoryError` there only reconnects                  | Agent      | low      | ✅      |
 | 8  | The starter's agent dies with a `NoSuchMethodError` on Spring Boot 4.0.x and 4.1.0                   | Embedding  | medium   | ✅      |
-| 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ⬜      |
-| 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ⬜      |
-| 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ⬜      |
-| 12 | A start that times out keeps starting, with no handle to stop it                                     | Embedding  | low      | ⬜      |
-| 13 | An anonymous `POST /logout` forces a collect and a push to every open page, once per request         | Dashboards | medium   | ⬜      |
-| 14 | Ending a session whose socket has stopped reading freezes every open page                            | Dashboards | medium   | ⬜      |
-| 15 | A session that stops reading stays open, holding a `maxSessions` slot                                | Dashboards | low      | ⬜      |
-| 16 | The tables' search doesn't match a path as its row shows it, or an agent by its label                | Dashboards | low      | ⬜      |
-| 17 | A collect that throws ends the push loop for good, logged only to stderr                             | Dashboards | low      | ⬜      |
-| 18 | A gone agent's detail pane names it by its raw `agentId`                                             | Dashboards | low      | ⬜      |
-| 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ⬜      |
-| 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ⬜      |
-| 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ⬜      |
-| 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ⬜      |
-| 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ⬜      |
+| 9  | Logback at runtime scope breaks Spring Boot apps that log with Log4j2                                | Embedding  | medium   | ✅      |
+| 10 | The Ktor plugin starts the agent before the port binds, so an app whose port is taken never exits    | Embedding  | medium   | ✅      |
+| 11 | The starter and the plugin ignore a proxy set by `PROXY_HOSTNAME`, `setting()`, or a customizer      | Embedding  | low      | ✅      |
+| 12 | A start that times out keeps starting, with no handle to stop it                                     | Embedding  | low      | ✅      |
+| 13 | An anonymous `POST /logout` forces a collect and a push to every open page, once per request         | Dashboards | medium   | ✅      |
+| 14 | Ending a session whose socket has stopped reading freezes every open page                            | Dashboards | medium   | ✅      |
+| 15 | A session that stops reading stays open, holding a `maxSessions` slot                                | Dashboards | low      | ✅      |
+| 16 | The tables' search doesn't match a path as its row shows it, or an agent by its label                | Dashboards | low      | ✅      |
+| 17 | A collect that throws ends the push loop for good, logged only to stderr                             | Dashboards | low      | ✅      |
+| 18 | A gone agent's detail pane names it by its raw `agentId`                                             | Dashboards | low      | ✅      |
+| 19 | The eviction countdown shows when the stale-agent check is off                                       | Dashboards | low      | ✅      |
+| 20 | One agent's labels can exhaust the proxy's heap, and `maxPathsPerAgent` doesn't bound an identity    | Security   | medium   | ✅      |
+| 21 | Any gRPC caller can make the proxy sample its calls with a `b3` header                               | Security   | low      | ✅      |
+| 22 | The dashboard logs `Origin` and `Host` whole and unthrottled, before any login                       | Security   | low      | ✅      |
+| 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ✅      |
 | 24 | The starter's `Target.toString` shows URL query values such as an `api_key`                          | Security   | low      | ✅      |
-| 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ⬜      |
-| 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ⬜      |
-| 27 | The quick-start compose file publishes the agent, scrape, and admin ports on every interface         | CI/build   | low      | ⬜      |
-| 28 | `--tests=<spec>` runs the whole suite unfiltered, and `unitTest --tests X` fails                     | CI/build   | low      | ⬜      |
-| 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ⬜      |
-| 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ⬜      |
+| 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ✅      |
+| 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ✅      |
+| 27 | The quick-start compose file publishes the agent, scrape, and admin ports on every interface         | CI/build   | low      | ✅      |
+| 28 | `--tests=<spec>` runs the whole suite unfiltered, and `unitTest --tests X` fails                     | CI/build   | low      | ✅      |
+| 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ✅      |
+| 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ✅      |
 | 31 | The starter page's YAML sets no `authority`, so the docs' own certificate fails the handshake        | Docs       | medium   | ✅      |
-| 32 | The upgrade notes miss that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`               | Docs       | low      | ⬜      |
-| 33 | The Embedded Agent page gives `agent.logLevel` a default an embedded agent doesn't use               | Docs       | low      | ⬜      |
-| 34 | The docs say a refused `PROMETHEUS_*` value is never shown, but an endpoint is                       | Docs       | low      | ⬜      |
-| 35 | `agent.metrics.proxyPath` is missing from the README, `llms.txt`, and the Grafana docs               | Docs       | low      | ⬜      |
-| 36 | The security doc says a displaced agent is invalidated; it stays connected                           | Docs       | low      | ⬜      |
-| 37 | The Quick Start says a 404 means an unregistered path, but a target's own 404 looks the same         | Docs       | low      | ⬜      |
-| 38 | The Agent Dashboard page's Helm commands use a namespace the site's agent installs don't use         | Docs       | low      | ⬜      |
-| 39 | The README and changelogs say every demo turns on its agents' dashboards                             | Docs       | low      | ⬜      |
-| 40 | A check order, a `make up` claim, and an unnamed size limit on the deployment and security pages     | Docs       | low      | ⬜      |
-| 41 | The README and `llms.txt` miss `PROMETHEUS_PROXY_AUTHORITY` and misstate `-D` precedence             | Docs       | low      | ⬜      |
-| 42 | The metrics docs' counter count, alert list, and chunk threshold are wrong                           | Docs       | low      | ⬜      |
-| 43 | `docs/packages.md`, `ConfigLoadException`'s KDoc, and `KDOC_SUMMARY.md` describe 4.6.0               | Docs       | low      | ⬜      |
-| 44 | AGENTS.md and `docs/TESTING.md` name a deploy check that's gone, and misdescribe `make all-tests`    | Docs       | low      | ⬜      |
-| 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ⬜      |
-| 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ⬜      |
-| 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ⬜      |
-| 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ⬜      |
-| 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ⬜      |
-| 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ⬜      |
-| 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ⬜      |
-| 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ⬜      |
-| 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ⬜      |
-| 54 | The Ktor plugin's wait for the agent's stop has no deterministic test                                | Tests      | low      | ⬜      |
-| 55 | `AgentDashboardHtmlTest` pins neither half of the column-guide rule, nor the agent page's live region | Tests     | low      | ⬜      |
-| 56 | Two more `dashboard-constraints.md` rules have no test                                               | Tests      | low      | ⬜      |
-| 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ⬜      |
-| 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ⬜      |
-| 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ⬜      |
-| 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ⬜      |
-| 61 | `release-check`'s stale-version check misses the Quick Start's JAR download links                    | CI/build   | low      | ⬜      |
-| 62 | Both changelogs date 4.7.0 2026-11-23, and `release-check` accepts any date                          | CI/build   | low      | ⬜      |
-| 63 | The basics demo promises an alert that a late thaw never fires                                       | CI/build   | low      | ⬜      |
-| 64 | The agent page says `--proxy` and `PROXY_HOSTNAME` apply only without `endpoints`                    | Docs       | low      | ⬜      |
-| 65 | Two diagram descriptions split a hyphenated name across a line                                       | Docs       | low      | ⬜      |
-| 66 | Nothing checks the settings tables' options, variables, links, or gRPC defaults                      | Tests      | low      | ⬜      |
-| 67 | On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have     | CI/build   | low      | ⬜      |
-| 68 | `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap                           | CI/build   | low      | ⬜      |
-| 69 | The changelogs describe the home page #546 replaced, and miss four commits' changes                  | Docs       | low      | ⬜      |
-| 70 | The release skill still lists `index.md`, and a design-check exemption covers a deleted class        | Docs       | low      | ⬜      |
-| 71 | The Kubernetes demo's docs say its agent dashboard port is set once, but nothing keeps it            | Docs       | low      | ⬜      |
-| 72 | `DemoTourTablesTest` misses a stale README heading and `demo.sh`'s page anchors                      | Tests      | low      | ⬜      |
+| 32 | The upgrade notes miss that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`               | Docs       | low      | ✅      |
+| 33 | The Embedded Agent page gives `agent.logLevel` a default an embedded agent doesn't use               | Docs       | low      | ✅      |
+| 34 | The docs say a refused `PROMETHEUS_*` value is never shown, but an endpoint is                       | Docs       | low      | ✅      |
+| 35 | `agent.metrics.proxyPath` is missing from the README, `llms.txt`, and the Grafana docs               | Docs       | low      | ✅      |
+| 36 | The security doc says a displaced agent is invalidated; it stays connected                           | Docs       | low      | ✅      |
+| 37 | The Quick Start says a 404 means an unregistered path, but a target's own 404 looks the same         | Docs       | low      | ✅      |
+| 38 | The Agent Dashboard page's Helm commands use a namespace the site's agent installs don't use         | Docs       | low      | ✅      |
+| 39 | The README and changelogs say every demo turns on its agents' dashboards                             | Docs       | low      | ✅      |
+| 40 | A check order, a `make up` claim, and an unnamed size limit on the deployment and security pages     | Docs       | low      | ✅      |
+| 41 | The README and `llms.txt` miss `PROMETHEUS_PROXY_AUTHORITY` and misstate `-D` precedence             | Docs       | low      | ✅      |
+| 42 | The metrics docs' counter count, alert list, and chunk threshold are wrong                           | Docs       | low      | ✅      |
+| 43 | `docs/packages.md`, `ConfigLoadException`'s KDoc, and `KDOC_SUMMARY.md` describe 4.6.0               | Docs       | low      | ✅      |
+| 44 | AGENTS.md and `docs/TESTING.md` name a deploy check that's gone, and misdescribe `make all-tests`    | Docs       | low      | ✅      |
+| 45 | `docs/DESIGN.md` and `docs/PRODUCT.md` no longer match the shipped dashboard                         | Docs       | low      | ✅      |
+| 46 | Nothing tests `receiveCatchingWithin`, and a test helper uses the form it rules out                  | Tests      | low      | ✅      |
+| 47 | The starter's required-agent tests can't tell `start()` from `startIfConfigured()`                   | Tests      | low      | ✅      |
+| 48 | Two of `MetricsSource`'s isolation promises have no test                                             | Tests      | low      | ✅      |
+| 49 | `ProxyPathManagerLincheckTest` never runs takeover or reclaim                                        | Tests      | low      | ✅      |
+| 50 | No test fails when a change stops waking the dashboards' push loop                                   | Tests      | low      | ✅      |
+| 51 | The proxy's `scrape` and `forward` spans have no unit test                                           | Tests      | low      | ✅      |
+| 52 | No test pins `AgentMetrics`' `PER_LAUNCH` rule                                                       | Tests      | low      | ✅      |
+| 53 | Nothing tests that an embedded agent leaves the JVM metric groups to its host                        | Tests      | low      | ✅      |
+| 54 | The Ktor plugin's wait for the agent's stop has no deterministic test                                | Tests      | low      | ✅      |
+| 55 | `AgentDashboardHtmlTest` pins neither half of the column-guide rule, nor the agent page's live region | Tests     | low      | ✅      |
+| 56 | Two more `dashboard-constraints.md` rules have no test                                               | Tests      | low      | ✅      |
+| 57 | "fromEnvironment reads the process's environment" can't fail                                         | Tests      | low      | ✅      |
+| 58 | The config-key guards don't reach `setting()` keys or the website's HOCON blocks                     | Tests      | low      | ✅      |
+| 59 | `TestingGuideTest` and `TestPortsTest` don't read the subprojects' tests                             | Tests      | low      | ✅      |
+| 60 | An agent with one proxy reconnects on gRPC's backoff, not every `reconnectPauseSecs`                 | Agent      | low      | ✅      |
+| 61 | `release-check`'s stale-version check misses the Quick Start's JAR download links                    | CI/build   | low      | ✅      |
+| 62 | Both changelogs date 4.7.0 2026-11-23, and `release-check` accepts any date                          | CI/build   | low      | ✅      |
+| 63 | The basics demo promises an alert that a late thaw never fires                                       | CI/build   | low      | ✅      |
+| 64 | The agent page says `--proxy` and `PROXY_HOSTNAME` apply only without `endpoints`                    | Docs       | low      | ✅      |
+| 65 | Two diagram descriptions split a hyphenated name across a line                                       | Docs       | low      | ✅      |
+| 66 | Nothing checks the settings tables' options, variables, links, or gRPC defaults                      | Tests      | low      | ✅      |
+| 67 | On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have     | CI/build   | low      | ✅      |
+| 68 | `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap                           | CI/build   | low      | ✅      |
+| 69 | The changelogs describe the home page #546 replaced, and miss four commits' changes                  | Docs       | low      | ✅      |
+| 70 | The release skill still lists `index.md`, and a design-check exemption covers a deleted class        | Docs       | low      | ✅      |
+| 71 | The Kubernetes demo's docs say its agent dashboard port is set once, but nothing keeps it            | Docs       | low      | ✅      |
+| 72 | `DemoTourTablesTest` misses a stale README heading and `demo.sh`'s page anchors                      | Tests      | low      | ✅      |
 
 ---
 
@@ -146,23 +147,23 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 
 | Step | Status | Issues                       | PR theme                                                              | Touches                                                                                                                       | Why here                                                                                                                                                                                         |
 |------|--------|------------------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1    | ⬜      | #25, #30, #61, #62, #67      | Release checks that miss nothing, and demos that pull a published release | `demos/*/demo.sh`, the demo READMEs, `bin/docker-*.sh`, `Makefile` (`release-check`, `_check-demos-pull-release`, `SITE_VERSION_SOURCES`, `release`), `docs/RELEASE.md`, the publishing-release skill, a new `misc/` spec | No longer blocks the 4.7.0 tag: #537's `_check-demos-pull-release` refuses a release until the demos are lowered. A gate on whether the release's images exist drops that release-day edit and keeps `master`'s `make up` right between the bump and the publish. For 4.7.0 itself, set both changelogs' date in the release's last change (#62). #67 is the demos' links to a site that, between releases, is the last release's. |
+| 1    | ✅ #561 | #25, #30, #61, #62, #67      | Release checks that miss nothing, and demos that pull a published release | `demos/*/demo.sh`, the demo READMEs, `bin/docker-*.sh`, `Makefile` (`release-check`, `_check-demos-pull-release`, `SITE_VERSION_SOURCES`, `release`), `docs/RELEASE.md`, the publishing-release skill, a new `misc/` spec | No longer blocks the 4.7.0 tag: #537's `_check-demos-pull-release` refuses a release until the demos are lowered. A gate on whether the release's images exist drops that release-day edit and keeps `master`'s `make up` right between the bump and the publish. For 4.7.0 itself, set both changelogs' date in the release's last change (#62). #67 is the demos' links to a site that, between releases, is the last release's. |
 | 2    | ✅ #550 | #8, #24, #31                 | A Spring Boot starter that runs on the Spring Boot it names           | `agent/AgentMetrics.kt`, `Agent.kt` (`connectOutcome`), `spring-boot-starter/` (`PrometheusProxyAgentProperties`, the website YAML), `spring-boot-starter.md`, `embedded-agent.md` | The starter is new in 4.7.0; fixing it before the tag means no release ships it broken. A starter test at Spring Boot 4.0's or 4.1.0's Prometheus client pins #8.                                 |
-| 3    | ⬜      | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
-| 4    | ⬜      | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
-| 5    | ⬜      | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
-| 6    | ⬜      | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
-| 7    | ⬜      | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
-| 8    | ⬜      | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
-| 9    | ⬜      | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
-| 10   | ⬜      | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
-| 11   | ⬜      | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
-| 12   | ⬜      | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
-| 13   | ⬜      | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
-| 14   | ⬜      | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
-| 15   | ⬜      | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
-| 16   | ⬜      | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
-| 17   | ⬜      | #43, #44, #45, #70           | Maintainer docs that describe what shipped                            | `docs/packages.md`, `docs/KDOC_SUMMARY.md`, `ConfigLoadException`'s KDoc, AGENTS.md, `docs/TESTING.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, the publishing-release skill, `.impeccable/config.json`, `extra.css` | No behavior change. Last, so they describe what the earlier steps settle.                                                                                                                        |
+| 3    | ✅ #551 | #9                           | Logback off embedders' classpaths                                     | `build.gradle.kts` (`compileOnly`, the shadow configuration), `common/Utils.kt` (`setLogLevel`), `etc/consumer-check`, `embedded-agent.md`'s Logging section | The starter carries it into every Spring Boot app from 4.7.0 on. Changes nothing for the fat JARs, and `consumer-check` can assert that no Logback is resolved.                                   |
+| 4    | ✅ #557 | #5, #12                      | A failed or slow start releases what it opened                        | `Agent.kt` (`startUp`, `releaseSteps`, `stop`, `startEmbedded`), `agent/EmbeddedAgentConfig.kt`                               | The agent dashboard (#5) is new in 4.7.0, and the standalone agent's pod stays "healthy" with no connection. After step 2, which shares `Agent.kt`.                                               |
+| 5    | ✅ #562 | #10, #11, #47, #54           | Integrations that start when configured and stop with their host      | `ktor-plugin/.../AgentLifecycle.kt`, `spring-boot-starter/.../PrometheusProxyAgent.java`, `agent/EmbeddedAgentConfig.kt` (`namesProxy`), possibly `Agent.kt` (a daemon executor), both integrations' tests and pages | Both integrations are new in 4.7.0. #47 and #54 are the tests that would catch a regression in what this step changes. After step 4: the daemon-thread option for #10 also covers #12.            |
+| 6    | ✅ #558 | #13, #14, #15, #17, #50      | A push loop no client can flood or stall                              | `common/dashboard/DashboardServer.kt` (`pushLoop`, `push`, the logout route), `common/dashboard/DashboardSessions.kt`, the dashboard push specs | #13 needs no login, and #14 freezes every viewer. #50 makes the wakeups testable at all, so it lands with them. Read `.claude/rules/dashboard-constraints.md` first.                             |
+| 7    | ✅ #563 | #22, #23                     | Dashboard response headers and bounded request logs                   | `common/dashboard/DashboardServer.kt` (`buildServer`, the origin guard), `web-dashboard.md`                                   | Small, but after step 6, which edits the same file.                                                                                                                                              |
+| 8    | ✅ #564 | #16, #18, #19, #55, #56      | Dashboard views that show what's there                                | `common/dashboard/RowFilter.kt`, `proxy/dashboard/ProxyRowFilter.kt`, `proxy/dashboard/ProxyDashboardHtml.kt`, `proxy/dashboard/ProxySnapshot.kt`, `agent/dashboard/AgentActivityHtml.kt`, their tests, `dashboard-constraints.md` | Display-only. #55 and #56 are the constraint tests for the views this step edits. After step 9, which shares `ProxySnapshot.kt`.                                                                 |
+| 9    | ✅ #560 | #20                          | Bound labels, and paths per identity                                  | `proxy/ProxyPathManager.kt`, `Proxy.kt` (`serviceDiscoveryLabels`), `proxy/ProxyOptions.kt`, `config/config.conf`, `proxy/dashboard/ProxySnapshot.kt`, `docs/security-agent-authentication.md`, the agent's `pathConfigs` check | New `proxy.internal` limits need config, validation, docs, and "Before you upgrade" notes. Check whether `ProxyRegistry.tla` should count paths per identity.                                     |
+| 10   | ✅ #565 | #2, #3, #4, #21, #51         | Proxy tracing, limit warnings, and the notices stream's contract       | `proxy/ScrapeDispatch.kt`, `proxy/ProxyServiceImpl.kt`, `proxy/ProxyPathManager.kt`, `proxy/AgentContextManager.kt`, `src/main/proto/proxy_service.proto`, `common/ScrapeTracing.kt`, `proxy/ProxyGrpcService.kt`, AGENTS.md | #51 adds the span tests that #2 and #21 need. After step 9, which shares `ProxyPathManager.kt`.                                                                                                  |
+| 11   | ✅ #559 | #1, #49                      | Takeover and reclaim, modeled and stress-tested                       | `specs/tla/ProxyRegistry.tla`, `proxy/ProxyPathManagerLincheckTest.kt`                                                        | Model and test only. Run `make tla-checks-full` and `make lincheck-tests`. Independent of the other steps.                                                                                       |
+| 12   | ✅ #566 | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
+| 13   | ✅ #555 | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
+| 14   | ✅ #567 | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
+| 15   | ✅ #556 | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
+| 16   | ✅ #552 | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
+| 17   | ✅ #568 | #43, #44, #45, #70           | Maintainer docs that describe what shipped                            | `docs/packages.md`, `docs/KDOC_SUMMARY.md`, `ConfigLoadException`'s KDoc, AGENTS.md, `docs/TESTING.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, the publishing-release skill, `.impeccable/config.json`, `extra.css` | No behavior change. Last, so they describe what the earlier steps settle.                                                                                                                        |
 
 ### What can run in parallel
 
@@ -179,10 +180,10 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 
 | Wave | Status | Steps                       | Waits for                                    |
 |------|--------|-----------------------------|----------------------------------------------|
-| A    | ⬜      | 2, 3, 16                    | nothing; all before the 4.7.0 tag            |
-| B    | ⬜      | 1, 4, 6, 9, 11, 13, 15      | 4 on 2                                       |
-| C    | ⬜      | 5, 7, 8, 10, 12, 14         | 5 and 12 on 4; 7 on 6; 8 and 10 on 9; 14 on 3 |
-| D    | ⬜      | 17                          | the code steps (2–12)                        |
+| A    | ✅      | 2, 3, 16                    | nothing; all before the 4.7.0 tag            |
+| B    | ✅      | 1, 4, 6, 9, 11, 13, 15      | 4 on 2                                       |
+| C    | ✅      | 5, 7, 8, 10, 12, 14         | 5 and 12 on 4; 7 on 6; 8 and 10 on 9; 14 on 3 |
+| D    | ✅      | 17                          | the code steps (2–12)                        |
 
 Seven files, or sets of files, are edited across tracks, in separate places, so they merge cleanly, though the later
 PR rebases:
@@ -295,7 +296,7 @@ the tree, and #29's new reach by a run that passed `UP-TO-DATE` on four broken d
 
 ## 📡 Proxy
 
-### 1. ⬜ `ProxyRegistry.tla` invalidates an orphaned connection without clearing its unread notices, which the code's `invalidate()` clears, so the model lets a dead connection deliver notices the code drops
+### 1. ✅ `ProxyRegistry.tla` invalidates an orphaned connection without clearing its unread notices, which the code's `invalidate()` clears, so the model lets a dead connection deliver notices the code drops
 
 **Severity:** low · **Confidence:** confirmed by trace (model against code)
 
@@ -329,7 +330,9 @@ Then run `make tla-checks-full`.
 **Tests:** `make tla-checks-full` still passes. A temporary invariant `\A o \in Conns : ~valid[o] /\ phase[o] =
 "live" => notices[o] = {}` fails in `ProxyRegistryReconnect.cfg` today and holds after the change.
 
-### 2. ⬜ `sendScrapeRequest` tags the forward span after a send that can outlast the scrape, so a timed-out scrape's span loses its queue wait and "sent to agent"
+**Resolution:** Fixed in #559. `RegisterLocked` clears an orphan's unread notices as it invalidates it, and the new `InvalidatedHasNoNotices` is checked in all four ProxyRegistry configs; the optional `valid[c]` guard on `NoticeEmit` was left out, as the invariant would catch the slip it hid. One correction: no shipped config broke the invariant before the fix, since with one path an orphan has always just lost it to its own launch; with two paths and three connections the unchanged model breaks it at depth 12, a model too large to ship. TLC also showed the model needed the notice a refused reclaim sends (`tellHolder` in `reclaimRejection`), which the appendix had called irrelevant, so it sends it now.
+
+### 2. ✅ `sendScrapeRequest` tags the forward span after a send that can outlast the scrape, so a timed-out scrape's span loses its queue wait and "sent to agent"
 
 **Severity:** low · **Confidence:** plausible: the gap is confirmed in Brave 6.3.1, zipkin-reporter-brave 3.5.3, and
 grpc-kotlin 1.5.0 source; it needs an agent that has stopped reading its scrape-request stream long enough to trip
@@ -363,7 +366,9 @@ removes it from the map before `traced` finishes the span), or drop the post-sen
 forward span. Pass a `send` that finishes the span before returning, which stands in for the scrape timing out during
 a blocked emit, then check that the reported span has `queue.wait_ms`. It's missing today.
 
-### 3. ⬜ The 80% warnings for `maxPathsPerAgent` and `maxAgentsPerIdentity` fire every time the count climbs back to the threshold, not once, as the path one's comment says
+**Resolution:** Fixed in #565. `sendScrapeRequest` now tags the forward span with `queue.wait_ms` before the send, and adds `sent to agent` after it only while the scrape is still tracked (`containsScrapeRequest`), so a send held by flow control can no longer leave a timed-out span without its wait, and nothing is written to a span that has finished. A `ProxyServiceImplTest` case finishes the span during the send, as a timeout would, and failed before the fix; a second, with a mock span, checks that no annotation follows a scrape that has ended. The test collector, `TracingMocks.collectInto`, now copies each span as it finished: before, a late tag still reached the shared span, which hid the loss a real reporter suffers. The `proxy_scrape_queue_wait_seconds` observation stays where it was, as Considered says.
+
+### 3. ✅ The 80% warnings for `maxPathsPerAgent` and `maxAgentsPerIdentity` fire every time the count climbs back to the threshold, not once, as the path one's comment says
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -391,7 +396,9 @@ per agent. Either way, the comment then holds.
 one, register another, and expect still one WARN. Today it's two. The same for `addAgentContextWithinLimit` with
 `maxPerIdentity = 5`: add 4, remove one, add one.
 
-### 4. ⬜ The proto doesn't say that a `PathNotice` with no path is a keepalive, and AGENTS.md says every keepalive waits for the other side's say-so, which the notices stream's don't
+**Resolution:** Fixed in #565. A new `NearLimitWarnings` carries the hysteresis #560 gave `maxPathsPerIdentity`'s warning (warn as a count reaches 80%, and again only once it has fallen below 70%), and all three limit warnings use it. `ProxyPathManager` reports both the agent's and the identity's path counts from `countPaths`, under the `pathMap` lock, so every decrease, an agent's removal included, re-arms the warning and no memory outlives the agent; `AgentContextManager` reports an identity's agent count inside the compute that adds or removes the agent. With a limit of 10, going 8 → 7 → 8 → 6 → 8 now warns twice, not three times, for paths per agent and for agents per identity, and `NearLimitWarningsTest` covers the boundaries. Unlike the fix this finding suggested, the warned keys live in one shared class, not a flag on `AgentContext` or a set in the manager, and the threshold is "at least 80%" where it was "exactly 80%".
+
+### 4. ✅ The proto doesn't say that a `PathNotice` with no path is a keepalive, and AGENTS.md says every keepalive waits for the other side's say-so, which the notices stream's don't
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -419,11 +426,13 @@ the notices stream sends them to every reader.
 
 **Tests:** none needed: comments only.
 
+**Resolution:** Fixed in #565. The proto's `PathNotice` comment now says a notice with no path is a keepalive, which the agent ignores: the proxy sends one after `proxy.internal.streamKeepAliveSecs` of quiet, none when that is 0, and unlike the other streams' keepalives no registration flag gates them, since every agent that reads the stream ignores one. The `readPathNoticesFromProxy` rpc comment points to it, and AGENTS.md limits its gating rule to `readRequestsFromProxy` and the response streams. Only comments changed, so the code and the wire format are as they were. The website's keepalive text is left as is: only an agent that takes keepalives ever opens the notices stream, so it holds for users.
+
 ---
 
 ## 🛰️ Agent and shared code
 
-### 5. ⬜ When the agent's dashboard can't bind its port, the admin, metrics, and Zipkin services and the JVM shutdown hook keep running, so a standalone agent never exits and its `/ping` still answers 200
+### 5. ✅ When the agent's dashboard can't bind its port, the admin, metrics, and Zipkin services and the JVM shutdown hook keep running, so a standalone agent never exits and its `/ping` still answers 200
 
 **Severity:** medium · **Confidence:** reproduced with the shipped `prometheus-agent.jar`. The config had the dashboard on
 port 27420, which another process was holding, and the admin server on 27421 and the metrics server on 27422. `main()`
@@ -475,7 +484,9 @@ again and that no shutdown hook is left. common-utils' `registeredShutDownHook` 
 test reads it through reflection. Today's code fails both checks. An `EmbeddedAgentApiTest` case
 should check the same through `startAsyncAgent(Config)`.
 
-### 6. ⬜ Results still queued in the connection's results channel when a writer stream fails are never counted, as sent or as dropped
+**Resolution:** Fixed in #557. `Agent.startUp()` starts in two parts: a failure in `super.startUp()` runs the release steps, and a dashboard that fails after it returned runs them and `super.shutDown()` too, stopping the admin, metrics, and Zipkin services and removing the shutdown hook, as `Proxy.startUp()` does; what the release throws is attached as suppressed, and a FAILED dashboard isn't stopped again. The fix also closes a second leak: Ktor's `start()` leaves its shutdown hook and application behind when the bind fails, so `DashboardService.startUp()` stops the server. On the shipped jar, an agent with its dashboard port held now exits with status 1 in about 1.3 s; it ran on with `/ping` answering 200. `AgentStartupTest` and `DashboardServiceTest` pin both.
+
+### 6. ✅ Results still queued in the connection's results channel when a writer stream fails are never counted, as sent or as dropped
 
 **Severity:** low · **Confidence:** confirmed by trace, including kotlinx-coroutines 1.11.0's channel source. Not
 reproduced.
@@ -526,7 +537,9 @@ exists to show, and its sum stops matching `agent_scrape_request_count_total`.
 A second case, where the chunked writer is the one that fails, should check that no ERROR is logged for
 `processScrapeResults`.
 
-### 7. ⬜ Connection tasks, stream writers, heartbeats, and discovery catch JVM `Error`s, so an `OutOfMemoryError` there ends only the connection, and the agent reconnects
+**Resolution:** Fixed in #566. The connection's results channel now hands a result it can't deliver to a callback that counts it as `dropped` (`Agent.newConnectionContext`), and the producer's `finally` ends the connection and drops what it left queued (`AgentConnectionContext.dropUnsentResults`). The callback also covers a result the producer takes just as it's cancelled, which the coroutine library would otherwise lose, while a result offered after the close is still counted by its scrape, since `trySend` calls no `onUndeliveredElement`. The producer returns on a `ClosedSendChannelException`, so another writer's failure no longer logs an ERROR. Two `AgentGrpcServiceTest` cases hold the producer after its first forward until the failed writer has closed the connection: before the fix they counted 2 of 3 results and logged the ERROR. `AgentConnectionContextTest` and `AgentTest` pin the callback and its wiring.
+
+### 7. ✅ Connection tasks, stream writers, heartbeats, and discovery catch JVM `Error`s, so an `OutOfMemoryError` there ends only the connection, and the agent reconnects
 
 **Severity:** low · **Confidence:** confirmed by trace. `runCatchingCancellable` is `runCatching` plus a rethrow of
 `CancellationException` (common-utils 5.3.0 `ExceptionUtils.kt:34-38`), so it catches `Error`.
@@ -570,7 +583,9 @@ shared `runCatchingNonFatal` helper next to `failureKey` that rethrows `Error` a
 - A `PathDiscoveryServiceTest` case whose source throws `StackOverflowError` expects it to propagate from
   `reconcileOnce`.
 
-### 60. ⬜ The demo pages say a single-endpoint agent retries the proxy every 3 seconds and reconnects within a few seconds of its return, but gRPC paces the real attempts on an exponential backoff, so after a 110-second outage the agent took 34 seconds to reconnect
+**Resolution:** Fixed in #566. `launchConnectionTask`, `runStreamTask`, `sendHeartBeat`, `PathDiscoveryService.reconcileOnce`, and the path manager's four per-path calls now catch with `runCatchingNonFatal` (`common/NonFatal.kt`), which rethrows a JVM `Error` as well as a `CancellationException`, and `connectAgent`'s own check moved into it. An `Error` there fails the connection's scope, and `handleConnectionFailure` rethrows it, so the agent ends `FAILED`, as it already did for a scrape's. Ten tests across `AgentTest`, `AgentGrpcServiceTest`, `AgentPathManagerTest`, and `PathDiscoveryServiceTest` fail when the helper stops rethrowing `Error`. The proxy's handlers and `HttpClientCache`'s sweeper still catch one, as they aren't part of the agent's connection.
+
+### 60. ✅ The demo pages say a single-endpoint agent retries the proxy every 3 seconds and reconnects within a few seconds of its return, but gRPC paces the real attempts on an exponential backoff, so after a 110-second outage the agent took 34 seconds to reconnect
 
 **Severity:** low · **Confidence:** reproduced: an agent and a proxy from the demos' `prometheus-proxy-demo/*:local`
 images (version 4.7.0, built from this code), on a Docker network of their own, one `pathConfigs` entry and no other
@@ -632,6 +647,8 @@ holds there.
 
 **Tests:** for the first fix, an `AgentGrpcService` unit spec with an in-process server started after the channel has
 failed three times: the next `connectAgent` succeeds without waiting out a backoff. For the second, none; it's prose.
+
+**Resolution:** Fixed in #566. `connectAgent` calls `channel.resetConnectBackoff()` after a failed connect, so the channel looks up the proxy's name again and dials at each attempt, with gRPC's own backoff starting over in between. A failover list's channels are rebuilt per attempt and have nothing to reset, so `EndpointFailover` and `AgentFailover.tla` are unchanged. The attempt that resets usually still fails, since gRPC keeps the channel failed until a dial succeeds, and the reconnect comes on the next one. With the fat JARs over Netty on loopback, a 90-second outage took 22.4 s to reconnect before and 4.6 s after, and a 60-second one 10.3 s and 1.3 s. An `AgentGrpcServiceTest` case with an in-process proxy started after three failed connects, and one that checks when the reset happens, fail without it. The demos' and the config's "3 seconds" now hold, and the security page's restart step, which described the growing backoff, is corrected.
 
 ---
 
@@ -729,7 +746,7 @@ without the 1.7 API: it refuses the gauge name `agent_build_info`. So:
 - `oldestSpringBootTest` runs the starter's tests under Spring Boot 4.0.10 with the two set; without them, the
   integration test failed with the `NoSuchMethodError`.
 
-### 9. ⬜ The starter puts Logback on every embedder's classpath, so a Spring Boot app that logs with Log4j2 breaks: it fails to start, or loses its Log4j2 configuration
+### 9. ✅ The starter puts Logback on every embedder's classpath, so a Spring Boot app that logs with Log4j2 breaks: it fails to start, or loses its Log4j2 configuration
 
 **Severity:** medium · **Confidence:** confirmed by trace. The published POM was read, as was Spring Boot 4.2.0's
 `LogbackLoggingSystem` and `Log4J2LoggingSystem`. Which of the two breakages an app sees depends on SLF4J's provider
@@ -780,7 +797,16 @@ Logback. November #19 took `logback.xml` out of the jar but kept the dependency.
 - A consumer-check assertion that `logback-classic` isn't on the classpath of a project that depends only on the agent
   (or only on the starter).
 
-### 10. ⬜ The Ktor plugin starts the agent before the engine binds its port, so an app whose port is taken hangs instead of exiting, with its agent connected
+**Resolution:** Fixed in #551. `logback-classic` is `compileOnly` in the agent, so the published POM no longer names it,
+and on the main runtime classpath through `standaloneRuntimeOnly`, a dependency scope `runtimeClasspath` extends and
+`runtimeElements` doesn't, so the fat JARs and the images still log with it. `Utils.setLogLevel` sets a level through
+`LogbackLevels`, the only class that links against Logback, once `Class.forName` finds it, and warns otherwise; a
+`UtilsTest` spec scans the main classes for any other class naming Logback. `make consumer-check` fails when Logback
+resolves for the agent alone, a Ktor app with the plugin, or a Spring Boot app with the starter (a new
+`spring-boot-starter` profile), where the review's Log4j2 starter test would have needed a classpath of its own. The
+Embedded Agent page's Logging section and the upgrade notes say what an app with no SLF4J provider adds.
+
+### 10. ✅ The Ktor plugin starts the agent before the engine binds its port, so an app whose port is taken hangs instead of exiting, with its agent connected
 
 **Severity:** medium · **Confidence:** reproduced with a scratch spec (since deleted):
 
@@ -834,7 +860,9 @@ Logback. November #19 took `logback.xml` out of the jar but kept the dependency.
 
 It fails today.
 
-### 11. ⬜ Both integrations decide whether to start from their own proxy setting alone: a proxy from `PROXY_HOSTNAME`, a `setting()` key, or (in the starter) a customizer leaves the agent off
+**Resolution:** Fixed in #562. An embedded agent's service thread is now a daemon: `Agent` overrides Guava's `executor()` when `isEmbedded`, which `startEmbedded` sets before `startAsync()`, so a host that fails after starting its agent, without stopping it, exits. `ServerBindFailureTest` runs a CIO app with the plugin in a child JVM against a port the test holds: before, it was still running after 30 seconds, its agent retrying the proxy; now it exits with status 1 in about a second, its app disposed by Ktor's shutdown hook, which stops the agent through the plugin. `AgentStartupTest` pins the thread kind, and covers a `startUp()` that never returns, the part of #12 that `startWithin` couldn't stop. The admin and metrics servers' Jetty threads, which common-utils builds, still aren't daemons, so an agent with either port on still holds the JVM; the docs say so. A program whose `main()` only starts an embedded agent and returns now exits, which both changelogs and the upgrade page note.
+
+### 11. ✅ Both integrations decide whether to start from their own proxy setting alone: a proxy from `PROXY_HOSTNAME`, a `setting()` key, or (in the starter) a customizer leaves the agent off
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -877,7 +905,9 @@ The two integrations also disagree with each other: the plugin honors a proxy se
 - An `AgentLifecycle` test with `settings.proxy.hostname` and no `proxy` key.
 - The internal `env` lookup lets both cover `PROXY_HOSTNAME`.
 
-### 12. ⬜ A start that times out is reported as "stays off", but the agent keeps starting, with no handle to stop it
+**Resolution:** Fixed in #562. `EmbeddedAgentConfig.namesProxy()` is public: the rule `startIfConfigured()` already followed (the builder's proxy, a `setting()` of the endpoints or host name, or `PROXY_HOSTNAME`). The starter runs its customizers before deciding, and the plugin decides once the file and the install block have built the settings; both read `namesProxy()`. New tests in `PrometheusProxyAgentAutoConfigurationTest` (a customizer's proxy, a `settings.proxy.hostname` property, and a required agent whose customizer sets the proxy) and in `AgentLifecycleTest` (a file `settings` key on a required agent, and an agent block's `setting()`) failed before the change; `PROXY_HOSTNAME` itself is covered by `StartIfConfiguredTest`, through the internal `env` lookup. Both integrations now log `No proxy is set (prometheus-proxy.agent.proxy or PROXY_HOSTNAME)`.
+
+### 12. ✅ A start that times out is reported as "stays off", but the agent keeps starting, with no handle to stop it
 
 **Severity:** low · **Confidence:** plausible: the gap is confirmed in the code. It needs `startUp()` to take over
 30 s, which is rare (binding the admin, metrics, and dashboard ports, and starting Zipkin's reporter).
@@ -904,11 +934,13 @@ once `startUp()` returns, and runs `shutDown()`. Then throw an `IllegalStateExce
 that, make the timeout a parameter of `startEmbedded`. The case expects the exception, and the agent TERMINATED
 shortly after.
 
+**Resolution:** Fixed in #557. `startEmbedded` starts the agent with `Agent.startWithin`, at `startSync()`'s 30 seconds: on a timeout it calls `stopAsync()`, so Guava skips `run()` once `startUp()` returns and calls `shutDown()`, and the agent releases what it opened and never connects; the start throws an `IllegalStateException` with the `TimeoutException` as its cause. `AgentStartupTest` blocks the dashboard's start on a latch and checks the agent reaches TERMINATED, its port free and its channel shut, without connecting. Step 5's daemon thread would cover a `startUp()` that never returns, which this doesn't.
+
 ---
 
 ## 🖥️ Dashboards
 
-### 13. ⬜ An anonymous `POST /logout` wakes the push loop, so anyone who can reach a login-protected dashboard can make it collect a snapshot and push every open page once per request
+### 13. ✅ An anonymous `POST /logout` wakes the push loop, so anyone who can reach a login-protected dashboard can make it collect a snapshot and push every open page once per request
 
 **Severity:** medium · **Confidence:** reproduced with a scratch spec (since deleted): a `DashboardServer` with a login,
 a 2 s refresh, a site that counted its collects, and one logged-in WebSocket reader. Idle for 4 s it collected 2
@@ -946,7 +978,9 @@ needs no collect at all, and leave the push loop to the site's changes and the t
 **Tests:** in a `DashboardServer` spec with a counting site, a login, and one open session: 100 `POST /logout`
 without a cookie add no collects beyond the tick's; one with the open session's cookie closes that session's socket.
 
-### 14. ⬜ Ending a session whose socket has stopped reading blocks the shared push loop until that TCP connection dies, so every open page freezes while still showing "live"
+**Resolution:** Fixed in #558, by the better-still option. `DashboardSessions.remove` returns whether it ended a session, and Log out, through `endLogin`, closes only that login's open pages and never wakes the loop, so one naming no session costs a lookup. `DashboardPushTest` sends 100 such logouts and sees no collect and no push; the old code collected 102 times.
+
+### 14. ✅ Ending a session whose socket has stopped reading blocks the shared push loop until that TCP connection dies, so every open page freezes while still showing "live"
 
 **Severity:** medium · **Confidence:** reproduced with a scratch spec (since deleted): a `DashboardServer` with a login
 and a 200 ms refresh, one logged-in WebSocket client that read, and one raw socket that completed the handshake with
@@ -986,7 +1020,9 @@ once, then close it on its own scope with a bound, for example
 handshake and never reads; `POST /logout` with the raw socket's cookie; the reader keeps receiving frames at the tick
 rate.
 
-### 15. ⬜ A session that stops reading isn't reliably closed: once its outgoing buffer overflows, Ktor's pinger exits silently, and the session stays open, counted against `maxSessions` and rendered for on every push
+**Resolution:** Fixed in #558. Every close goes through `end()`, which takes the session out of the pushes at once and closes its socket on a coroutine of its own: a close frame, waited for at most 5 seconds, then the socket's handler cancelled. `DashboardPushTest` ends the login of a raw socket that never reads a 16 MiB frame, by Log out and by expiry, and another page keeps getting frames; both froze on the old code.
+
+### 15. ✅ A session that stops reading isn't reliably closed: once its outgoing buffer overflows, Ktor's pinger exits silently, and the session stays open, counted against `maxSessions` and rendered for on every push
 
 **Severity:** low · **Confidence:** reproduced with a scratch spec (since deleted): with a 200 ms refresh and 256 KiB
 frames, a raw socket that completed the handshake and then never read was still among `sessionsOpen` at 10, 20, 30,
@@ -1017,7 +1053,9 @@ session whose last send failed.
 **Tests:** a raw socket that never reads, with a short refresh and large frames: `sessionsOpen` drops back within a
 few seconds of its first failed send.
 
-### 16. ⬜ The tables' search doesn't match a path as its row shows it: typing `/payments` finds nothing
+**Resolution:** Fixed in #558. A failed send ends its session at once, freeing its `maxSessions` slot, and an ended session isn't rendered for again; `DashboardPushTest` sees a stalled page leave within about 2 seconds and a new one connect. One correction: once the buffer overflows, Ktor's pinger fails with an uncaught `ChannelOverflowException`, logged at ERROR, rather than stopping silently; the session stayed open all the same.
+
+### 16. ✅ The tables' search doesn't match a path as its row shows it: typing `/payments` finds nothing
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1039,7 +1077,9 @@ comparing with a path), and agent names through `agentLabel`.
 `AgentDashboardHtmlTest`: `/foo` matches an entry naming path `foo`; `registering` matches a path served by an
 `Unassigned` agent.
 
-### 17. ⬜ A collect that throws ends the push loop for good, with nothing logged through the logger
+**Resolution:** Fixed in #564. The search now matches a row as it shows it. `RowFilter.pathAsShown` gives a path its slash, and the Paths and Activity rows render the path with it too, so the two can't drift apart. The proxy's matchers name each agent through `agentLabel`, so `registering` finds an agent not yet registered and `Unassigned` no longer does. `/payments_metrics` now finds its path on the proxy's Paths and Activity views and on the agent's Activity view. `RowFilterTest` covers a path with its slash, an agent by its label, and an activity line's paths and agent; `ActivityHtmlTest` and `AgentDashboardHtmlTest` cover the rendered views. `dashboard-constraints.md` gains the rule that the search matches a row as the row shows it.
+
+### 17. ✅ A collect that throws ends the push loop for good, with nothing logged through the logger
 
 **Severity:** low · **Confidence:** confirmed by trace; no collect was found that throws today.
 
@@ -1057,7 +1097,9 @@ next wake or tick; give `scope` a `CoroutineExceptionHandler` that logs through 
 **Tests:** a site whose first collect throws: an open session still gets a frame on the next tick, and one ERROR is
 logged.
 
-### 18. ⬜ The detail pane of an agent that has gone names it by its raw numeric `agentId`, which no other view shows
+**Resolution:** Fixed in #558. `collectForPush` logs a run of failed collects at ERROR once, then DEBUG, and the loop carries on at its next wake or tick; the server's scope logs its tasks' failures through the logger. `DashboardPushTest` sees one ERROR for two failures and a push on the next change.
+
+### 18. ✅ The detail pane of an agent that has gone names it by its raw numeric `agentId`, which no other view shows
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1076,7 +1118,9 @@ connected", with no id.
 **Tests:** `ProxyDashboardHtmlTest`: `detailFragment` for an id no longer connected doesn't contain the id, and names
 the agent when a path's history holds a scrape of it.
 
-### 19. ⬜ An agent's detail shows a stale-agent eviction countdown when the stale-agent check is off
+**Resolution:** Fixed in #564. The gone pane names the agent through `agentLabel`, from the newest activity line or scrape the snapshot still holds of it (`ProxySnapshot.goneAgentName`), worked out once per snapshot and only once a session's selected agent has gone. When the snapshot holds neither, the pane says "The selected agent is no longer connected", and the id no longer appears. Unlike the fix this finding suggested, it reads the activity log as well as the paths' histories, so an agent that left before its first scrape is still named, usually from the line recording its departure. `ProxyDashboardHtmlTest` covers the name from a scrape, from an activity line, and from neither, never the id; `ProxySnapshotTest` covers the newest line or scrape winning, and no name for a connected agent or for a line that names no agent.
+
+### 19. ✅ An agent's detail shows a stale-agent eviction countdown when the stale-agent check is off
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1092,11 +1136,13 @@ agent idle past `maxAgentInactivitySecs` (heartbeats off) reads "evicted in 0s" 
 
 **Tests:** `ProxyDashboardHtmlTest`: an agent's detail from a snapshot with the check off has no "evicted in".
 
+**Resolution:** Fixed in #564. `ProxySnapshot.maxAgentInactivitySecs` became `evictAfterSecs`, which is null while `Proxy.isStaleAgentCheckRunning` is false, so a snapshot can't carry a delay that no check acts on, and the detail shows the countdown only when it's set. It leaves the countdown out rather than saying the check is off, which the Settings view already says. A disabled transport filter forces the check on, and the countdown then shows, correctly. `ProxyDashboardHtmlTest` covers 58s, 0s when overdue, and no countdown with the check off; `ProxySnapshotTest` covers `collect` from a proxy with the check on and with `staleAgentCheckEnabled = false`.
+
 ---
 
 ## 🔒 Security
 
-### 20. ⬜ One agent's labels can exhaust the proxy's heap within the default limits, and `maxPathsPerAgent` doesn't bound an identity
+### 20. ✅ One agent's labels can exhaust the proxy's heap within the default limits, and `maxPathsPerAgent` doesn't bound an identity
 
 **Severity:** medium · **Confidence:** reproduced: a standalone JVM program that builds what `addPath` keeps per path
 (the raw labels string plus `Proxy.serviceDiscoveryLabels`' filtered `JsonObject`, with kotlinx-serialization 1.13.0)
@@ -1164,7 +1210,9 @@ heap.
 **Follows up:** late-September #14 (per-connection quota, chosen so the legacy token's shared identity wouldn't cap the
 fleet) and November #12 and #15 (the same attacker and amplifiers).
 
-### 21. ⬜ The proxy's gRPC tracing keeps every call whose metadata says "sampled", so any caller can override the sample rate and trace heartbeats
+**Resolution:** Fixed in #560. A path's labels are parsed once, as it registers (`Proxy.pathLabels`), and its entry keeps only the parsed copy, which service discovery, the dashboard's links, and `/debug` read, and which the dashboard no longer re-parses on each collect: 8 KiB of one-character labels took 134.5 KiB, and with the new `proxy.internal.maxLabelsPerPath` (default 64) a path takes at most about 20 KiB. The new `proxy.internal.maxPathsPerIdentity` (default 100,000) caps what an identity's agents hold together; with auth off it counts the whole fleet, a takeover within an identity leaves its count alone, and it warns at 80%. The release notes gain a Before You Upgrade section for both. Differences from the fix above: the entry keeps every label with a value, since the dashboard's links read labels service discovery leaves out; the agent checks neither limit, both being the proxy's; `maxLabelsSizeBytes` stays at 8 KiB; and `ProxyRegistry.tla` doesn't count paths per identity, since the count changes under the same lock as `pathCounts` and drives no lifecycle decision. One connection at its 20,000-path quota with every path at its limits still holds about 400 MiB, which only a lower `maxPathsPerAgent` would close.
+
+### 21. ✅ The proxy's gRPC tracing keeps every call whose metadata says "sampled", so any caller can override the sample rate and trace heartbeats
 
 **Severity:** low (Zipkin is off by default) · **Confidence:** confirmed in Brave 6.3.1's source.
 
@@ -1201,7 +1249,9 @@ the agent asked.
 `b3: 1` produces no reported span, and with `sampleRate = 0.0` a `registerPath` call carrying `x-b3-sampled: 1` produces
 none either.
 
-### 22. ⬜ The dashboard logs a client's `Origin` and `Host` headers whole, unescaped, and unthrottled, before any login
+**Resolution:** Fixed in #565. `ScrapeTracing`'s gRPC tracing uses a propagation, `ServerSampledPropagation`, whose extractor clears the sampled and debug flags of whatever it extracts (`ScrapeTracing.undecided`) and keeps the trace and span IDs, so Brave's server handler always asks the proxy's `rpcSampler`, and a call still joins its caller's trace. The client side's injection is unchanged. New `ScrapeTracingTest` cases make real calls through an in-process server behind the interceptor: a heartbeat sent with `b3: 1`, `b3: d`, `x-b3-sampled: 1`, or `x-b3-flags: 1` is served unsampled; at rate 0 a `registerPath` with `x-b3-sampled: 1` is unsampled and keeps the caller's trace ID; and at rate 1 one sent with `x-b3-sampled: 0` is sampled. The first two failed before the fix. The website's Sampling paragraph says whose rate applies to which side of a call.
+
+### 22. ✅ The dashboard logs a client's `Origin` and `Host` headers whole, unescaped, and unthrottled, before any login
 
 **Severity:** low · **Confidence:** confirmed by trace, with CIO's header parser read in `ktor-http-cio` 3.6.1.
 
@@ -1235,7 +1285,9 @@ characters; the same for a refused `Host` with `allowedHosts` set.
 
 **Follows up:** November #40 and #16 (the same rule for client- and agent-supplied text).
 
-### 23. ⬜ Pages behind the dashboard's login can be framed and are cacheable; only the login page refuses both
+**Resolution:** Fixed in #563. `originRefusal` and `checkHost` now log the header through `shownValue`, cut to 270 characters rather than its default 64, so a real origin or host (a 253-character DNS name with its scheme and port) is still shown whole and still names what to allow. Each line has its own `KeyedThrottle` per remote address, as `recordBadLogin` does: INFO once a minute and DEBUG otherwise. The message wording is otherwise unchanged, so the docs' quotes of it still match. `DashboardResponsesTest` sends an `Origin`, then a `Host`, of `ESC[2J` and 5,000 more characters twice from one address over a raw socket (Ktor's client refuses a control character in a header), and sees one INFO and one DEBUG line, each with the escape written out and under 400 characters; the old code logged two INFO lines with the raw escape.
+
+### 23. ✅ Pages behind the dashboard's login can be framed and are cacheable; only the login page refuses both
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1265,6 +1317,8 @@ HTML response once a login is set. Name framing in the Exposure section.
 
 **Tests:** in `ProxyWebDashboardTest` and `AgentWebDashboardTest`, a page, a detail fragment, and a Scrape now response
 each carry `frame-ancestors 'none'`; with a login set, a page carries `no-store`.
+
+**Resolution:** Fixed in #563. A `DashboardServer` application plugin, an `onCallRespond` hook like `DefaultHeaders`', adds `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` to every response, refusals, redirects, error pages, assets, and the WebSocket handshake included. It adds each header once, since StatusPages answers a bare 404 twice, and a brand mark keeps its `sandbox` policy alongside. With a login set, `CachingHeaders` gives every response but the versioned assets `Cache-Control: no-store`, not only HTML responses, so fragments, redirects, and 401s are covered too; `respondLogin` no longer sets either header itself. The Exposure section names framing as a third guard. `DashboardResponsesTest` checks ten kinds of response without a login and seven with one: before the fix all ten lacked the framing headers and six of the seven lacked `no-store`. The proxy and agent harness specs check a page, a fragment, Scrape now, and the login page.
 
 ### 24. ✅ The Spring Boot starter's `Target.toString` masks a URL's user info but not its query values, so a logged property set shows an `api_key`
 
@@ -1300,7 +1354,7 @@ finds none of its secrets in the properties' `toString`.
 
 ## 🏗️ CI, build, packaging, and demos
 
-### 25. ⬜ Every release moves each demo's `NEEDS_RELEASE_AFTER` by hand, twice, and until the release is published `master`'s `make up` says a release that isn't out "predates this demo", then can't pull it
+### 25. ✅ Every release moves each demo's `NEEDS_RELEASE_AFTER` by hand, twice, and until the release is published `master`'s `make up` says a release that isn't out "predates this demo", then can't pull it
 
 **Severity:** low (medium at `56b1c355`; found by both the build and the documentation passes) · **Confidence:**
 confirmed by trace and by running `make _check-demos-pull-release` with several `VERSION`s.
@@ -1371,7 +1425,9 @@ release tag pulls its images. Still open: the value is edited twice per release 
 `bin/docker-*.sh` mishandle the unpublished release between the bump and the publish, and the guard skips a demo it
 can't parse and has no test.
 
-### 26. ⬜ Both charts' dashboards listen on every pod interface, so keeping them off the Service doesn't keep them private
+**Resolution:** Fixed in #561. Each `demo.sh` checks whether the release the docs give is published, by an image Docker already has or Docker Hub's answer, only whose "no such manifest" means no, and `make up` builds from the checkout until it is, saying why; the Kubernetes demo asks Docker Hub alone, as its clusters pull the images. `NEEDS_RELEASE_AFTER` keeps its name and meaning, the newest release that lacks what the demo shows, rather than becoming the first that has it, and is 4.6.0 in all seven demos, so no bump or release moves it; `_check-demos-pull-release` stays as a guard, now failing on a value it can't read. `bin/docker-*.sh` say a release isn't on Docker Hub yet. `DemoReleaseGateTest` runs each `cmd_up` with a stubbed `docker`.
+
+### 26. ✅ Both charts' dashboards listen on every pod interface, so keeping them off the Service doesn't keep them private
 
 **Severity:** low · **Confidence:** confirmed by trace (the chart templates and `config/config.conf`'s default).
 
@@ -1402,7 +1458,9 @@ docs tell the reader that leaving the port off the Service is what keeps the das
 **Tests:** in `make helm-lint`, assert that the default render sets `DASHBOARD_HOST` to `127.0.0.1` when the dashboard is
 on, as the `secret-config-values.yaml` case is asserted now.
 
-### 27. ⬜ The Docker quick-start compose file publishes the agent, scrape, and admin ports on every interface with no token, and the docs tell readers to leave it running
+**Resolution:** Fixed in #556. Both charts have a `dashboard.host` value, default `127.0.0.1`, passed as `DASHBOARD_HOST`, which `kubectl port-forward` still reaches; a values file with no `host` key, as after `helm upgrade --reuse-values` from an older chart, gets `127.0.0.1` too, and an empty value leaves the address to the config. The install notes warn when the dashboard is on another address, the READMEs and pages say how to publish it deliberately, and the Kubernetes demo's proxy sets `0.0.0.0` for its NodePort. `make helm-lint` fails unless the all-features render sets `127.0.0.1`.
+
+### 27. ✅ The Docker quick-start compose file publishes the agent, scrape, and admin ports on every interface with no token, and the docs tell readers to leave it running
 
 **Severity:** low · **Confidence:** confirmed from the files.
 
@@ -1429,7 +1487,9 @@ line to `docker.md` pointing a reader who deploys it at the Cloud Platforms comp
 **Tests:** a `misc/` check, alongside `CiHygieneTest`, that every `ports:` entry in `etc/compose/*.yml` and in the site's
 compose snippets names `127.0.0.1`, as the demos' entries do.
 
-### 28. ⬜ `--tests=<spec>` (the equals form) runs the whole suite unfiltered, and with `RUN_CONTAINER_TESTS` runs the harness specs three at a time
+**Resolution:** Fixed in #556. `etc/compose/proxy.yml` and the site's compose example bind every port to `127.0.0.1`, and no longer publish 50051, which the compose agent reaches over the compose network; `docker.md` says so, and sends readers with remote agents to the cloud-proxy compose file. `DocsExamplesTest` fails on a compose file or docs snippet that publishes a port on every interface, the cloud-proxy example excepted.
+
+### 28. ✅ `--tests=<spec>` (the equals form) runs the whole suite unfiltered, and with `RUN_CONTAINER_TESTS` runs the harness specs three at a time
 
 **Severity:** low · **Confidence:** reproduced with `./gradlew -m test --tests=io.prometheus.common.UtilsTest`, which
 schedules `:unitTest`, `:harnessTest`, and the disabled `:test`.
@@ -1460,7 +1520,9 @@ schedules `:unitTest`, `:harnessTest`, and the disabled `:test`.
 **Tests:** a Gradle TestKit check, or a `misc/` spec that runs `./gradlew -m`, asserting that `--tests=X` schedules
 `:test` and neither partition.
 
-### 29. ⬜ The `misc/` specs read docs, workflows, the Makefile, and demo files that aren't `Test` inputs, so `./gradlew check` and `make ci-build` take their result from the cache after an edit to those files
+**Resolution:** Fixed in #567. `namedSpecs()` reads both `--tests X` and `--tests=X`, and both `testsOnlyContainerSpecs()` and `configureTestPartitions` use it. `unitTest` and `harnessTest` are always registered; `test` runs only them when nothing is named and it isn't excluded, and otherwise the Kover tasks leave the partitions out, so `./gradlew build -x test` still runs no spec. `harnessTest` never gets `ContainerTestsConfig`. On master, `./gradlew -m test --tests=io.prometheus.misc.TestingGuideTest` scheduled both partitions and a disabled `:test`; now it schedules `:test` alone, and only that spec's results appear. `./gradlew unitTest --tests X`, which failed with "Task 'unitTest' not found", runs the named spec. The partition logic got no spec of its own, since a nested `./gradlew -m` would start a second daemon per case; dry runs and an init script verified it.
+
+### 29. ✅ The `misc/` specs read docs, workflows, the Makefile, and demo files that aren't `Test` inputs, so `./gradlew check` and `make ci-build` take their result from the cache after an edit to those files
 
 **Severity:** low · **Confidence:** confirmed by trace: the build script declares only property inputs on `Test`
 (`build.gradle.kts:344-346`), and `org.gradle.caching=true`. Reproduced at `5c9f0a24`: with four demo files edited so
@@ -1493,7 +1555,9 @@ own list in `docs/TESTING.md`.
 
 **Tests:** none beyond the build: after the change, editing `docs/TESTING.md` makes the next `./gradlew unitTest` run.
 
-### 30. ⬜ `make site-version` doesn't scan `examples/cloud-proxy/docker-compose.yml`, which the site shows with an image tag, though its comment says nothing outside its sources names a version
+**Resolution:** Fixed in #567. `build.gradle.kts` declares two input sets with relative path sensitivity: `testConfigFiles()` (`config/test-configs`, `testing`) on every `Test` task, and `checkedFiles()` on `unitTest` and `test` only, which takes the top-level `Makefile`, `README.md`, `AGENTS.md`, changelogs, `llms.txt`, `gradle.properties`, and `settings.gradle.kts`; `config/config.conf`, `.github`, and `docs` without the code reviews; the site's pages and `zensical.toml`; `demos` without build output or `docker/.env`; `examples`, `etc`, `grafana`, `bin`, `logback`, and `src/shadow/resources`; and the source text, the subprojects' included. On master, an edit to `docs/TESTING.md` left `./gradlew test --tests TestingGuideTest` up to date; now it reruns `unitTest`, as a file planted in `ktor-plugin/src/test` does, while `harnessTest`'s inputs leave the docs out. `docs/TESTING.md`'s new Test Inputs section lists the sets.
+
+### 30. ✅ `make site-version` doesn't scan `examples/cloud-proxy/docker-compose.yml`, which the site shows with an image tag, though its comment says nothing outside its sources names a version
 
 **Severity:** low · **Confidence:** confirmed from the files.
 
@@ -1514,7 +1578,9 @@ guarantee and the wrong comment.
 **Tests:** a `SiteVersionTest` case that every snippet a page includes with `--8<--` is under `SITE_VERSION_SOURCES` or
 names no version.
 
-### 61. ⬜ `release-check`'s stale-version check, which #542 extended to the raw config links, misses the Quick Start's JAR download links, so a bump that skips them passes and the site sends JAR readers to the previous release
+**Resolution:** Fixed in #561. `SITE_VERSION_SOURCES` includes `examples`, and `SiteVersionTest` checks every file a page includes.
+
+### 61. ✅ `release-check`'s stale-version check, which #542 extended to the raw config links, misses the Quick Start's JAR download links, so a bump that skips them passes and the site sends JAR readers to the previous release
 
 **Severity:** low · **Confidence:** confirmed by replaying the Makefile's regex on the lines left at the previous
 version:
@@ -1556,7 +1622,9 @@ the raw link and the image tag are caught, the three JAR lines are not.
 run it on the tree with `PREV` set to the current version, the way `SiteVersionTest` runs `make site-version`: it must
 name `getting-started.md:16`, `:19`, and `:20`, which fails today.
 
-### 62. ⬜ Both changelogs say 4.7.0 was released on 2026-11-23, a day that passed without the release, and `make release-check` accepts any date
+**Resolution:** Fixed in #561. The stale check, now `_check-version-files` with a `PREVIOUS_RELEASE` override, catches the Quick Start's `releases/tag|download` links, and the Spring Boot demo's `<prometheus-proxy.version>`, which wasn't listed here; `ReleaseCheckTest` checks it catches every version mention but the historical ones. In place of placeholder notes, `make release` creates the GitHub release itself (`make github-release`) between the tag and the docs deploy, with `RELEASE_NOTES.md`'s section and the JARs, so the download links work from the start.
+
+### 62. ✅ Both changelogs say 4.7.0 was released on 2026-11-23, a day that passed without the release, and `make release-check` accepts any date
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1580,7 +1648,9 @@ release cut after the day its changelogs were dated is caught before it publishe
 
 **Tests:** none practical; `make release-check` is the check.
 
-### 63. ⬜ `agent-freeze agent-east` promises that DemoAgentEvicted fires once agent-east is back, but the rule looks back two minutes, so a thaw more than about a minute after the eviction never fires it
+**Resolution:** Fixed in #561. `_check-changelogs` refuses a release unless both changelogs date its section the day it runs, naming the date they give, and `docs/RELEASE.md` step 3 dates them in the last change merged before `make release`. 4.7.0's sections keep 2026-11-23 until that change.
+
+### 63. ✅ `agent-freeze agent-east` promises that DemoAgentEvicted fires once agent-east is back, but the rule looks back two minutes, so a thaw more than about a minute after the eviction never fires it
 
 **Severity:** low · **Confidence:** plausible: the rule's window, the sample gap, and the eviction timing are traced
 from the demo's configs, not run; whether it fires depends on when the reader thaws.
@@ -1614,7 +1684,10 @@ suggest `agent-freeze` of agent-west-2 to see the alert.
 
 **Tests:** none; scenario text.
 
-### 67. ⬜ On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have: three demos' pages answer 404, and no page has `#what-this-demo-shows`
+**Resolution:** Fixed in #552. The agent-east branch says to thaw within a minute of the eviction, why, and to freeze agent-west-2
+instead to see the alert fire.
+
+### 67. ✅ On `master`, `make up` and `make tour` link to docs pages and anchors the live site doesn't have: three demos' pages answer 404, and no page has `#what-this-demo-shows`
 
 **Severity:** low · **Confidence:** confirmed with `curl` against prometheus-proxy.com on 2026-11-24: `/ktor-demo/`,
 `/nginx-demo/`, and `/plain-kotlin-demo/` answer 404; `/basics-demo/` and `/kubernetes-demo/` answer 200, with
@@ -1648,7 +1721,9 @@ the top of demos/<name>/README.md, or of the demo's page". Or print the page lin
 **Tests:** with the README path printed, `DemoTourTablesTest` can require each `${PAGE_URL}#anchor` a script prints to
 be an anchor of the README too (see #72).
 
-### 68. ⬜ `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap, though only the harness specs read the profile, so the run can grow to 32g of test heap beside Gradle's 4g
+**Resolution:** Fixed in #561. `make up`, `make tour`, and the tours name the demo's README, which matches the checkout, beside the docs site's page for the latest release.
+
+### 68. ✅ `make xxl-tests` gives both test partitions the XXLARGE profile's 16g heap, though only the harness specs read the profile, so the run can grow to 32g of test heap beside Gradle's 4g
 
 **Severity:** low · **Confidence:** plausible: the per-task heap is traced in the build script; how far each JVM grows
 depends on the load and G1's sizing.
@@ -1671,6 +1746,8 @@ rather than end in a clear `OutOfMemoryError`.
 leaving `unitTest` at its 1g; say "16g for the harness JVM" in `docs/TESTING.md`.
 
 **Tests:** none beyond the build; `ps` during a `make xxl-tests` run shows each test JVM's `-Xmx`.
+
+**Resolution:** Fixed in #567. The harness profile's heap is no longer set on every `Test` task: `unitTest` keeps 1g, and `harnessTest` and `test` (which runs every spec in one JVM when specs are named) take the profile's; `-PtestMaxHeapSize` still overrides them all. An init script showed `maxHeapSize=16g` on all three at `-PharnessConfig=XXLARGE` on master, and `1g` on `unitTest` after. `docs/TESTING.md` and the 4.7.0 changelog say 16g for the harness JVM.
 
 ---
 
@@ -1707,7 +1784,7 @@ name the proxy's certificate is issued to, as `fromEnvironment()` defaults it.
 comment saying why. `StarterExamplesTest` binds it with `PROMETHEUS_PROXY_CERT` set, and finds
 `overrideAuthority=prometheus-proxy`, or the name `PROMETHEUS_PROXY_AUTHORITY` gives.
 
-### 32. ⬜ The upgrade notes don't say that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`, which a 4.6.0 agent ignored
+### 32. ✅ The upgrade notes don't say that a 4.7.0 agent reads `DASHBOARD_*` and `METRICS_PROXY_PATH`, which a 4.6.0 agent ignored
 
 **Severity:** low · **Confidence:** confirmed by trace that 4.7.0 reads them and 4.6.0 didn't; whether a deployment is
 affected depends on its environment.
@@ -1737,7 +1814,10 @@ can't parse, such as an empty `DASHBOARD_PORT`, fails its start."
 
 **Tests:** none practical; it's an upgrade note.
 
-### 33. ⬜ The Embedded Agent page gives `agent.logLevel` a default of `info`, but an embedded agent sets no level, and the startup log says `info` regardless
+**Resolution:** Fixed in #552. Upgrading from 4.6.x, and both changelogs' Behavior Changes, name the seven variables, and say what
+an agent whose environment sets them now does, and that a value it can't parse fails its start.
+
+### 33. ✅ The Embedded Agent page gives `agent.logLevel` a default of `info`, but an embedded agent sets no level, and the startup log says `info` regardless
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1759,7 +1839,13 @@ agent logging DEBUG says `agent.logLevel: info` at startup.
 **Tests:** drop `agent.logLevel` from `WebsiteConfigKeysTest`'s exemptions for the Embedded Agent page, so the table's
 default is checked against `config.conf`.
 
-### 34. ⬜ The Embedded Agent page and `fromEnvironment()`'s KDoc say a refused `PROMETHEUS_*` value is never shown, but an endpoint is quoted, as the page's own example shows
+**Resolution:** Fixed in #552. The Embedded Agent page's row gives `""`, and says that unset, the loggers follow the application's
+logging. An embedded agent with no level logs `agent.logLevel: unset, the application's logging configuration sets
+it`, where it said `info` (`BaseOptions.unsetLogLevel`), which a new `AgentOptionsTest` test checks.
+`WebsiteConfigKeysTest` exempts `logLevel` on the CLI Reference only, so the Embedded Agent page's default is checked
+against `config.conf`.
+
+### 34. ✅ The Embedded Agent page and `fromEnvironment()`'s KDoc say a refused `PROMETHEUS_*` value is never shown, but an endpoint is quoted, as the page's own example shows
 
 **Severity:** low (found by both the documentation and the tests passes) · **Confidence:** confirmed by trace.
 
@@ -1786,7 +1872,11 @@ Or strip the value from the endpoint rejection and change `EnvironmentSettingTes
 **Tests:** `EmbeddedAgentConfigTest` (or wherever `fromEnvironment` is tested) already builds these failures; assert
 the certificate's message omits the PEM, which is the guarantee worth keeping.
 
-### 35. ⬜ `agent.metrics.proxyPath` (new in 4.7.0) is missing from the README, `llms.txt`, Grafana's prerequisite, and `docs/metrics-and-grafana.md`, whose self-scrape snippet also points at a port that's off by default
+**Resolution:** Fixed in #552, by narrowing the texts: the page, `fromEnvironment()`'s KDoc, `EnvironmentSetting`'s comment,
+AGENTS.md, and `docs/TESTING.md` say a refused value never shows a certificate, and that an endpoint is quoted. The
+certificate's guarantee was already tested (`EnvironmentSettingTest`).
+
+### 35. ✅ `agent.metrics.proxyPath` (new in 4.7.0) is missing from the README, `llms.txt`, Grafana's prerequisite, and `docs/metrics-and-grafana.md`, whose self-scrape snippet also points at a port that's off by default
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1819,7 +1909,13 @@ in its own job and through the proxy, at its `agent.metrics.proxyPath` (or a pat
 **Tests:** `DashboardMetricNamesTest` reads `metrics-and-grafana.md`'s promql blocks; a `misc/` check that every hocon
 block registering a `localhost:8083` (or `:8082`) URL also sets `metrics.enabled = true` would catch the snippet.
 
-### 36. ⬜ `docs/security-agent-authentication.md` still says a displaced agent is invalidated and must reconnect, but since 4.7.0 it stays connected and its reclaim is refused while the other agent holds the path
+**Resolution:** Fixed in #552. `agent.metrics.proxyPath` (`--metrics_proxy_path`, `METRICS_PROXY_PATH`) is in the README's New
+Features and Built-in Metrics, `llms.txt`'s embedded paragraph and options table, the Grafana prerequisite, and
+`docs/metrics-and-grafana.md`, which leads with it and adds `metrics.enabled = true` to the port form. The new
+`DocsCodeBlocksTest` fails on a docs HOCON block that scrapes `localhost:8083` without turning the port on, as the
+metrics guide's did.
+
+### 36. ✅ `docs/security-agent-authentication.md` still says a displaced agent is invalidated and must reconnect, but since 4.7.0 it stays connected and its reclaim is refused while the other agent holds the path
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1844,7 +1940,10 @@ too, until the attacker's agent disconnects or is evicted, or the real agent res
 
 **Tests:** none; prose.
 
-### 37. ⬜ The Quick Start's Verify step says a `404` means no agent registered the path, but a target's own 404 comes back as 404 too
+**Resolution:** Fixed in #552. Step 4 and Availability say the legitimate agent stays connected without the path, is told who holds
+it, and has its reclaims refused until the attacker's agent leaves or the real agent restarts.
+
+### 37. ✅ The Quick Start's Verify step says a `404` means no agent registered the path, but a target's own 404 comes back as 404 too
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1866,7 +1965,10 @@ timeout."
 
 **Tests:** none; prose.
 
-### 38. ⬜ The Agent Dashboard page's Helm tab upgrades and port-forwards in `monitoring`, where the agent chart's README installs the agent, but the site's own agent installs are in the current namespace
+**Resolution:** Fixed in #552. The 404 item adds the target's own 404 and the `curl` check, and a `408 Request Timeout` item
+follows it.
+
+### 38. ✅ The Agent Dashboard page's Helm tab upgrades and port-forwards in `monitoring`, where the agent chart's README installs the agent, but the site's own agent installs are in the current namespace
 
 **Severity:** low · **Confidence:** confirmed from the docs and Helm's per-namespace releases.
 
@@ -1887,7 +1989,10 @@ in the current namespace, like the site's installs, or all of them in `monitorin
 
 **Tests:** none; prose.
 
-### 39. ⬜ The README and the changelogs say every demo turns on its agents' dashboards, but the plain Kotlin demo's ovens have none
+**Resolution:** Fixed in #552. The Helm tab drops `--namespace monitoring` and `-n monitoring`, and says to add them for an agent
+installed in a namespace, as the chart's README does.
+
+### 39. ✅ The README and the changelogs say every demo turns on its agents' dashboards, but the plain Kotlin demo's ovens have none
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1910,7 +2015,10 @@ the stopped ovens' paths listed as `gone` for an hour while `/discovery` drops t
 `change-config` counts the JVM and process series it adds instead of the stale 30-to-200 figure. The README and both
 changelogs still say every demo turns on its agents' dashboards.
 
-### 40. ⬜ Deployment and security pages: a check order, a `make up` claim, and a size limit no page names
+**Resolution:** Fixed in #552. The README and both changelogs leave out the plain Kotlin demo's ovens, which listen on no port, and
+the changelog's entry, which ended mid-sentence, is finished.
+
+### 40. ✅ Deployment and security pages: a check order, a `make up` claim, and a size limit no page names
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1938,7 +2046,12 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** none; prose.
 
-### 41. ⬜ `README.md` and `llms.txt`: `fromEnvironment()`'s fourth variable, and `-D` precedence
+**Resolution:** Fixed in #552. The security page says the globs run once a path's form and size have passed; the Advanced page says
+`make up` runs nginx on its stock timeouts and `nginx-shutdown-timeout` adds `worker_shutdown_timeout`; and
+`maxZippedContentSizeMBytes` is in Troubleshooting's 502 section, Production's sizing table, and the proxy page's
+Content Size Limits, which now says which limit fails a scrape with which status.
+
+### 41. ✅ `README.md` and `llms.txt`: `fromEnvironment()`'s fourth variable, and `-D` precedence
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1958,7 +2071,10 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** none; prose.
 
-### 42. ⬜ `monitoring.md` and `docs/metrics-and-grafana.md`: a counter count, the alert list, and the chunk threshold
+**Resolution:** Fixed in #552. The README's example names `PROMETHEUS_PROXY_AUTHORITY`, with a sentence on its default, and
+`llms.txt` gives the precedence with `-D` after the JAR above the file and JVM system properties below it.
+
+### 42. ✅ `monitoring.md` and `docs/metrics-and-grafana.md`: a counter count, the alert list, and the chunk threshold
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -1977,7 +2093,10 @@ changelogs still say every demo turns on its agents' dashboards.
 **Tests:** `DashboardMetricNamesTest` could check that every `alert:` name in `grafana/alerts.yml` appears in
 `metrics-and-grafana.md`.
 
-### 43. ⬜ The API summaries for maintainers describe 4.6.0: `docs/packages.md`, `ConfigLoadException`'s KDoc, and `docs/KDOC_SUMMARY.md`
+**Resolution:** Fixed in #552: three `agent_filter_*` counters, the full alert list, and the chunk threshold as a gzipped body that
+reaches `chunkContentSizeKbs`. The alert list stays descriptive, so no names test was added.
+
+### 43. ✅ The API summaries for maintainers describe 4.6.0: `docs/packages.md`, `ConfigLoadException`'s KDoc, and `docs/KDOC_SUMMARY.md`
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2000,7 +2119,9 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** none; prose.
 
-### 44. ⬜ `AGENTS.md` and `docs/TESTING.md` name a docs.yml deploy check that's gone, and describe `make all-tests` without its TLA+ checks
+**Resolution:** Fixed in #568. `docs/KDOC_SUMMARY.md` covers the 4.7.0 builder (`dashboardPort`, `fromEnvironment()`, `source()`, `agentMetricsAt()`, `dashboard()`, `dashboardLogin()`, `startIfConfigured()`), `MetricsSource`, and `EmbeddedAgentInfo.close()`, and describes the packages as `packages.md` does. `ConfigLoadException`'s KDoc and `packages.md` name every place it comes from, the builder's methods, `EmbeddedAgentConfig.start()`, and the Ktor plugin among them, and every setting it's thrown for, a malformed endpoint, a refused path character, and unusable PEM included; `EnvVars` is the variables the proxy and agent read themselves. The fix found that the API reference had never shown `packages.md`: inside `fun Project.configureDokka()`, `displayName` is `Project.displayName`, so the module was `root project 'prometheus-proxy'`, not the file's `# Module Prometheus Proxy`, and the file was a publication's `includes`, which Dokka reads only for a multi-module page. The module name is its own value, and the file is the source set's `includes`; the regenerated site shows each package's description.
+
+### 44. ✅ `AGENTS.md` and `docs/TESTING.md` name a docs.yml deploy check that's gone, and describe `make all-tests` without its TLA+ checks
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2019,7 +2140,9 @@ changelogs still say every demo turns on its agents' dashboards.
 **Tests:** `TestingGuideTest` could check that each `make` target `docs/TESTING.md` lists exists and that every target in
 `CI_JOBS` is named there.
 
-### 45. ⬜ `docs/DESIGN.md` and `docs/PRODUCT.md`, the dashboard's design and product contracts, no longer match what shipped
+**Resolution:** Fixed in #568. `AGENTS.md` says the demos' `make up` and `bin/docker-*.sh` read `make site-version`, and `docs/TESTING.md` names `make all-tests`' `tla-checks-full`, `spring-boot-demo-check`, and `check-rules` and `helm-lint`, which `make ci` runs too. `TestingGuideTest` checks that every `make` target the guide names exists (in every demo's Makefile, for a demo's own), that every `CI_JOBS` job is named, and that the `make all-tests` entry names every target it runs; against the old guide the second failed on three jobs and the third on `tla-checks-full`.
+
+### 45. ✅ `docs/DESIGN.md` and `docs/PRODUCT.md`, the dashboard's design and product contracts, no longer match what shipped
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2040,7 +2163,9 @@ changelogs still say every demo turns on its agents' dashboards.
 
 **Tests:** none; prose.
 
-### 64. ⬜ The Agent Configuration page lists `--proxy` and `PROXY_HOSTNAME` under `agent.proxy.hostname`, "used when `endpoints` is empty", but both replace `endpoints`
+**Resolution:** Fixed in #568. `docs/DESIGN.md` names the Links column's hover ring, an inset hairline with no offset or blur, and the `3px` corners of Log out and the Theme Picker as the exceptions to its no-shadow and square-or-circle rules, everywhere it states them, with a `bar-end` token; the CSS is unchanged. `docs/PRODUCT.md` has the proxy's four layouts, the logo and the brand mark beside `Proxy: host:port` or `Agent: name`, the seven demos, and the settings with no CLI flag or variable.
+
+### 64. ✅ The Agent Configuration page lists `--proxy` and `PROXY_HOSTNAME` under `agent.proxy.hostname`, "used when `endpoints` is empty", but both replace `endpoints`
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2068,7 +2193,9 @@ Helm it never applies: the agent chart always sets `PROXY_HOSTNAME`, from its re
 
 **Tests:** None; this is a description. #66's checks pin the row's option and variable, not its wording.
 
-### 65. ⬜ Two diagrams' descriptions break a hyphenated name across lines, so a screen reader reads "agent- west-2" and "the prometheus- agent chart"
+**Resolution:** Fixed in #552, with the description this finding gives.
+
+### 65. ✅ Two diagrams' descriptions break a hyphenated name across lines, so a screen reader reads "agent- west-2" and "the prometheus- agent chart"
 
 **Severity:** low · **Confidence:** confirmed by trace: Mermaid keeps the line break of a multi-line `accDescr` (it
 drops only the indentation after it) in the SVG's `desc`, which `diagrams.js` copies into the hidden description, where
@@ -2094,7 +2221,10 @@ keep it so.
 
 **Tests:** that check, which fails on today's two pages.
 
-### 69. ⬜ 4.7.0's changelog and release notes describe the home page #546 replaced, and nothing records what #543, #546, #548, and #549 changed
+**Resolution:** Fixed in #552. Both lines wrap before the name. `DocsCodeBlocksTest` fails on a line of an `accDescr` that ends
+with a word broken at its hyphen, as both pages' did.
+
+### 69. ✅ 4.7.0's changelog and release notes describe the home page #546 replaced, and nothing records what #543, #546, #548, and #549 changed
 
 **Severity:** low (found by all three third-pass reviews) · **Confidence:** confirmed from the files. In
 `4830930e..5c9f0a24` only #547 touched `CHANGELOG.md` (`:249-250`), and no commit touched `RELEASE_NOTES.md`.
@@ -2154,7 +2284,10 @@ tagged, so all of it can still be fixed before it's published.
 
 **Tests:** none; prose.
 
-### 70. ⬜ #546 removed the home page's version and flow line, but two configs still name them: the publishing-release skill lists `index.md` as a version file, and `.impeccable/config.json` exempts all of `extra.css` for `.pp-flow__wall`
+**Resolution:** Fixed in #552, with the wording this finding gives: the home-page entry and sentence, the login part, three new
+CHANGELOG entries, and a release-notes bullet for the demos' tours.
+
+### 70. ✅ #546 removed the home page's version and flow line, but two configs still name them: the publishing-release skill lists `index.md` as a version file, and `.impeccable/config.json` exempts all of `extra.css` for `.pp-flow__wall`
 
 **Severity:** low (the skill's part found by all three third-pass reviews) · **Confidence:** confirmed from the files.
 
@@ -2188,7 +2321,9 @@ today, but it would hide a real side-tab accent added to `extra.css` later.
 `RELEASE_VERSION_FILES` as `make -s` prints it, the way `SiteVersionTest` runs `make site-version`. It fails today on
 `index.md`.
 
-### 71. ⬜ The Kubernetes demo's page and README put `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` under "set its variable for the `make up` that creates the clusters … You set it once", but nothing reads it there or keeps it
+**Resolution:** Fixed in #568. The skill lists `{getting-started,docker}.md` and `grafana.md` alone, the `.impeccable/config.json` exemption is gone, and so is the orphaned comment in `extra.css`. `ReleaseCheckTest` compares the website pages the skill and `docs/RELEASE.md`'s step 2 name with `RELEASE_VERSION_FILES` as `make` prints it; it failed with the old skill, and with `index.md` put back in step 2.
+
+### 71. ✅ The Kubernetes demo's page and README put `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` under "set its variable for the `make up` that creates the clusters … You set it once", but nothing reads it there or keeps it
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -2227,11 +2362,14 @@ this variable alone.
 
 **Tests:** none for the docs fix, which is prose.
 
+**Resolution:** Fixed in #552, in the docs: the page and the README set aside the agent dashboard's variable from "set it once",
+and say nothing keeps it.
+
 ---
 
 ## 🧪 Tests
 
-### 46. ⬜ No test covers `receiveCatchingWithin`, the AGENTS.md rule against losing an element, and the loss it prevents can be reproduced deterministically
+### 46. ✅ No test covers `receiveCatchingWithin`, the AGENTS.md rule against losing an element, and the loss it prevents can be reproduced deterministically
 
 **Severity:** low · **Confidence:** confirmed by grep; the loss reproduced with a scratch program against
 kotlinx-coroutines 1.11.0
@@ -2285,7 +2423,9 @@ Change `waitingNotices` to call `context.awaitPathNotices(200.milliseconds)`.
 
 **Tests:** The three tests above. Each fails once its subject is rewritten as `withTimeoutOrNull { receiveCatching() }`.
 
-### 47. ⬜ The starter's required-agent tests all fail before `launch()` picks `start()`, so a required agent started with `startIfConfigured()` passes them
+**Resolution:** Fixed in #566. `ChannelsTest` pins `receiveCatchingWithin` with a new support helper, `lateArrival`, which follows this finding's recipe: on `runBlocking`'s single thread the wait suspends, the element arrives while the thread is held, and the thread stays held past the timeout. Two `AgentContextTest` cases do the same through `readScrapeRequest` and `awaitPathNotices`. With the helper rewritten as `withTimeoutOrNull { receiveCatching() }`, all three fail, as does the case for an element already queued with a zero timeout. `ProxyPathManagerTest.waitingNotices` now calls `awaitPathNotices(200.milliseconds)`.
+
+### 47. ✅ The starter's required-agent tests all fail before `launch()` picks `start()`, so a required agent started with `startIfConfigured()` passes them
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2313,7 +2453,9 @@ isn't PEM. Assert that the context fails with a `ConfigLoadException` root cause
 
 **Tests:** That test fails with `launch()` changed to always use `startIfConfigured`.
 
-### 48. ⬜ Two of a `MetricsSource`'s isolation promises have no test: a `VirtualMachineError` propagates, and a stuck call holds neither another path's scrape nor the agent's shutdown
+**Resolution:** Fixed in #562. `aRequiredAgentTheAgentRejectsFailsTheApp` starts a required agent with a proxy and a `trust-certificate` that isn't PEM, which the builder accepts and the agent rejects as it starts, and asserts that the context's startup failure has a `ConfigLoadException` in its cause chain, the root cause being the `IllegalArgumentException` it wraps. With `launch()` changed to always call `startIfConfigured()`, it's the only starter test that fails.
+
+### 48. ✅ Two of a `MetricsSource`'s isolation promises have no test: a `VirtualMachineError` propagates, and a stuck call holds neither another path's scrape nor the agent's shutdown
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2357,7 +2499,9 @@ Today:
 **Tests:** The `OutOfMemoryError` test fails without the `:766` branch. The second-path check fails under the bounded
 dispatcher. The `close()` check fails under a joining `close()`.
 
-### 49. ⬜ `ProxyPathManagerLincheckTest` never runs the takeover and reclaim code under contention: its agents share one launch, none reads path notices, and none reclaims
+**Resolution:** Fixed in #555. `MetricsSourceTest` checks that a source throwing `OutOfMemoryError` or `StackOverflowError` lets it propagate; that while one source is stuck past its timeout, another path's source answers 200; and, in a test of its own, that `close()` returns within 5 seconds with the source still stuck. Each failed with the code broken: the `VirtualMachineError` branch dropped, sources on `limitedParallelism(1)`, and a `close()` that joins the source scope.
+
+### 49. ✅ `ProxyPathManagerLincheckTest` never runs the takeover and reclaim code under contention: its agents share one launch, none reads path notices, and none reclaims
 
 **Severity:** low · **Confidence:** confirmed by trace. The gap is confirmed; the impact is limited, since the code
 runs under the `pathMap` lock.
@@ -2396,7 +2540,9 @@ The spec's header says it checks `ProxyRegistry.tla`'s invariants on the real co
 
 **Tests:** The extended spec fails with `reclaimRejection`'s holder check removed (`make lincheck-tests`).
 
-### 50. ⬜ A change no longer waking the dashboards' push loop fails no test: every push spec runs on a 1-second tick and waits 10 seconds or more
+**Resolution:** Fixed in #559. The spec's seven agents include two team-a launches that read notices, a reconnected context of one, and one that predates notices. A `reclaim` operation records a reclaim that displaced a live agent of another launch, or one refused with no such holder. `@Validate` checks an invalidated agent's notices, notices to an agent that predates them, a notice about a path the agent serves, and each waiter's notices, launch, connection, and uniqueness. It failed for six breaks of main source, the holder check in `reclaimRejection` among them. "Every waiter is valid" was left out: an old context of a launch can wait on another path until its connection is removed, which is harmless.
+
+### 50. ✅ A change no longer waking the dashboards' push loop fails no test: every push spec runs on a 1-second tick and waits 10 seconds or more
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2439,7 +2585,9 @@ Add a unit check that the agent's `DashboardSite.changes` emits on `activityLog.
 
 **Tests:** Each of these fails under the matching change above.
 
-### 51. ⬜ The proxy's `scrape` and `forward` spans have no unit test: one successful single-agent harness scrape is all that covers them, and nothing pins that a client's trace headers are ignored
+**Resolution:** Fixed in #558, with a unit spec rather than a 60-second refresh in the harness specs. `DashboardPushTest` runs `DashboardServer` against a stand-in site with a one-hour tick, so a frame comes only from the wake under test, and a case fails within 5 seconds; removing the change wake fails five of its six cases, and removing Log out's close fails that case. A new `AgentDashboardServiceTest` case, through the now internal `site`, fails when the agent's `changes` is `emptyFlow()`.
+
+### 51. ✅ The proxy's `scrape` and `forward` spans have no unit test: one successful single-agent harness scrape is all that covers them, and nothing pins that a client's trace headers are ignored
 
 **Severity:** low · **Confidence:** confirmed by grep and trace
 
@@ -2478,7 +2626,9 @@ harness spec. Its `scrape` span must have no parent, and a new trace ID.
 
 **Tests:** The cases above. Each fails when its behavior is removed.
 
-### 52. ⬜ No test pins AgentMetrics' `PER_LAUNCH` rule as a whole, so a new agent metric that breaks it keeps a stopped agent's series
+**Resolution:** Fixed in #565. `ScrapeDispatchTest` stubs `proxy.tracing` with a collecting `ScrapeTracing` and checks one `forward` span per agent of a consolidated path under the scrape's span, each agent's request carrying its own span (checked by joining the request's context as the agent's fetch would); `outcome`/`error` = `timed_out`, with status 503, for a silent agent and `agent_disconnected` for one that's gone; no span and no context for a scrape without a trace; and an agent name with a line break cut and escaped. `ProxyHttpRoutesTest` sends a scrape with `X-B3-TraceId`, `X-B3-SpanId`, `X-B3-Sampled`, `X-B3-Flags`, `b3`, and `traceparent`: its `scrape` span has no parent, a new trace ID, and no debug flag, and at rate 0 no span is kept. Each failed against code changed to drop its behavior (no escaping, a span for an untraced scrape, a route that joins the request's headers). The timeout case uses a 200 ms `ScrapeSpec` timeout rather than 1 s, and a disconnected case was added.
+
+### 52. ✅ No test pins AgentMetrics' `PER_LAUNCH` rule as a whole, so a new agent metric that breaks it keeps a stopped agent's series
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2502,7 +2652,9 @@ agent in the JVM holds the shared collectors, as when an embedded host restarts 
 
 **Tests:** The new `AgentMetricsTest` case. It fails if, say, `SCRAPE_QUEUE_WAIT` moves to the sampled list.
 
-### 53. ⬜ Nothing tests that an embedded agent leaves the JVM metric groups to its host
+**Resolution:** Fixed in #555. A new `AgentMetricsTest` test reads `AgentMetrics.COLLECTORS`, and each metric's declared label order, by reflection, since this step changed no main source. It checks that every agent metric takes `launch_id` first, and that closing one agent's metrics removes its series from every family while keeping another's. It failed for a metric moved to the sampled gauges, one with another label first, and a `close()` that cleared every agent's series.
+
+### 53. ✅ Nothing tests that an embedded agent leaves the JVM metric groups to its host
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2522,7 +2674,9 @@ registry gained no `process_` or `jvm_` family.
 
 **Tests:** That case fails without `!isEmbedded`.
 
-### 54. ⬜ The Ktor plugin's wait on `ApplicationStopping` for the agent's stop has no deterministic test
+**Resolution:** Fixed in #555, in a unit spec rather than the harness spec named here. A new `EmbeddedAgentConfigTest` test starts an agent embedded, with `agentMetricsAt` and two JVM groups turned on, and finds no `jvm_` or `process_` family in the default registry. An agent built directly from the same settings adds them, so the check can fail; it did with `!isEmbedded` dropped from `registersJvmMetrics`.
+
+### 54. ✅ The Ktor plugin's wait on `ApplicationStopping` for the agent's stop has no deterministic test
 
 **Severity:** low · **Confidence:** plausible. Removing the join makes one test racy rather than failing.
 
@@ -2543,7 +2697,9 @@ flag when it returns. Then assert the flag is set as soon as `events.raise(Appli
 
 **Tests:** That test fails every time once the join is removed.
 
-### 55. ⬜ `dashboard-constraints.md` says `AgentDashboardHtmlTest` pins the column-guide rule, but it pins neither half, and the agent page's live region has no positive test
+**Resolution:** Fixed in #562. `AgentLifecycleTest`'s "the app's disposal waits for the agent's stop the engine began" holds the mocked `shutdown()` on a latch that a helper thread opens only once the disposing thread is inside `Thread.join` (or after 5 seconds), and asserts that the stop finished as soon as `ApplicationStopping` returns. With the join removed, it failed in 3 of 3 runs, and every other case passed.
+
+### 55. ✅ `dashboard-constraints.md` says `AgentDashboardHtmlTest` pins the column-guide rule, but it pins neither half, and the agent page's live region has no positive test
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2576,7 +2732,9 @@ rule file says the agent's page does too.
 - the page has `id=ANNOUNCER_ID` with `aria-live="polite"`;
 - no push contains `ANNOUNCER_ID`.
 
-### 56. ⬜ Two more `dashboard-constraints.md` rules have no test: text tokens on `--surface-2`, and `agentLabel` in the proxy's Activity view
+**Resolution:** Fixed in #564. `AgentDashboardHtmlTest` now pins both halves of the column-guide rule and the live region, as the rule file said it did: the Activity page's `<th>` labels equal its guide's `<dt>` labels, in order; the guide follows the search and precedes `#activity`, and no view's push carries it; every view's page has the announcer, with `role="status"` and `aria-live="polite"`; and no push, for any view or none, carries it. Each of those four regressions fails a test, and so does sending the announcer in every push. The rule file's live-region bullet now names `AgentDashboardHtmlTest` too.
+
+### 56. ✅ Two more `dashboard-constraints.md` rules have no test: text tokens on `--surface-2`, and `agentLabel` in the proxy's Activity view
 
 **Severity:** low · **Confidence:** confirmed by trace (contrast computed from `DashboardCss.TOKENS`)
 
@@ -2608,7 +2766,9 @@ rule file says the agent's page does too.
 
 **Tests:** The two checks above.
 
-### 57. ⬜ "fromEnvironment reads the process's environment" can't fail where the tests run
+**Resolution:** Fixed in #564. `DashboardThemeTest` requires `--ink`, `--ink-2`, `--ink-3`, `--ok`, `--warn`, and `--crit` to clear 4.5:1 on `--surface-2` in all three token blocks, reusing its `tokenValues` and `contrast`; it passes today, and lightening light `--ink-3` or darkening dark `--crit` fails it. `ActivityHtmlTest` requires an `Unassigned` agent to render as `agentLabel("Unassigned")`, with no placeholder in the push; rendering the raw name fails it. The rule file names both tests.
+
+### 57. ✅ "fromEnvironment reads the process's environment" can't fail where the tests run
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2624,7 +2784,9 @@ Otherwise, delete the test.
 
 **Tests:** The changed test fails if `fromEnvironment()` doesn't read `System.getenv`.
 
-### 58. ⬜ The config-key guards don't reach keys passed to `EmbeddedAgentConfig.setting()`, whose KDoc says they aren't checked, or the website's HOCON blocks
+**Resolution:** Fixed in #555. The test runs `fromEnvironment()` in a forked JVM, as `BaseOptionsTest` does, whose environment has all four `PROMETHEUS_*` variables, and checks that it builds what the lookup overload builds from them. It failed for a `fromEnvironment()` that read nothing. A variable set on the Gradle `Test` task would have reached every spec and child process, and IntelliJ's runner wouldn't set it.
+
+### 58. ✅ The config-key guards don't reach keys passed to `EmbeddedAgentConfig.setting()`, whose KDoc says they aren't checked, or the website's HOCON blocks
 
 **Severity:** low · **Confidence:** confirmed by trace, and by a scratch checker showing that nothing has drifted yet
 
@@ -2663,7 +2825,9 @@ and checked the `setting()` keys against `config/config.conf`. All are valid tod
 
 **Tests:** The two new checks. Each fails on a planted misnamed key.
 
-### 59. ⬜ The `misc/` guards stop at the root project: `TestingGuideTest` and `TestPortsTest` never read `ktor-plugin/` or `spring-boot-starter/` tests
+**Resolution:** Fixed in #567. `ConfigFileKeysTest` gains two checks. The key of every literal `setting(…)` or `setting(key = …)` call must be declared under `agent`, a list taken whole, across the tests, the main sources, both subprojects, the demos' apps, the site pages, the READMEs, `docs`, and `llms.txt` (`EmbeddedAgentConfigTest`'s three wrong-case keys are exempt). And every fenced `hocon` block in those docs, with its `--8<--` includes resolved from `zensical.toml`'s base paths, must declare only known settings, read as a proxy or agent config, a discovery file, or a lone list entry such as an `agent.filters` entry; `proxyMetricsHost` and the Ktor plugin's `prometheus-proxy` section are exempt, and a block that doesn't parse fails. Every key and block checked is valid today. A planted `setting("scrapeTimeoutSec", 5)` on the Embedded Agent page, `agent.consolidate` in an inline block, and `proxy.zipkin.enabled` in an included snippet each passed the old spec and fail the new one.
+
+### 59. ✅ The `misc/` guards stop at the root project: `TestingGuideTest` and `TestPortsTest` never read `ktor-plugin/` or `spring-boot-starter/` tests
 
 **Severity:** low · **Confidence:** confirmed by trace
 
@@ -2694,7 +2858,9 @@ keeps every bound port in `TestPorts`. Neither holds for the two subprojects:
 
 **Tests:** The two extended checks. Each fails on an unlisted spec, or on a port that isn't in `TestPorts`.
 
-### 66. ⬜ `WebsiteConfigKeysTest` checks the settings tables' keys and defaults, but not the option and variable columns #542 added, the anchors they link to, or the gRPC defaults, so any of those can drift silently
+**Resolution:** Fixed in #567. `TestingGuideTest` reads the subprojects `settings.gradle.kts` includes: each `*Test.kt` or `*Test.java` must be named in its subproject's section (whose regex now admits `-`), and their support files in the guide. `TestPortsTest` requires each `*_PORT = <n>` constant in a subproject's tests to be a `TestPorts` port that no root test source uses. The support-file check found one real gap, the starter's `AgentCustomizations`, which the guide named only as `website.AgentCustomizations`; it's now named. A planted unlisted spec and support file in `ktor-plugin/src/test` passed the old spec and fail the new one, as does a subproject port moved to a harness port (9506) or to one `TestPorts` doesn't list.
+
+### 66. ✅ `WebsiteConfigKeysTest` checks the settings tables' keys and defaults, but not the option and variable columns #542 added, the anchors they link to, or the gRPC defaults, so any of those can drift silently
 
 **Severity:** low · **Confidence:** confirmed by trace. A script that extracted every row found all of them correct
 today: 171 rows name a key, 125 of them also name an option or a variable.
@@ -2754,7 +2920,9 @@ wrong:
 `MAX_CLIENT_CACHE_SIZE` misspelled in `cli-reference.md`, a link's fragment or a `<span id>` changed, and the agent's
 `keepAliveTimeSecs` given as 7200.
 
-### 72. ⬜ `DemoTourTablesTest` misses a README's Guided Tour heading left at a part's old name and the anchors `demo.sh` adds to its page link, and `docs/TESTING.md` misdescribes what it checks
+**Resolution:** Fixed in #567. A new `CliReferenceTest` checks that each CLI Reference row's options are exactly one `@Parameter`'s names on its role's options class or `BaseOptions`, with every option given a row; that its variable is one its role's options import from `EnvVars`, with every imported variable given a row and every `EnvVars` entry a role; that its `<span id>` is its key; that options built from `[option, value]` equal options built from `-D<key>=<value>`; and that the source call reading its variable takes its option's field (or, with no option, names the key's last part). Each configuration-page row linked to the CLI Reference must use the key as its fragment and repeat that row's option, variable, and default, a configuration row for such a key must link, and every link to `cli-reference.md#…` must land on an anchor. `WebsiteConfigKeysTest` compares a `long | -1` setting's documented default with gRPC's own (`GrpcUtil`'s keepalive constants, the server builder's handshake timeout, `INT_MAX` for a limit that's off) and pins `ProxyOptions`' two gRPC constants to them. Every row is right today. This finding's planted errors (`--chunks`, a misspelled variable, a changed link fragment and span id, the agent's `keepAliveTimeSecs` as 7200), plus swapped options, swapped variables, and the proxy's `-p` on an agent row, each passed master's specs and fail the new ones.
+
+### 72. ✅ `DemoTourTablesTest` misses a README's Guided Tour heading left at a part's old name and the anchors `demo.sh` adds to its page link, and `docs/TESTING.md` misdescribes what it checks
 
 **Severity:** low · **Confidence:** reproduced by planting errors in a scratch edit of the tree, then reverting; the
 guide's wording confirmed from the files.
@@ -2800,6 +2968,8 @@ guide's wording confirmed from the files.
   which `make up` and `make tour` print, is its page".
 
 **Tests:** the two extended checks, which fail on the planted errors above.
+
+**Resolution:** Fixed in #567. `DemoTourTablesTest` requires each README part's `### N.` heading, lowercased, to equal the part's name, and every `${PAGE_URL}#anchor` or `$PAGE_URL#anchor` in a `demo.sh` to be a heading anchor of the demo's page, read from the script, so the links #561 rewrote are covered. Today's tree passes both. This finding's plants each passed the old spec and fail the new one: the Spring Boot demo's part 5 renamed in `TOUR_PARTS` and both tables with its README heading left alone, and the Kubernetes demo's `#running-it` changed to `#running-it-nowhere`. `docs/TESTING.md` says a page's rows, where they link, link only below the table.
 
 ---
 

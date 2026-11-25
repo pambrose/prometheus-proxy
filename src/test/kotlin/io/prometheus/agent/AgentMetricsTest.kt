@@ -31,6 +31,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainAll
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.ranges.shouldBeIn
@@ -40,6 +41,8 @@ import io.prometheus.common.mockAgentForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
 import io.prometheus.metrics.model.snapshots.Labels
+import io.prometheus.metrics.core.metrics.MetricWithFixedMetadata
+import io.prometheus.metrics.core.metrics.StatefulMetric
 import kotlin.time.Clock
 
 // Tests for AgentMetrics which manages Prometheus metrics for the agent component.
@@ -49,6 +52,29 @@ class AgentMetricsTest : StringSpec() {
   private val openMetrics = mutableListOf<AgentMetrics>()
 
   private fun opened(metrics: AgentMetrics): AgentMetrics = metrics.also { openMetrics += it }
+
+  // Every agent metric the default registry gets, read from AgentMetrics' private COLLECTORS, a companion property, so
+  // a static field of the class.
+  @Suppress("UNCHECKED_CAST")
+  private fun agentCollectors(): List<MetricWithFixedMetadata> =
+    AgentMetrics::class.java.getDeclaredField("COLLECTORS").apply { isAccessible = true }.get(null)
+      as List<MetricWithFixedMetadata>
+
+  // [metric]'s label names, in the order its builder declared them, which is the order a series' values take; the
+  // library keeps them in a protected field, and its getLabelNames() gives an unordered set.
+  private fun declaredLabelNames(metric: MetricWithFixedMetadata): List<String> =
+    (
+      MetricWithFixedMetadata::class.java.getDeclaredField("labelNames").apply { isAccessible = true }.get(metric)
+        as Array<*>
+    ).map { it.toString() }
+
+  // A mock agent with [launchId], with discovery and a dashboard, so it has every agent metric's series.
+  private fun fullyEquippedAgent(launchId: String) =
+    mockAgentForMetrics().also { agent ->
+      every { agent.launchId } returns launchId
+      every { agent.pathDiscoveryService } returns mockk(relaxed = true)
+      every { agent.dashboardService } returns mockk<AgentDashboardService>(relaxed = true)
+    }
 
   init {
     // Every agent's metrics are shared in the JVM; closing each test's AgentMetrics removes the series it recorded.
@@ -345,6 +371,48 @@ class AgentMetricsTest : StringSpec() {
       registeredCounts("agent_dashboard_logins", "outcome").keys shouldBe setOf("success", "failure", "blocked")
     }
 
+    // AGENTS.md's rule for an agent metric: launch_id is its first label, and one that keeps series (any but a gauge
+    // sampled on each scrape, which reports only the agents still in the JVM) is in PER_LAUNCH, whose series of the
+    // closing agent close() removes by their first label's value. A metric that broke it, put among the sampled gauges
+    // or with another label first, would still be registered and exposed, and keep a stopped agent's series for as long
+    // as another agent in the JVM holds the shared collectors, as when an embedded host starts its agent again. So
+    // every collector gets a series for each of two agents, its launch_id where its builder put it, and closing one
+    // agent's metrics must take its series from every family and leave the other's.
+    "every agent metric should take launch_id first, and lose a closing agent's series while keeping another's" {
+      val leaving = opened(AgentMetrics(fullyEquippedAgent(LEAVING)))
+      opened(AgentMetrics(fullyEquippedAgent(STAYING)))
+      val collectors = agentCollectors()
+
+      // Read at all, so the checks below can't pass on an empty list
+      collectors.map { it.prometheusName } shouldContain "agent_scrape_queue_wait_seconds"
+      // By family name, so a failure names the family
+      collectors.associate { it.prometheusName to declaredLabelNames(it) }.entries.forAll { (_, labelNames) ->
+        labelNames.first() shouldBe AgentMetrics.LAUNCH_ID
+      }
+      collectors.filterIsInstance<StatefulMetric<*, *>>().forEach { metric ->
+        val labelNames = declaredLabelNames(metric)
+        listOf(LEAVING, STAYING).forEach { launchId ->
+          metric.labelValues(
+            *labelNames.map { if (it == AgentMetrics.LAUNCH_ID) launchId else "a-$it" }.toTypedArray(),
+          )
+        }
+      }
+
+      // Each family's launch IDs, by its name, so a failure names the family
+      fun launchIds() =
+        collectors
+          .associate { collector ->
+            collector.prometheusName to collector.collect().dataPoints.map { it.labels.get(AgentMetrics.LAUNCH_ID) }
+          }.entries
+
+      launchIds().forAll { (_, launchIds) -> launchIds shouldContainAll listOf(LEAVING, STAYING) }
+      leaving.close()
+      launchIds().forAll { (_, launchIds) ->
+        launchIds shouldContain STAYING
+        launchIds shouldNotContain LEAVING
+      }
+    }
+
     // What agent_connect_count_total counts an attempt as, from how registering the agent ended.
     "a connect attempt should count as a success once registered, rejected when refused, and a failure otherwise" {
       connectOutcome(null) shouldBe "success"
@@ -381,5 +449,10 @@ class AgentMetricsTest : StringSpec() {
 
       registeredSnapshot<GaugeSnapshot>("agent_dashboard_sessions").dataPoints shouldBe emptyList()
     }
+  }
+
+  private companion object {
+    const val LEAVING = "leaving-launch-id"
+    const val STAYING = "staying-launch-id"
   }
 }

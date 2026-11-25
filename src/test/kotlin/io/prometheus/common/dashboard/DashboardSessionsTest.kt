@@ -86,14 +86,17 @@ class DashboardSessionsTest : StringSpec() {
       sessions.isValid(token, counts = false).shouldBeFalse()
     }
 
-    "removing a session ends it" {
+    // Log out acts on its pages only for a token that named a session, since anyone may post one.
+    "removing a session ends it, and says whether there was one" {
       val sessions = DashboardSessions()
       val token = sessions.create()
-      sessions.remove(token)
+      sessions.remove(token).shouldBeTrue()
       sessions.isValid(token).shouldBeFalse()
-      // Nothing to remove: no error.
-      sessions.remove(null)
-      sessions.remove("never-issued")
+      // Nothing to remove: no error, and nothing removed.
+      sessions.remove(token).shouldBeFalse()
+      sessions.remove(null).shouldBeFalse()
+      sessions.remove("").shouldBeFalse()
+      sessions.remove("never-issued").shouldBeFalse()
     }
 
     "past the cap, the least recently used session goes" {

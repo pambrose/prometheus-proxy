@@ -48,8 +48,8 @@ On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/g
 `make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the coffee shop inside Docker against the
-latest release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it
-builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
+latest release's library, from Maven Central, so it needs no JDK. Until a release with everything the demo shows is
+on Docker Hub, it builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -363,7 +363,7 @@ machine.
 | `prometheus/ktor-alerts.yml` | `CoffeeShopDown`, `CoffeeShopErrors`, and `CoffeeQueueBacklog` |
 | `grafana/` | The provisioned datasource, dashboard folder, and Coffee Shop dashboard |
 | `Makefile` | The demo's targets: `make up`, `make up-local`, `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
-| `demo.sh` | Starting, stopping, and the scenarios. It writes the secrets to `docker/.env` the first time the demo starts, and saves there any port moved for `make up`. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds from this checkout, as `make up-local` does |
+| `demo.sh` | Starting, stopping, and the scenarios. It writes the secrets to `docker/.env` the first time the demo starts, and saves there any port moved for `make up`. Its `NEEDS_RELEASE_AFTER` is the newest release that lacks something the demo shows: until the release the docs give is later and its images are on Docker Hub, `make up` builds from this checkout, as `make up-local` does, so set it to the latest release on Docker Hub when the demo comes to use something no release has yet |
 | `bin/screenshots.sh` | The Ktor Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits three minutes so Grafana's graphs have some history, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/ktor-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_HISTORY_WAIT=1` skips the wait, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
 
 From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool,

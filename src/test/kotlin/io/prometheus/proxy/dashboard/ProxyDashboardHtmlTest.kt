@@ -35,6 +35,7 @@ import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.Setting
 import io.prometheus.common.dashboard.SettingsGroup
 import io.prometheus.common.dashboard.SettingsHtml
+import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
@@ -165,6 +166,32 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain "gone"
     }
 
+    // An agent's id is a counter no view shows, so the gone pane names the agent as the other views did, from what the
+    // snapshot still holds of it: a path's scrape of it, or its activity, such as the line recording it leaving.
+    "a selected agent that disconnected should be named as the other views name it, never by its id" {
+      fun gonePane(snapshot: ProxySnapshot) = ProxyDashboardHtml.detailFragment(snapshot, selectedId = "4711")
+      val scraped = departedPathView(lastScrape = DashboardFixtures.scrapeRecord(agentId = "4711", agentName = "east"))
+      val left =
+        DashboardFixtures.activityEntry(
+          kind = ActivityKind.AGENT_DISCONNECTED,
+          agentName = "Unassigned",
+          agentId = "4711",
+        )
+
+      gonePane(snapshot(agents = emptyList(), paths = [scraped])).apply {
+        this shouldContain ">east is no longer connected<"
+        this shouldNotContain "4711"
+      }
+      gonePane(DashboardFixtures.snapshot(agents = emptyList(), activity = [left])).apply {
+        this shouldContain ">${ProxyDashboardHtml.agentLabel("Unassigned")} is no longer connected<"
+        this shouldNotContain "Unassigned"
+      }
+      gonePane(snapshot(agents = emptyList())).apply {
+        this shouldContain ">The selected agent is no longer connected<"
+        this shouldNotContain "4711"
+      }
+    }
+
     "no selection should render a prompt rather than an empty pane" {
       ProxyDashboardHtml.detailFragment(snapshot(), selectedId = null) shouldContain "Select an agent"
     }
@@ -235,6 +262,20 @@ class ProxyDashboardHtmlTest : StringSpec() {
       DashboardPage.humanize(3.minutes + 59.seconds) shouldBe "3m"
       DashboardPage.humanize(2.hours + 5.minutes + 30.seconds) shouldBe "2h 5m"
       DashboardPage.humanize(1.days + 3.hours + 20.minutes) shouldBe "1d 3h"
+    }
+
+    // With the stale-agent check off, no agent is evicted, and an agent idle past maxAgentInactivitySecs read
+    // "evicted in 0s" for as long as it stayed.
+    "an agent's detail should count down to its eviction only while the stale-agent check runs" {
+      val idle = [DashboardFixtures.agentView(inactivity = 75.seconds)]
+
+      ProxyDashboardHtml.detailFragment(snapshot(), selectedId = "1") shouldContain " · evicted in 58s"
+      ProxyDashboardHtml.detailFragment(DashboardFixtures.snapshot(agents = idle), selectedId = "1") shouldContain
+        " · evicted in 0s"
+      ProxyDashboardHtml.detailFragment(DashboardFixtures.snapshot(agents = idle, evictAfterSecs = null), "1").apply {
+        this shouldContain " · idle 75s · backlog 0"
+        this shouldNotContain "evicted"
+      }
     }
 
     "the agent detail should show how long the agent has been connected" {

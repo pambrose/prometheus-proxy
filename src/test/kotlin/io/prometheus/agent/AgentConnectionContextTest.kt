@@ -33,6 +33,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
@@ -163,6 +165,51 @@ class AgentConnectionContextTest : StringSpec() {
       // After draining, the next receive should indicate the channel is closed
       val received4 = channel.receiveCatching()
       received4.isClosed.shouldBeTrue()
+    }
+
+    // What the producer drops once it stops, which the agent counts as dropped: the results still queued, each once
+    // (November #6).
+    "dropUnsentResults should hand each result still queued after close to onUndeliveredResult, once" {
+      val dropped = mutableListOf<Long>()
+      val context = AgentConnectionContext(128) { dropped += it.srScrapeId }
+      (1L..3L).forEach { context.sendScrapeResults(ScrapeResults(srAgentId = "agent-1", srScrapeId = it)) }
+      context.scrapeResults().tryReceive().getOrNull()?.srScrapeId shouldBe 1L
+      context.close()
+
+      context.dropUnsentResults()
+      context.dropUnsentResults()
+
+      dropped.sorted() shouldBe [2L, 3L]
+    }
+
+    // sendScrapeResults reports that one to its caller, the scrape, which counts it, so it isn't counted twice.
+    "a result offered after close should not go to onUndeliveredResult" {
+      val dropped = mutableListOf<Long>()
+      val context = AgentConnectionContext(128) { dropped += it.srScrapeId }
+      context.close()
+
+      context.sendScrapeResults(ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L)).shouldBeFalse()
+      context.dropUnsentResults()
+
+      dropped shouldBe emptyList()
+    }
+
+    // A result handed to the producer just as the connection's end cancels it is lost to kotlinx's prompt
+    // cancellation, unless the channel hands it to onUndeliveredElement. On runBlocking's one thread the reader's
+    // resumption with the result is queued behind this coroutine, which cancels the reader first.
+    "a result the reader takes just as it is cancelled should go to onUndeliveredResult" {
+      val dropped = mutableListOf<Long>()
+      val context = AgentConnectionContext(128) { dropped += it.srScrapeId }
+
+      runBlocking {
+        val reader = launch { for (results in context.scrapeResults()) error("read ${results.srScrapeId}") }
+        yield()
+        context.sendScrapeResults(ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L)).shouldBeTrue()
+        reader.cancel()
+        reader.join()
+      }
+
+      dropped shouldBe [1L]
     }
 
     "empty scrape results channel should close cleanly" {

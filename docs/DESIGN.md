@@ -80,6 +80,7 @@ typography:
 rounded:
   none: "0"
   tab: "6px 6px 0 0"
+  bar-end: "3px"
   pill: "20px"
   dot: "50%"
 spacing:
@@ -231,18 +232,19 @@ entire job is telling an operator whether something is broken. Every visual deci
 that: if the dashboard is ever wrong, or ever *looks* wrong, it has failed at the one thing it exists
 to do.
 
-The system's discipline shows most in what it refuses. There are no shadows, anywhere. There are no
-transitions, anywhere — hover, selection, and live swaps all land instantly, which is itself a claim
-about latency the interface then has to keep. The accent color has exactly two jobs on the entire
-surface: focus, and the current item. The only thing that moves is a 7px dot reporting whether the socket is alive. This is
-a system built by subtraction, and the remaining elements are load-bearing.
+The system's discipline shows most in what it refuses. There are no shadows, anywhere: the one `box-shadow` draws a
+hairline, not depth. There are no transitions, anywhere — hover, selection, and live swaps all land instantly, which is
+itself a claim about latency the interface then has to keep. The accent color has exactly two jobs on the entire
+surface: focus, and the current item. The only thing that moves is a 7px dot reporting whether the socket is alive. This
+is a system built by subtraction, and the remaining elements are load-bearing.
 
 **Key Characteristics:**
 
 - One typeface — monospace — at 12.5px base, for every role from title to micro-label.
-- Zero shadows. Depth is four tonal planes plus two hairline weights.
-- Two radii: `0` and fully round. Rectangles hold content; circles report status. The one exception is the top
-  corners of the folder tabs.
+- Zero shadows. Depth is four tonal planes plus two hairline weights. The one `box-shadow`, the Links column's hover
+  ring, is a hairline.
+- Two radii: `0` and fully round. Rectangles hold content; circles report status. The exceptions are the top corners
+  of the folder tabs and the `3px` corners of the bar's end, the Theme Picker and Log out.
 - The accent is used twice: focus rings and the current item's edge. It never fills a surface.
 - No CSS transitions. The only animation in the system is the connection beacon.
 - Full-bleed layout — no centered container, no max-width, no page margins.
@@ -252,7 +254,7 @@ a system built by subtraction, and the remaining elements are load-bearing.
 
 A cool blue-grey neutral family carrying a single warm accent and a three-tier status palette — the
 accent is the only warm hue in the system, which is why it can be used so sparingly and still be seen.
-(The Row Links' brand marks carry their tools' own colors, which are not tokens and stay inside the mark.)
+(The bar's logo and the Row Links' brand marks carry their own colors, which are not tokens and stay inside the mark.)
 
 Every token exists as a light/dark pair; the frontmatter carries both (`accent` / `accent-dark`). The
 light theme is `:root`; the dark theme is an override that applies under `prefers-color-scheme: dark` unless
@@ -263,8 +265,9 @@ dark ground, not algorithmically dimmed. The page follows the system by default;
 ### Primary
 
 - **Burnt Orange** (`accent`): The only warm hue on the surface, and deliberately the rarest. It draws
-  edge of the current item (the selected row's 2px left edge, and the 2px line along the current tab's
-  bottom) and the 2px focus-visible outline. That is the complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
+  the edge of the current item (the selected row's 2px left edge, the 2px line along the current tab's
+  bottom, and the one along the Theme Picker's button for the theme in force) and the 2px focus-visible outline.
+  That is the complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
   themes differ in character rather than only in value — against black it reads as a lit filament
   rather than as rust.
 
@@ -336,7 +339,8 @@ clears 3:1.
 | `crit` on `surface` (departed row path cell) | 5.84:1 | 5.21:1 |
 | `ink` on `surface` | 17.81:1 | 14.61:1 |
 
-Non-text: LEDs and the beacon measure 4.57–6.88:1 against every ground they sit on, and the `accent`
+Non-text: LEDs and the beacon measure 4.57–6.88:1 against every ground they sit on at rest (4.16:1 at the least on a
+hovered row's `surface-3`, computed from the tokens), and the `accent`
 current-item edge 4.83:1 light / 6.37:1 dark against `surface`, and 4.10:1 / 5.83:1 against the
 `surface-2` of the current tab's fill above it and the strip below it.
 
@@ -444,8 +448,10 @@ scroller before it ships.
 
 ## Elevation & Depth
 
-**There are no shadows in this system.** Not one `box-shadow` declaration exists. Depth is built
-entirely from two mechanisms: four tonal planes and two hairline weights.
+**There are no shadows in this system.** Depth is built entirely from two mechanisms: four tonal planes and two
+hairline weights. The one `box-shadow` declaration is no exception to that: the Links column's hover ring
+(`inset 0 0 0 1px` in `ink-3`, see Row Links) has no offset and no blur, so it draws a `1px` hairline inside a mark's
+round target without changing the target's size.
 
 The tonal planes do not form a simple light-to-dark ramp. `surface` is the **reading plane**;
 `surface-2` and `surface-3` step *away* from it in the direction of contrast — darker in light mode,
@@ -459,7 +465,9 @@ structure before it resolves content — you see the panes, then the rows, then 
 ### Named Rules
 
 **The No-Shadow Rule.** Zero shadows. Not for hover, not for panels, not for the "elevated" state of
-anything. If an element needs to separate from its neighbor, it gets a hairline or a tonal step.
+anything. If an element needs to separate from its neighbor, it gets a hairline or a tonal step. A `box-shadow` that
+draws only a hairline, inset, with no offset or blur, as the Links column's hover ring does, is a hairline, not a
+shadow; anything softer is a shadow.
 
 **The Reading Plane Rule.** `surface` is where content is read. `surface-2` and `surface-3` are always
 *away* from it in contrast, never toward it. When adding a plane, ask which direction from the reading
@@ -473,14 +481,16 @@ The form language is **two radii and nothing between them.**
   table. No rounded corners on any container, with one exception, below.
 - **`6px` on the top corners of the folder tabs, and only there.** A tab is a handle on the layout below
   it, not a container, and its rounded top is what reads as a folder tab rather than a box on the bar.
+- **`3px` on the bar's end: the Theme Picker's group and the Log out button.** The corners of their quiet `line`
+  border. They're controls, neither a container nor a report of state.
 - **Fully round (`20px` on short elements, `50%` on dots) — everything that reports state.** Status
   pills, tags, LEDs, the connection beacon.
 
 The split is semantic, not decorative: **rectangles hold content, round things report status.** A
 7px circle is a lamp. A 20px-radius capsule is a badge. Neither shape is ever used for a container,
-and no container is ever softened toward them. Apart from the tabs' top corners there is no `4px`, no
-`6px`, no `8px` radius in the system, and introducing one would blur a distinction that currently does
-real work.
+and no container is ever softened toward them. Apart from the tabs' top corners and the bar's end, there is no
+`4px`, no `6px`, no `8px` radius in the system (the Login Page, its one deliberate exception, aside), and introducing
+one would blur a distinction that currently does real work.
 
 Borders carry the remaining form language: 1px hairlines for structure, among them the tabs' `line` outlines,
 and the current-item edges in `accent`, the only borders in the system thicker than a hairline: the row item's
@@ -490,8 +500,8 @@ transparent at rest, under a transparent 2px top that keeps its glyph centred.
 ### Named Rules
 
 **The Square-or-Circle Rule.** Radius is `0` or fully round. Nothing in between ships, but for the
-folder tabs' top corners. If a new element feels like it wants `6px`, it is a container and it wants
-`0`.
+folder tabs' top corners and the bar's end's `3px`. If a new element feels like it wants `6px`, it is a container
+and it wants `0`.
 
 ## Components
 
@@ -506,7 +516,7 @@ A `<button>` styled as a full-width list row, so it is keyboard-operable by cons
 - **Shape:** square (`0`), full-bleed, `10px 15px` padding (`16px` on the left, so with the `2px` edge the text sits
   `18px` in), `line-soft` bottom divider.
 - **Structure:** two lines — an LED plus the agent name, followed by a neutral Tag naming its identity when
-  it registered as one, then `address · N paths` in Caption/`ink-3`.
+  it registered as one, then `address · N paths` in Meta/`ink-3`.
 - **Rest:** transparent background.
 - **Hover:** background steps to `surface-3`. No transition.
 - **Focus:** `2px solid accent` outline, `outline-offset: -2px` so the ring sits *inside* the row and
@@ -613,9 +623,9 @@ ninth, Identity, after Agent(s) whenever agent auth is on; and Links last whenev
 
 ### Path Search
 
-The one form in the system, above the Path Table and the Activity Table on `surface-2` with a `line` bottom border,
-so it reads as part of the table's header rather than a separate panel. One component on both: the label and the
-placeholder name what it filters, and the form submits to its own layout's route.
+The one form in the system that takes input, above the Path Table and the Activity Table on `surface-2` with a `line`
+bottom border, so it reads as part of the table's header rather than a separate panel. One component on both: the
+label and the placeholder name what it filters, and the form submits to its own layout's route.
 
 - **Input:** a `type="search"` field, square (it holds content), `surface` ground, `line` border, Body
   type in `ink` with an `ink-3` placeholder. Focus is the standard `2px solid accent` ring.
@@ -773,7 +783,8 @@ nothing, so they are links, not buttons.
 - **Rest:** a name is the dimmed column's `ink-3`, underlined `2px` below the text so a link reads as one among plain
   supporting facts. Not the accent, which stays on focus rings and the current item (see The Two Places Rule).
 - **Mark:** the tool's own, a `16px` Simple Icons mark in a `24px` target like the Copy Button's, in the brand's color
-  rather than a token: the one warm hue on the page besides the accent, confined to the mark. Painted through the mark
+  rather than a token, as the bar's logo is: with the logo, the one warm hue on the page besides the accent, confined to
+  the mark. Painted through the mark
   as a CSS mask, as the Copy Button's glyphs are, but fetched from the proxy rather than inlined, so a push carries only
   the link's class. Measured against `surface-2`, a hovered row's ground, at WCAG 1.4.11's 3:1 for a non-text mark,
   since the name is also in the link's tooltip and `aria-label`: Prometheus `#E6522C` at 3.18:1 light and 4.27:1
@@ -834,9 +845,9 @@ carries `white-space: nowrap` so a narrow viewport wraps between stats rather th
 
 ### Theme Picker
 
-At the bar's end, before Log out, in Log out's quiet border: three icon buttons in one group, light (a sun),
-dark (a moon), and auto (a half-filled circle), in the order the system's own appearance settings list them, so
-each theme is one press away and none is passed through on the way to another. Auto follows the system's
+At the bar's end, before Log out, in Log out's quiet border (`1px` `line`, `3px` corners): three icon buttons in one
+group, light (a sun), dark (a moon), and auto (a half-filled circle), in the order the system's own appearance settings
+list them, so each theme is one press away and none is passed through on the way to another. Auto follows the system's
 preference and is the default.
 
 - **Size:** each button is a `24px`-tall target, the minimum size, `44px` square under a coarse pointer. It
@@ -869,27 +880,30 @@ assistive tech and in its tooltip, which the server renders, since nothing about
 
 A visually-hidden `role="status" aria-live="polite"` region, written by the WebSocket lifecycle
 handlers: *"Connection to the proxy lost. Reconnecting."* and, on recovery from a real outage,
-*"Connection to the proxy restored."* The Copy Button writes its result there too, once per click, and
-the Path Search its match count, on either table, once per change of filter.
+*"Connection to the proxy restored."*, naming the agent on the agent's dashboard. The Copy Button writes its result
+there too, once per click, the Scrape Button its result, the Theme Picker the theme chosen, and the Path Search its
+match count, on either table, once per change of filter.
 
 It exists because the beacon reports connection state through color and a change of rhythm, and
 neither reaches a screen reader — without it the page simply goes silently stale, which is the exact
 failure this dashboard exists to make impossible to miss. Deliberately **outside every out-of-band
 region**: a live region the push loop rewrote would re-announce itself on every frame. Scoped to the
-connection and the result of a copy click for the same reason — announcing pushed counters would make
-it unusable.
+connection and the viewer's own acts, a copy, a scrape, a theme, or a filter, for the same reason — announcing pushed
+counters would make it unusable.
 
 ### Empty States
 
 Plain sentences in `ink-3`, no illustration, no icon, no call to action. Three variants: inline
-(`14px 15px`), padded (`22px 18px`), and the `gone` variant which renders in `crit` for "Agent X is no
-longer connected." Copy states the fact and, where useful, the next action in the same breath —
+(`14px 15px`), padded (`22px 18px`), and the `gone` variant which renders in `crit` for "orders-agent is no
+longer connected", the agent named as the other layouts name it, from the newest activity line or scrape of it the
+proxy still holds, or "The selected agent" when it holds none (on the agent's dashboard, "/orders_metrics is no longer
+configured, discovered, or registered"). Copy states the fact and, where useful, the next action in the same breath —
 "Select an agent to see its paths and recent scrapes."
 
 ### Not yet in the system
 
 Recorded so future work doesn't assume otherwise: there are **no dialogs, no toasts, and no
-destructive actions**, and the Path Search is the only form. The one action, the Scrape Button, changes
+destructive actions**, and the Path Search is the only form that takes input. The one action, the Scrape Button, changes
 nothing on the proxy, so it borrowed the Copy Button's shape rather than defining an action button. PRODUCT.md
 records that control actions that do change the proxy are a planned direction; when they arrive they will
 need a genuinely new component vocabulary (destructive confirmation, action button, disabled state), and
@@ -954,7 +968,7 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
 ### Do:
 
 - **Do** use the monospace stack for every new element. Hierarchy comes from size (15 / 12.5 / 11.5 /
-  11 / 10.5 / 10), weight (400 / 600 / 640), case, and color — never from a second family.
+  10.5 / 10), weight (400 / 600 / 640), case, and color — never from a second family.
 - **Do** reach for a hairline or a tonal step when something needs to separate. `line` between
   regions, `line-soft` between rows.
 - **Do** give every new region header the engraved Label treatment: 10px, uppercase, `0.09em`, weight
@@ -980,9 +994,10 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
 - **Don't** drift toward a consumer SaaS dashboard — no gradient hero cards, no `rounded-2xl`, no soft
   drop shadows, no illustrated empty states, no sparkline that decorates rather than informs. *(User-confirmed
   anti-reference.)*
-- **Don't** add a `box-shadow`. There are zero in the system and that is the elevation strategy, not
-  an oversight.
-- **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`.
+- **Don't** add a `box-shadow`. There are no shadows in the system and that is the elevation strategy, not
+  an oversight; the one declaration, the Links column's hover ring, draws a hairline, not a shadow.
+- **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`. The folder tabs' top corners and
+  the bar's end's `3px` are the only ones.
 - **Don't** fill anything with the accent. It draws focus rings and the current item's edge; that is the
   complete list.
 - **Don't** use a soft status color as a region or row background. Soft colors back pills and tags only.

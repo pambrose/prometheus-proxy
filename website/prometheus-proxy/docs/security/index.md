@@ -109,12 +109,19 @@ enforces, on every path registration, that the requested path matches one of the
 Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
 (e.g. `team_a_*`).
 
-A path is checked against the patterns only once it has passed the path limits
-(`proxy.internal.maxPathLength` and the rest; see
+A path is checked against the patterns only once its form and size have passed
+(`proxy.internal.maxPathLength` and `maxLabelsSizeBytes`; see
 [Proxy configuration](../configuration/proxy.md#internal-settings)), so a path that is too long, has more
 than one segment, or has whitespace, a control character, `?`, or `#` in it is refused as invalid, whatever the
 patterns. A `*` matches any run of characters, line breaks included, so this check is what keeps an agent from
 registering a path that would forge lines in the proxy's log.
+
+However many paths its patterns match, an identity's agents may hold at most `proxy.internal.maxPathsPerIdentity`
+(100,000) paths together, and each connection at most `maxPathsPerAgent` (20,000), so an identity can't register
+without limit by opening more connections. A path past either limit, or with more than `maxLabelsPerPath` (64)
+labels, is refused once the patterns have passed it. With agent auth off, or only the legacy `agentToken`, every
+agent shares one identity, and the limit counts them all; see
+[Internal Settings](../configuration/proxy.md#internal-settings).
 
 A path also belongs to the identity whose agent serves it: while a live agent serves a path in
 [consolidated mode](../advanced.md#consolidated-mode) (multiple agents serving one path), only an agent of the same
@@ -168,8 +175,8 @@ change to shared infrastructure.
     ```
 
 3. **Restart the proxy.** Identities are read only at startup. Every team's agents lose their connection, reconnect
-   on their own once the proxy is back (gRPC's backoff between attempts grows while it's down, so a quick restart is
-   a quick reconnect), and register their paths again; a scrape that lands in between fails. Once it's up, the
+   on their own within seconds of the proxy being back (each tries every `agent.internal.reconnectPauseSecs`, 3 seconds
+   by default), and register their paths again; a scrape that lands in between fails. Once it's up, the
    [dashboard](../web-dashboard.md)'s **Settings** layout lists `team-b` and its patterns under Agent
    authentication.
 

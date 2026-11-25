@@ -33,8 +33,9 @@ required. `make codescene` runs the same delta analysis with the local `cs` CLI 
 branch's changes since `origin/master`, uncommitted and untracked files included, and fails as the check does: on a
 code health finding that's new or worse outside `src/test/`. Both read `.codescene/code-health-rules.json`, which turns
 off, for every Kotlin source, the rules that flagged the code's intended shape rather than a problem (Primitive
-Obsession, String Heavy Function Arguments, Excess Number of Function Arguments, Global Conditionals); the
-function-level rules stay on, so split a function CodeScene rates complex or bumpy rather than working around a rule.
+Obsession, String Heavy Function Arguments, Excess Number of Function Arguments, Global Conditionals), and the first two
+for the Spring Boot starter's `PrometheusProxyAgentProperties`, a JavaBean of the agent's settings; the function-level
+rules stay on, so split a function CodeScene rates complex or bumpy rather than working around a rule.
 It turns every rule off for the docs site's vendored third-party builds (`website/prometheus-proxy/docs/vendor`),
 which `.codacy.yml` excludes too.
 
@@ -69,8 +70,8 @@ versions of some of the agent's libraries, older than the agent's own (`./demo.s
 spring-boot-demo-check` (in CI's `consumer-check` job) builds it against the snapshot `consumer-check` publishes, the
 starter's included, and runs its `RoasteryAgentTest`, which starts the agent against a proxy in the same JVM and scrapes
 through it, so a change to the starter, or a Spring Boot release that breaks the agent at runtime, fails there. Its
-`prometheus-proxy.version` is a release version literal; while the latest release predates what the demo shows,
-`demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` build the library from the checkout.
+`prometheus-proxy.version` is a release version literal; while the release the docs give predates what the demo shows
+(`demo.sh`'s `NEEDS_RELEASE_AFTER`) or isn't on Docker Hub yet, `make up` builds the library from the checkout.
 
 The plain Kotlin demo's oven, `demos/plain-kotlin/app`, is a Gradle project of its own, like the coffee shop: a plain
 Kotlin program with no framework or HTTP server that takes orders from a Redis queue (through Jedis, whose version is in
@@ -87,13 +88,16 @@ keep it compiling. IntelliJ links it as the coffee shop is, its wrapper properti
 The Spring Boot starter, `spring-boot-starter/`, is one of the build's two subprojects (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration
 (`io.prometheus.agent.spring`) that runs an embedded agent as a `SmartLifecycle` bean from the `prometheus-proxy.agent.*`
-properties and serves the app's `PrometheusRegistry` bean in-process (the builder's `source(path, registry)`), starting
-a required agent with `start()` and any other with `startIfConfigured()`. Its POM names no Spring
+properties and serves the app's `PrometheusRegistry` bean in-process (the builder's `source(path, registry)`). Once the
+customizers have run, it starts the agent only where `EmbeddedAgentConfig.namesProxy()` says the settings name a proxy,
+a required agent with `start()` and any other with `startIfConfigured()`; deciding from the `proxy` property alone, as
+it once did, left out a customizer's proxy, a `settings` key's, and `PROXY_HOSTNAME`. Its POM names no Spring
 Boot artifact and imports no BOM, so an app's own Spring Boot is the one it runs with: the Spring Boot artifacts are
 `compileOnly`, through the BOM at `spring-boot` in `libs.versions.toml`, and its JUnit 5 tests run the agent at Spring
 Boot's versions, enforced as an app's dependency management enforces them (`./gradlew :spring-boot-starter:test`, part
 of `build`), and again, in `oldestSpringBootTest`, which `test` runs, under the oldest Spring Boot it supports
-(`spring-boot-oldest`, 4.0's last release), with kotlinx-coroutines and the Prometheus client set as the starter's page
+(`spring-boot-oldest`, 4.0's last release, which `make versions` doesn't list as behind, as
+`configureVersions()` leaves out the `oldestSpringBoot*` configurations), with kotlinx-coroutines and the Prometheus client set as the starter's page
 tells such an app to set them. An embedded agent refuses to start on versions of those two it can't run on
 (`RuntimeLibraries`), naming the Spring Boot property that sets each. Kover, detekt, and kotlinter don't cover it. Its `compileJava` runs in full and isn't cached,
 since an incremental compile drops the configuration metadata's descriptions (`ConfigurationMetadataTest`), and the
@@ -105,11 +109,14 @@ agent with a Ktor app and serves the `PrometheusRegistry` it's given in-process.
 `prometheus-proxy.agent` section of the app's config file, read through Ktor's `ApplicationConfig` by the starter's
 property names (`FileSettings`), then the install block's. `AgentLifecycle` starts the agent on `ApplicationStarted`,
 begins its stop on `ApplicationStopPreparing` on a thread of its own, so the engine's grace period stays the app's, and
-waits for it on `ApplicationStopping`; keep that split. A required agent starts with `start()`, and any other with
-`startIfConfigured()`, which logs a failure itself. Its POM puts the agent and `ktor-server-core` at compile scope, since
-its API names their types (the `PrometheusRegistry` it takes comes with the agent's), and `make consumer-check` resolves
-it as a Ktor app does (the consumer check's `ktor` profile) and compiles the docs site's Ktor Plugin examples, which
-`KtorPluginExamplesTest` runs.
+waits for it on `ApplicationStopping`; keep that split. Ktor raises `ApplicationStarted` before the engine binds, and an
+engine that can't bind throws without disposing the app, so no stop event comes: the embedded agent's daemon thread is
+what lets that app's JVM exit (`ServerBindFailureTest`). Once the file and the install block have made the settings, it
+starts the agent only where `EmbeddedAgentConfig.namesProxy()` says they name a proxy, a required agent with `start()`,
+and any other with `startIfConfigured()`, which logs a failure itself. Its POM puts the agent and `ktor-server-core` at
+compile scope, since its API names their types (the `PrometheusRegistry` it takes comes with the agent's), and
+`make consumer-check` resolves it as a Ktor app does (the consumer check's `ktor` profile) and compiles the docs site's
+Ktor Plugin examples, which `KtorPluginExamplesTest` runs.
 It applies kotlinter and detekt (the root's `config/detekt/detekt.yml`), and the root aggregates its coverage
 (`kover(project(":ktor-plugin"))`), so the coverage floors cover it; `./gradlew :ktor-plugin:test` runs its Kotest
 specs, and so does `build`.
@@ -144,12 +151,14 @@ Only these types are part of the supported, documented public API. Everything el
   typed methods (from Java, with `EmbeddedAgentConfig.builder()`). It builds the same `Config` that
   `startAsyncAgent(Config)` takes.
   - `start()` starts the agent, and throws on a setting the agent rejects or a start that fails.
-  - `startIfConfigured()` returns null in those cases instead, logging why, and also when no proxy is set.
+  - `startIfConfigured()` returns null in those cases instead, logging why, and also when no proxy is set, as
+    `namesProxy()` tells (the builder's `proxy`, a `setting()` of `proxy.endpoints` or `proxy.hostname`, or
+    `PROXY_HOSTNAME`), which the Ktor plugin and the Spring Boot starter read too.
   - `fromEnvironment()` reads `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and
     `PROMETHEUS_PROXY_AUTHORITY`, which nothing else reads. Its `internal` overload takes the lookup function, so
     tests can call it, as with `EnvVars`' parsing. The builder remembers which values it read, until code sets the same
     key, and `start()` checks them first with the agent's own parsers (`EnvironmentSetting`), so a value the agent
-    refuses names its variable as well as its setting, and never the value.
+    refuses names its variable as well as its setting, and never a certificate (an endpoint it can't parse is quoted).
   - `agentMetricsAt(path, labels)` sets `agent.metrics.proxyPath` and `agent.metrics.proxyPathLabels`, which a
     standalone agent sets in its config, or with `--metrics_proxy_path` / `METRICS_PROXY_PATH`
     (`AgentOptions.metricsProxyPath`). The agent serves its own metric families there in-process
@@ -175,7 +184,7 @@ When promoting a type from `internal` to `public`, also add a cross-reference to
 ### gRPC Service Definition
 
 Defined in `src/main/proto/proxy_service.proto` — read it for the current RPC set. Note the defaults that
-aren't in the proto: a scrape result is sent in chunks once its gzipped size reaches `chunkContentSizeKbs` (32 KB), the heartbeat fires every 5s during inactivity, and each stream sends a keepalive after `proxy.internal.streamKeepAliveSecs` (30s) of quiet, so a reverse proxy's idle timeout doesn't close it; the proxy tells the agent the interval for its response streams at registration (`RegisterAgentResponse.stream_keepalive_millis`). A side sends keepalives only once the other said at registration that it takes them (the agent's `stream_keepalives`, a nonzero interval from the proxy), since one predating them would take a keepalive for a scrape request or a result. Every wait that ends in a keepalive goes through `receiveCatchingWithin` (`common/Channels.kt`), a `select` with `onTimeout`, never a receive inside `withTimeoutOrNull`, which can take a channel's element as it times out and lose it.
+aren't in the proto: a scrape result is sent in chunks once its gzipped size reaches `chunkContentSizeKbs` (32 KB), the heartbeat fires every 5s during inactivity, and each stream sends a keepalive after `proxy.internal.streamKeepAliveSecs` (30s) of quiet, so a reverse proxy's idle timeout doesn't close it; the proxy tells the agent the interval for its response streams at registration (`RegisterAgentResponse.stream_keepalive_millis`). On `readRequestsFromProxy` and the two response streams, a side sends keepalives only once the other said at registration that it takes them (the agent's `stream_keepalives`, a nonzero interval from the proxy), since one predating them would take a keepalive for a scrape request or a result. `readPathNoticesFromProxy` sends its keepalive, a `PathNotice` with no path, to every reader, ungated, since every agent that reads that stream ignores one (`AgentPathManager.notePathNotice`). Every wait that ends in a keepalive goes through `receiveCatchingWithin` (`common/Channels.kt`), a `select` with `onTimeout`, never a receive inside `withTimeoutOrNull`, which can take a channel's element as it times out and lose it.
 
 ### Key Mechanisms
 
@@ -185,8 +194,20 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 - **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`. One started that way
   (`Agent.startEmbedded`, which `EmbeddedAgentConfig` uses too) sets `isEmbedded`, so it registers no JVM shutdown
   hook (common-utils' `registersShutDownHook`): its host stops it after the work that needs it, where the hook stopped
-  it on SIGTERM alongside the host's own hooks, in no set order. The standalone agent keeps the hook.
+  it on SIGTERM alongside the host's own hooks, in no set order. Its service thread is a daemon (`Agent.executor()`),
+  so it never keeps the host's JVM up: a host that fails without stopping it, as a Ktor app whose port is taken does,
+  still exits, and so does one whose agent's `startUp()` never returns. Its admin and metrics servers' Jetty threads,
+  which common-utils builds, aren't daemons. The standalone agent keeps the hook and a thread that isn't a daemon.
 - **Proxy failover**: The agent rotates through an ordered `agent.proxy.endpoints` list (`AgentGrpcService.advanceEndpoint` / `resetEndpoint`, chosen by `EndpointFailover.beforeAttempt`); a failed connect or a rejected registration advances, and only a connection that registered and then dropped retries from the head.
+  An agent with one endpoint keeps its channel between attempts, so `connectAgent` resets the channel's connect backoff
+  after a failed connect (`resetConnectBackoff`); without it, gRPC dialed only on its own backoff, up to 2 minutes, and
+  each attempt in between failed at once, so the agent tried every `reconnectPauseSecs` but reconnected up to 2
+  minutes late.
+- **JVM Errors**: an agent's connection tasks, response streams, heartbeat, discovery tick, and per-path calls catch
+  failures with `runCatchingNonFatal` (`common/NonFatal.kt`), which rethrows a JVM `Error` as well as a
+  `CancellationException`, so an `OutOfMemoryError` fails the connection and `Agent.handleConnectionFailure` stops the
+  agent, as a scrape's does. Don't catch one there with `runCatching` or common-utils' `runCatchingCancellable`, which
+  ended only the connection, and the agent reconnected.
 - **Path takeover**: a non-consolidated registration takes the path (`ProxyPathManager.takeOverPath`), and a displaced
   agent of another launch stays connected. The proxy tells it on `readPathNoticesFromProxy`
   (`AgentContext.queuePathNotice`); it keeps the path, its `PathEntry` in `AgentPathManager.paths` carrying the
@@ -199,15 +220,18 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   `reclaim`: that brings back two agents swapping the path every few seconds (`ProxyRegistry.tla`'s
   `ReclaimNeverDisplaces` and `ReconnectReclaims`).
 - **Dynamic target discovery**: `PathDiscoveryService` polls a watched file and calls `AgentPathManager.reconcileDiscoveredPaths`; paths are tagged `STATIC`/`DISCOVERED`, and static entries are never touched.
-- **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity. `registerPath` runs `ProxyPathManager.formRejection` (length, form, labels size) before the globs see a path, and `AgentAuthManager.globMatches` matches in time proportional to the path's length; keep both, since a regex or the other order lets one authenticated agent stall the proxy with a long path. With `transportFilterDisabled`, where the agent names its own agentId on every call, `readRequestsFromProxy` looks the context up once and removes only that object (`Proxy.removeAgentContextIfCurrent`), and `AgentContextManager.addAgentContextWithinLimit` caps the contexts one identity holds at `proxy.internal.maxAgentsPerIdentity`.
-- **Agent-supplied values**: the proxy cuts what an agent reports about itself (`ProxyServiceImpl.boundedRegistration`, `proxy.internal.maxAgentFieldLength` / `maxAgentProxyEndpoints`) and about each path (`ProxyPathManager.addPath`: the target URL, redacted before it's cut, to `maxTargetUrlLength`), and logs every agent-supplied value through `AgentValues.shownValue`, which cuts it and escapes its control characters so it can't forge a log line (`ProxyPathManager.shownPath` for a path or `agentId`, its first 64 characters); bound or cut any new agent-supplied value before storing it, and pass it through `shownValue` before logging it. `formRejection` refuses a path with whitespace, a control character, `?`, or `#` (`AgentValues.pathCharacterProblem`), which the agent checks on its `pathConfigs` at startup too.
+- **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity. `registerPath` runs `ProxyPathManager.formRejection` (length, form, labels size) before the globs see a path, and `AgentAuthManager.globMatches` matches in time proportional to the path's length; keep both, since a regex or the other order lets one authenticated agent stall the proxy with a long path. With `transportFilterDisabled`, where the agent names its own agentId on every call, `readRequestsFromProxy` looks the context up once and removes only that object (`Proxy.removeAgentContextIfCurrent`), and `AgentContextManager.addAgentContextWithinLimit` caps the contexts one identity holds at `proxy.internal.maxAgentsPerIdentity`. In either mode `ProxyPathManager.countPaths` counts each identity's paths beside each agent's, for `proxy.internal.maxPathsPerIdentity` (an agent's against the identity of its first path, so a decrement always meets its increment); change `pathCounts` only through it.
+- **Agent-supplied values**: the proxy cuts what an agent reports about itself (`ProxyServiceImpl.boundedRegistration`, `proxy.internal.maxAgentFieldLength` / `maxAgentProxyEndpoints`) and about each path (`ProxyPathManager.addPath`: the target URL, redacted before it's cut, to `maxTargetUrlLength`; the labels, at most `maxLabelsPerPath`, kept only as `Proxy.pathLabels` parsed them, never also as sent), and logs every agent-supplied value through `AgentValues.shownValue`, which cuts it and escapes its control characters so it can't forge a log line (`ProxyPathManager.shownPath` for a path or `agentId`, its first 64 characters); bound or cut any new agent-supplied value before storing it, and pass it through `shownValue` before logging it. `formRejection` refuses a path with whitespace, a control character, `?`, or `#` (`AgentValues.pathCharacterProblem`), which the agent checks on its `pathConfigs` at startup too.
 - **Shared metrics**: `AgentMetrics` / `ProxyMetrics` build their collectors once per JVM in their companion objects and share them through `SharedCollectors`, since the default registry rejects a second collector with the same name and label names, which kept a second agent in a JVM from connecting. Add a new metric to its companion's `SHARED` list (the agent's `COLLECTORS`, whose names `agent.metrics.proxyPath` serves and a registry source of the default registry leaves out); an agent metric takes `launch_id` as its first label and goes in `PER_LAUNCH`, which `COLLECTORS` includes, so a stopped agent's series are removed (and, given the label values, start at zero).
 - **TLS material**: each certificate, key, or trust collection is a file (`tls.*FilePath`) or PEM text or its base64
   (`tls.*Pem`, `*_PEM` env vars, no CLI flags), never both (`TlsSource.requireOneSource`); `TlsMaterial` builds the
   gRPC TLS context from either with `GrpcSslContexts`. Never log a PEM value, only whether it's set.
 - **Tracing**: `ScrapeTracing` (common) is each process's Brave tracing, owned by `Proxy.tracing` / `Agent.tracing`
   and built on first use (the reporter is assigned after the gRPC server and channel are built). It samples gRPC calls
-  with an `RpcRuleSampler` that never samples `sendHeartBeat`, and traces each scrape: the proxy's `scrape` span
+  with an `RpcRuleSampler` that never samples `sendHeartBeat` or `readPathNoticesFromProxy`, and samples each call it
+  serves itself: its gRPC propagation (`ServerSampledPropagation`) drops the sampling decision a call's metadata
+  carries and keeps its trace IDs, since Brave's server handler otherwise keeps a caller's `sampled` or debug flag,
+  which let any caller have the proxy trace every call. It traces each scrape: the proxy's `scrape` span
   (`ProxyHttpRoutes`) and a `forward` span per agent (`ScrapeDispatch`), whose context rides `ScrapeRequest`'s
   `trace_context` to the agent's `fetch` span (`AgentHttpService`). Each span's lifecycle goes through
   `ScrapeTracing.traced`, which tags how its block ended and finishes it. Pass spans explicitly, never put them in
@@ -254,20 +278,26 @@ per-section `assign*` function it belongs to.
 
 Releases follow `docs/RELEASE.md`: after the version bump and changelogs are merged, `make release` publishes to Maven
 Central and Docker Hub, gated by `make release-check` (clean, up-to-date `master` on which every check, and each CI
-job `RELEASE_REQUIRED_JOBS` lists, passed; a dated section for the version in both changelogs; the version, and not
-the previous one, in every bumped file; every demo's `NEEDS_RELEASE_AFTER` below the version; not already
-published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors step 2's list of hard-coded version literals; keep
-the two in step. Step 2 raises each demo's `NEEDS_RELEASE_AFTER` to the new version, so `make up` builds from the
-checkout while the release isn't published, and the last change before `make release` lowers it again
-(`_check-demos-pull-release`), so `make up` from the release's tag pulls its images.
+job `RELEASE_REQUIRED_JOBS` lists, passed; both changelogs' sections for the version dated the day it runs
+(`_check-changelogs`), so the last change before `make release` dates them; the version, and not the previous one, in
+every bumped file (`_check-version-files`); every demo's `NEEDS_RELEASE_AFTER` below the version
+(`_check-demos-pull-release`); not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors step 2's list
+of hard-coded version literals, as the publishing-release skill's list does; keep the three in step (`ReleaseCheckTest`
+compares the website pages they name). A demo's `NEEDS_RELEASE_AFTER` isn't one: it's the newest release
+that lacks what the demo shows, and `make up` runs the release the docs give only once it's later and its images are on
+Docker Hub (`published` in each `demo.sh` but the Kubernetes demo's, whose clusters pull the images, so its `cmd_up`
+asks Docker Hub alone), building from the checkout until then, so neither a bump nor a release changes it
+(`DemoReleaseGateTest`).
 
 `make release` ends by pushing the release tag (`make release-tag`), which the docs' `git clone --branch` commands
-check out, and deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), the only run
-that deploys it: a push to `master` builds the site and the KDocs as a check, without deploying, so the live site
-describes the last release until the next one, docs changes merged in between included (`CiHygieneTest` pins this).
-`make gh-docs` by hand deploys `master` as it is, unreleased pages included. `make site-version` prints the version the
-site shows as its image tag and Maven coordinate, the one step 2 bumps, which `bin/docker-*.sh` and the demos run; not
-`gradle.properties`, which can hold a `-SNAPSHOT` (`SiteVersionTest`). CI's `docs-site` job
+check out, creating the GitHub release on it with the JARs the Quick Start downloads and `RELEASE_NOTES.md`'s section
+as its notes (`make github-release`), and deploying the docs site (`make gh-docs`, a `workflow_dispatch` of
+`docs.yml`), the only run that deploys it: a push to `master` builds the site and the KDocs as a check, without
+deploying, so the live site describes the last release until the next one, docs changes merged in between included
+(`CiHygieneTest` pins this), which is why each demo prints its README (`README_PATH`) beside its page. `make gh-docs`
+by hand deploys `master` as it is, unreleased pages included. `make site-version` prints the version the site shows as
+its image tag and Maven coordinate, the one step 2 bumps, which `bin/docker-*.sh` and the demos run once Docker Hub has
+it; not `gradle.properties`, which can hold a `-SNAPSHOT` (`SiteVersionTest`). CI's `docs-site` job
 (`make build-site`) builds the site on every pull request; it's named so as not to share a name with the `build`
 check the branch protection requires.
 
@@ -288,8 +318,16 @@ A run of every spec splits them between two Test tasks Gradle runs at once, each
 (`configureTestPartitions` in `build.gradle.kts`): `harnessTest`, the `harness/` specs, which bind fixed ports and so run
 one at a time, and `unitTest`, the rest; `test` only depends on both. A spec that starts a proxy and agent through
 `HarnessSetup` or `TestUtils`, or binds a `HARNESS_*` port, goes in `harness/` (`TestPortsTest` checks). A run with
-`--tests` or `-x test` isn't split. To recompute coverage from the last run without rerunning it, exclude both
+`--tests` (or `--tests=`) or `-x test` isn't split: `test` runs what it names in one JVM. Either partition can still be
+run on its own, filtered or not (`./gradlew unitTest --tests …`). A harness profile's heap (`-PharnessConfig`) goes to
+the harness JVM alone; `unitTest` keeps 1g. To recompute coverage from the last run without rerunning it, exclude both
 partitions: `./gradlew koverVerify koverVerifyPerClass -x unitTest -x harnessTest`.
+
+Gradle reruns a `Test` task when its classpath changes, not when a file its specs open does, so the files specs read
+are its inputs (`testConfigFiles()` and `checkedFiles()` in `build.gradle.kts`, listed in `docs/TESTING.md`'s Test
+Inputs): the test configs and certificates for every `Test` task, and the docs, workflows, `Makefile`, demos, sources'
+text, and other files the `misc/` specs and `TestPortsTest` read for `unitTest` (and `test`) alone, so an edit to them
+reruns `unitTest` but not the harness specs. A new spec that reads a file outside those adds it there.
 
 Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testcontainers suite that builds the proxy and agent images from `etc/docker/*.Dockerfile`, stands them up alongside an `nginx:1.31-alpine` metrics stub and a `prom/prometheus:v3.14.0` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Shared container/network/HTTP/PromQL factories live in `support/ContainerTestSupport.kt`; `ls` that directory
 for the current spec list.
@@ -300,11 +338,11 @@ Lincheck concurrency specs (`*LincheckTest`) carry the Kotest `Lincheck` tag (`c
 
 TLA+ specs in `specs/tla/` model the design rather than test the code: `ProxyRegistry.tla` covers `AgentContextManager`, `AgentContext`'s invalidate and drain, `ProxyPathManager`'s register and remove, `ScrapeRequestManager`, and `Proxy.removeAgentContext`; `AgentFailover.tla` covers `EndpointFailover`. When you change the locking, ordering, or lifecycle of one of those, update the matching action and run `make tla-checks` (about a minute; it fetches the pinned TLA+ tools into `specs/tla/`, git-ignored, and checks their SHA-256), which CI's `tla` job runs on every pull request; it runs `make tla-checks-full`, which adds the slower `ProxyRegistryReconnect.cfg`, instead when a file under `specs/tla/` or the pinned TLA+ tools (`TLA_VERSION`, `TLA_SHA256`) change, as TLC reads nothing else. Run `make tla-checks-full` locally when you change how a reconnect treats a taken-over path. `specs/tla/README.md` lists the properties.
 
-What embedders get from Maven Central is checked by a Maven build, not a Gradle one: `make consumer-check` (CI's `consumer-check` job, which `RELEASE_REQUIRED_JOBS` lists) publishes to the local Maven repository at a throwaway `-consumer-check-SNAPSHOT` version and builds `etc/consumer-check` against it. It fails unless the website's embedded-agent examples compile, Maven resolves Jackson, every netty-tcnative native, Netty, protobuf, and every Prometheus Java client module at the catalog's versions, and no jar carries a `logback.xml`; it resolves and compiles the examples as a project that depends only on the agent. So a type a public class exposes goes in `api(...)`, a pin an embedder needs is declared directly (Maven ignores a dependency's BOM imports, and a classifier jar is its own artifact), and a resource only the fat JARs need goes in `src/shadow/resources`, as `logback.xml` does.
+What embedders get from Maven Central is checked by a Maven build, not a Gradle one: `make consumer-check` (CI's `consumer-check` job, which `RELEASE_REQUIRED_JOBS` lists) publishes to the local Maven repository at a throwaway `-consumer-check-SNAPSHOT` version and builds `etc/consumer-check` against it. It fails unless the website's embedded-agent examples compile, Maven resolves Jackson, every netty-tcnative native, Netty, protobuf, and every Prometheus Java client module at the catalog's versions, no Logback resolves (for the agent alone, or with the Ktor plugin or the Spring Boot starter), and no jar carries a `logback.xml`; it resolves and compiles the examples as a project that depends only on the agent. So a type a public class exposes goes in `api(...)`, a pin an embedder needs is declared directly (Maven ignores a dependency's BOM imports, and a classifier jar is its own artifact), a resource only the fat JARs need goes in `src/shadow/resources`, as `logback.xml` does, and a dependency only they need in `standaloneRuntimeOnly`, as Logback does, which `Utils.setLogLevel` reaches only through `LogbackLevels`, once it has found Logback on the classpath.
 
-Specs in `src/test/kotlin/io/prometheus/misc/` check the docs and CI against the code, so a change can fail them without touching a test: `TestingGuideTest` fails when a spec isn't named in its package's section of `docs/TESTING.md` or a support file isn't named there at all, so add each new one; `WebsiteConfigKeysTest` and `DashboardMetricNamesTest` check the `proxy.`/`agent.` config keys, table defaults, and `proxy_*`/`agent_*` series the website names against `config/config.conf` and the exposed metrics; `ConfigFileKeysTest` fails on a setting in a shipped or test config (`config/test-configs`, `examples`, …), or a `-D` key a test passes in a string literal, that `config/config.conf` doesn't declare; `CiHygieneTest` requires a `timeout-minutes` on every workflow job, a digest on every `*_IMAGE` in the `Makefile` and on every third-party `*_IMAGE` in `ContainerTestSupport`, a pinned uv `version` on every `setup-uv` step, and a fixed commit for the CRD schemas; and `SiteVersionTest` pins `make site-version`, which `docs.yml`'s deploy check and `bin/docker-*.sh` read.
+Specs in `src/test/kotlin/io/prometheus/misc/` check the docs and CI against the code, so a change can fail them without touching a test: `TestingGuideTest` fails when a spec isn't named in its package's section of `docs/TESTING.md`, or a subproject's (`ktor-plugin/`, `spring-boot-starter/`) in its subproject's section, or a support file isn't named there at all, so add each new one, and when a `make` target it names isn't in the `Makefile`, a job in `CI_JOBS` isn't named there, or its `make all-tests` entry leaves out a target `all-tests` runs; `WebsiteConfigKeysTest` and `DashboardMetricNamesTest` check the `proxy.`/`agent.` config keys, table defaults (gRPC's own for a setting left to gRPC), and `proxy_*`/`agent_*` series the website names against `config/config.conf`, gRPC, and the exposed metrics; `CliReferenceTest` checks the CLI Reference's options, variables, and anchors against the options classes' `@Parameter`s, the `EnvVars` they read, and the `-D` key each option sets, and the configuration pages' linked rows against the CLI Reference; `ConfigFileKeysTest` fails on a setting in a shipped or test config (`config/test-configs`, `examples`, …), a `-D` key a test passes in a string literal, a key a `setting()` call spells out, or a setting in a docs page's HOCON block (snippet includes resolved), that `config/config.conf` doesn't declare; `CiHygieneTest` requires a `timeout-minutes` on every workflow job, a digest on every `*_IMAGE` in the `Makefile`, on every third-party `*_IMAGE` in `ContainerTestSupport`, and on every image a demo runs (its Prometheus the `Makefile`'s `PROMETHEUS_IMAGE`), a pinned uv `version` on every `setup-uv` step, and a fixed commit for the CRD schemas; and `SiteVersionTest` pins `make site-version`, which the demos' `make up` and `bin/docker-*.sh` read.
 
-Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`. Shared test constants live in `src/test/kotlin/io/prometheus/common/TestPorts.kt` (`TestPorts` object) — canonical proxy/agent/Prometheus/nginx port numbers used across the unit, harness, and container suites; reference these instead of hard-coding port literals in new tests. The constants that equal a product default (8080, 8082, 50051, …) are for asserting those defaults and for ports inside containers; never bind one on the host, since a proxy, agent, or Prometheus already running on the machine holds it. Each harness spec's dedicated ports live there too — `TestUtils.startProxy` / `startAgent` bind the `HARNESS_*` ones unless a spec passes its own — and `TestPortsTest` fails on a duplicate, on a port of 32768 or above (the OS's ephemeral range, where another test's outgoing connection can hold it), or on a port a demo publishes on the host (a `demos/*/docker/compose.yml` port, a kind `hostPort`, or a `demo.sh` port default; the product-default constants are exempt, by name), so give a new spec its own entries below that, and move a spec's port rather than a demo's.
+Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`. Shared test constants live in `src/test/kotlin/io/prometheus/common/TestPorts.kt` (`TestPorts` object) — canonical proxy/agent/Prometheus/nginx port numbers used across the unit, harness, and container suites; reference these instead of hard-coding port literals in new tests. The constants that equal a product default (8080, 8082, 50051, …) are for asserting those defaults and for ports inside containers; never bind one on the host, since a proxy, agent, or Prometheus already running on the machine holds it. Each harness spec's dedicated ports live there too — `TestUtils.startProxy` / `startAgent` bind the `HARNESS_*` ones unless a spec passes its own — and `TestPortsTest` fails on a duplicate, on a port of 32768 or above (the OS's ephemeral range, where another test's outgoing connection can hold it), or on a port a demo publishes on the host (a `demos/*/docker/compose.yml` port, a kind `hostPort`, or a `demo.sh` port default; the product-default constants are exempt, by name), so give a new spec its own entries below that, and move a spec's port rather than a demo's. A subproject's test can't use `TestPorts`, so it spells out its port constants (`*_PORT = <n>`), each of which must be a `TestPorts` port no root test source uses (`STARTER_PROXY_*`, `KTOR_PLUGIN_*`).
 
 `EnvVars.getEnv()` reads `java.lang.System.getenv()`, which can't be set in-process, so its parse-and-throw branches aren't reachable by setting an env var in a test. The numeric/boolean parsing is therefore extracted into `internal` companion helpers (`parseBooleanStrict` / `parseIntStrict` / `parseLongStrict`) that the tests call directly. When adding a new typed `getEnv` overload, follow this pattern so the invalid-value path stays testable.
 

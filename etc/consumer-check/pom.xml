@@ -45,6 +45,18 @@
 
   <profiles>
     <profile>
+      <!-- A Spring Boot app with the starter, at the agent's version, which brings the agent and Micrometer's Prometheus
+           registry. Only resolved, to check what it brings: the starter's own tests compile and run its examples. -->
+      <id>spring-boot-starter</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.pambrose</groupId>
+          <artifactId>prometheus-proxy-spring-boot-starter</artifactId>
+          <version>${prometheus-proxy.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
       <!-- A Ktor app with the Ktor plugin: the plugin, at the agent's version, and Micrometer's Ktor plugin and
            Prometheus registry, which the docs site's examples serve, at the versions the agent's build uses. -->
       <id>ktor</id>

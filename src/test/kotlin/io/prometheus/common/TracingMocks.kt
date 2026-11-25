@@ -21,14 +21,18 @@ import brave.handler.MutableSpan
 import brave.handler.SpanHandler
 import brave.propagation.TraceContext
 
-/** A span handler that adds each span a Tracing finishes to [spans], for a spec to read what was traced. */
+/**
+ * A span handler that adds each span a Tracing finishes to [spans], for a spec to read what was traced: a copy, as the
+ * span was when it finished. A Zipkin reporter converts a span as it finishes, so what is written to it afterwards is
+ * lost, but Brave still writes it to the span's own MutableSpan, which a spec reading that would see.
+ */
 internal fun collectInto(spans: MutableCollection<MutableSpan>): SpanHandler =
   object : SpanHandler() {
     override fun end(
       context: TraceContext,
       span: MutableSpan,
       cause: Cause,
-    ): Boolean = spans.add(span)
+    ): Boolean = spans.add(MutableSpan(span))
   }
 
 /** A real [ScrapeTracing] at [sampleRate] whose finished spans land in [spans]; close it when done. */

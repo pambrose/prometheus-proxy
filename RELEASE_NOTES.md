@@ -4,7 +4,63 @@
 
 ## 4.7.0
 
-_Released 2026-11-23_
+_Released 2026-11-24_
+
+### Before you upgrade
+
+- **The proxy refuses a path with more than 64 labels.** The new `proxy.internal.maxLabelsPerPath` refuses such a path
+  at registration, and the agent logs the rejection once without retrying it. If a path of yours has more, raise the
+  limit, or set it to `0` for none, before you upgrade.
+- **The agents of one identity may register at most 100,000 paths together.** The new
+  `proxy.internal.maxPathsPerIdentity` counts the paths of every connection an identity's agents open, where
+  `maxPathsPerAgent` counts one connection's. With agent auth off, or every agent on the legacy `proxy.agentToken`,
+  all agents share one identity, so the limit counts your whole fleet. A path past it is refused, and the agent doesn't
+  retry it until it reconnects. If your fleet could come near it, raise the limit, or set it to `0` for none, before
+  you upgrade.
+- **No page can frame a dashboard.** Every response from the proxy's dashboard and the agent's now tells the browser not
+  to show it in a frame (`Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`), so a page on
+  another site can't show a dashboard under content of its own and steer a viewer's clicks onto Scrape now or Log out.
+  A portal or another page of your own that frames a dashboard stops showing it; no setting allows it. With a login
+  set, the browser is also told to keep no page behind it, so none outlives Log out in its cache.
+- **The Helm charts keep the dashboard on the pod.** The proxy chart's dashboard now listens only on the pod's loopback
+  (the new `dashboard.host`, default `127.0.0.1`), as the agent chart's does, so `kubectl port-forward` reaches it and
+  no other pod in the cluster can. Leaving its port off the Service didn't stop a pod from opening it at the pod's
+  address. If you publish the proxy's dashboard through a Service or an Ingress of your own, set `dashboard.host` to
+  `0.0.0.0` when you upgrade, and require a login.
+- **The Docker Compose stack keeps its ports on your machine.** `etc/compose/proxy.yml` and the Docker page's Compose
+  example publish their ports on `127.0.0.1` only, and no longer publish the agents' port, 50051, which their own agent
+  reaches over the compose network. Before, anyone who could reach the host could register an agent without a token
+  and read every path's metrics. To connect agents on other hosts, publish 50051 with a token and TLS, as the Cloud
+  Platforms page's compose file does.
+- **The agent reads the dashboard's variables, and `METRICS_PROXY_PATH`.** `DASHBOARD_ENABLED`, `DASHBOARD_PORT`,
+  `DASHBOARD_PATH`, `DASHBOARD_HOST`, `DASHBOARD_USERNAME`, and `DASHBOARD_PASSWORD` were the proxy's alone through
+  4.6.0, and nothing read `METRICS_PROXY_PATH`. An agent whose environment sets them, such as one that shares the
+  proxy's env file, now opens its own dashboard, or serves its metrics at that path. The dashboard is on port 8095
+  unless `DASHBOARD_PORT` names another, with no login unless `DASHBOARD_PASSWORD` is set too, and a value the agent
+  can't parse, such as an empty `DASHBOARD_PORT`, or a dashboard port that's taken, stops it starting. Check an agent's
+  environment before you upgrade it.
+- **The agent no longer brings Logback into your app.** It came with the agent's Maven artifact, and pushed aside your
+  app's own logging: a Spring Boot app on Log4j2 failed to start, or lost its Log4j2 configuration. The agent's logs
+  now go wherever your app's do, through its own SLF4J provider, and `agent.logLevel` sets their level only when that
+  provider is Logback. If your app logged only through the Logback the agent brought, add an SLF4J provider to it, such
+  as `ch.qos.logback:logback-classic`, or SLF4J warns that it found none and nothing is logged. The standalone proxy
+  and agent, and their images, still log with Logback.
+- **An embedded agent on Spring Boot 4.0 or 4.1 needs two version properties.** Their dependency management sets
+  kotlinx-coroutines and the Prometheus Java client below the versions the agent runs on, so set
+  `kotlin-coroutines.version` to `1.11.0` and `prometheus-client.version` to `1.10.0` before you upgrade. The agent
+  now checks both as it starts: with either too old, it refuses to start and names the property to set, rather than
+  fail once it runs and leave your app running with an agent that never serves. Spring Boot 4.2 needs neither.
+- **An embedded agent no longer keeps your app running.** An agent started with `startAsyncAgent()` or
+  `EmbeddedAgentConfig` runs on a daemon thread, so an app that fails after starting one, without stopping it, now
+  exits and can be restarted, where the agent's thread kept it running with the agent connected. A program whose
+  `main()` only starts the agent and returns now exits at once too, unless the agent's admin or metrics port is on:
+  keep `main()` running while you need the agent, as `startIfConfigured().use { … }` does around your app's work. The
+  standalone agent, and `startSyncAgent()`, are unchanged.
+- **An embedded agent stops when your app stops it.** An agent started with `startAsyncAgent()` or
+  `EmbeddedAgentConfig` no longer registers a JVM shutdown hook, which on SIGTERM stopped it at the same time as the
+  app's own shutdown, in no set order. Stop it with `shutdown()` or `close()` where your app stops its own services,
+  as the Ktor plugin and the Spring Boot starter do; one your app never stops ends with the JVM, without a graceful
+  stop.
 
 ### New Features
 
@@ -14,24 +70,26 @@ _Released 2026-11-23_
   path, with the proxy's reason for refusing one and when it's tried again; each path's metric filter and what it has
   dropped; the discovery file; and the agent's settings. It is off by default, and asks for a login once you set
   `agent.dashboard.password` (or `DASHBOARD_PASSWORD`). An embedded agent turns it on with `dashboard(port, host)`.
+  If its port is taken, the agent doesn't start, as with a taken admin or metrics port.
 - **Each path's scrapes, as the agent saw them.** The agent's dashboard shows a path's recent scrapes: the target's
   status, how long the fetch took, and how big the body was before and after the path's metric filter. Its Scrape now
   button fetches a target from the agent right away, even for a path the proxy refused, and shows the start of what
   Prometheus would get.
 - **What happened to the agent.** The agent's dashboard has an Activity view: the agent connecting, losing its
   connection and why, failing over, and its paths registered or refused, in order, so you can see what happened while
-  nobody was watching. The agent's Helm chart can turn the dashboard on (`dashboard.enabled`), and every demo now shows
-  its agents' dashboards.
-- **Every setting, on both dashboards.** A new Settings view on the proxy's dashboard and the agent's shows every setting
-  the process is running with, from its ports, authentication, and TLS to its limits and timeouts, so you can check
-  them without reading the startup log. Tokens, passwords, and private keys show only as set or not set.
+  nobody was watching. The agent's Helm chart can turn the dashboard on (`dashboard.enabled`), and every demo but the
+  plain Kotlin demo, whose ovens listen on no port, now shows its agents' dashboards.
+- **Every setting, on both dashboards.** A new Settings view on the proxy's dashboard and the agent's shows every
+  setting the process is running with, from its ports, authentication, and TLS to its limits and timeouts, so you can
+  check them without reading the startup log. Tokens, passwords, and private keys show only as set or not set.
 - **Metrics without an endpoint.** An app that embeds the agent can hand it its metrics registry with
   `source(path, registry)`, instead of serving its metrics at a URL for the agent to scrape: no `/metrics` endpoint,
   port, password, or extra dependency to set up. It takes the Prometheus Java client's registry, which Micrometer's
   uses too, and `source(path, source)` takes any other metrics as a `MetricsSource`.
 - **An embedded agent in a few lines.** For an app with no framework, such as a worker or a daemon,
   `fromEnvironment()` reads the proxy, token, and certificate from `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, and
-  `PROMETHEUS_PROXY_CERT`, and names the variable when its value can't be used; `startIfConfigured()` starts the
+  `PROMETHEUS_PROXY_CERT`, with the certificate's authority from `PROMETHEUS_PROXY_AUTHORITY` (default
+  `prometheus-proxy`), and names the variable when its value can't be used; `startIfConfigured()` starts the
   agent only where a proxy is set, and keeps the app running when it can't start, logging why; and
   `agentMetricsAt(path)` serves the agent's own metrics through the proxy, with no port opened for them. The agent's
   handle is `AutoCloseable`, so `startIfConfigured().use { … }` stops the agent with the app. The Embedded Agent page
@@ -43,18 +101,18 @@ _Released 2026-11-23_
   `metrics-proxy-path`. The metrics port is still there for a scraper on the agent's own network, which can read an
   agent that can't reach the proxy; the Monitoring page says when each fits.
 - **A demo of the agent in a program with no framework.** `demos/plain-kotlin` runs a bakery whose ovens are plain
-  Kotlin programs, with no framework or HTTP server, each with the agent started in a few lines of its `main`. An oven listens on no port and
-  is scraped all the same, more ovens become more Prometheus targets with no change to Prometheus's config, and an
-  oven with no proxy, or with the agent's settings wrong, keeps baking.
+  Kotlin programs, with no framework or HTTP server, each with the agent started in a few lines of its `main`. An oven
+  listens on no port and is scraped all the same, more ovens become more Prometheus targets with no change to
+  Prometheus's config, and an oven with no proxy, or with the agent's settings wrong, keeps baking.
 - **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot 4.2 app and set the proxy's
-  address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
-  or a web server, and shows its connection in `/actuator/health`. On Spring Boot 4.0 or 4.1, set two of its version
-  properties, as the new Spring Boot Starter page says, which also lists its properties. The Spring Boot demo's
-  roastery now runs its agent with it.
+  address, in a property, a customizer, or `PROXY_HOSTNAME`: the agent starts and stops with the app, serves its metrics
+  to Prometheus without `/actuator/prometheus` or a web server, and shows its connection in `/actuator/health`. On
+  Spring Boot 4.0 or 4.1, set two of its version properties, as the new Spring Boot Starter page says, which also lists
+  its properties. The Spring Boot demo's roastery now runs its agent with it.
 - **A Ktor plugin.** Add `prometheus-proxy-ktor` to a Ktor app and `install(PrometheusProxyAgent)` with the app's
-  registry and a path: the agent starts and stops with the app and serves its metrics to Prometheus without a
-  `/metrics` route. Set the proxy in code or in `application.conf`. The new Ktor Plugin page lists its settings, and
-  the Ktor demo's coffee shop now runs its agent with it.
+  registry and a path: the agent starts and stops with the app and serves its metrics to Prometheus without a `/metrics`
+  route. Set the proxy in code, in `application.conf`, or with `PROXY_HOSTNAME`. The new Ktor Plugin page lists its
+  settings, and the Ktor demo's coffee shop now runs its agent with it.
 - **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
   follows your system and is where it starts. Your browser remembers it.
 - **The proxy counts what happens to its agents.** New metrics count agents disconnecting and why, connects and
@@ -67,13 +125,11 @@ _Released 2026-11-23_
   let through unfiltered, discovery's reads, and dashboard logins, and record how long a scrape waits to start, and
   `agent_build_info` shows each agent's version. The agents' Grafana dashboard charts them, and new alerts catch an
   agent that's disconnected, one stuck on a backup proxy, and a discovery file that can't be read.
-- **Which proxy or agent is this?** Each dashboard's top bar and browser tab now name it: `Proxy: proxy:8080`, the
-  proxy's host and the port Prometheus scrapes, or `Agent: agent-east`, the agent's name, so several open dashboards are
-  told apart at a glance.
 - **Each scrape, traced.** With Zipkin on, each scrape Prometheus makes is now a trace of its own, from the proxy
-  through the agent to the target, showing which Prometheus asked, how long the scrape waited for its agent, how long
-  the target took and how often the agent retried it, and why a scrape failed. Set `sampleRate` under
-  `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
+  through the agent to the target, showing which Prometheus asked, how long the scrape waited for its agent, even one
+  that timed out, how long the target took and how often the agent retried it, and why a scrape failed. Set
+  `sampleRate` under `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of
+  them.
 - **Nginx's default timeouts are enough.** A current agent and proxy keep their streams open with a keepalive every 30
   seconds, so nginx's default 60-second timeouts no longer cut off an agent every minute. For a reverse proxy with a
   shorter idle timeout, lower `proxy.internal.streamKeepAliveSecs`. Agents and proxies from 4.6.0 or earlier don't
@@ -94,10 +150,14 @@ _Released 2026-11-23_
 
 ### Bug Fixes
 
-- **An embedded agent on Spring Boot 4.0 or 4.1 says what to set.** Those releases set two of the agent's libraries,
-  kotlinx-coroutines and the Prometheus Java client, below the versions it runs on, and the agent failed once it ran,
-  leaving your app running with an agent that never served. It now refuses to start, and names the property to set
-  for each: `kotlin-coroutines.version` and `prometheus-client.version`.
+- **A path's labels take far less of the proxy's memory.** The proxy kept each path's labels twice, as the agent sent
+  them and parsed, and parsed labels can take many times their size: 8 KiB of short labels took about 130 KiB a path,
+  so a few thousand paths could exhaust a small proxy's heap. It now keeps them once, parsed, and with
+  `maxLabelsPerPath` a path takes at most about 28 KiB. The dashboard shows a path's labels as the proxy keeps them,
+  and no longer parses them on every refresh.
+- **Limit warnings come once.** The proxy's warnings that an agent nears `maxPathsPerAgent`, or an identity
+  `maxAgentsPerIdentity`, repeated each time the count climbed back to 80%, as an agent's discovery file churned or
+  its fleet's agents reconnected. Each now comes once, and again only after the count falls below 70%.
 - **Scrape now says why it refused a path.** Clicking Scrape now on a path that had just left the proxy showed only
   "404 Not Found" instead of the reason.
 - **No secrets in an embedded agent's logged settings.** `EmbeddedAgentConfig.toString()` hid a token or a private
@@ -109,14 +169,39 @@ _Released 2026-11-23_
   the path being free, and not before, even if it reconnects meanwhile. Agents and proxies from earlier releases behave
   as before.
 - **A refused agent token shows in the proxy's log.** The proxy logs it at WARN, naming the host and whether the token
-  was unknown or missing, at most once a minute for each host. Before, only the dashboard's activity feed showed it,
-  and the agent said why only on its first attempt; now it says so again every 10 minutes while it can't connect.
+  was unknown or missing, at most once a minute for each host. Before, only the dashboard's activity feed showed it.
+  An agent that can't connect said why only on its first attempt; it now says so again every 10 minutes while it
+  can't.
 - **No exception for a connection that closes early.** A port probe, or a connection that fails its TLS handshake, no
   longer logs a `NullPointerException` at WARN on the proxy, as it did behind Railway's TCP proxy.
 - **The docs site's address.** Its pages and sitemap name https://prometheus-proxy.com, and its 404 page loads its
   styles again.
 - **Hovered rows stay readable.** In a dashboard's list of agents or paths, a hovered row's address line fell under
   the WCAG AA contrast floor; it now darkens on hover.
+- **An agent finds its proxy again within seconds.** An agent with one proxy that lost it tried again every 3
+  seconds, but each try failed at once while gRPC waited out its own backoff, so after a long outage the agent
+  reconnected up to 2 minutes after the proxy was back. Each try now dials the proxy, so the agent is back within
+  seconds of it.
+- **An embedded agent that's slow to start stops.** When an embedded agent took over 30 seconds to start, the start
+  failed as though the agent stayed off, but it went on starting and then connected, with nothing able to stop it, and
+  kept your app from exiting. It now stops as soon as its startup ends, without connecting.
+- **A dashboard lets go of a browser that stops reading.** A dashboard page whose browser had stopped reading stayed
+  open, holding its place under `maxSessions`, and the dashboard went on preparing updates for it. It's now
+  disconnected once 32 updates are waiting for it, and closing it never holds up the other pages' updates.
+- **A dashboard keeps updating after a failure reading its state.** One failure stopped every page's updates until a
+  restart, with the error printed only to stderr; it's now logged, and the next update goes out as usual.
+- **A refused request can't flood the log.** A dashboard logged every request it refused for its `Origin` or `Host`
+  header, with the header in full, so anyone who could reach its port could write control characters into the proxy's
+  or agent's log as fast as they sent requests. It now logs one such line a minute for each address at INFO, and the
+  rest at DEBUG, with the header cut and its control characters escaped.
+- **The dashboards' search finds a path as it's shown.** Searching for `/payments_metrics`, as the table and
+  Prometheus write it, found nothing; a path now matches with its slash or without, and on the proxy's dashboard an
+  agent not yet registered matches the `(registering…)` its row shows.
+- **A gone agent is named.** When the agent you're looking at on the proxy's dashboard disconnects, its panel names it
+  as the other views did, rather than by an internal number no view shows.
+- **No eviction countdown without evictions.** With the stale-agent check off (`proxy.internal.staleAgentCheckEnabled`
+  false and the transport filter on), an agent's panel on the proxy's dashboard no longer counts down to an eviction
+  that never comes.
 
 ### Behavior Changes
 
@@ -126,20 +211,24 @@ _Released 2026-11-23_
   `proxy_heartbeat_count_total` no longer count connects and heartbeats the proxy refused, and an eviction is counted
   only when it removed the agent.
 - **The agent's connect and result counts mean what they say.** `agent_connect_count_total` counts a connect as a
-  success once the proxy has registered the agent, and as `rejected` when the proxy refuses it, and a result counts as
-  sent only once it's on its way, with one a dropped connection loses counted as `dropped`.
-- **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin. The
-  `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a config that sets it still loads.
+  success once the proxy has registered the agent, and as `rejected` when the proxy refuses it.
+  `agent_scrape_result_count_total` counts a result as sent only once it's on its way, and as `dropped` every result
+  lost when the connection ends, as on a proxy restart, where some counted as neither; the agent no longer logs an
+  ERROR with a stack trace for such a disconnect.
+- **An agent that runs out of memory stops.** An `OutOfMemoryError`, or another JVM `Error`, in the agent's
+  connection to the proxy ended only that connection, and the agent reconnected and ran on. It now stops, as it
+  already did for one in a scrape, so whatever supervises it can restart it; an embedded agent's app runs on without
+  it, with `isConnected` false.
+- **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin, and no
+  caller can have the proxy trace one, or more calls than its `sampleRate`, by marking its own trace sampled: the proxy
+  decides each call it serves itself. The `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a
+  config that sets it still loads.
 - **The release date is the release commit's.** The version the proxy and agent print, and the dashboards' Settings,
   give the date of the commit a build is from rather than the day it was built.
 - **Fewer ERROR lines on the proxy.** An unregister the proxy can't apply, for a path that's gone or that another
   agent now holds, is logged at INFO instead of ERROR.
 - **A refused token is an ERROR, once.** When the proxy refuses an agent's token, the agent logs one ERROR line that
   says where the token is set, instead of a WARN with a stack trace, and a reminder every 10 minutes while it lasts.
-- **An embedded agent stops when your app stops it.** An agent started with `startAsyncAgent()` or
-  `EmbeddedAgentConfig` no longer registers a JVM shutdown hook, which on SIGTERM stopped it at the same time as the
-  app's own shutdown, in no set order. Stop it with `shutdown()` or `close()` where your app stops its own services;
-  the Ktor plugin and the Spring Boot starter do.
 - **Quieter starts and stops.** The proxy and agent log their services' setup steps, and their starting and stopping,
   at DEBUG instead of INFO, and the shutdown hook's lines go to the log instead of stderr.
 - **The embedded demo is now the Ktor demo.** `demos/embedded` is `demos/ktor`, since the Spring Boot and plain
@@ -174,12 +263,16 @@ _Released 2026-11-23_
   docs site's Demos page gives them.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
+- **The demos' tours.** Each demo opens its tour with a table of what each part shows and why, every step shows
+  something, and `make up` points to the demo's README and its page on the docs site. A demo run from a checkout
+  whose release isn't out yet builds the proxy and agent itself, rather than failing to pull them.
 - **The docs site.** It takes the dashboard's look, its warning and danger colors included, follows your light or
   dark setting, loads no web font, and has no chat widget. Its sidebar is regrouped into seven sections, with a Demos
   page listing every demo; each heading has a link of its own; and the reference tables no longer break a flag or key
-  in the middle. Its home page is short: what the project does, the Docker commands to try it, and three ways on. The
-  configuration pages give each setting's key, option, variable, and default in one row, as the CLI Reference does,
-  grouped by what it configures, and a link can open a setting's row by its key. The Security page walks through onboarding a team onto a shared proxy, start to finish.
+  in the middle. Its home page shows how the proxy works and ends with three ways on: install it, try a demo, or
+  onboard a team. The configuration pages give each setting's key, option, variable, and default in one row, as the
+  CLI Reference does, grouped by what it configures, and a link can open a setting's row by its key. The Security page
+  walks through onboarding a team onto a shared proxy, start to finish.
 
 ## 4.6.0
 

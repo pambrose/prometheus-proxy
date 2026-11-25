@@ -53,22 +53,28 @@ Two consequences of that position are also differentiators:
 **Deployment.** Two long-running services. The proxy runs outside the firewall alongside Prometheus
 (HTTP scrape port default `8080`, admin `8092`); the agent runs inside, next to the monitored
 services (admin `8093`). Both ship as standalone JARs (`agentJar` / `proxyJar`), Docker images
-(`pambrose/prometheus-proxy`, `pambrose/prometheus-agent`), and a Maven Central artifact
-(`com.pambrose:prometheus-proxy`) for embedded use. Java 17+.
+(`pambrose/prometheus-proxy`, `pambrose/prometheus-agent`), and Maven Central artifacts for embedded use
+(`com.pambrose:prometheus-proxy`, and its Ktor plugin and Spring Boot starter, `prometheus-proxy-ktor` and
+`prometheus-proxy-spring-boot-starter`). Java 17+.
 
 **Configuration.** Typesafe Config (HOCON). Precedence: CLI args → env vars → config file → built-in
-defaults. Every setting is reachable from all four, because deployment environments differ in which
-one they can control (a Kubernetes ConfigMap, a systemd unit, a `docker run` line).
+defaults. The everyday settings are reachable from all four, because deployment environments differ in
+which one they can control (a Kubernetes ConfigMap, a systemd unit, a `docker run` line). Not every
+setting is: the dashboards' login and the TLS PEMs have an env var but no CLI flag; `agent.discovery`, the `internal`
+tuning, and the rest of the tuning, such as the dashboards' beyond their port, path, and host, have neither (a `-D`
+override sets them); and the lists of objects, `proxy.auth`, `proxy.dashboard.links`, `agent.pathConfigs`, and
+`agent.filters`, are set in the config file only.
 
 **Surfaces in scope for design work:**
 
 1. **The operational dashboard** — served from its own port (default `8094`, base path `/dashboard`),
-   **opt-in and disabled by default**. Three bookmarkable layouts, switched by folder tabs: an agent view
+   **opt-in and disabled by default**. Four bookmarkable layouts, switched by folder tabs: an agent view
    (master–detail: which agents are connected, what each is doing), a path view (a table of every
    registered path and how its recent scrapes went, *including paths whose agent has departed* —
    precisely the case that used to vanish from view — with search, a problems-only filter, scrape-now,
-   and links out to Prometheus, Grafana, or a runbook), and an activity view (what the proxy did with its
-   agents and paths, including what it refused, newest first). A status bar carries connection liveness
+   and links out to Prometheus, Grafana, or a runbook), an activity view (what the proxy did with its
+   agents and paths, including what it refused, newest first), and a settings view (how the proxy is set
+   up, as it resolved its flags, env vars, config, and defaults). A status bar carries connection liveness
    and proxy-internal health counters. Updates arrive live over a WebSocket.
 2. **A project landing page** — a surface that persuades a prospective adopter, distinct from the
    reference documentation.
@@ -90,7 +96,10 @@ Explicitly **out of scope** for now: the Zensical documentation site at
 - Chunked responses for large payloads (above ~32KB), heartbeat every 5s during inactivity.
 - Stale-agent eviction after `maxAgentInactivitySecs` (default 60s).
 - Consolidated mode: several agents register the same path for redundancy.
-- Embedded agent — runs inside another JVM app via `Agent.startAsyncAgent()`.
+- Embedded agent — runs inside another JVM app, set up in code with `embeddedAgent { }` (`EmbeddedAgentConfig`) or
+  from a config with `Agent.startAsyncAgent()`, and can serve the app's metrics registry in-process rather than
+  scrape an endpoint; the Ktor plugin (`install(PrometheusProxyAgent)`) and the Spring Boot starter start and stop
+  one with a Ktor or Spring Boot app.
 - Proxy failover across an ordered `agent.proxy.endpoints` list.
 - Dynamic target discovery: the agent watches a file and reconciles paths without restarting;
   `STATIC` entries are never touched by discovery.
@@ -128,13 +137,17 @@ lives relative to the docs site.
 
 ## Brand Commitments
 
-- **Name:** `prometheus-proxy` (lowercase, hyphenated) is the project name and the string used as the
-  dashboard's brand mark. The two services are `proxy` and `agent`.
+- **Name:** `prometheus-proxy` (lowercase, hyphenated) is the project name. The two services are `proxy`
+  and `agent`. A dashboard's brand mark is the logo beside its name, `Proxy: host:port` or
+  `Agent: name`, which says which proxy or agent the page is.
 - **License:** Apache 2.0. Author: Paul Ambrose. Repository: `pambrose/prometheus-proxy`.
 - **Existing assets:** the architecture diagram at `docs/prometheus-proxy.png`, from which `make readme-diagram`
   makes the light and dark versions the README shows (`docs/prometheus-proxy-light.png` and
-  `docs/prometheus-proxy-dark.png`); run it after the diagram changes. There is no logo,
-  wordmark, or defined brand palette — none has been established, and none should be assumed to exist.
+  `docs/prometheus-proxy-dark.png`); run it after the diagram changes. The logo, in Prometheus's orange
+  (`#E6522C`), is `website/prometheus-proxy/docs/images/logo.svg`, with a heavier cut for 16px,
+  `favicon.svg`: the docs site's header and tab icon, and the dashboards' bar, tab icon, and login page
+  (`DashboardLogo`, which `LogoTest` keeps the same as the site's files). There is no wordmark or
+  defined brand palette beyond it — none has been established, and none should be assumed to exist.
 - *Observed, not user-confirmed:* the existing README and docs voice is direct and problem-first —
   it states the operational pain, then the mechanism, in concrete technical terms, without marketing
   superlatives. Worth preserving unless the user says otherwise.
@@ -147,9 +160,10 @@ lives relative to the docs site.
   both images, Maven Central presence, Apache 2.0 license, CI / Codecov / Codacy badges. All
   independently verifiable.
 - **Working configuration and demonstration** — the config examples under `examples/`, the reference
-  schema at `config/config.conf`, the architecture diagram at `docs/prometheus-proxy.png`, the three
-  demos under `demos/` (each one `make up` on the released images, with a guided tour), and real
-  screenshots of the running dashboard taken from them. Demonstration over claims.
+  schema at `config/config.conf`, the architecture diagram at `docs/prometheus-proxy.png`, the seven
+  demos under `demos/` (basics, network, nginx, and Kubernetes, and the Ktor, Spring Boot, and plain
+  Kotlin apps that embed the agent; each one `make up`, with a guided tour), and real screenshots of the
+  running dashboards taken from them. Demonstration over claims.
 
 **Explicitly absent — must not be fabricated:**
 

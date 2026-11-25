@@ -443,8 +443,10 @@ class ProxyOptions internal constructor(
     with(internal) {
       listOf(
         "maxPathsPerAgent" to maxPathsPerAgent,
+        "maxPathsPerIdentity" to maxPathsPerIdentity,
         "maxPathLength" to maxPathLength,
         "maxLabelsSizeBytes" to maxLabelsSizeBytes,
+        "maxLabelsPerPath" to maxLabelsPerPath,
         "maxAgentFieldLength" to maxAgentFieldLength,
         "maxAgentProxyEndpoints" to maxAgentProxyEndpoints,
         "maxTargetUrlLength" to maxTargetUrlLength,

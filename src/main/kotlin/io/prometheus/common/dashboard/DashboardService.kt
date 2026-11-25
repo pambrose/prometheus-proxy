@@ -48,8 +48,16 @@ internal abstract class DashboardService<V : Any, S : Any> : GenericIdleService(
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
 
+  // Guava calls shutDown() only after startUp() succeeds, and Ktor's start() registers a JVM shutdown hook and builds
+  // the application before its engine binds the port, then leaves both when the bind fails. So a port that's taken
+  // stops the server here, which disposes the application and removes the hook; left, the hook held the server, and
+  // the proxy or agent it renders, for the life of the JVM.
   override fun startUp() {
-    server.start()
+    runCatching { server.start() }
+      .onFailure { e ->
+        runCatching { server.stop() }.exceptionOrNull()?.let(e::addSuppressed)
+        throw e
+      }
     logger.info { "Started $simpleClassName on ${server.settings.host}:${server.settings.port} at ${server.basePath}" }
   }
 

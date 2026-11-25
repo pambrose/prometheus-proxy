@@ -38,6 +38,7 @@ import kotlin.time.TimeSource
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.common.captureLogs
+import io.prometheus.common.lateArrival
 import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
@@ -109,6 +110,18 @@ class AgentContextTest : StringSpec() {
       context.awaitPathNotices(50.milliseconds) shouldBe emptyList()
       context.invalidate()
       context.awaitPathNotices(50.milliseconds).shouldBeNull()
+    }
+
+    // A wait that took the notice's wake as its timeout passed, and lost it, would leave the notice unread until the
+    // next one woke the stream (November #46).
+    "awaitPathNotices should return a notice queued just as its wait ends" {
+      val context = AgentContext("remote")
+
+      val notice = noticeOf("a", "taker-1")
+
+      val notices = lateArrival(wait = { context.awaitPathNotices(it) }, arrive = { context.queuePathNotice(notice) })
+
+      notices shouldBe listOf(notice)
     }
 
     "forgetPathNotice should drop a path's unread notice" {
@@ -319,6 +332,19 @@ class AgentContextTest : StringSpec() {
       context.writeScrapeRequest(wrapper)
 
       context.readScrapeRequest(idle = 1.seconds) shouldBe wrapper
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
+    // A wait that took the request's signal as its idle time ran out, and lost it, would leave the request queued with
+    // nothing to wake a reader for it, and its scrape would time out (November #46).
+    "readScrapeRequest should return a request queued just as its idle wait ends" {
+      val context = AgentContext("remote-addr")
+      val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
+
+      val read =
+        lateArrival(wait = { context.readScrapeRequest(idle = it) }, arrive = { context.writeScrapeRequest(wrapper) })
+
+      read shouldBe wrapper
       context.scrapeRequestBacklogSize shouldBe 0
     }
 

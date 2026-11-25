@@ -57,9 +57,12 @@ save_ports() {
 # built either way, against the latest release (up) or this checkout (up-local).
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/spring-boot-app:local)
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
-# The demo shows what came after this release (the agent's own dashboard, and the Spring Boot starter the roastery runs
-# it with), so until a later one is out, up builds everything from this checkout, as up-local does.
-NEEDS_RELEASE_AFTER=4.7.0
+# The newest release that lacks something the demo shows (the agent's own dashboard, and the Spring Boot starter the
+# roastery runs it with). up runs the release the docs give (make site-version) once it's later than this and its
+# proxy image is on Docker Hub, and otherwise builds everything from this checkout, as up-local does, so nothing
+# here changes with a release. When the demo comes to use something no release has yet, set this to the latest
+# release on Docker Hub.
+NEEDS_RELEASE_AFTER=4.6.0
 # The version up-local publishes this checkout's library at, to the local Maven repository, for the roastery's Maven
 # build: never a released one, so nothing mistakes it for one.
 LOCAL_LIBRARY_VERSION="$(sed -n 's/^version=//p' "$REPO_DIR/gradle.properties")"
@@ -69,7 +72,10 @@ LOCAL_LIBRARY_VERSION="${LOCAL_LIBRARY_VERSION%-SNAPSHOT}-spring-boot-demo-SNAPS
 ENV_FILE="$DEMO_DIR/docker/.env"
 CERTS_DIR="$REPO_DIR/testing/certs"
 
-# This demo's page on the docs site, which shows its layout and code
+# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
+# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
+# between releases the page can lag behind this checkout, or not be there yet.
+README_PATH="demos/spring-boot/README.md"
 PAGE_URL="https://prometheus-proxy.com/spring-boot-demo/"
 APP_URL="http://localhost:${SPRING_BOOT_DEMO_APP_PORT:-8490}"
 DASHBOARD_URL="http://localhost:${SPRING_BOOT_DEMO_DASHBOARD_PORT:-8494}/dashboard"
@@ -162,7 +168,8 @@ print_urls() {
   echo "  Prometheus:         $PROMETHEUS_URL"
   echo "  Through the proxy:  $PROXY_URL/roastery_metrics"
   echo
-  echo "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
+    "release: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 settings | peek | proxy-stop | stop-app ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -215,8 +222,24 @@ version_after() {
   return 1
 }
 
-# The latest release: the version the docs give, whose images are on Docker Hub and whose library is on Maven Central.
+# The release the docs give: the latest, or, from a version bump until the release is out, the next, whose proxy
+# image and library aren't published yet. make release publishes the library to Maven Central before it pushes
+# the images to Docker Hub, so a release whose proxy image is there has its library there too.
 latest_release() { "$MAKE" -s --no-print-directory -C "$REPO_DIR" site-version; }
+
+# Whether a release's images are published: published <version> <image>... Docker has them already, since a
+# release's images don't change and a demo started again without a network connection uses them, or Docker Hub has
+# them. Only Docker Hub's answer that it has no such image says no, as from a version bump until its release is out;
+# when Docker Hub can't be reached, the pull says so.
+published() {
+  local release="$1" image answer
+  shift
+  for image in "$@"; do
+    docker image inspect "$image:$release" >/dev/null 2>&1 && continue
+    answer="$(docker manifest inspect "$image:$release" 2>&1 >/dev/null)" && continue
+    [[ "$answer" != *"no such manifest"* ]] || return 1
+  done
+}
 
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 
@@ -278,17 +301,21 @@ pull_proxy() {
   docker tag "$released" "${IMAGES[0]}"
 }
 
-# The latest release's proxy and library, unless it predates what the demo shows.
+# The release the docs give, its proxy and library, unless it predates what the demo shows or isn't published yet.
 cmd_up() {
   local release
   check_tools
   release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
-  if version_after "$release" "$NEEDS_RELEASE_AFTER"; then
-    start_demo "$release"
-  else
+  if ! version_after "$release" "$NEEDS_RELEASE_AFTER"; then
     wrap "" "" "The latest release, $release, predates this demo, so it builds the library, the proxy, and the" \
       "roastery from this checkout, which takes a JDK 17 or later, and Maven."
     start_demo
+  elif ! published "$release" "$RELEASED_PROXY_IMAGE"; then
+    wrap "" "" "Release $release, which the docs give, isn't published yet, so the demo builds the library, the" \
+      "proxy, and the roastery from this checkout, which takes a JDK 17 or later, and Maven."
+    start_demo
+  else
+    start_demo "$release"
   fi
 }
 
@@ -412,7 +439,6 @@ cmd_versions() {
   printf '  %-24s %-14s %s\n' "Library" "The agent's" "The roastery's"
   row "kotlinx-serialization" "$(catalog_version serialization)" "$(lib_version "$libs" kotlinx-serialization-json-jvm)"
   row "Jackson 2" "$(catalog_version jackson)" "$(lib_version "$libs" jackson-databind 2)"
-  row "Logback" "$(catalog_version logback)" "$(lib_version "$libs" logback-classic)"
   row "gRPC" "$(catalog_version grpc)" "$(lib_version "$libs" grpc-core)"
   row "Netty" "$(catalog_version netty)" "$(lib_version "$libs" netty-handler)"
   row "netty-tcnative" "$(catalog_version tcnative)" "$(lib_version "$libs" netty-tcnative-classes)"
@@ -483,7 +509,8 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. To start from another part, run" \
     "$MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
+    "${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

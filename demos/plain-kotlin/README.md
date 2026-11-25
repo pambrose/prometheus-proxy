@@ -50,8 +50,8 @@ On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/g
 `make`, and `curl`. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the oven inside Docker against the latest
-release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds from
-the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
+release's library, from Maven Central, so it needs no JDK. Until a release with everything the demo shows is on Docker
+Hub, it builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -296,7 +296,7 @@ and frees its resources.
 | File | What it sets up |
 |---|---|
 | `app/` | The oven: a Gradle project of its own, outside the repository's build, which reads the repository's version catalog (`settings.gradle.kts`). `Main.kt` is its `main`, with the agent, `Oven.kt` the oven and its menu and metrics, and `OrderQueue.kt` the Redis queue, through Jedis. With `-PlocalProxy` it builds against this checkout's library (a composite build), as `make up-local` and CI do. |
-| `app/src/main/resources/logback.xml` | The oven's logging, which is its agent's too, since the library carries no Logback configuration: INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which would bury the lines `startIfConfigured()` logs |
+| `app/src/main/resources/logback.xml` | The oven's logging, which is its agent's too, since the library brings neither an SLF4J provider nor a configuration (the oven's build adds Logback): INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which would bury the lines `startIfConfigured()` logs |
 | `app/Dockerfile` | Builds the oven's image: compiled inside Docker against the latest release (`make up`), or from the build on the host (`make up-local`), on the Temurin JRE, whose shell `demo.sh sockets` reads `/proc` with |
 | `counter/counter.sh` | The counter: the trickle of orders, and a rush |
 | `docker/compose.yml` | The services, their ports, their images, the ovens' settings, and the misconfigured ovens' |
@@ -304,7 +304,7 @@ and frees its resources.
 | `prometheus/prometheus.yml` | One job from the proxy's service discovery, with the agents' metrics as a job of their own, and the proxy's own metrics |
 | `grafana/` | The provisioned datasource, dashboard folder, and Bakery dashboard |
 | `Makefile` | The demo's targets: `make up`, `make up-local`, `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists |
-| `demo.sh` | Starting, stopping, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds from this checkout, as `make up-local` does |
+| `demo.sh` | Starting, stopping, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the newest release that lacks something the demo shows: until the release the docs give is later and its images are on Docker Hub, `make up` builds from this checkout, as `make up-local` does, so set it to the latest release on Docker Hub when the demo comes to use something no release has yet |
 
 From the repository root, `make check-rules` validates the Prometheus config with promtool, `ConfigFileKeysTest` checks
 every key in `config/proxy.conf` against `config/config.conf`, and CI builds the oven against the checkout

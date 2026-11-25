@@ -18,6 +18,7 @@
 
 package io.prometheus.common.dashboard
 
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.doubles.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
@@ -73,6 +74,20 @@ class DashboardThemeTest : StringSpec() {
       inks.size shouldBe 3
       grounds.size shouldBe inks.size
       inks.zip(grounds).forEach { (ink, ground) -> contrast(ink, ground) shouldBeGreaterThan 4.5 }
+    }
+
+    // dashboard-constraints.md: every text colour also lands on --surface-2, under the tables and section headers, the
+    // tighter ground where all 29 contrast failures fixed in 4.0.1 were. Light, dark, and set to dark each.
+    "every text colour should clear 4.5:1 on --surface-2, in every token block" {
+      val grounds = tokenValues("--surface-2")
+      grounds.size shouldBe 3
+      listOf("--ink", "--ink-2", "--ink-3", "--ok", "--warn", "--crit").forEach { token ->
+        val inks = tokenValues(token)
+        inks.size shouldBe grounds.size
+        inks.zip(grounds).forEach { (ink, ground) ->
+          withClue("$token $ink on $ground") { contrast(ink, ground) shouldBeGreaterThan 4.5 }
+        }
+      }
     }
 
     // In the head, so a stored choice applies before the page draws, and only a choice it knows.

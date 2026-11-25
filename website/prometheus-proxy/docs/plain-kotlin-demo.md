@@ -62,8 +62,8 @@ On macOS or Linux, the demo needs [Docker](https://docs.docker.com/get-started/g
 `make`, and `curl`, as the [Demos](demos/index.md) page says.
 
 `make up` runs the latest release's proxy image, from Docker Hub, and builds the oven inside Docker against the latest
-release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it builds from
-the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
+release's library, from Maven Central, so it needs no JDK. Until a release with everything the demo shows is on Docker
+Hub, it builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -146,8 +146,9 @@ The oven's build depends on `com.pambrose:prometheus-proxy`, which brings the re
 client's `prometheus-metrics-core` for its metrics. On every pull request, the project builds it against the checkout
 (`make plain-kotlin-demo-check`), so a change to the API it uses that breaks it fails there.
 
-The oven also has a `logback.xml`, which sets the agent's logging along with the oven's, since the library carries no
-Logback configuration of its own: INFO to the console, with gRPC's internals and Netty at WARN. A plain program has no
+The oven's build adds Logback, since the library brings neither an SLF4J provider nor a configuration, and its
+`logback.xml` sets the agent's logging along with the oven's: INFO to the console, with gRPC's internals and Netty at
+WARN. A plain program has no
 framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which
 would bury the lines `startIfConfigured()` logs. [Logging](embedded-agent.md#logging) covers the agent's loggers.
 

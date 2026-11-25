@@ -80,7 +80,8 @@ internal class AgentDashboardService(
   // Read at the first collect, once the agent's services are built, and kept: no setting changes while it runs.
   private val settings by lazy { AgentSettings.of(agent) }
 
-  private val site =
+  // Internal for AgentDashboardServiceTest, which checks that a write to the activity feed reaches the push loop.
+  internal val site: DashboardSite<AgentView, AgentSnapshot> =
     object : DashboardSite<AgentView, AgentSnapshot> {
       // A write to the activity feed, a fold included; the first value is the count at the start, which is no change.
       override val changes: Flow<Any?> = agent.activityLog?.changes?.drop(1) ?: emptyFlow()

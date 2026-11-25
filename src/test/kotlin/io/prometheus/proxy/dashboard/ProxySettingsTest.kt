@@ -124,6 +124,8 @@ class ProxySettingsTest : StringSpec() {
       settings.value("gRPC server", "Max connection age") shouldBe "gRPC default (no limit)"
       settings.value("gRPC server", "Stream keepalive") shouldBe "on, after 30s without a message"
       settings.value("Agent limits", "Stale agent check") shouldBe "on, every 10s, evicting after 60s idle"
+      settings.value("Agent limits", "Paths per identity") shouldBe "100000"
+      settings.value("Agent limits", "Labels per path") shouldBe "64"
       settings.value("Service discovery", "Service discovery") shouldBe "off"
       settings.value("Dashboard", "Login") shouldBe "off"
       settings.value("Dashboard", "Links") shouldBe "none"

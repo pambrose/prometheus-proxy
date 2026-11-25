@@ -109,6 +109,15 @@ class ActivityHtmlTest : StringSpec() {
       firstRow(activityPush([badToken]))[2] shouldBe DashboardPage.DASH
     }
 
+    // An announced agent that leaves before registerAgent is recorded as Unassigned, which the Agents and Paths views
+    // show through agentLabel; this view names it the same way, so a line can be read against them.
+    "an agent not yet registered should be named by its label, never by the placeholder" {
+      val html = activityPush([activityEntry(ActivityKind.AGENT_DISCONNECTED, agentName = "Unassigned")])
+
+      firstRow(html)[2] shouldBe ProxyDashboardHtml.agentLabel("Unassigned")
+      html shouldNotContain "Unassigned"
+    }
+
     "the Identity column should show while agent auth is on, the legacy token as a shared token" {
       val lines = [activityEntry(identity = "east"), activityEntry(identity = "legacy-agent-token")]
 
@@ -146,6 +155,22 @@ class ActivityHtmlTest : StringSpec() {
       activityPush(lines, RowFilter.of(null, problemsOnly = true)).apply {
         this shouldContain "rejected"
         this shouldNotContain "/orders_metrics"
+      }
+    }
+
+    // The search matches what the row shows: a path with its slash, as the Path cell writes it, and an agent by its
+    // label.
+    "a search should match a line's path with its slash, and its agent by the label the row shows" {
+      val lines =
+        [
+          activityEntry(paths = ["team_b_metrics"]),
+          activityEntry(ActivityKind.AGENT_DISCONNECTED, agentName = "Unassigned", paths = emptyList()),
+        ]
+
+      activityPush(lines, RowFilter.of("/team_b_metrics", problemsOnly = false)) shouldContain "Showing 1 of 2 events"
+      activityPush(lines, RowFilter.of("registering", problemsOnly = false)).apply {
+        this shouldContain "Showing 1 of 2 events"
+        this shouldNotContain "/team_b_metrics"
       }
     }
 

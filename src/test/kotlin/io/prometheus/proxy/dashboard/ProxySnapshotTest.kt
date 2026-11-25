@@ -436,6 +436,36 @@ class ProxySnapshotTest : StringSpec() {
       snapshot.scrapesOf("9").shouldBeEmpty()
     }
 
+    // The gone agent's detail names it by what the snapshot still holds of it, its newest activity line or scrape, as
+    // the views that named it did; never a connected agent, whose detail has its own name.
+    "a gone agent's name should be its newest activity line's or scrape's, and a connected agent's none" {
+      fun line(
+        agentId: String,
+        agentName: String,
+        secs: Int,
+      ) = DashboardFixtures.activityEntry(agentName = agentName, at = at(secs), agentId = agentId)
+      val scraped =
+        DashboardFixtures.departedPathView(
+          lastScrape = DashboardFixtures.scrapeRecord(agentId = "7", agentName = "east", at = at(3)),
+        )
+      val snapshot =
+        DashboardFixtures.snapshot(
+          agents = [DashboardFixtures.agentView(agentId = "1", paths = emptyList())],
+          paths = [scraped],
+          activity = [line("8", "west", 9), line("8", "Unassigned", 2), line("7", "Unassigned", 1), line("1", "a", 5)],
+        )
+
+      snapshot.goneAgentName("7") shouldBe "east"
+      snapshot.goneAgentName("8") shouldBe "west"
+      snapshot.goneAgentName("1").shouldBeNull()
+      snapshot.goneAgentName("9").shouldBeNull()
+      // A bad token's line names no agent, so it names none.
+      DashboardFixtures
+        .snapshot(activity = [DashboardFixtures.activityEntry(ActivityKind.BAD_TOKEN, agentName = "", agentId = "")])
+        .goneAgentName("")
+        .shouldBeNull()
+    }
+
     // Every session showing the agent renders the same snapshot, so the walk over the histories runs once, at the first
     // read.
     "a snapshot should work out its agents' scrapes once, however many read them" {
@@ -476,6 +506,23 @@ class ProxySnapshotTest : StringSpec() {
 
       log.record(ActivityKind.BAD_TOKEN, detail = "An unknown agent token")
       ProxySnapshot.collect(proxy).activityChangeCount shouldBe first.activityChangeCount + 1
+    }
+
+    // The detail counts down to an eviction only while the stale-agent check runs. A disabled transport filter forces
+    // it on, which ProxySettingsTest covers through the same Proxy.isStaleAgentCheckRunning.
+    "a collect should carry the eviction delay while the stale-agent check runs, and none with it off" {
+      fun evictAfterSecs(vararg args: String) =
+        ProxySnapshot
+          .collect(
+            Proxy(
+              options = ProxyOptions(listOf("--dashboard") + args),
+              inProcessServerName = "snapshot-test-${System.nanoTime()}",
+              testMode = true,
+            ),
+          ).evictAfterSecs
+
+      evictAfterSecs("-Dproxy.internal.maxAgentInactivitySecs=45") shouldBe 45L
+      evictAfterSecs("-Dproxy.internal.staleAgentCheckEnabled=false").shouldBeNull()
     }
   }
 

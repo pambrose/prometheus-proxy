@@ -50,9 +50,10 @@ See the [security guide](https://prometheus-proxy.com/security/).
 
 ## The Dashboard's Login
 
-The dashboard (`dashboard.enabled`) stays off the Service, so you reach it with `kubectl port-forward`. To have it ask
-for a login as well, put a password in a Secret and name it in `dashboard.login.existingSecret`; the username is
-`admin` unless you set `dashboard.login.username`:
+The dashboard (`dashboard.enabled`) listens on the pod's loopback (`dashboard.host`, `127.0.0.1`), so you reach it with
+`kubectl port-forward`, which connects there, and no other pod in the cluster can. Its port isn't on the Service
+either. To have it ask for a login as well, put a password in a Secret and name it in `dashboard.login.existingSecret`;
+the username is `admin` unless you set `dashboard.login.username`:
 
 ```bash
 kubectl -n monitoring create secret generic prometheus-proxy-dashboard --from-literal=password='<a long password>'
@@ -62,7 +63,11 @@ helm upgrade prometheus-proxy ./charts/prometheus-proxy --namespace monitoring -
 
 Create the Secret with `--from-literal`, not from a file that ends in a newline: the proxy refuses a password with a
 control character in it. The dashboard serves plain HTTP, so the password is protected only by the port-forward's
-tunnel or, behind an Ingress, by the TLS the Ingress terminates.
+tunnel.
+
+To publish the dashboard through a Service or an Ingress of your own instead, set `dashboard.host` to `0.0.0.0`, and
+require a login. Any pod in the cluster can then open the dashboard at the pod's address, and the password crosses the
+pod network in plain HTTP, behind whatever TLS the Ingress terminates.
 
 ## Values
 
@@ -79,6 +84,7 @@ tunnel or, behind an Ingress, by the TLS the Ingress terminates.
 | `admin.enabled` / `admin.port`           | `true` / `8092`                            | `/ping`, used by the probes, and `/healthcheck`; not on the Service      |
 | `metrics.enabled` / `metrics.port`       | `true` / `8082`                            | The proxy's own metrics, on the Service                                  |
 | `dashboard.enabled` / `dashboard.port`   | `false` / `8094`                           | The operational dashboard; not on the Service, so use `port-forward`     |
+| `dashboard.host`                         | `127.0.0.1`                                | Its listen address (`DASHBOARD_HOST`); the pod's loopback keeps it local |
 | `dashboard.login.existingSecret`         | `""`                                       | Secret holding the dashboard's password (`DASHBOARD_PASSWORD`), at `key` |
 | `dashboard.login.username`               | `admin`                                    | The username the dashboard's login takes (`DASHBOARD_USERNAME`)          |
 | `service.type`                           | `ClusterIP`                                | The main Service: HTTP, gRPC, and metrics ports                          |

@@ -25,8 +25,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * The embedded agent's settings, the {@code prometheus-proxy.agent.*} properties. Only {@link #getProxy() proxy} is
- * needed: without it, as on a developer's machine, the agent stays off. {@link #toString()} shows the token, the
- * passwords, and the PEMs only as set or not, so the settings can be logged.
+ * needed: without it, or a proxy from a customizer, a {@code settings} key, or the agent's own {@code PROXY_HOSTNAME},
+ * as on a developer's machine, the agent stays off. {@link #toString()} shows the token, the passwords, and the PEMs
+ * only as set or not, so the settings can be logged.
  */
 @ConfigurationProperties("prometheus-proxy.agent")
 public class PrometheusProxyAgentProperties {
@@ -35,7 +36,8 @@ public class PrometheusProxyAgentProperties {
 
   /**
    * The proxy the agent connects to, as host or host:port (the port defaults to 50051), or several, separated by
-   * commas, in the order the agent fails over through them. Unset or empty, the agent stays off.
+   * commas, in the order the agent fails over through them. Unset or empty, the agent stays off, unless a customizer, a
+   * settings key, or the agent's own PROXY_HOSTNAME environment variable names one.
    */
   private String proxy;
 
