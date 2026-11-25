@@ -135,8 +135,8 @@ is, unreleased pages included.
    - **Description**: `RELEASE_NOTES.md`'s section for the version, its headings a level up and each paragraph and
      list item on one line, since GitHub shows a release's line breaks as written, then a full-changelog link
      (e.g. `**Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/<prev>...<new>`).
-     `make github-release-notes` prints it. Read it once the release is up; `gh release edit <version> --notes-file
-     <file>` replaces it.
+     `make github-release-notes` prints it. To correct a published release's notes, fix `RELEASE_NOTES.md`, then
+     replace them with `make github-release-notes > notes.md` and `gh release edit <version> --notes-file notes.md`.
    - **Assets**: `build/libs/prometheus-agent.jar`, `build/libs/prometheus-proxy.jar`, and
      `build/libs/prometheus-proxy-<version>-sources.jar`, which `make distro` builds.
 
