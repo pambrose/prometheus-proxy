@@ -374,7 +374,8 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     }
 
     // The login is checked when a page's WebSocket opens; a socket outlives that, so the push loop closes one whose
-    // session has ended, and Log out wakes it at once. The page then asks for its session and gets the login page.
+    // session has ended, and Log out closes its own at once. The page then asks for its session and gets the login
+    // page.
     "an open dashboard's WebSocket should close when its session ends" {
       withProxy {
         val token = loggedIn()

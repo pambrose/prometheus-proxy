@@ -53,6 +53,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.ChannelOverflow
@@ -64,8 +65,10 @@ import io.prometheus.BuildConfig
 import io.prometheus.common.KeyedThrottle
 import io.prometheus.common.dashboard.LoginHtml.renderLogin
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -73,6 +76,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -84,6 +88,7 @@ import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.onEach
@@ -187,11 +192,16 @@ internal interface DashboardSite<V : Any, S : Any> {
  *   their WebJar's version, so a year-long cache can never run an old script against new markup.
  * - **Updates.** One shared push loop, not one per session. It wakes on one of the site's [DashboardSite.changes] or a
  *   timer tick, collects a single snapshot, and fans a frame out to every connected session. The tick is what keeps
- *   drifting values live: without it, an idle process would freeze its countdowns until the next change.
+ *   drifting values live: without it, an idle process would freeze its countdowns until the next change. Nothing in
+ *   the loop waits on a browser, so no one client can hold up the others' pushes: a session is closed on a coroutine of
+ *   its own, and one whose send fails, as once its outgoing buffer is full, is dropped then. A collect that throws is
+ *   logged, and the loop carries on at its next wake or tick.
  */
 internal class DashboardServer<V : Any, S : Any>(
   val settings: DashboardSettings,
   private val site: DashboardSite<V, S>,
+  // The login page's sessions. A spec passes its own, with a time source it moves, to end one without waiting.
+  private val logins: DashboardSessions = DashboardSessions(),
   // Told how each login went, for the owner's metrics; see DashboardLoginOutcome for what counts as one.
   private val onLogin: (DashboardLoginOutcome) -> Unit = {},
 ) {
@@ -215,8 +225,9 @@ internal class DashboardServer<V : Any, S : Any>(
     // for a script's socket, which logs in with Basic Auth on every request rather than keeping a session.
     val login: String?,
     val send: suspend (String) -> Unit,
-    // Closes the socket.
-    val end: suspend () -> Unit,
+    // Closes the socket, with a close frame when given a reason, and drops its connection when not, or when the
+    // browser doesn't take the frame in time (see closer). Can wait that long, so called only through end().
+    val close: suspend (CloseReason?) -> Unit,
   ) {
     // Written by this session's socket coroutine and read by the shared push loop, hence @Volatile. Null until the
     // browser's first message says which page it shows. The browser sends that message as soon as the socket opens.
@@ -239,7 +250,17 @@ internal class DashboardServer<V : Any, S : Any>(
 
   private val sessions = ConcurrentHashMap.newKeySet<Session<V>>()
   private val wake = Channel<Unit>(Channel.CONFLATED)
-  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+  // The push loop's, the change watch's, and each closing socket's. A failure in one is logged through the logger,
+  // rather than printed to stderr by the default handler, outside the process's log.
+  private val scope =
+    CoroutineScope(
+      SupervisorJob() + Dispatchers.IO +
+        CoroutineExceptionHandler { _, e -> logger.error(e) { "A ${settings.role} dashboard task failed" } },
+    )
+
+  // Whether the push loop's last collect failed, so a run of failures is logged at ERROR once. The push loop's alone.
+  private var collectFailing = false
 
   // Normalized once. Null when allowedHosts is empty, which turns the Host check off.
   private val hostAllowlist: Set<String>? = hostAllowlist(settings.allowedHosts, settings.allowedOrigins)
@@ -297,9 +318,8 @@ internal class DashboardServer<V : Any, S : Any>(
     return "Origin not allowed"
   }
 
-  // The login page's sessions, and the cookie that carries one: named for the role and the port, since a browser sends
-  // a host's cookies to every port on it, and an HA pair can run on one host.
-  private val logins = DashboardSessions()
+  // The cookie that carries a login page's session: named for the role and the port, since a browser sends a host's
+  // cookies to every port on it, and an HA pair can run on one host.
   private val sessionCookie = cookieName(settings.role, settings.port)
   private val loginPath = "$routeBase/login"
   private val logoutPath = "$routeBase/logout"
@@ -470,7 +490,9 @@ internal class DashboardServer<V : Any, S : Any>(
       install(WebSockets) {
         // Ktor's defaults send no pings and buffer outgoing frames without limit, so a client that stops reading
         // would pile up a frame per push until the process ran out of memory. Pings find a dead peer, and a full
-        // buffer closes that session instead of growing -- so the shared push loop never waits on a slow one.
+        // buffer closes the session's channel instead of growing -- so a send never waits on a slow client, and the
+        // next push to it fails, which drops it (see push). Ktor's pinger doesn't: once the buffer has overflowed, it
+        // stops without closing the session.
         pingPeriodMillis = PING_PERIOD_MILLIS
         timeoutMillis = PING_TIMEOUT_MILLIS
         // A browser message is a few dozen bytes; the default accepts, and buffers whole, a frame of any size.
@@ -527,13 +549,19 @@ internal class DashboardServer<V : Any, S : Any>(
     route(logoutPath) {
       install(originGuard)
       post {
-        logins.remove(call.request.cookies[sessionCookie])
-        // So the push loop closes this session's open pages now rather than at its next tick.
-        wake.trySend(Unit)
+        endLogin(call.request.cookies[sessionCookie])
         call.response.header(HttpHeaders.SetCookie, sessionCookieHeader(null))
         call.seeOther(loginPath)
       }
     }
+  }
+
+  // Ends [token]'s login, and closes its open pages now, rather than at the push loop's next tick, without waking the
+  // loop. Log out needs no login, so anyone can post it in a loop: one naming no session costs a lookup and nothing
+  // more, and a page's token is compared only with a token that named a session, by the client that holds it.
+  private fun endLogin(token: String?) {
+    if (logins.remove(token))
+      sessions.filter { it.login == token }.forEach { end(it, SESSION_ENDED) }
   }
 
   // Explicit allowlists rather than staticResources: the WebJar layout embeds a version in the path, and an allowlist
@@ -575,7 +603,8 @@ internal class DashboardServer<V : Any, S : Any>(
           Session<V>(
             login = if (loginEnabled) call.request.cookies[sessionCookie] else null,
             send = { text -> outgoing.send(Frame.Text(text)) },
-            end = { close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "The dashboard session ended")) },
+            // This handler's own coroutine is the connection's: Ktor runs it in a child of the socket's job.
+            close = closer(this, currentCoroutineContext().job),
           )
         sessions.add(session)
         try {
@@ -594,6 +623,38 @@ internal class DashboardServer<V : Any, S : Any>(
         }
       }
     }
+  }
+
+  // How [socket], run by the coroutine [connection], is closed when its session ends. With a reason, a close frame,
+  // which a reading browser answers at once, waited for at most CLOSE_TIMEOUT; without one, or past that, the
+  // connection is cancelled, which ends this handler, freeing the session's slot, and Ktor's coroutines for the socket,
+  // discarding the frames queued for it. Ktor's close() alone would wait, in its flush, for every frame queued ahead of
+  // the close to be written, which for a browser that has stopped reading is for as long as its TCP connection lives.
+  // (CIO still holds that connection, with the bytes it had already buffered for it, until the browser reads them or
+  // the connection fails: Ktor gives an app no way to drop it sooner.)
+  private fun closer(
+    socket: DefaultWebSocketServerSession,
+    connection: Job,
+  ): suspend (CloseReason?) -> Unit =
+    { reason ->
+      val closed =
+        reason != null &&
+          withTimeoutOrNull(CLOSE_TIMEOUT) {
+            socket.close(reason)
+            connection.join()
+          } != null
+      if (!closed)
+        connection.cancel()
+    }
+
+  // Ends [session], once however many find it ended: out of the pushes at once, and closed (Session.close) on a
+  // coroutine of its own, so no caller, the push loop or a Log out, waits on its browser.
+  private fun end(
+    session: Session<V>,
+    reason: CloseReason?,
+  ) {
+    if (sessions.remove(session))
+      scope.launch { session.close(reason) }
   }
 
   /** How many browsers have the page open. */
@@ -625,46 +686,78 @@ internal class DashboardServer<V : Any, S : Any>(
   private suspend fun pushLoop() {
     while (scope.isActive) {
       withTimeoutOrNull(settings.refreshInterval) { wake.receive() }
-      if (sessions.isEmpty()) continue
       // Always a collect, never the cache: a tick exists to sample the values that drift.
-      val snapshot = snapshots.fresh()
-      sessions.forEach {
-        // A page whose login session has ended, by Log out, expiring, or a restart's losing it, gets no more pushes:
-        // its socket closes, and the page, asking for its session, goes to the login page. A check, not a request, so
-        // an open page doesn't keep its session from going idle.
-        if (it.login != null && !logins.isValid(it.login, counts = false))
-          it.end()
-        else
-          push(it, snapshot)
-      }
+      if (sessions.isNotEmpty())
+        collectForPush()?.also { pushToEvery(it) }
     }
   }
+
+  // Pushes [snapshot] to every open page, or closes it when its login has ended.
+  private suspend fun pushToEvery(snapshot: S) {
+    sessions.forEach {
+      // A page whose login session has ended, by expiring or a restart's losing it, gets no more pushes: its socket
+      // closes, and the page, asking for its session, goes to the login page. Log out closes its pages itself. A
+      // check, not a request, so an open page doesn't keep its session from going idle.
+      if (it.login != null && !logins.isValid(it.login, counts = false))
+        end(it, SESSION_ENDED)
+      else
+        push(it, snapshot)
+    }
+  }
+
+  // The push loop's snapshot, or null when the collect threw. The loop carries on at its next wake or tick: ending it
+  // would leave every page showing live with nothing pushed until a restart. Only the loop's own cancellation, as the
+  // server stops, is passed on. The first failure of a run is logged at ERROR, and the rest at DEBUG.
+  private suspend fun collectForPush(): S? =
+    runCatching { snapshots.fresh() }
+      .onSuccess { collectFailing = false }
+      .onFailure { e ->
+        currentCoroutineContext().ensureActive()
+        if (collectFailing)
+          logger.debug { "Dashboard snapshot not collected again: ${e.simpleClassName}" }
+        else
+          logger.error(e) {
+            "Failed to collect the ${settings.role} dashboard's snapshot; trying again at its next change or tick"
+          }
+        collectFailing = true
+      }.getOrNull()
 
   private suspend fun push(
     session: Session<V>,
     snapshot: S,
   ) {
     session.pushing.withLock {
-      // Rendered apart from the send. A send fails when the browser has gone, which is routine, but a render that
-      // throws is a bug in the page; caught with the sends, it froze every session on that page with nothing logged
-      // above DEBUG.
-      val frame =
-        runCatching { site.frame(snapshot, session.view, session.sent, routeBase) }
-          .onFailure { e ->
-            if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
-            session.renderFailed = true
-          }.getOrNull() ?: return
-      // A send fails when the browser has gone, which is routine. Only this coroutine's own cancellation, as the
-      // server stops, is passed on: a gone browser's cancelled channel fails a send with a CancellationException too,
-      // and passing that on would end the loop that pushes to every other session.
+      // An ended session, still in a loop's pass over the sessions, is rendered for no more.
+      if (session !in sessions) return
+      val frame = render(session, snapshot) ?: return
+      // A send fails when the browser has gone, or has stopped reading and filled its buffer, which closes the
+      // session's channel. Either way the session is ended now, rather than left to Ktor's pinger, which doesn't close
+      // one whose buffer overflowed: left open, it held a slot of maxSessions and was rendered for on every push. Only
+      // this coroutine's own cancellation, as the server stops, is passed on: a gone browser's cancelled channel fails
+      // a send with a CancellationException too, and passing that on would end the loop that pushes to every other
+      // session.
       runCatching { session.send(frame.text) }
         .onSuccess { session.sent = frame.sent }
         .onFailure {
           currentCoroutineContext().ensureActive()
-          logger.debug { "Dashboard push not sent: ${it.simpleClassName}" }
+          logger.debug { "Dashboard push not sent, so its session is ended: ${it.simpleClassName}" }
+          end(session, reason = null)
         }
     }
   }
+
+  // The frame for [session] from [snapshot], or null when the render threw. Rendered apart from the send: a send fails
+  // when the browser has gone, which is routine, but a render that throws is a bug in the page; caught with the sends,
+  // it froze every session on that page with nothing logged above DEBUG. Callers hold the session's pushing lock.
+  private fun render(
+    session: Session<V>,
+    snapshot: S,
+  ): DashboardFrame? =
+    runCatching { site.frame(snapshot, session.view, session.sent, routeBase) }
+      .onFailure { e ->
+        if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
+        session.renderFailed = true
+      }.getOrNull()
 
   /** Claims a session slot, or returns false when maxSessions sessions are already connected. */
   private fun reserveSession(): Boolean {
@@ -749,6 +842,13 @@ internal class DashboardServer<V : Any, S : Any>(
 
     // Frames a session may have waiting before it is closed. A reading browser drains each push long before the next.
     private const val OUTGOING_FRAME_BUFFER = 32
+
+    // How long a session's close frame may wait to be written, before its connection is dropped instead. A reading
+    // browser takes it at once.
+    private val CLOSE_TIMEOUT = 5.seconds
+
+    // Why a page's socket is closed when its login ends. The page then asks for its session and goes to the login page.
+    private val SESSION_ENDED = CloseReason(CloseReason.Codes.VIOLATED_POLICY, "The dashboard session ended")
 
     private val BAD_LOGIN_WARNING_INTERVAL = 1.minutes
     private const val MAX_BAD_LOGIN_HOSTS = 1_000
