@@ -17,9 +17,9 @@ shown below verbatim, except `examples/cloud-proxy`, which
 
 ## Self-Monitoring — `simple.conf`
 
-Enables admin and metrics on both components and points the agent at the proxy's and agent's
-own `/metrics` endpoints, so the proxy and agent monitor themselves. A good first run on a
-single host.
+Turns on admin on both components and the proxy's metrics port, points the agent at the proxy's `/metrics`
+endpoint, and has the agent serve its own metrics at `/agent_metrics`, in-process, with no port
+(`agent.metrics.proxyPath`), so the proxy and agent monitor themselves. A good first run on a single host.
 
 ```hocon
 --8<-- "examples/simple.conf"
