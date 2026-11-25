@@ -58,7 +58,9 @@ KDoc on the class and each of its members, its `Builder` and every builder metho
   `PROMETHEUS_PROXY_AUTHORITY`); paths scraped with `path` and `scrapeSelf` (credentials percent-encoded into the
   URL) or served in-process with `source` (a `MetricsSource` or a `PrometheusRegistry`); the agent's own metrics on a
   port with `agentMetrics(port)` or at a path in-process with `agentMetricsAt(path)`; its dashboard with `dashboard()`
-  and `dashboardLogin()`; `setting(key, value)` and its precedence; and the values the builder refuses as they're
+  and `dashboardLogin()`; `setting(key, value)` and its precedence; since 4.7.1, the `onFailure` handlers
+  `startIfConfigured()` tells of a failed start, `reportFailure(cause)` for a host whose own settings fail first, and
+  the `stopTimeout` the started handle's `shutdown()` waits at most; and the values the builder refuses as they're
   given, with `ConfigLoadException`
 
 #### `MetricsSource` (`src/main/kotlin/io/prometheus/agent/MetricsSource.kt`)
@@ -82,7 +84,8 @@ KDoc on the class and each member, covering:
 - **Usage Examples**: starting, logging its identity, and `shutdown()`; and `use { }` on what `startIfConfigured()`
   returns, as it's `AutoCloseable`
 - **Members**: `launchId`, `agentName`, `isConnected` and `proxyEndpoint` (its connection, read live for a health
-  check), `shutdown()`, and `close()`, which calls it
+  check), `shutdown()`, which waits up to the builder's `stopTimeout`, or 30 seconds without one, and `close()`, which
+  calls it
 - **@property**: `launchId`, `agentName`
 
 ### Documented Internal Classes

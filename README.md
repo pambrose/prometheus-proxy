@@ -72,7 +72,7 @@ from the checkout) starts every demo, one after another, and `make demos-down` s
 of memory and CPU.
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # the guided tour
@@ -92,40 +92,14 @@ scenarios.
 
 ## ✨ New Features
 
-Version 4.7.0 adds:
+Version 4.7.1 adds, for apps that embed the agent:
 
-- **Agent dashboard** - the agent serves a [dashboard](https://prometheus-proxy.com/agent-dashboard/) of its own, off
-  by default, showing its connection, its paths and why the proxy refused any, its filters, and its discovery file
-- **Per-path scrapes on the agent** - the agent's dashboard shows each path's recent scrapes, and its Scrape now button
-  fetches a target from the agent right away
-- **Agent Activity view** - the agent's dashboard lists the agent connecting, disconnecting, failing over, and its paths
-  registered or refused, in order
-- **Settings view** - both dashboards show every setting the process is running with; tokens, passwords, and keys
-  show only as set or not set
-- **Metrics without an endpoint** - an app that embeds the agent hands it its metrics registry, with
-  `source(path, registry)`, or a `MetricsSource` that writes its metrics, so it serves no `/metrics` endpoint; and
-  `agentMetricsAt(path)` serves the agent's own metrics the same way, with no port
-- **Agent metrics without a port** - `agent.metrics.proxyPath` (`--metrics_proxy_path`, `METRICS_PROXY_PATH`) serves
-  a standalone agent's own metrics, its JVM metrics included, through the proxy at that path, read in-process, with no
-  metrics port to open
-- **Simpler embedding** - `fromEnvironment()` reads the proxy, its token, and its certificate from the app's
-  environment, and `startIfConfigured()` starts the agent only where there's a proxy, keeping the app running if it
-  can't start
-- **Spring Boot starter** - add the [starter](https://prometheus-proxy.com/spring-boot-starter/) to a Spring Boot app,
-  and the agent starts and stops with the app and serves its metrics without `/actuator/prometheus`
-- **Ktor plugin** - `install(PrometheusProxyAgent)` from the [plugin](https://prometheus-proxy.com/ktor-plugin/) in a
-  Ktor app, and the agent starts and stops with the app and serves its metrics without a `/metrics` route
-- **Theme picker** - both dashboards offer light, dark, or auto, which follows your system
-- **Proxy metrics** - new metrics count agent disconnects, refused connects and paths, bad agent tokens, late
-  results, dashboard logins, and how long a scrape waits for its agent, with new Grafana panels and alerts
-- **Agent metrics** - new metrics show the agent's connection and proxy endpoint, and count its disconnects,
-  failovers, refused paths, retries, and dashboard logins, with new Grafana panels and alerts
-- **Dashboard names** - each dashboard's top bar and browser tab name it, `Proxy: proxy:8080` or `Agent: agent-east`
-- **Scrape tracing** - with Zipkin on, each scrape is a trace from the proxy through the agent to the target
-- **Stream keepalives** - the proxy and the agent keep their streams open behind nginx's default 60-second timeouts
-- **nginx demo** - a new [demo](demos/nginx) puts nginx between the agents and the proxy, ending the agents' TLS
-- **Dashboard logins** - set `DASHBOARD_PASSWORD`, and the proxy's or the agent's dashboard shows a login page, with
-  the username `admin` unless you set `DASHBOARD_USERNAME`
+- **Failure alerts** - the builder's `onFailure` handler, added in a Ktor `agent { }` block or a Spring Boot
+  customizer too, is told why the agent couldn't start, to send it wherever someone will see it, such as a chat
+  channel; the app still runs on without the agent
+- **A capped stop** - the builder's `stopTimeout`, and the Ktor plugin's and the Spring Boot starter's `stop-timeout`,
+  cap how long the agent's stop holds up the app's shutdown, to fit the window its platform gives it, such as Cloud
+  Run's 10 seconds after `SIGTERM`
 
 The [release notes](RELEASE_NOTES.md) and the [changelog](CHANGELOG.md) have the full list.
 
@@ -210,12 +184,12 @@ proxy) and register the paths for which they will provide data. One proxy can wo
    ```bash
    java -jar prometheus-agent.jar \
      -Dagent.proxy.hostname=mymachine.local \
-     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/myapps.conf
 
    # or use --proxy option
    java -jar prometheus-agent.jar \
      --proxy mymachine.local \
-     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/myapps.conf
    ```
 
 4. Configure Prometheus to scrape from the proxy at `http://mymachine.local:8080`
@@ -237,7 +211,7 @@ proxy) and register the paths for which they will provide data. One proxy can wo
 
    # On the agent's machine
    nohup java -jar prometheus-agent.jar --proxy mymachine.local \
-     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf > agent.log 2>&1 &
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/myapps.conf > agent.log 2>&1 &
    echo $! > agent.pid
 
    # Later, to follow a log or stop a process
@@ -260,7 +234,7 @@ prometheus-proxy
 # On the agent's machine, inside the firewall
 brew install pambrose/tap/prometheus-agent
 prometheus-agent --proxy mymachine.local \
-  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/myapps.conf
 ```
 
 To keep either one running in the background, edit its config in `$(brew --prefix)/etc/` and start it with
@@ -307,13 +281,13 @@ docker network create prometheus-proxy-net
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
   -p 8080:8080 -p 50051:50051 \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:4.7.0
+  pambrose/prometheus-proxy:4.7.1
 
 # Start agent, in another terminal
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
-  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf' \
-  pambrose/prometheus-agent:4.7.0
+  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/simple.conf' \
+  pambrose/prometheus-agent:4.7.1
 
 # Scrape the proxy's and the agent's own metrics through the proxy
 curl http://localhost:8080/proxy_metrics
@@ -331,7 +305,7 @@ too (Docker doesn't allow `--rm` with `--restart`):
 
 ```bash
 docker run --detach --name prometheus-proxy --restart unless-stopped --network prometheus-proxy-net \
-  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.7.0
+  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.7.1
 
 docker logs --follow prometheus-proxy   # follow its log
 docker stop prometheus-proxy            # stop it, and no longer restart it
@@ -345,7 +319,7 @@ docker rm prometheus-proxy              # remove the stopped container
 ### Agent Configuration
 
 If the prometheus-proxy were running on a machine named *mymachine.local* and the `agent.pathConfigs` value in the
-[myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/myapps.conf) config file had
+[myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/myapps.conf) config file had
 the contents:
 
 ```hocon
@@ -433,8 +407,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.7.0
-docker pull pambrose/prometheus-agent:4.7.0
+docker pull pambrose/prometheus-proxy:4.7.1
+docker pull pambrose/prometheus-agent:4.7.1
 ```
 
 ### Production Docker Setup
@@ -452,7 +426,7 @@ docker run --detach --name prometheus-proxy --restart unless-stopped \
         -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:4.7.0
+        pambrose/prometheus-proxy:4.7.1
 ```
 
 Start an agent container with:
@@ -463,14 +437,14 @@ docker run --detach --name prometheus-agent --restart unless-stopped \
         --network prometheus-proxy-net \
         -p 8093:8093 \
         --env PROXY_HOSTNAME=prometheus-proxy \
-        --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf' \
-        pambrose/prometheus-agent:4.7.0
+        --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/simple.conf' \
+        pambrose/prometheus-agent:4.7.1
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
 that scrapes through them (`docker compose -f etc/compose/proxy.yml up`).
 
-Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.0/examples/simple.conf),
+Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/4.7.1/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy's scrape port on *localhost* at:
 
 * http://localhost:8080/proxy_metrics
@@ -492,7 +466,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env PROXY_HOSTNAME=prometheus-proxy \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-agent:4.7.0
+    pambrose/prometheus-agent:4.7.1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -999,7 +973,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.7.0
+    pambrose/prometheus-proxy:4.7.1
 
 docker run --rm \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -1007,7 +981,7 @@ docker run --rm \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.local:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.7.0
+    pambrose/prometheus-agent:4.7.1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -1239,7 +1213,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.7.0")
+  implementation("com.pambrose:prometheus-proxy:4.7.1")
 }
 ```
 
