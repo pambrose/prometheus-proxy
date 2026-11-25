@@ -868,13 +868,24 @@ internal class AgentGrpcService(
     val chunkedChannel = outgoingChannel<ChunkedScrapeResponse>(agent)
 
     fun closeAll() {
+      // The response channels close first, so a connection that reads as closed forwards nothing more: a result the
+      // producer forwarded between the two was still sent, by a writer whose stream hadn't failed.
+      nonChunkedChannel.close()
+      chunkedChannel.close()
       // close() drains N buffered scrape actions; decrement the backlog by that count here too (mirroring
       // Agent.launchConnectionTask's invokeOnCompletion) so the gauge isn't left inflated by N until the
       // next connect resets it (finding 18).
       val drained = connectionContext.close()
       if (drained > 0) agent.decrementBacklog(drained)
-      nonChunkedChannel.close()
-      chunkedChannel.close()
+    }
+
+    // The producer is the results' one reader, so once it stops, however it stops, none can be sent: end the
+    // connection, which closes the response channels, so each streamOf flow ends, and has a scrape that finishes later
+    // count its own result as dropped, then drop the results it left queued, which counts each as dropped. Those were
+    // counted as neither when a writer's failure stopped the producer (November #6).
+    fun endConnection() {
+      closeAll()
+      connectionContext.dropUnsentResults()
     }
 
     // Shared per-stream failure policy: run [block], and on a failure log it (tagged with [name]) while the agent is
@@ -893,35 +904,36 @@ internal class AgentGrpcService(
         }
     }
 
-    coroutineScope {
-      // Ends by connectionContext.close()
-      launch(Dispatchers.IO) {
-        try {
-          runStreamTask("processScrapeResults") {
-            processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
+    try {
+      coroutineScope {
+        // Ends by connectionContext.close()
+        launch(Dispatchers.IO) {
+          try {
+            runStreamTask("processScrapeResults") {
+              processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
+            }
+          } finally {
+            endConnection()
           }
-        } finally {
-          // The producer is the results' one reader, so once it stops, however it stops, none can be sent: end the
-          // connection, which closes the response channels, so each streamOf flow ends, and has a scrape that finishes
-          // later count its own result as dropped, then drop the results it left queued, which counts each as
-          // dropped. Those were counted as neither when a writer's failure stopped the producer (November #6).
-          closeAll()
-          connectionContext.dropUnsentResults()
         }
-      }
 
-      // Ends by disconnection from server
-      launch(Dispatchers.IO) {
-        runStreamTask("writeResponsesToProxy") {
-          grpcStub.writeResponsesToProxy(streamOf(nonChunkedChannel, agent, KEEPALIVE_RESPONSE))
+        // Ends by disconnection from server
+        launch(Dispatchers.IO) {
+          runStreamTask("writeResponsesToProxy") {
+            grpcStub.writeResponsesToProxy(streamOf(nonChunkedChannel, agent, KEEPALIVE_RESPONSE))
+          }
         }
-      }
 
-      launch(Dispatchers.IO) {
-        runStreamTask("writeChunkedResponsesToProxy") {
-          grpcStub.writeChunkedResponsesToProxy(streamOf(chunkedChannel, agent, KEEPALIVE_CHUNKED_RESPONSE))
+        launch(Dispatchers.IO) {
+          runStreamTask("writeChunkedResponsesToProxy") {
+            grpcStub.writeChunkedResponsesToProxy(streamOf(chunkedChannel, agent, KEEPALIVE_CHUNKED_RESPONSE))
+          }
         }
       }
+    } finally {
+      // A writer's JVM Error cancels the scope, and a producer it cancels before the producer has run never reaches
+      // its finally block, which left the connection open and its results queued. Every task has stopped here.
+      endConnection()
     }
   }
 

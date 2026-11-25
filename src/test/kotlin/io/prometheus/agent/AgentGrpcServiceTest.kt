@@ -86,6 +86,7 @@ import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -1615,6 +1616,26 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // The Error cancels the connection's tasks, and a producer cancelled before it had run never reached the finally
+    // block that ends the connection: on a busy machine, the spec above found it still open. Cancelled before any task
+    // runs, the producer never does.
+    "a connection whose tasks are cancelled before the producer runs should still end, dropping its queued results" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, _ ->
+        val agent = service.agent.countsDroppedResults()
+        val connectionContext = countingConnectionContext(agent).withResults(2)
+
+        coroutineScope {
+          launch {
+            cancel()
+            service.writeResponsesToProxyUntilDisconnected(agent, connectionContext)
+          }
+        }
+
+        connectionContext.connected.shouldBeFalse()
+        verify(exactly = 2) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
+      }
+    }
+
     "registerAgent should throw on empty agentId" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       every { agent.agentId } returns ""
@@ -2407,6 +2428,11 @@ class AgentGrpcServiceTest : StringSpec() {
           forwarded.complete(Unit)
           awaitDisconnect(connectionContext)
         }
+        // A scrape request still queued has the failed writer's closeAll() decrement the backlog, slowly here. With the
+        // response channels closed after the connection, the producer, going on once the connection read as closed,
+        // forwarded the other two results while they were still open, and the other writer sent all three.
+        connectionContext.sendScrapeRequestAction { error("never run") }
+        every { agent.decrementBacklog(1) } answers { Thread.sleep(500) }
 
         val errors =
           captureLogs<AgentGrpcService> {
