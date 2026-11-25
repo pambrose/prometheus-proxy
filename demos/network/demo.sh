@@ -81,10 +81,8 @@ flaky_bytes() { if [[ "$1" == agent-branch ]]; then echo 170000; else echo 7500;
 # A byte count in KB, as the text gives it: 7.5, or 170.
 kb() { awk -v bytes="$1" 'BEGIN { printf "%g", bytes / 1000 }'; }
 
-# This demo's README, which shows its layout and what each part of its tour shows as this checkout has them, and its
-# page on the docs site, which shows the same for the latest release: the site changes only with a release, so
-# between releases the page can lag behind this checkout, or not be there yet.
-README_PATH="demos/network/README.md"
+# This demo's page on the docs site, which shows its layout and what each part of its tour shows. The demo points only
+# there, never to a raw Markdown file, which isn't readable without a viewer.
 PAGE_URL="https://prometheus-proxy.com/network-demo/"
 DASHBOARD_URL="http://localhost:${NETWORK_DEMO_DASHBOARD_PORT:-8194}/dashboard"
 STANDBY_DASHBOARD_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/dashboard"
@@ -184,8 +182,7 @@ print_urls() {
   echo "  Zipkin:           $ZIPKIN_URL/zipkin/"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
-  wrap "" "" "What each part of this demo shows, and why: $README_PATH, or the docs site's page for the latest" \
-    "release: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
   echo
   echo "Scenarios: $0 far | thin | filter | proxy-down | cut | flaky | wan-down | heal ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -635,8 +632,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
     "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: $README_PATH, or the docs site's page for the latest release:" \
-    "${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

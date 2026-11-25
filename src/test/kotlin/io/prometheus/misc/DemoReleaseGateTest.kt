@@ -62,15 +62,13 @@ class DemoReleaseGateTest : StringSpec() {
   }
 
   init {
-    "every demo should name the newest release that lacks what it shows, and its README" {
+    "every demo should name the newest release that lacks what it shows" {
       demos.shouldNotBeEmpty()
       val siteVersion = siteVersion()
       demos.forEach { demo ->
         withClue(demo.name) {
           val value = NEEDS_RELEASE_AFTER.find(demo.text)?.groupValues?.get(1)
           (value != null && atMost(value, siteVersion)).shouldBeTrue()
-          README_PATH.find(demo.text)?.groupValues?.get(1) shouldBe "demos/${demo.name}/README.md"
-          File(demo.dir, "README.md").isFile.shouldBeTrue()
         }
       }
     }
@@ -197,7 +195,6 @@ class DemoReleaseGateTest : StringSpec() {
     private const val OLD = "1.0.0"
     private const val NEW = "1.1.0"
     private val NEEDS_RELEASE_AFTER = Regex("""(?m)^NEEDS_RELEASE_AFTER=([0-9]+\.[0-9]+\.[0-9]+)$""")
-    private val README_PATH = Regex("""(?m)^README_PATH="([^"]+)"$""")
 
     private val HARNESS =
       """

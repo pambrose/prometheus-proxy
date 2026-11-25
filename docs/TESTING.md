@@ -994,13 +994,13 @@ These support helpers also live here (not test classes themselves):
   or while Docker Hub answers that it has no image of the release, and runs the release once Docker Hub has it; the
   Docker demos also run a release whose images Docker has without asking Docker Hub, and leave a Docker Hub they can't
   reach to the pull, while the Kubernetes demo, whose clusters pull the images themselves, stops. Each demo's
-  `NEEDS_RELEASE_AFTER` is a release no later than the docs', and its `README_PATH`, which it prints beside its page on
-  the docs site, is its README
+  `NEEDS_RELEASE_AFTER` is a release no later than the docs'
 - **DemoTourTablesTest** — each demo's README and its page on the docs site have a What This Demo Shows table that
   names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
   of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the
   table; each `demo.sh`'s `PAGE_URL`, which `make up` and `make tour` print, is its page, and every section of the page
-  it links to (`${PAGE_URL}#running-it`) is one the page has
+  it links to (`${PAGE_URL}#running-it`) is one the page has; and no `demo.sh` prints a Markdown file's path, only a
+  comment may name one, since a raw `.md` file isn't readable without a viewer
 - **DocsCodeBlocksTest** — the fenced blocks of the docs site's pages, the maintainer docs, and the READMEs: every
   HOCON block that has an agent scrape its own metrics port, `localhost:8083`, turns the port on too, as it's off by
   default; and no line of a Mermaid diagram's `accDescr`, the text a screen reader gives for it, ends with a word broken
