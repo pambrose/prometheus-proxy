@@ -86,7 +86,9 @@ val releaseDate =
   }
 
 val basePackage = "io.prometheus"
-val displayName = "Prometheus Proxy"
+// The KDoc site's module name, which docs/packages.md's "# Module" heading must match. Not displayName, which inside a
+// Project extension is Project.displayName ("root project 'prometheus-proxy'"), so packages.md never reached the site.
+val dokkaModuleName = "Prometheus Proxy"
 val repoUrl = "https://github.com/pambrose/prometheus-proxy"
 val harnessConfigEnv = "HARNESS_CONFIG"
 val generatedSourcesDir = "build/generated"
@@ -671,20 +673,23 @@ fun Project.configureJars() {
 
 fun Project.configureDokka() {
   dokka {
-    moduleName.set(displayName)
+    moduleName.set(dokkaModuleName)
 
     dokkaPublications.html {
       outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
-      includes.from("docs/packages.md")
     }
 
     pluginsConfiguration.html {
       homepageLink.set(repoUrl)
-      footerMessage.set(displayName)
+      footerMessage.set(dokkaModuleName)
     }
 
     dokkaSourceSets.main {
       documentedVisibilities(VisibilityModifier.Public)
+
+      // The module's and packages' descriptions. A source set's includes, since a publication's are for a multi-module
+      // page, which a single module has none of.
+      includes.from("docs/packages.md")
 
       // Agent and Proxy extend common-utils' AbstractGenericService, whose private dropwizardExports field has a type from
       // a runtime-only dependency, DropwizardExports, which the compile classpath Dokka reads lacks. Nothing public

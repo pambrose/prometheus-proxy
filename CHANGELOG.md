@@ -568,6 +568,10 @@ All notable changes to this project are documented in this file.
   `PROMETHEUS_*` value shows; the agent dashboard's Helm commands without a namespace; the proxy's zipped-size limit
   in Troubleshooting, Production, and the proxy's configuration page; `-D` precedence in `llms.txt`; and the check
   order of agent auth's path globs
+- The maintainer docs describe what 4.7.0 ships: the API summaries, the dashboards' design and product docs, the
+  `make` targets in `docs/TESTING.md`, and the release skill's version files, the last two now checked by specs
+- The API reference shows the module's and each package's description from `docs/packages.md`, which it had never
+  included, and names its module `Prometheus Proxy` rather than `root project 'prometheus-proxy'`
 
 ### Dependencies
 

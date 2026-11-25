@@ -28,10 +28,10 @@ When bumping the version, update `version` in `gradle.properties` and every hard
 - `etc/compose/proxy.yml` — proxy and agent image tags
 - `examples/cloud-proxy/docker-compose.yml` — proxy image tag
 - `charts/prometheus-{proxy,agent}/Chart.yaml` — `version` and `appVersion` (the image tag the charts deploy)
-- `website/prometheus-proxy/docs/{getting-started,index,docker}.md` — Docker pull/run examples
+- `website/prometheus-proxy/docs/{getting-started,docker}.md` — Docker pull/run examples
 - `website/prometheus-proxy/docs/getting-started.md` — the JAR tab's release page and download links (`releases/tag/…`, `releases/download/…/`)
 - `src/test/kotlin/website/{DockerExamples,EmbeddedAgentExamples,KubernetesExamples}.txt` — snippet sources the website's Docker, Embedded Agent, and Kubernetes pages include
-- `README.md`, `llms.txt`, `website/prometheus-proxy/docs/{index,grafana}.md`, and `src/test/kotlin/website/{DockerExamples,GettingStarted,ConfigExamples}.txt` — the release tag in the `raw.githubusercontent.com` config and dashboard links
+- `README.md`, `llms.txt`, `website/prometheus-proxy/docs/grafana.md`, and `src/test/kotlin/website/{DockerExamples,GettingStarted,ConfigExamples}.txt` — the release tag in the `raw.githubusercontent.com` config and dashboard links
 - `README.md`, `llms.txt`, `demos/{basics,network,nginx,kubernetes,ktor,spring-boot,plain-kotlin}/README.md`, and `website/prometheus-proxy/docs/{basics-demo,network-demo,nginx-demo,kubernetes-demo,ktor-demo,spring-boot-demo,plain-kotlin-demo,getting-started}.md` — the `git clone --branch` tag the demos and the Helm install check out
 - `demos/spring-boot/app/pom.xml` — `prometheus-proxy.version`, the release the Spring Boot demo builds against
 - this line, and step 2 of `docs/RELEASE.md`

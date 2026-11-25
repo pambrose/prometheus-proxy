@@ -402,9 +402,6 @@ body {
   }
 }
 
-/* The home page reads as a group per section, each set close within. The headings' space is the only wide one, so
-   space means a new group. */
-
 /* The home page's ways on: one list, a row each, the whole row its link, in the dashboard's rows rather than the
    theme's cards. The link is the row's name; the text under it says where it goes. */
 .md-typeset .pp-ways > ul {

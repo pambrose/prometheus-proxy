@@ -33,8 +33,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempDirectory
 
 // The parts of make release-check that read the checkout, run as make runs them (November 23 #25, #61, #62): the
-// bumped files' stale-version check, the changelogs' release date, and the demos' NEEDS_RELEASE_AFTER; and the notes
-// make github-release gives the GitHub release.
+// bumped files' stale-version check, the changelogs' release date, and the demos' NEEDS_RELEASE_AFTER; the notes make
+// github-release gives the GitHub release; and the bumped files the release docs list, against the check's (#70).
 class ReleaseCheckTest : StringSpec() {
   private class MakeResult(
     val exitCode: Int,
@@ -168,6 +168,39 @@ class ReleaseCheckTest : StringSpec() {
       }
     }
 
+    // Step 2 of docs/RELEASE.md and the publishing-release skill list the files a bump edits, for whoever bumps the
+    // version, and RELEASE_VERSION_FILES lists them for release-check. #546 took the home page, which names no version
+    // now, out of the first and the last but not the skill, which sent the next bump to look for one there. The
+    // website's pages are compared, which each list names in its own way: step 2 by a page's name, the skill in braces.
+    "step 2 of docs/RELEASE.md and the publishing-release skill should name the pages RELEASE_VERSION_FILES lists" {
+      val listed = releaseVersionFiles.filter { it.startsWith(WEBSITE_DOCS) }.toSortedSet()
+      listed.shouldNotBeEmpty()
+
+      val step = listedSection(RELEASE_GUIDE, RELEASE_STEP)
+      val stepPages =
+        BACKTICKED
+          .findAll(step)
+          .map { it.groupValues[1] }
+          .mapNotNull { name ->
+            when {
+              name.startsWith(WEBSITE_DOCS) -> name
+              '/' !in name && name.endsWith(".md") && File(WEBSITE_DOCS, name).isFile -> "$WEBSITE_DOCS$name"
+              else -> null
+            }
+          }.toSortedSet()
+      withClue("the website pages step 2 of $RELEASE_GUIDE names") { stepPages shouldBe listed }
+
+      val bump = listedSection(SKILL, SKILL_BUMP)
+      val skillPages =
+        BACKTICKED
+          .findAll(bump)
+          .map { it.groupValues[1] }
+          .filter { it.startsWith(WEBSITE_DOCS) }
+          .flatMap { expandBraces(it) }
+          .toSortedSet()
+      withClue("the website pages $SKILL names") { skillPages shouldBe listed }
+    }
+
     // GitHub shows a release's line breaks as written, so a paragraph or list item wrapped over lines would show
     // broken there.
     "the GitHub release notes should be the release notes' section, unwrapped, then the full changelog's link" {
@@ -191,6 +224,25 @@ class ReleaseCheckTest : StringSpec() {
   private fun historyPatterns(version: String): List<Regex> {
     val v = Regex.escape(version)
     return listOf(Regex("""Since $v\b"""), Regex("""\($v\)"""), Regex("""Version $v adds"""))
+  }
+
+  // The list of bumped files in the release doc at path: from the line that starts it to the paragraph that says
+  // RELEASE_VERSION_FILES lists them too.
+  private fun listedSection(
+    path: String,
+    start: String,
+  ): String {
+    val text = File(path).readText()
+    text shouldContain start
+    text shouldContain VERSION_FILES_NOTE
+    return text.substringAfter(start).substringBefore(VERSION_FILES_NOTE)
+  }
+
+  // A path with a {a,b} group, as the skill writes several files in one, as each file.
+  private fun expandBraces(path: String): List<String> {
+    val group = BRACES.find(path) ?: return listOf(path)
+    val (prefix, alternatives, suffix) = group.destructured
+    return alternatives.split(',').flatMap { expandBraces(prefix + it + suffix) }
   }
 
   // RELEASE_NOTES.md's lines for a version, from its heading to the next release's.
@@ -257,11 +309,19 @@ class ReleaseCheckTest : StringSpec() {
     private const val RELEASE_NOTES = "RELEASE_NOTES.md"
     private const val GRADLE_PROPERTIES = "gradle.properties"
     private const val GETTING_STARTED = "website/prometheus-proxy/docs/getting-started.md"
+    private const val RELEASE_GUIDE = "docs/RELEASE.md"
+    private const val SKILL = ".claude/skills/publishing-release/SKILL.md"
+    private const val WEBSITE_DOCS = "website/prometheus-proxy/docs/"
+    private const val RELEASE_STEP = "\n2) Update "
+    private const val SKILL_BUMP = "\n## Bumping the version\n"
+    private const val VERSION_FILES_NOTE = "`RELEASE_VERSION_FILES` in the `Makefile`"
     private const val DEMOS_DIR = "demos"
     private const val MAKE_TIMEOUT_SECS = 60L
     private const val VERSION_RADIX = 1000L
     private val CHANGELOG_SECTION = Regex("""(?m)^## \[([0-9]+\.[0-9]+\.[0-9]+)] - ([0-9]{4}-[0-9]{2}-[0-9]{2})$""")
     private val STALE_LINE = Regex("""(?m)^ {2}([^:\s]+:[0-9]+):""")
     private val NEEDS_RELEASE_AFTER = Regex("""(?m)^NEEDS_RELEASE_AFTER=([0-9.]+)$""")
+    private val BACKTICKED = Regex("""`([^`\s]+)`""")
+    private val BRACES = Regex("""^([^{]*)\{([^}]*)}(.*)$""")
   }
 }
