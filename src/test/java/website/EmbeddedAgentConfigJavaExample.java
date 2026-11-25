@@ -19,6 +19,7 @@ package website;
 // --8<-- [start:embedded-java-config]
 import io.prometheus.agent.EmbeddedAgentConfig;
 import io.prometheus.agent.EmbeddedAgentInfo;
+import java.time.Duration;
 
 public class EmbeddedAgentConfigJavaExample {
   // Starts the agent from the app's own settings, in memory, so no config file holds the token or the password.
@@ -32,6 +33,9 @@ public class EmbeddedAgentConfigJavaExample {
       .fromEnvironment()
       // The app's own /metrics, on 127.0.0.1; the agent sends the credentials as Basic Auth
       .scrapeSelf("my_app_metrics", appPort, env("METRICS_USER"), env("METRICS_PASSWORD"))
+      // How long the agent's stop may hold up the app's shutdown: inside the platform's window after SIGTERM, such as
+      // Cloud Run's 10 seconds
+      .stopTimeout(Duration.ofSeconds(8))
       .build()
       .startIfConfigured(false);
   }

@@ -21,12 +21,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.prometheus.metrics.model.registry.PrometheusRegistry;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import website.AgentCustomizations;
+import website.Alerts;
 import website.BatchJobs;
 import website.SecretStore;
 
@@ -58,7 +61,8 @@ class StarterExamplesTest {
                   "proxy={endpoints=[localhost:" + closedPort + "]}",
                   "agentToken=(set)",
                   "name=roastery",
-                  "sources={roastery_metrics=in-process}")
+                  "sources={roastery_metrics=in-process}",
+                  "stopTimeout=8s")
               // No PROMETHEUS_PROXY_CERT, so no TLS
               .doesNotContain("tls=");
         });
@@ -92,12 +96,30 @@ class StarterExamplesTest {
         .withUserConfiguration(AgentCustomizations.class)
         .withBean(SecretStore.class, () -> name -> PEM)
         .withBean(BatchJobs.class, () -> PrometheusRegistry::new)
+        .withBean(Alerts.class, () -> message -> { })
         .run(context ->
             assertThat(context.getBean(PrometheusProxyAgent.class).config().toString())
                 .contains(
                     "tls={overrideAuthority=prometheus-proxy, trustCertCollectionPem=(set)}",
                     "batch_jobs_metrics=in-process",
                     "application_metrics=in-process"));
+  }
+
+  // PEM is a certificate's shape, not a certificate, so the agent can't start with it
+  @Test
+  void thePagesCustomizerAlertsWhyTheAgentCouldNotStart() throws IOException {
+    List<String> alerts = new CopyOnWriteArrayList<>();
+    runner
+        .withPropertyValues("prometheus-proxy.agent.proxy=localhost:" + freePort())
+        .withUserConfiguration(AgentCustomizations.class)
+        .withBean(SecretStore.class, () -> name -> PEM)
+        .withBean(BatchJobs.class, () -> PrometheusRegistry::new)
+        .withBean(Alerts.class, () -> alerts::add)
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isFalse();
+          assertThat(alerts).singleElement().asString().startsWith("No metrics from this app: ");
+        });
   }
 
   private static int freePort() throws IOException {

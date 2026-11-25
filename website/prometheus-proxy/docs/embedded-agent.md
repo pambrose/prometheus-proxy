@@ -72,6 +72,9 @@ and keeps the app running if it can't:
   into the scrape URL, whatever their characters; the agent sends them as Basic Auth and leaves them out of its logs.
   An app with a metrics registry needn't serve it at all: the agent reads it
   [in-process](#metrics-served-in-process).
+- **`stopTimeout` caps how long the agent's stop holds up the app's shutdown,** inside the window the platform gives
+  the app after `SIGTERM`; once it's up, `shutdown()` returns, and the agent goes on stopping on its own
+  ([`EmbeddedAgentInfo`](#embeddedagentinfo)).
 - **The settings fall back to the built-in defaults,** as a config file's do, and a setting the agent can't use throws
   `ConfigLoadException` from `start()`; `startIfConfigured()` logs it and returns `null`.
 - **The environment variables of single settings still take precedence,** such as `AGENT_TOKEN` or `PROXY_HOSTNAME`,
