@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
-import io.kotest.assertions.nondeterministic.eventually
+import com.google.common.util.concurrent.Service
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -28,7 +28,10 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.captureLogs
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -75,12 +78,11 @@ class EmbeddedAgentInfoTest : StringSpec() {
       verify { agent.stop() }
     }
 
-    // AutoCloseable, so Kotlin's use and Java's try-with-resources stop the agent after their block
     // So an app's shutdown fits its platform's window: the agent goes on stopping on a thread of its own
     "shutdown with a stop timeout returns once it's up, while the agent still stops" {
-      val agent = mockk<Agent>(relaxed = true)
+      val agent = runningAgent()
       val release = CountDownLatch(1)
-      every { agent.stop() } answers { release.await() }
+      every { agent.awaitTerminated() } answers { release.await() }
 
       EmbeddedAgentInfo(agent, stopTimeout = 50.milliseconds).shutdown()
 
@@ -90,9 +92,9 @@ class EmbeddedAgentInfoTest : StringSpec() {
     }
 
     "shutdown with a stop timeout waits for a stop that ends within it" {
-      val agent = mockk<Agent>(relaxed = true)
+      val agent = runningAgent()
       var stopped = false
-      every { agent.stop() } answers {
+      every { agent.awaitTerminated() } answers {
         Thread.sleep(50)
         stopped = true
       }
@@ -102,9 +104,73 @@ class EmbeddedAgentInfoTest : StringSpec() {
       stopped shouldBe true
     }
 
+    // stop() waits 30 seconds at most, then throws, which would cut a longer stop timeout short and throw out of
+    // shutdown, so the handle's thread stops the agent without that limit, leaving the stop timeout the only one
+    "shutdown with a stop timeout stops the agent without stop()'s own limit" {
+      val agent = runningAgent()
+
+      EmbeddedAgentInfo(agent, stopTimeout = 5.seconds).shutdown()
+
+      verify(exactly = 1) {
+        agent.stopAsync()
+        agent.awaitTerminated()
+      }
+      verify(exactly = 0) {
+        agent.stop()
+        agent.awaitTerminated(any(), any())
+      }
+    }
+
+    // As stop() does: a failed agent has already released what it held, and Guava rejects its stop
+    "shutdown with a stop timeout stops nothing of a failed agent" {
+      val agent = runningAgent()
+      every { agent.state() } returns Service.State.FAILED
+
+      EmbeddedAgentInfo(agent, stopTimeout = 5.seconds).shutdown()
+
+      verify(exactly = 0) { agent.stopAsync() }
+    }
+
+    // Duration.INFINITE waits for as long as the stop takes, with no deadline that overflows
+    "shutdown with an infinite stop timeout waits for the stop" {
+      val agent = runningAgent()
+      var stopped = false
+      every { agent.awaitTerminated() } answers {
+        Thread.sleep(50)
+        stopped = true
+      }
+
+      EmbeddedAgentInfo(agent, stopTimeout = Duration.INFINITE).shutdown()
+
+      stopped shouldBe true
+    }
+
+    // As stop() does, through Guava's awaitTerminated: a caller already interrupted, as a worker loop that ended on an
+    // interrupt is, still waits for the stop, and keeps its interrupt for what comes after
+    "shutdown with a stop timeout waits through an interrupt, and keeps it" {
+      val agent = runningAgent()
+      var stopped = false
+      every { agent.awaitTerminated() } answers {
+        Thread.sleep(50)
+        stopped = true
+      }
+
+      Thread.currentThread().interrupt()
+      val interrupted =
+        try {
+          EmbeddedAgentInfo(agent, stopTimeout = 5.seconds).shutdown()
+          Thread.currentThread().isInterrupted
+        } finally {
+          Thread.interrupted()
+        }
+
+      stopped shouldBe true
+      interrupted shouldBe true
+    }
+
     "shutdown with a stop timeout passes on the failure of a stop that ends within it" {
-      val agent = mockk<Agent>(relaxed = true)
-      every { agent.stop() } throws IllegalStateException("stuck")
+      val agent = runningAgent()
+      every { agent.awaitTerminated() } throws IllegalStateException("stuck")
 
       shouldThrow<IllegalStateException> {
         EmbeddedAgentInfo(agent, stopTimeout = 5.seconds).shutdown()
@@ -113,10 +179,12 @@ class EmbeddedAgentInfoTest : StringSpec() {
 
     // shutdown has returned by then, so the log is the only place it can go
     "a stop that fails after the stop timeout is up is logged" {
-      val agent = mockk<Agent>(relaxed = true)
+      val agent = runningAgent()
       every { agent.agentName } returns "test-agent"
       val release = CountDownLatch(1)
-      every { agent.stop() } answers {
+      val stopping = CompletableFuture<Thread>()
+      every { agent.awaitTerminated() } answers {
+        stopping.complete(Thread.currentThread())
         release.await()
         throw IllegalStateException("stuck")
       }
@@ -126,9 +194,7 @@ class EmbeddedAgentInfoTest : StringSpec() {
           EmbeddedAgentInfo(agent, stopTimeout = 50.milliseconds).shutdown()
           release.countDown()
           // The stop's thread logs before it ends
-          eventually(5.seconds) {
-            Thread.getAllStackTraces().keys.none { it.name == "prometheus-agent-stop" } shouldBe true
-          }
+          stopping.get(5, TimeUnit.SECONDS).join(5.seconds.inWholeMilliseconds)
         }
 
       events.map { it.level to it.formattedMessage } shouldBe
@@ -139,6 +205,7 @@ class EmbeddedAgentInfoTest : StringSpec() {
         )
     }
 
+    // AutoCloseable, so Kotlin's use and Java's try-with-resources stop the agent after their block
     "use should stop the agent after its block, and run the block on a null handle" {
       val agent = mockk<Agent>(relaxed = true)
       val ran = mutableListOf<String>()
@@ -151,4 +218,12 @@ class EmbeddedAgentInfoTest : StringSpec() {
       verify(exactly = 1) { agent.stop() }
     }
   }
+
+  // A mocked running agent, as a handle with a stop timeout stops it: its stopAsync(), then its awaitTerminated(),
+  // which a spec makes its stop
+  private fun runningAgent(): Agent =
+    mockk<Agent>(relaxed = true).also { agent ->
+      every { agent.state() } returns Service.State.RUNNING
+      every { agent.stopAsync() } returns agent
+    }
 }

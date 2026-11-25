@@ -78,8 +78,8 @@ class EmbeddedAgentConfig private constructor(
   // The handlers onFailure added, which startIfConfigured tells of a start that fails.
   private val failureHandlers: List<BiConsumer<in String, in Exception>>,
   /**
-   * How long the started agent's [shutdown][EmbeddedAgentInfo.shutdown] waits for it to stop, or null, for as long as
-   * the stop takes ([Builder.stopTimeout]). It's the handle's, not the agent's, so [toConfig]'s tree doesn't hold it.
+   * How long the started agent's [shutdown][EmbeddedAgentInfo.shutdown] waits for it to stop, or null, for the agent's
+   * own 30 seconds ([Builder.stopTimeout]). It's the handle's, not the agent's, so [toConfig]'s tree doesn't hold it.
    */
   @get:JvmSynthetic
   val stopTimeout: Duration?,
@@ -164,25 +164,8 @@ class EmbeddedAgentConfig private constructor(
     } catch (e: Exception) {
       // A setting the agent rejects (ConfigLoadException), a failure to start, the start timing out included
       // (IllegalStateException), or anything else the start throws
-      val reason = failureReason(e)
-      logger.error { "The Prometheus agent could not start, so it stays off: $reason" }
-      (failureHandlers + listOfNotNull(onFailure)).forEach { handler -> tell(handler, reason, e) }
+      reportFailure(e, failureHandlers + listOfNotNull(onFailure))
       null
-    }
-  }
-
-  // Tells [handler] why the start failed. One that throws is logged: the start returns null whatever it meets, and
-  // Kotlin can throw a checked exception undeclared, so Exception is caught, not only RuntimeException.
-  @Suppress("TooGenericExceptionCaught")
-  private fun tell(
-    handler: BiConsumer<in String, in Exception>,
-    reason: String,
-    e: Exception,
-  ) {
-    try {
-      handler.accept(reason, e)
-    } catch (thrown: Exception) {
-      logger.warn(thrown) { "An onFailure handler threw, given: $reason" }
     }
   }
 
@@ -245,9 +228,10 @@ class EmbeddedAgentConfig private constructor(
      * How long the started agent's [shutdown][EmbeddedAgentInfo.shutdown], and its `close()`, wait for it to stop.
      * Once it's up, the call returns, with a warning in the log, and the agent goes on stopping on a daemon thread of
      * its own, so a host's shutdown fits the window its platform gives it, such as Cloud Run's 10 seconds after
-     * SIGTERM. Null, the default, waits for as long as the stop takes. One of zero or less throws
-     * [ConfigLoadException]. It's the handle's, so the tree [toConfig][EmbeddedAgentConfig.toConfig] gives doesn't hold
-     * it.
+     * SIGTERM. [Duration.INFINITE] waits for as long as the stop takes. Null, the default, leaves the wait to the
+     * agent's own stop, which gives up after 30 seconds by throwing a `java.util.concurrent.TimeoutException` out of
+     * `shutdown()`. One of zero or less throws [ConfigLoadException]. It's the handle's, so the tree
+     * [toConfig][EmbeddedAgentConfig.toConfig] gives doesn't hold it.
      */
     @get:JvmSynthetic
     @set:JvmSynthetic
@@ -257,7 +241,7 @@ class EmbeddedAgentConfig private constructor(
         field = value
       }
 
-    /** Sets [stopTimeout]; null waits for as long as the stop takes. */
+    /** Sets [stopTimeout]; null leaves the wait to the agent's own stop, 30 seconds. */
     fun stopTimeout(timeout: java.time.Duration?): Builder = apply { stopTimeout = timeout?.toKotlinDuration() }
 
     /**
@@ -268,6 +252,18 @@ class EmbeddedAgentConfig private constructor(
      * doesn't call them: it throws, for its caller to handle.
      */
     fun onFailure(handler: BiConsumer<in String, in Exception>): Builder = apply { failureHandlers += handler }
+
+    /**
+     * Logs [cause], a failure that came while these settings were being made, before the agent could start, and tells
+     * each handler [onFailure] has added, as [startIfConfigured][EmbeddedAgentConfig.startIfConfigured] does of a start
+     * that fails: with why, as the log line gives it, and [cause]. It's for a host that makes an agent's settings from
+     * its own configuration first and from the app's code after, as the Ktor plugin and the Spring Boot starter do: a
+     * value in its configuration that a method here rejects throws before the app's code has added its handlers, so the
+     * host goes on to run that code, which adds them, then reports the failure here.
+     */
+    fun reportFailure(cause: Exception) {
+      reportFailure(cause, failureHandlers.toList())
+    }
 
     /** The agent's name, as the proxy's dashboard and logs show it (`agent.name`). */
     @get:JvmSynthetic
@@ -669,6 +665,31 @@ class EmbeddedAgentConfig private constructor(
         .let(::sanitizeUrlsInText)
 
     private fun invalid(message: String): Nothing = throw ConfigLoadException(message)
+
+    // Logs why a start failed, and tells each of [handlers], in turn, as startIfConfigured and reportFailure do
+    private fun reportFailure(
+      e: Exception,
+      handlers: List<BiConsumer<in String, in Exception>>,
+    ) {
+      val reason = failureReason(e)
+      logger.error { "The Prometheus agent could not start, so it stays off: $reason" }
+      handlers.forEach { handler -> tell(handler, reason, e) }
+    }
+
+    // Tells [handler] why the start failed. One that throws is logged: the start returns null whatever it meets, and
+    // Kotlin can throw a checked exception undeclared, so Exception is caught, not only RuntimeException.
+    @Suppress("TooGenericExceptionCaught")
+    private fun tell(
+      handler: BiConsumer<in String, in Exception>,
+      reason: String,
+      e: Exception,
+    ) {
+      try {
+        handler.accept(reason, e)
+      } catch (thrown: Exception) {
+        logger.warn(thrown) { "An onFailure handler threw, given: $reason" }
+      }
+    }
 
     // A setting as toString shows it: a secret or a PEM only as set or not, and a URL with its credentials masked. A
     // key is matched in any case, as Spring Boot lowercases one read from an environment variable.

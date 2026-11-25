@@ -17,12 +17,14 @@
 package io.prometheus.agent.spring;
 
 import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.convert.DurationUnit;
 
 /**
  * The embedded agent's settings, the {@code prometheus-proxy.agent.*} properties. Only {@link #getProxy() proxy} is
@@ -107,9 +109,11 @@ public class PrometheusProxyAgentProperties {
   private boolean required;
 
   /**
-   * How long the app's shutdown waits for the agent to stop. Once it's up, the app stops anyway, with a warning, and the
-   * agent goes on stopping on a thread of its own. It must be more than zero.
+   * How long the app's shutdown waits for the agent to stop, as a number of seconds or a duration such as 10s or PT10S.
+   * Once it's up, the app stops anyway, with a warning, and the agent goes on stopping on a thread of its own. It must
+   * be more than zero.
    */
+  @DurationUnit(ChronoUnit.SECONDS)
   private Duration stopTimeout = Duration.ofSeconds(30);
 
   /**

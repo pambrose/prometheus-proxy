@@ -165,9 +165,15 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
         5.seconds
     }
 
-    // Thread.join(0) waits for as long as the stop takes, so a zero timeout would be none at all
+    // As the Spring Boot starter's stop-timeout property reads one
+    "a stop-timeout of a number alone is in seconds" {
+      PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to "10")).builder().stopTimeout shouldBe
+        10.seconds
+    }
+
+    // A zero timeout would give up on every stop at once
     "a stop-timeout that isn't a duration of more than zero fails the settings" {
-      listOf("ten", "0s", "-5s").forEach { value ->
+      listOf("ten", "0", "0s", "-5s").forEach { value ->
         shouldThrow<ConfigLoadException> {
           PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to value)).builder()
         }.message shouldBe
@@ -175,7 +181,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       }
     }
 
-    "an agent block's stop timeout takes precedence over the file's, and null waits for as long as the stop takes" {
+    "an agent block's stop timeout takes precedence over the file's, and null leaves it to the agent's stop" {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig("stop-timeout" to "10s"))
       config.agent { stopTimeout = 5.seconds }
 
@@ -221,6 +227,20 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
       builder.proxy shouldBe "from-code:50051"
       builder.build().toString() shouldContain "code_path=in-process"
       builder.build().toString() shouldNotContain "file_path"
+    }
+
+    // So each block's onFailure handler is added whatever failed, for the plugin to tell them of the failure
+    "every agent block runs after a step that fails, and the first failure is then thrown" {
+      val config = PrometheusProxyAgentConfig(MapApplicationConfig("metrics-port" to "ninety"))
+      config.agent { name = "first" }
+      config.agent { error("the secret store is down") }
+      config.agent { token = "s3cret" }
+      val builder = EmbeddedAgentConfig.builder()
+
+      shouldThrow<ConfigLoadException> { config.applyTo(builder) }.message shouldBe
+        "prometheus-proxy.agent.metrics-port must be a number: ninety"
+      builder.name shouldBe "first"
+      builder.token shouldBe "s3cret"
     }
 
     "every agent block runs, in turn" {

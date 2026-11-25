@@ -315,6 +315,65 @@ class PrometheusProxyAgentAutoConfigurationTest {
         .run(context -> assertThat(config(context)).contains("stopTimeout=5s"));
   }
 
+  // As the Ktor plugin's stop-timeout reads one, where Spring's default unit would make it milliseconds
+  @Test
+  void aStopTimeoutOfANumberAloneIsInSeconds() {
+    runner
+        .withPropertyValues("prometheus-proxy.agent.stop-timeout=10")
+        .run(context -> assertThat(config(context)).contains("stopTimeout=10s"));
+  }
+
+  // The customizers add the handlers, after the properties, so a property the builder rejects fails before they're
+  // added: the customizers still run, and their handlers are told, as of a start that fails
+  @Test
+  void aPropertyTheBuilderRejectsIsToldToACustomizersOnFailure() throws IOException {
+    List<String> reasons = new CopyOnWriteArrayList<>();
+    runner
+        .withPropertyValues(
+            "prometheus-proxy.agent.proxy=localhost:" + freePort(), "prometheus-proxy.agent.stop-timeout=0s")
+        .withBean(PrometheusProxyAgentCustomizer.class, () -> builder ->
+            builder.onFailure((reason, e) -> reasons.add(reason)))
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isFalse();
+          assertThat(reasons).containsExactly("prometheus-proxy.agent.stop-timeout must be more than zero: PT0S");
+        });
+  }
+
+  @Test
+  void aCustomizerThatFailsIsToldToTheHandlersOfTheCustomizersBeforeAndAfterIt() throws IOException {
+    runner
+        .withPropertyValues("prometheus-proxy.agent.proxy=localhost:" + freePort())
+        .withBean(Heard.class, () -> new Heard(new CopyOnWriteArrayList<>()))
+        .withUserConfiguration(FailingCustomizers.class)
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isFalse();
+          assertThat(context.getBean(Heard.class).reasons())
+              .containsExactly("before: the secret store is down", "after: the secret store is down");
+        });
+  }
+
+  // As start() tells no handler: the app's start fails with why instead
+  @Test
+  void aRequiredAgentWhosePropertyTheBuilderRejectsFailsTheAppAndTellsNoHandler() throws IOException {
+    List<String> reasons = new CopyOnWriteArrayList<>();
+    runner
+        .withPropertyValues(
+            "prometheus-proxy.agent.required=true",
+            "prometheus-proxy.agent.proxy=localhost:" + freePort(),
+            "prometheus-proxy.agent.stop-timeout=0s")
+        .withBean(PrometheusProxyAgentCustomizer.class, () -> builder ->
+            builder.onFailure((reason, e) -> reasons.add(reason)))
+        .run(context -> {
+          assertThat(context)
+              .getFailure()
+              .rootCause()
+              .hasMessage("prometheus-proxy.agent.stop-timeout must be more than zero: PT0S");
+          assertThat(reasons).isEmpty();
+        });
+  }
+
   // The builder's onFailure, which startIfConfigured tells: a customizer adds one, as it makes any other setting
   @Test
   void aCustomizersOnFailureIsToldWhyTheAgentCouldNotStart() throws IOException {
@@ -539,7 +598,7 @@ class PrometheusProxyAgentAutoConfigurationTest {
         });
   }
 
-  private static String config(AssertableApplicationContext context) {
+  private static String config(AssertableApplicationContext context) throws Exception {
     return context.getBean(PrometheusProxyAgent.class).config().toString();
   }
 
@@ -611,6 +670,33 @@ class PrometheusProxyAgentAutoConfigurationTest {
     @Bean
     PrometheusProxyAgent west(ApplicationContext context) {
       return new PrometheusProxyAgent(new PrometheusProxyAgentProperties(), context);
+    }
+  }
+
+  // What the handlers FailingCustomizers adds were told
+  record Heard(List<String> reasons) {}
+
+  // A customizer that fails between two that add a handler each
+  @Configuration(proxyBeanMethods = false)
+  static class FailingCustomizers {
+    @Bean
+    @Order(1)
+    PrometheusProxyAgentCustomizer before(Heard heard) {
+      return builder -> builder.onFailure((reason, e) -> heard.reasons().add("before: " + reason));
+    }
+
+    @Bean
+    @Order(2)
+    PrometheusProxyAgentCustomizer failing() {
+      return builder -> {
+        throw new UnsupportedOperationException("the secret store is down");
+      };
+    }
+
+    @Bean
+    @Order(3)
+    PrometheusProxyAgentCustomizer after(Heard heard) {
+      return builder -> builder.onFailure((reason, e) -> heard.reasons().add("after: " + reason));
     }
   }
 

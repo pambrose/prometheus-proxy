@@ -216,7 +216,9 @@ the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spr
   has it, and what was thrown. Each handler added runs, in turn, and one that throws is logged, without failing the
   start, so a [Ktor](ktor-plugin.md) `agent { }` block or a [Spring Boot](spring-boot-starter.md) customizer can add
   one beside the app's own. `startIfConfigured(onFailure)` still takes one too, which runs after them. `start()`
-  tells none of them: it throws, for its caller to handle.
+  tells none of them: it throws, for its caller to handle. A host that makes the settings from its own configuration
+  before the app's code adds its handlers, as those two do, tells them of a value there that a builder method rejects
+  with the builder's `reportFailure(cause)`, which logs it as a failed start is logged.
 - **The handle is `AutoCloseable`,** and Kotlin's `use` and Java's try-with-resources both take a `null` one, so a
   program that runs while its agent does reads as `startIfConfigured().use { worker.run() }`: the worker runs whether
   or not the agent started, and the agent stops after it. Write `.use`, not `?.use`, which skips the block for `null`.
@@ -460,7 +462,8 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `source(path, source)`, `source(path, labels, source)`             | none: it's code                                     | Since 4.7.0, serve what the `MetricsSource` writes at `path`, read in-process, with the path's labels or none                            |
 | `setting(key, value)`                                              | the key, under `agent`                              | Any other setting, such as `http.clientTimeoutSecs`; it takes precedence over a method that sets the same key                             |
 | `onFailure(handler)`                                               | none: it's code                                     | Add a handler `startIfConfigured()` tells of a start that fails, with why and what was thrown ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
-| `stopTimeout(timeout)`                                             | none: it's the handle's                             | How long the handle's `shutdown()` waits for the agent to stop, more than zero; `null`, the default, waits for as long as it takes ([`EmbeddedAgentInfo`](#embeddedagentinfo)) |
+| `reportFailure(cause)`                                             | none: it's an action                                | Log a failure that came while the settings were being made, before the agent could start, and tell the `onFailure` handlers, as a failed start does, for a host that makes the settings from its own configuration ([Starting Where There's a Proxy](#starting-where-theres-a-proxy)) |
+| `stopTimeout(timeout)`                                             | none: it's the handle's                             | How long the handle's `shutdown()` waits for the agent to stop, more than zero, or `Duration.INFINITE` for as long as it takes; `null`, the default, leaves the wait to the agent's own stop, 30 seconds ([`EmbeddedAgentInfo`](#embeddedagentinfo)) |
 
 In `embeddedAgent { }`, `name`, `proxy`, `token`, `consolidated`, `agentMetricsPort`, `dashboardPort`, and `stopTimeout`
 are properties too, so `name = "my-app"` does what `name("my-app")` does; `proxy` takes several endpoints separated by
@@ -493,7 +496,7 @@ The handle `startAsyncAgent()` and `EmbeddedAgentConfig.start()` return.
 | `agentName`     | `String`  | Name of the agent: `agent.name`, or `Unnamed-<hostname>` when none is set                                                                         |
 | `isConnected`   | `Boolean` | Whether the agent is connected to a proxy and has registered its paths there, so Prometheus can scrape through it now; read live, for a health check |
 | `proxyEndpoint` | `String?` | The proxy it's connected to, as `host:port`, or `null` when it isn't                                                                             |
-| `shutdown()`    | `Unit`    | Stops the agent and blocks until it has stopped, or until the builder's `stopTimeout` is up; calling it again, or on a failed agent, does nothing |
+| `shutdown()`    | `Unit`    | Stops the agent and blocks until it has stopped, up to the builder's `stopTimeout`, or, without one, 30 seconds, after which it throws a `TimeoutException`; calling it again, or on a failed agent, does nothing |
 | `close()`       | `Unit`    | Since 4.7.0, does what `shutdown()` does: the handle is `AutoCloseable`, for Kotlin's `use` and Java's try-with-resources                         |
 
 `isConnected` is false before the agent's first connection, while it reconnects after losing one, and once it has
@@ -502,10 +505,12 @@ take the app down.
 
 Call `shutdown()` wherever your application stops its own services, or from a shutdown hook of its own. It closes the
 connection to the proxy, drains the scrapes in flight, and releases its admin, metrics, and dashboard ports, so the
-agent's connection and background work don't outlive your application. It waits for as long as that takes, unless the
-builder's `stopTimeout` caps it: once that's up, `shutdown()` returns, with a warning in the log, and the agent goes on
-stopping on a daemon thread of its own, so your application's shutdown fits the window its platform gives it, such as
-the 30 seconds Kubernetes gives a pod, or Cloud Run's 10. A stop that fails within it throws, as one without it does. Since 4.7.0, the agent registers no JVM shutdown
+agent's connection and background work don't outlive your application. It waits up to the builder's `stopTimeout`:
+once that's up, `shutdown()` returns, with a warning in the log, and the agent goes on stopping on a daemon thread of
+its own, so your application's shutdown fits the window its platform gives it, such as the 30 seconds Kubernetes gives
+a pod, or Cloud Run's 10. A stop that fails within it throws. Without a `stopTimeout`, it waits 30 seconds at most,
+then throws a `java.util.concurrent.TimeoutException`, and the agent goes on stopping. An interrupt ends neither wait.
+Since 4.7.0, the agent registers no JVM shutdown
 hook, so it stops when your application stops it, after the work that needs it, not at the same time as your
 application's own hooks; the [Ktor Plugin](ktor-plugin.md) and the [Spring Boot Starter](spring-boot-starter.md) stop
 it with the app.

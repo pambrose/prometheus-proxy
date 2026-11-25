@@ -72,10 +72,11 @@ Both are the agent's own settings, the builder's, so they go in the `agent { }` 
 
 An agent that can't start stays off while the app runs on, and the plugin logs why. A handler the block adds with
 `onFailure { reason, cause -> }` is told too, with the reason the log gives, which holds no token, password, or PEM,
-and what the start threw, so the app can send it wherever someone will see it, such as a chat channel. It isn't told of
+and what was thrown, so the app can send it wherever someone will see it, such as a chat channel. That includes a
+failure before the agent's start, such as a value in the file the plugin can't read, or an `agent { }` block that
+throws: the plugin runs every block whatever failed, so each one's handler is added, then tells them. It isn't told of
 a `required` agent's failure, which fails the app's start, nor of an agent left off on purpose, not `enabled` or without
-a proxy, nor of a failure before the agent's settings are complete, such as a value in the file the plugin can't read,
-which is only logged. A handler that throws is logged, without failing the app's start.
+a proxy. A handler that throws is logged, without failing the app's start.
 
 `stopTimeout` is how long the app's shutdown waits for the agent's stop, 30 seconds unless the file's `stop-timeout` or
 the block sets another: set it inside the shutdown window the app's platform gives, such as Cloud Run's 10 seconds
@@ -125,7 +126,7 @@ environment variable gives:
 | `dashboard.port`, `.host`  |                            | The [agent's dashboard](agent-dashboard.md), off without a port, listening on every interface unless `host` names one, such as `127.0.0.1`                                    |
 | `dashboard.password`       |                            | Requires a login to the dashboard, as `dashboard.username` (`admin` by default)                                                                                               |
 | `required`                 | `false`                    | Whether the app fails to start when the agent can't, or has no proxy                                                                                                          |
-| `stop-timeout`             | `30s`                      | The agent's `stopTimeout`: how long the app's shutdown waits for its stop, more than zero, in Kotlin's duration format or ISO 8601's, such as `10s` or `PT10S`                |
+| `stop-timeout`             | `30s`                      | The agent's `stopTimeout`: how long the app's shutdown waits for its stop, more than zero, as a number of seconds or a duration such as `10s` or `PT10S`                      |
 | `settings.<key>`           |                            | Any other [agent setting](configuration/agent.md), by its key under `agent`, such as `settings.scrapeTimeoutSecs = 20`. It takes precedence over the keys above              |
 | `enabled`                  | `true`                     | Whether to run the agent at all                                                                                                                                               |
 

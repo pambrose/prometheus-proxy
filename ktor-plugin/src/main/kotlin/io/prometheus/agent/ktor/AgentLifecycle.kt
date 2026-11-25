@@ -26,6 +26,7 @@ import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.agent.EmbeddedAgentInfo
 import kotlinx.coroutines.DisposableHandle
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
@@ -43,7 +44,8 @@ import kotlin.concurrent.thread
 //  - ApplicationStopping, raised once the engine has stopped, as the app is disposed, waits for the stop to finish, or
 //    stops the agent itself when the app is disposed without the engine stopping. The agent's handle stops waiting for
 //    its stop once the settings' stopTimeout is up, which the plugin sets to 30 seconds unless the file or an agent
-//    block sets another, and this waits a second more, for the handle to return.
+//    block sets another, and this waits a second more, for the handle to return. A block that sets none leaves the
+//    wait to the handle, which gives up after the agent's own 30 seconds.
 //
 // The handlers are the app's, not the plugin's: in development mode, a reload disposes the app and creates another on
 // the same monitor, so each handler checks that the event is its app's, but for ApplicationStopPreparing's, which
@@ -61,8 +63,8 @@ internal class AgentLifecycle(
   private val agent = AtomicReference<EmbeddedAgentInfo?>()
   private val stopping = AtomicReference<Thread?>()
 
-  // The started agent's settings' stopTimeout, which its handle's shutdown waits for at most; null, for as long as the
-  // stop takes
+  // The started agent's settings' stopTimeout, which its handle's shutdown waits for at most; null, as long as the
+  // handle's shutdown takes, which gives up after the agent's own 30 seconds
   private val stopTimeout = AtomicReference<Duration?>()
 
   fun subscribe() {
@@ -81,21 +83,22 @@ internal class AgentLifecycle(
       logger.info { "prometheus-proxy.agent.enabled is false, so the Prometheus agent stays off" }
       return
     }
+    val builder = EmbeddedAgentConfig.builder()
     try {
-      launchAgent()
+      config.applyTo(builder)
+      launchAgent(builder.build())
     } catch (e: Exception) {
       // A value in the file the builder rejects (ConfigLoadException), an agent block's own failure, or, for a required
       // agent, its start's: a setting the agent rejects, or a failure to start, its start timing out included
       // (IllegalStateException). Kotlin can throw a checked exception undeclared, so Exception is caught, not only
-      // RuntimeException. Any other agent's start logs its own failure and returns null.
-      failed(e)
+      // RuntimeException. Any other agent's start logs its own failure, tells the handlers, and returns null.
+      failed(builder, e)
     }
   }
 
-  private fun launchAgent() {
+  private fun launchAgent(settings: EmbeddedAgentConfig) {
     // Decided once the file and the agent blocks have made the settings, by the agent's own rule, which
     // startIfConfigured follows too: a proxy from the builder, a settings key, or the agent's PROXY_HOSTNAME
-    val settings = config.builder().build()
     if (!settings.namesProxy()) {
       withoutAProxy()
       return
@@ -120,12 +123,16 @@ internal class AgentLifecycle(
     logger.info { "$PROXY_UNSET, so the Prometheus agent stays off" }
   }
 
-  // A start that threw e: a required agent fails the app's startup, and any other stays off, logging why. Its settings
-  // weren't complete, or startIfConfigured would have told their onFailure handlers, so nothing else is told.
-  private fun failed(e: Exception) {
+  // A start that threw e: a required agent fails the app's startup, telling no handler, as start() tells none. Any
+  // other stays off, and the builder logs why and tells the onFailure handlers the blocks added, which applyTo ran
+  // whatever failed: its settings weren't complete, or startIfConfigured would have told them itself.
+  private fun failed(
+    builder: EmbeddedAgentConfig.Builder,
+    e: Exception,
+  ) {
     if (config.required)
       throw e as? RuntimeException ?: IllegalStateException("The Prometheus agent could not start", e)
-    logger.error { "The Prometheus agent could not start, so it stays off: ${e.message ?: e::class.qualifiedName}" }
+    builder.reportFailure(e)
   }
 
   fun beginStop() {
@@ -149,8 +156,9 @@ internal class AgentLifecycle(
       thread.join()
       return
     }
-    // The handle's shutdown returns once its stop timeout is up; a second more lets it, before the app stops anyway
-    thread.join(timeout.inWholeMilliseconds + HANDLE_RETURN_MARGIN_MILLIS)
+    // The handle's shutdown returns once its stop timeout is up; a second more lets it, before the app stops anyway.
+    // Added as durations, which saturate, so an infinite timeout waits for as long as the stop takes.
+    thread.join((timeout + HANDLE_RETURN_MARGIN_MILLIS.milliseconds).inWholeMilliseconds)
     if (thread.isAlive)
       logger.warn { "The Prometheus agent was still stopping after $timeout; the app stops anyway" }
   }

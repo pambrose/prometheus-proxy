@@ -179,6 +179,36 @@ class StartIfConfiguredTest : StringSpec() {
         )
     }
 
+    // For a host that makes the settings from its own configuration, then from the app's code, which adds the handlers:
+    // a value of the host's that a builder method rejects, or the app's code throwing, fails before the agent can
+    // start, so the host runs the rest of the app's code, then reports it, as startIfConfigured does a failed start
+    "reportFailure logs a failure that came before the start, and tells each handler, with why and what was thrown" {
+      val heard = mutableListOf<String>()
+      val thrown =
+        ConfigLoadException(
+          "The URL for path app_metrics has no scheme",
+          IllegalArgumentException("https://user:s3cret@example.com/metrics"),
+        )
+      val builder =
+        EmbeddedAgentConfig.builder()
+          .onFailure { reason, e ->
+            e shouldBeSameInstanceAs thrown
+            heard += "first: $reason"
+          }.onFailure { _, _ -> error("the chat channel is down") }
+          .onFailure { reason, _ -> heard += "third: $reason" }
+
+      val events = captureLogs<EmbeddedAgentConfig>(Level.DEBUG) { builder.reportFailure(thrown) }
+
+      // Its causes, as a failed start's, with a URL's credentials masked
+      val reason = "The URL for path app_metrics has no scheme: https://***@example.com/metrics"
+      heard shouldBe listOf("first: $reason", "third: $reason")
+      events.map { it.level to it.formattedMessage } shouldBe
+        listOf(
+          Level.ERROR to "The Prometheus agent could not start, so it stays off: $reason",
+          Level.WARN to "An onFailure handler threw, given: $reason",
+        )
+    }
+
     // A proxy nothing listens on: the agent starts, and keeps trying to connect until it's stopped
     "a started agent's handle stops it within the builder's stop timeout" {
       val agent =
