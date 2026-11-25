@@ -23,11 +23,15 @@ import com.typesafe.config.ConfigValueType
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
+import io.prometheus.proxy.ProxyOptions
 import java.io.File
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.TimeUnit.NANOSECONDS
 
 // HOCON doesn't reject a key it doesn't know, so an operator who copies a misnamed key from the website gets no error,
 // and the setting silently keeps its default. Every proxy. and agent. key the pages name must be in the reference
-// config, which declares them all with their defaults, and a default the pages give must be the one it declares.
+// config, which declares them all with their defaults, and a default the pages give must be the one it declares, or,
+// for a setting it leaves to gRPC, gRPC's. The settings tables' options, variables, and links are CliReferenceTest's.
 class WebsiteConfigKeysTest : StringSpec() {
   private val reference by lazy { ConfigFactory.parseFile(File(REFERENCE_CONFIG)) }
 
@@ -70,19 +74,63 @@ class WebsiteConfigKeysTest : StringSpec() {
     return defaults
   }
 
-  // Whether the reference config declares [default] for [key]. Lists and objects have no one default to give, and a
-  // tscfg spec such as "long | -1" leaves the setting to gRPC's own default, which the pages give instead.
+  // Whether the reference config declares [default] for [key]. Lists and objects have no one default to give. A tscfg
+  // spec gives its default after its type, "double | 1.0", and one of -1, "long | -1", leaves the setting to gRPC's own
+  // default, which the pages give instead.
   private fun declares(
     key: String,
     default: String,
   ): Boolean {
     val value = reference.getValue(key)
     return when (value.valueType()) {
-      ConfigValueType.NUMBER, ConfigValueType.BOOLEAN -> value.unwrapped().toString() == default
-      ConfigValueType.STRING -> (value.unwrapped() as String).let { it.matches(TSCFG_SPEC) || it == default }
-      else -> true
+      ConfigValueType.NUMBER, ConfigValueType.BOOLEAN -> {
+        value.unwrapped().toString() == default
+      }
+
+      ConfigValueType.STRING -> {
+        val declared = value.unwrapped() as String
+        val spec = TSCFG_SPEC.matchEntire(declared)?.groupValues?.get(1)
+        when (spec) {
+          null -> declared == default
+          GRPC_DEFAULT_SPEC -> grpcDefaults[key] == default
+          else -> spec == default
+        }
+      }
+
+      else -> {
+        true
+      }
     }
   }
+
+  // gRPC's own default for each setting the reference config leaves to it, as the pages give it: in seconds, or INT_MAX
+  // for none. The proxy's builder starts from gRPC's server defaults, and the agent's from its client defaults, which
+  // leave keepalive off.
+  private val grpcDefaults: Map<String, String> by lazy {
+    fun seconds(constant: String) = NANOSECONDS.toSeconds(grpcUtil(constant)).toString()
+    mapOf(
+      "proxy.grpc.handshakeTimeoutSecs" to MILLISECONDS.toSeconds(grpcHandshakeTimeoutMillis()).toString(),
+      "proxy.grpc.keepAliveTimeSecs" to seconds("DEFAULT_SERVER_KEEPALIVE_TIME_NANOS"),
+      "proxy.grpc.keepAliveTimeoutSecs" to seconds("DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS"),
+      "proxy.grpc.permitKeepAliveTimeSecs" to seconds("DEFAULT_SERVER_PERMIT_KEEPALIVE_TIME_NANOS"),
+      "proxy.grpc.maxConnectionIdleSecs" to NO_LIMIT,
+      "proxy.grpc.maxConnectionAgeSecs" to NO_LIMIT,
+      "proxy.grpc.maxConnectionAgeGraceSecs" to NO_LIMIT,
+      "agent.grpc.keepAliveTimeSecs" to NO_LIMIT,
+      "agent.grpc.keepAliveTimeoutSecs" to seconds("DEFAULT_KEEPALIVE_TIMEOUT_NANOS"),
+    )
+  }
+
+  // A constant of gRPC's GrpcUtil, which is in grpc-core, on the tests' runtime classpath only
+  private fun grpcUtil(name: String) = Class.forName("io.grpc.internal.GrpcUtil").getField(name).getLong(null)
+
+  // The handshake timeout a gRPC server builder starts with, which gRPC keeps in a private constant
+  private fun grpcHandshakeTimeoutMillis() =
+    Class
+      .forName("io.grpc.internal.ServerImplBuilder")
+      .getDeclaredField("DEFAULT_HANDSHAKE_TIMEOUT_MILLIS")
+      .apply { isAccessible = true }
+      .getLong(null)
 
   init {
     "every proxy and agent config key named on the website should be in config/config.conf" {
@@ -96,7 +144,8 @@ class WebsiteConfigKeysTest : StringSpec() {
         .filterValues { it.isNotEmpty() } shouldBe emptyMap()
     }
 
-    // A key the reference config doesn't declare is left to the check above.
+    // A key the reference config doesn't declare is left to the check above. A key left to gRPC is given gRPC's
+    // default.
     "every proxy and agent config key default in the website's tables should be the one config/config.conf has" {
       val defaults =
         WebsitePages.prose.mapValues { (page, prose) ->
@@ -109,6 +158,22 @@ class WebsiteConfigKeysTest : StringSpec() {
         .mapValues { (_, rows) -> rows.filterNot { (key, default) -> declares(key, default) } }
         .filterValues { it.isNotEmpty() } shouldBe emptyMap()
     }
+
+    // Every setting the reference config leaves to gRPC has a default to compare with, and the ones the proxy's startup
+    // log and dashboard show as gRPC's are gRPC's.
+    "gRPC's defaults should be known for every setting left to gRPC, and be the ones ProxyOptions shows" {
+      val leftToGrpc =
+        reference.entrySet().filter { (_, value) ->
+          (value.unwrapped() as? String)?.let { TSCFG_SPEC.matchEntire(it)?.groupValues?.get(1) } == GRPC_DEFAULT_SPEC
+        }.map { it.key }
+      leftToGrpc.toSet() shouldBe grpcDefaults.keys
+
+      ProxyOptions.GRPC_HANDSHAKE_TIMEOUT_SECS.toString() shouldBe grpcDefaults["proxy.grpc.handshakeTimeoutSecs"]
+      ProxyOptions.GRPC_PERMIT_KEEPALIVE_TIME_SECS.toString() shouldBe
+        grpcDefaults["proxy.grpc.permitKeepAliveTimeSecs"]
+      declares("agent.grpc.keepAliveTimeSecs", "7200") shouldBe false
+      declares("proxy.grpc.keepAliveTimeSecs", "7200") shouldBe true
+    }
   }
 
   companion object {
@@ -116,7 +181,15 @@ class WebsiteConfigKeysTest : StringSpec() {
 
     // A dotted proxy. or agent. path, optionally followed by "= value".
     private val CONFIG_KEY = Regex("""((?:proxy|agent)(?:\.[A-Za-z][A-Za-z0-9]*)+)(?:\s*=.*)?""")
-    private val TSCFG_SPEC = Regex("""\w+ \| .*""")
+
+    // A tscfg spec, "long | -1": a type, then the default
+    private val TSCFG_SPEC = Regex("""\w+ \| (.*)""")
+
+    // The default of a setting the reference config leaves to gRPC
+    private const val GRPC_DEFAULT_SPEC = "-1"
+
+    // How the pages give a gRPC limit that's off
+    private const val NO_LIMIT = "INT_MAX"
 
     // A cell that starts with a linked code span, as [`agent.scrapeTimeoutSecs`](../cli-reference.md#…)<br>`--timeout`.
     private val LINKED_KEY = Regex("""^\[`([^`]+)`]\(""")

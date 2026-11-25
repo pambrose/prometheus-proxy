@@ -375,8 +375,9 @@ All notable changes to this project are documented in this file.
 - `TestPortsTest` fails on a port a spec binds that a demo publishes on the host (a compose port, a kind `hostPort`,
   or a `demo.sh` port default), since a spec run while that demo was up reached the demo's container. The admin-path
   specs and `HarnessHelpersTest` move off the basics and network demos' ports (8098, 8099, 9511)
-- The XXLARGE harness profile (`make xxl-tests`) runs with a 16g test heap, 1,000 concurrent clients, and 100
-  parallel queries against 30 HTTP servers, and XLARGE with 500 concurrent clients
+- The XXLARGE harness profile (`make xxl-tests`) runs with a 16g heap for the harness specs' JVM (the other specs' keeps
+  1g), 1,000 concurrent clients, and 100 parallel queries against 30 HTTP servers, and XLARGE with 500 concurrent
+  clients
 - `make docker-build` builds the proxy and agent images for this machine into the local Docker, as
   `prometheus-proxy:local` and `prometheus-agent:local`, and `make docker-scan` builds them and lists their CVEs with
   Docker Scout, the libraries inside the fat jars included
@@ -390,6 +391,18 @@ All notable changes to this project are documented in this file.
   agent's series (`PER_LAUNCH`), an embedded agent leaves the JVM metric groups to its host, `fromEnvironment()`
   reads the process's environment, and a `MetricsSource` that throws a `VirtualMachineError` propagates it, while
   one stuck past its timeout holds neither another path's scrape nor the agent's shutdown
+- `./gradlew test --tests=X`, the equals form, runs only the specs it names, as `--tests X` does, where it ran every
+  spec, and with `RUN_CONTAINER_TESTS=true` the harness specs three at a time; and `./gradlew unitTest --tests X` runs
+  one spec outside the harness
+- The files the specs read are test inputs, so an edit to a workflow, the `Makefile`, `docs/TESTING.md`, a docs page,
+  or a demo reruns the unit specs rather than passing on the last run's result, and an edit to a test config or
+  certificate reruns every partition
+- The docs guards see more: `TestingGuideTest` and `TestPortsTest` read the Ktor plugin's and the Spring Boot starter's
+  tests; `ConfigFileKeysTest` checks the keys `setting()` calls give and every HOCON block in the docs, the snippets they
+  include among them; the new `CliReferenceTest` checks the CLI Reference's options, variables, and anchors against the
+  code, and the configuration pages' rows and every link to it against the CLI Reference; `WebsiteConfigKeysTest`
+  checks the defaults of the settings left to gRPC against gRPC's own; and `DemoTourTablesTest` checks each README's
+  Guided Tour headings and the page sections `demo.sh` links to
 - Update the GitHub Actions the workflows pin by commit SHA: `actions/setup-java` 6.2.0 → 6.3.0 and
   `anthropics/claude-code-action` 1.0.275 → 1.0.278 (#477, #521)
 - `ProxyRegistry.tla` drops an orphaned connection's unread path notices as the code does, where it let the dead
