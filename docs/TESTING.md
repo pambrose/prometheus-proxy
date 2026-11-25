@@ -302,7 +302,9 @@ application's logging config.
   counts under `launch_id` alone, and an agent's series goes when its metrics close while another agent's stays; the
   connection, path, discovery, and dashboard series registered; `agent_build_info`'s launch ID, name, and version; an
   agent's counters with a known set of labels at zero from the start, discovery's and the dashboard's only when it has
-  them; and the sampled gauges reporting the connection, the endpoint, the paths by source, and the dashboard's pages
+  them; the sampled gauges reporting the connection, the endpoint, the paths by source, and the dashboard's pages; and
+  AGENTS.md's `PER_LAUNCH` rule for every agent metric, read from the private `COLLECTORS`: each takes `launch_id` as
+  its first label, and closing one agent's metrics takes its series from every family while another agent's stay
 - **AgentBacklogDriftTest** — scrapeRequestBacklogSize drift when sendScrapeRequestAction fails
 - **HttpClientCacheTest** — HTTP client caching with TTL/idle eviction, keyed by auth credentials
 - **HttpClientCacheCancellationTest** — a scrape cancelled while the client cache is busy still releases its client,
@@ -324,18 +326,22 @@ application's logging config.
   `pathConfigs` entry; `source()` with a `PrometheusRegistry` serves it through `MetricsSource.of`, with or without
   labels; `fromEnvironment()` sets the proxy, the token, and the certificate from the `PROMETHEUS_` variables, read
   through a lookup a spec gives, trimmed, the authority `prometheus-proxy` without `PROMETHEUS_PROXY_AUTHORITY`, a blank
-  or unset variable leaving its setting alone, and a builder method called after it taking precedence; and
+  or unset variable leaving its setting alone, and a builder method called after it taking precedence, and without a
+  lookup reads the process's environment, which a JVM of its own, given all four variables, shows; and
   `agentMetricsAt()` gives an agent built from it, never started, an in-process path served by the agent's own metrics
   source, named as `agent.metrics.proxyPath`'s in a startup message, and its metrics collected with their port off; it
   sets `agent.metrics.proxyPath` and its labels, so it shows in `toString()` and `toConfig()`, an agent started from
-  that tree serves it, and it moves when called again
+  that tree serves it, and it moves when called again; an agent started embedded with it registers none of the JVM
+  metric groups in the default registry, even with their `agent.metrics` settings on, where one built from the same
+  settings directly does
 - **MetricsSourceTest** — a path served by a `MetricsSource`: scraped in-process in the content type the source names
   (the text format when it names none), asked in a text format the scrape accepts for the families named with
   `name[]`, filtered, refused past `maxContentLengthMBytes` whether written in arrays or a byte at a time, interrupted
   at the scrape timeout, failed when the source throws, an `Error` or its own cancellation or interrupt included, and
-  logged as a failed scrape of `in-process`, not an HTTP request; every byte kept when it writes from several threads
-  at once; read by the dashboard's fetch, which counts nothing; a call that ignores the interrupt times out on time,
-  and the source isn't called again until it returns; and the docs site's worker, in Kotlin and in Java, doing its work
+  logged as a failed scrape of `in-process`, not an HTTP request, but a `VirtualMachineError` propagating; every byte
+  kept when it writes from several threads at once; read by the dashboard's fetch, which counts nothing; a call that
+  ignores the interrupt times out on time, holds neither another path's source nor the service's `close()`, and the
+  source isn't called again until it returns; and the docs site's worker, in Kotlin and in Java, doing its work
 - **RegistryMetricsSourceTest** — a `PrometheusRegistry` served in-process (`MetricsSource.of`, from Kotlin and from
   Java): written in the text format or OpenMetrics, as the scrape accepts, and only the families it names; a source of
   the default registry leaving out the agent metrics while an agent collects them, named or not, and serving it all

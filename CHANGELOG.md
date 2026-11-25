@@ -276,6 +276,10 @@ All notable changes to this project are documented in this file.
   formulae, and `HomebrewFormulaTest` checks them with the version and checksum filled in
 - Dependabot holds the Spring Boot demo's Maven image at JDK 25: it reads the JDK in the image's tag as part of the
   version, so JDK 26 came as a patch update
+- Tests now pin four agent promises that had none: every agent metric takes `launch_id` first and loses a stopped
+  agent's series (`PER_LAUNCH`), an embedded agent leaves the JVM metric groups to its host, `fromEnvironment()`
+  reads the process's environment, and a `MetricsSource` that throws a `VirtualMachineError` propagates it, while
+  one stuck past its timeout holds neither another path's scrape nor the agent's shutdown
 - Update the GitHub Actions the workflows pin by commit SHA: `actions/setup-java` 6.2.0 → 6.3.0 and
   `anthropics/claude-code-action` 1.0.275 → 1.0.278 (#477, #521)
 
