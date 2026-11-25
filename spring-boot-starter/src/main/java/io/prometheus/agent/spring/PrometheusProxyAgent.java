@@ -205,15 +205,9 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     }
   }
 
-  // What the agent serves of its own: consolidated mode, its metrics, and its dashboard; and how long its stop may take,
-  // checked here, so its failure names the property, not only the builder's setting
+  // What the agent serves of its own: consolidated mode, its metrics, and its dashboard; and how long its stop may take
   private void features(EmbeddedAgentConfig.Builder builder) {
-    Duration stopTimeout = properties.getStopTimeout();
-    if (stopTimeout != null && (stopTimeout.isZero() || stopTimeout.isNegative())) {
-      throw new ConfigLoadException(
-          "prometheus-proxy.agent.stop-timeout must be more than zero: " + stopTimeout, null);
-    }
-    builder.stopTimeout(stopTimeout);
+    stopTimeout(builder);
     if (properties.isConsolidated()) {
       builder.consolidated(true);
     }
@@ -233,6 +227,17 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     if (!isBlank(dashboard.getPassword())) {
       builder.dashboardLogin(dashboard.getPassword(), orEmpty(dashboard.getUsername()));
     }
+  }
+
+  // How long the agent's stop may take, checked here, so a value of zero or less names the property, not only the
+  // builder's setting
+  private void stopTimeout(EmbeddedAgentConfig.Builder builder) {
+    Duration stopTimeout = properties.getStopTimeout();
+    if (stopTimeout != null && stopTimeout.compareTo(Duration.ZERO) <= 0) {
+      throw new ConfigLoadException(
+          "prometheus-proxy.agent.stop-timeout must be more than zero: " + stopTimeout, null);
+    }
+    builder.stopTimeout(stopTimeout);
   }
 
   // The targets it scrapes, then the app's registry
