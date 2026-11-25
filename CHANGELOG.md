@@ -15,7 +15,9 @@ All notable changes to this project are documented in this file.
   again; each path's metric filter and what it has dropped; the discovery file and how its last read went; and the
   settings the agent resolved, a token or key only as set. It takes the proxy dashboard's login
   (`agent.dashboard.password`), Host and Origin checks, and session cap, and an embedded agent turns it on with
-  `EmbeddedAgentConfig`'s `dashboard(port, host)` and `dashboardLogin(password, username)`
+  `EmbeddedAgentConfig`'s `dashboard(port, host)` and `dashboardLogin(password, username)`. A dashboard port that's
+  taken fails the agent's start, as a taken admin or metrics port does: a standalone agent exits with status 1, and
+  an embedded agent's start throws, with the ports it had opened released
 - The agent's dashboard shows each path's recent scrapes as the agent saw them (`agent.dashboard.pathHistorySize`,
   default 20): a strip of results on each path, and a Recent scrapes list with the target's status, the fetch's
   duration, the body's size before and after the filter, whether it was gzipped and chunked, and the reason a scrape
@@ -187,6 +189,10 @@ All notable changes to this project are documented in this file.
 - An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a
   `NullPointerException` in place of a startup failure, such as an admin or metrics port already in use, and left its
   gRPC channel and HTTP client cache open. It now throws the failure and releases them
+- An embedded agent whose start took over 30 seconds threw a `TimeoutException`, which `startIfConfigured()` reported
+  as the agent staying off, but went on starting, then connected and served its paths with nothing able to stop it,
+  and kept the app's JVM from exiting. It now stops as soon as its startup ends, without connecting, and the start
+  throws an `IllegalStateException` that says so, with the `TimeoutException` as its cause
 - The Spring Boot demo's roastery starts without Spring Boot's build info, as from an IDE's build, showing its version
   as `unknown`; its status page labels its roasted stock `Roasted stock:`; and it roasts the origins in a fixed
   rotation, so their graph lines no longer cross. `RoasteryAgentTest` stops the agent before the proxy, so a passing

@@ -279,6 +279,17 @@ object TestPorts {
   const val AGENT_FAILED_SHUTDOWN_ADMIN_PORT = 9707
   const val AGENT_FAILED_SHUTDOWN_METRICS_PORT = 9708
 
+  // AgentStartupTest: a dashboard port the spec holds open, and the admin and metrics servers the agent's failed start
+  // must stop, through startSync() and through the embedded entry point; and the admin server of an agent whose start
+  // times out, and its dashboard's port, which the case's mock keeps unbound (November 23 review, #5 and #12).
+  const val AGENT_FAILED_DASHBOARD_TAKEN_PORT = 9715
+  const val AGENT_FAILED_DASHBOARD_ADMIN_PORT = 9716
+  const val AGENT_FAILED_DASHBOARD_METRICS_PORT = 9717
+  const val EMBEDDED_FAILED_DASHBOARD_TAKEN_PORT = 9718
+  const val EMBEDDED_FAILED_DASHBOARD_ADMIN_PORT = 9719
+  const val AGENT_START_TIMEOUT_ADMIN_PORT = 9709
+  const val AGENT_START_TIMEOUT_DASHBOARD_PORT = 9762
+
   // InProcessZipkinTest: the HTTP port of each case's proxy, and a Zipkin port nothing listens on, which the reporter
   // fails to send to without holding up startup, a scrape, or shutdown.
   const val ZIPKIN_UNREACHABLE_PORT = 9710
