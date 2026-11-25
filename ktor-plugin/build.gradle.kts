@@ -36,6 +36,8 @@ dependencies {
   testImplementation(libs.kotest)
   testImplementation(libs.mockk)
   testImplementation(libs.ktor.server.test.host)
+  // An app on a real engine, which ServerBindFailureTest runs in a JVM of its own
+  testImplementation(libs.ktor.server.cio)
   testImplementation(libs.ktor.server.config.yaml)
   testImplementation(libs.ktor.server.metrics.micrometer)
   testImplementation(libs.micrometer.registry.prometheus)

@@ -51,11 +51,11 @@ All notable changes to this project are documented in this file.
   (`prometheus-metrics-model` is at compile scope in the agent's POM); `fromEnvironment()` reads `PROMETHEUS_PROXY`,
   `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and `PROMETHEUS_PROXY_AUTHORITY` (default `prometheus-proxy`),
   which the agent itself never reads, and a proxy or certificate from them that the agent can't use fails the start
-  with an error naming the variable; and `startIfConfigured()` starts the agent only where a proxy is set, and
-  otherwise, or when the start fails, logs why and returns null, so the app keeps running, with an optional
-  `onFailure` for the reason. `EmbeddedAgentInfo` is `AutoCloseable`, so `startIfConfigured().use { … }` runs the app
-  with its agent or without it. The Ktor plugin and the Spring Boot starter serve their registry and start their agent
-  the same way
+  with an error naming the variable; and `startIfConfigured()` starts the agent only where a proxy is set, which
+  `namesProxy()` tells, and otherwise, or when the start fails, logs why and returns null, so the app keeps running,
+  with an optional `onFailure` for the reason. `EmbeddedAgentInfo` is `AutoCloseable`, so
+  `startIfConfigured().use { … }` runs the app with its agent or without it. The Ktor plugin and the Spring Boot
+  starter serve their registry and start their agent the same way
 - An agent can serve its own metrics through the proxy, at a path of its own, read in-process, with no metrics port:
   `agent.metrics.proxyPath` (`--metrics_proxy_path`, `METRICS_PROXY_PATH`), with the path's labels in
   `agent.metrics.proxyPathLabels`. An embedded agent sets them with `agentMetricsAt(path, labels)`, and the Spring Boot
@@ -64,17 +64,19 @@ All notable changes to this project are documented in this file.
   the default registry then leaves them out, so each series is served once. The agent's dashboard shows the path in
   its Settings view
 - A Spring Boot starter, `com.pambrose:prometheus-proxy-spring-boot-starter`, released with the agent at its version:
-  with `prometheus-proxy.agent.proxy` set, a Spring Boot 4.2 app, or a 4.0 or 4.1 app that sets
-  `kotlin-coroutines.version` and `prometheus-client.version` to the agent's, runs an embedded agent that starts and
-  stops with it, serves the app's `PrometheusRegistry` bean in-process at `/<spring.application.name>_metrics`, and
-  reports its connection as Actuator's `prometheusAgent` health component. Its other `prometheus-proxy.agent.*`
-  properties map onto `EmbeddedAgentConfig`'s settings, and a `PrometheusProxyAgentCustomizer` bean changes them in code
+  with a proxy set, by `prometheus-proxy.agent.proxy`, a customizer, or `PROXY_HOSTNAME`, a Spring Boot 4.2 app, or a
+  4.0 or 4.1 app that sets `kotlin-coroutines.version` and `prometheus-client.version` to the agent's, runs an
+  embedded agent that starts and stops with it, serves the app's `PrometheusRegistry` bean in-process at
+  `/<spring.application.name>_metrics`, and reports its connection as Actuator's `prometheusAgent` health component.
+  Its other `prometheus-proxy.agent.*` properties map onto `EmbeddedAgentConfig`'s settings, and a
+  `PrometheusProxyAgentCustomizer` bean changes them in code
 - A Ktor plugin, `com.pambrose:prometheus-proxy-ktor`, released with the agent at its version:
-  `install(PrometheusProxyAgent)` runs an embedded agent that starts once the app's modules load, begins stopping when
-  the server stops accepting connections, and serves the `PrometheusRegistry` it's given in-process at its `path`. Its
-  settings come from `prometheus-proxy.agent` in `application.conf` or `application.yaml`, by the starter's property
-  names, and from the install block, whose `agent { }` takes `EmbeddedAgentConfig`'s builder; the running agent's
-  `EmbeddedAgentInfo` is `application.prometheusProxyAgent`
+  `install(PrometheusProxyAgent)` runs an embedded agent that starts once the app's modules load, where its settings or
+  `PROXY_HOSTNAME` name a proxy, begins stopping when the server stops accepting connections, and serves the
+  `PrometheusRegistry` it's given in-process at its `path`. Its settings come from `prometheus-proxy.agent` in
+  `application.conf` or `application.yaml`, by the starter's property names, and from the install block, whose
+  `agent { }` takes `EmbeddedAgentConfig`'s builder; the running agent's `EmbeddedAgentInfo` is
+  `application.prometheusProxyAgent`
 - The spring-boot demo's roastery runs its agent with the starter, from `application.yml`, in place of its own
   lifecycle, settings, health, and Spring Security classes, and no longer exposes `/actuator/prometheus`
 - The Ktor demo's coffee shop runs its agent with the Ktor plugin, which reads its Micrometer registry in-process,
@@ -207,6 +209,9 @@ All notable changes to this project are documented in this file.
 - An agent started from its constructor's `initBlock`, as `Agent(options) { startSync() }` starts one, threw a
   `NullPointerException` in place of a startup failure, such as an admin or metrics port already in use, and left its
   gRPC channel and HTTP client cache open. It now throws the failure and releases them
+- An app that failed after starting an embedded agent, without stopping it, never exited: the agent's thread kept the
+  JVM running, with the agent connected. A Ktor app with the plugin whose port was taken did so, since Ktor starts the
+  app, and the agent with it, before it binds the port. An embedded agent's thread is now a daemon, so the app exits
 - An embedded agent whose start took over 30 seconds threw a `TimeoutException`, which `startIfConfigured()` reported
   as the agent staying off, but went on starting, then connected and served its paths with nothing able to stop it,
   and kept the app's JVM from exiting. It now stops as soon as its startup ends, without connecting, and the start
@@ -256,6 +261,10 @@ All notable changes to this project are documented in this file.
   also stops waiting, so it isn't told the path is free
 - An agent the proxy refuses for its token logs one ERROR line, without a stack trace, that names where the token is
   set, rather than a WARN with one; repeats log at DEBUG, with a reminder at ERROR every 10 minutes while it lasts
+- An agent started embedded, with `startAsyncAgent()` or `EmbeddedAgentConfig`, runs on a daemon thread, so it no
+  longer keeps the JVM running: a program whose `main()` only starts one and returns now exits. With its admin or
+  metrics port on, those ports' servers still keep the JVM running. The standalone agent, and `startSyncAgent()`, are
+  unchanged
 - An agent started embedded, with `startAsyncAgent()` or `EmbeddedAgentConfig`, registers no JVM shutdown hook, which
   on SIGTERM stopped it at the same time as its host's own hooks, in no set order. Its host stops it, as the Ktor plugin
   and the Spring Boot starter do; one its host never stops ends with the JVM, without a graceful stop. The standalone

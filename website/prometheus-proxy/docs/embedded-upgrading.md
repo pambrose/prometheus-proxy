@@ -25,6 +25,10 @@ A release that changed nothing an embedding app sees isn't listed; the
   `shutdown()` or `close()` where your application stops its own services (see
   [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo)); one that's never stopped ends with the JVM, without draining the scrapes
   in flight.
+- An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` runs on a daemon thread, so it no longer keeps the
+  JVM running. Through 4.6.0 its thread did: an application that failed after starting the agent never exited, and a
+  program whose `main()` only started the agent kept running. That program now exits at once, so keep `main()` running
+  for as long as the agent is needed, or start the agent as the standalone agent does, with `startSyncAgent()`.
 
 ## Upgrading from 4.4.x
 

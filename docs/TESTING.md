@@ -218,7 +218,9 @@ application's logging config.
   to start, on a port the spec holds, stops the admin, metrics, and Zipkin services and removes the JVM shutdown hook,
   through `startSync()` and through `startAsyncAgent(Config)`, and a release step that throws (a MockK constructor
   mock) is attached to the failure while the rest still run; and a start that times out, its dashboard's start held
-  by a MockK constructor mock, throws at once, then stops without connecting as soon as its startup ends
+  by a MockK constructor mock, throws at once, then stops without connecting as soon as its startup ends; and an
+  embedded agent's service thread a daemon, which can't keep its host's JVM up, even in a start that never ends, and a
+  directly started agent's not
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling;
   a connect counted once the proxy registered the agent, a refused registration as rejected; each endpoint advance and
   each heartbeat sent counted, by outcome; a scrape request's wait for its scrape recorded, not a dashboard's; and a
@@ -357,7 +359,8 @@ application's logging config.
   not, with only its own agent series
 - **StartIfConfiguredTest** — `EmbeddedAgentConfig.startIfConfigured()`: off, with one INFO line, without a proxy; on
   with the builder's proxy, a `setting()` of the endpoints or the host name, or `PROXY_HOSTNAME`, and off with a blank
-  one; a start that fails, a checked exception included, returning null, logged at ERROR with its cause's message,
+  one, the rule the public `namesProxy()` gives too; a start that fails, a checked exception included, returning null,
+  logged at ERROR with its cause's message,
   and given to `onFailure` with why and what was thrown; why read along the cause chain, each message once, with a
   URL's credentials masked; and real failed starts, a key, a certificate, a setting, a wrong-typed token, a duplicate
   path, a dashboard password, and an admin port in use, saying why without the token, a password, or a PEM
@@ -1210,9 +1213,11 @@ and leaves `oldestSpringBootTest` out. `TestingGuideTest` reads only the root pr
   with its build's version) and path (`<app>_metrics`, or `application_metrics`); the registry served, or not with
   `source=none` or no `PrometheusRegistry` bean; `settings` keys keeping their case from a properties file, and losing
   it from an environment variable; customizers running after the properties in their order, a builder method of one
-  replacing a property but not a `settings` entry, which only its `setting()` replaces; `start()` on a running agent
+  replacing a property but not a `settings` entry, which only its `setting()` replaces; a customizer's proxy, or a
+  `settings` key's, starting the agent with no `proxy` property, a required one too; `start()` on a running agent
   keeping it; the started line naming no proxy, which a customizer can change; `required` failing the
-  app without a proxy, on a bad setting, or on a customizer's failure, a checked exception included, and the app
+  app without a proxy, on a bad setting, on a setting only the agent rejects as it starts (a certificate it can't
+  read), which only `start()` reaches, or on a customizer's failure, a checked exception included, and the app
   running without the agent otherwise, whatever stopped it: a setting the builder or the agent rejects, a certificate
   it can't read, a `settings` key its config can't hold, or a customizer that throws; and the `prometheusAgent` health
   indicator, from its own auto-configuration: UNKNOWN while off or connecting, turned off by
@@ -1241,11 +1246,13 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
 - **AgentLifecycleTest** — the lifecycle's events raised by hand on a mocked app's monitor, with the agent's start
   replaced: the app's `ApplicationStarted` starts the agent and puts its handle in the app's attributes, and another
   app's, as a development-mode reload gives, doesn't; the agent stays off when disabled or without a proxy, and a
-  required one fails the start; a start that throws leaves the agent off, or, when required, fails the app's start with
+  required one fails the start; a proxy that only the file's `settings` or an agent block's `setting()` names starts
+  it; a start that throws leaves the agent off, or, when required, fails the app's start with
   the exception, a checked one wrapped, and a start that returns none, as `startIfConfigured()` does for a failure,
-  leaves it off; `ApplicationStopPreparing` begins the stop without waiting for it, and `ApplicationStopping` stops an
-  agent the engine didn't, and gives up waiting at its timeout, once whichever come; an agent that fails to stop
-  doesn't fail the app's; and the handlers are gone once the app stops.
+  leaves it off; `ApplicationStopPreparing` begins the stop without waiting for it, and `ApplicationStopping` waits for
+  that stop, its agent's `shutdown()` held until the disposal is in its join, stops an agent the engine didn't, and
+  gives up waiting at its timeout, once whichever come; an agent that fails to stop doesn't fail the app's; and the
+  handlers are gone once the app stops.
 - **PrometheusProxyAgentConfigTest** — `prometheus-proxy.agent` in HOCON, YAML (`full-section.yaml`), and a
   `MapApplicationConfig` builds the tree the same builder calls do, `metrics-proxy-path` and its labels included; a blank
   value, such as YAML's empty default for an unset environment variable (`unset-proxy.yaml`), counts as unset; the
@@ -1259,6 +1266,10 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
   proxy in the same JVM on fixed ports that the root project's `TestPorts` lists (`KTOR_PLUGIN_PROXY_*`): the proxy
   serves the app's meter and Micrometer's JVM metrics at `/ktor_app_metrics`, its service discovery has the path's
   labels, the handle reports the connection, and once the app stops, the proxy no longer has the path.
+- **ServerBindFailureTest** — an app on the CIO engine with the plugin (**TakenPortApp**), run in a JVM of its own,
+  whose port the spec holds (`KTOR_PLUGIN_TAKEN_PORT` in the root project's `TestPorts`): its start fails with the
+  `BindException` after the agent started, and the JVM exits with status 1, its app disposed by Ktor's shutdown hook,
+  rather than run on with its agent.
 - **KtorPluginExamplesTest** — the Ktor Plugin page's examples, in `website/KtorPluginExample.kt` and the test
   resources' `website/application.conf`: the module runs without the agent where `PROMETHEUS_PROXY` isn't set, and its
   health route says so; the file starts the agent with the environment's proxy and the file's name, and leaves it off

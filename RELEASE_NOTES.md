@@ -60,14 +60,14 @@ _Released 2026-11-23_
   is scraped all the same, more ovens become more Prometheus targets with no change to Prometheus's config, and an
   oven with no proxy, or with the agent's settings wrong, keeps baking.
 - **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot 4.2 app and set the proxy's
-  address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
-  or a web server, and shows its connection in `/actuator/health`. On Spring Boot 4.0 or 4.1, set two of its version
-  properties, as the new Spring Boot Starter page says, which also lists its properties. The Spring Boot demo's
-  roastery now runs its agent with it.
+  address, in a property, a customizer, or `PROXY_HOSTNAME`: the agent starts and stops with the app, serves its metrics
+  to Prometheus without `/actuator/prometheus` or a web server, and shows its connection in `/actuator/health`. On
+  Spring Boot 4.0 or 4.1, set two of its version properties, as the new Spring Boot Starter page says, which also lists
+  its properties. The Spring Boot demo's roastery now runs its agent with it.
 - **A Ktor plugin.** Add `prometheus-proxy-ktor` to a Ktor app and `install(PrometheusProxyAgent)` with the app's
-  registry and a path: the agent starts and stops with the app and serves its metrics to Prometheus without a
-  `/metrics` route. Set the proxy in code or in `application.conf`. The new Ktor Plugin page lists its settings, and
-  the Ktor demo's coffee shop now runs its agent with it.
+  registry and a path: the agent starts and stops with the app and serves its metrics to Prometheus without a `/metrics`
+  route. Set the proxy in code, in `application.conf`, or with `PROXY_HOSTNAME`. The new Ktor Plugin page lists its
+  settings, and the Ktor demo's coffee shop now runs its agent with it.
 - **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
   follows your system and is where it starts. Your browser remembers it.
 - **The proxy counts what happens to its agents.** New metrics count agents disconnecting and why, connects and
@@ -135,6 +135,9 @@ _Released 2026-11-23_
   styles again.
 - **Hovered rows stay readable.** In a dashboard's list of agents or paths, a hovered row's address line fell under
   the WCAG AA contrast floor; it now darkens on hover.
+- **An app that fails after starting an embedded agent exits.** An app that failed without stopping the agent it had
+  started kept running, the agent connected, since the agent's thread held the JVM up: a Ktor app with the plugin
+  whose port was taken did so. The agent's thread no longer holds it, so the app exits, and can be restarted.
 - **An embedded agent that's slow to start stops.** When an embedded agent took over 30 seconds to start, the start
   failed, and `startIfConfigured()` said the agent stays off, but it went on starting and then connected, with
   nothing able to stop it, and kept your app from exiting. It now stops as soon as its startup ends, without
@@ -179,6 +182,10 @@ _Released 2026-11-23_
   proxy's env file, now opens its own dashboard on port 8095, without a login unless `DASHBOARD_PASSWORD` is set too,
   or serves its metrics at that path, and a value it can't parse, such as an empty `DASHBOARD_PORT`, stops it
   starting. Check an agent's environment before you upgrade it.
+- **An embedded agent no longer keeps your app running.** An agent started with `startAsyncAgent()` or
+  `EmbeddedAgentConfig` runs on a daemon thread, so a program whose `main()` only starts it and returns now exits at
+  once. Keep `main()` running while you need the agent, as `startIfConfigured().use { … }` does around your app's
+  work. The standalone agent is unchanged.
 - **An embedded agent stops when your app stops it.** An agent started with `startAsyncAgent()` or
   `EmbeddedAgentConfig` no longer registers a JVM shutdown hook, which on SIGTERM stopped it at the same time as the
   app's own shutdown, in no set order. Stop it with `shutdown()` or `close()` where your app stops its own services;

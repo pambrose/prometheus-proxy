@@ -49,9 +49,9 @@ With that, the app gets:
 
 - **An agent that starts and stops with the app.** It starts once the app is up, in the last lifecycle phase, and stops
   first on shutdown, before a graceful shutdown drains the web server: the agent disconnects, the proxy drops its
-  paths, and no scrape reaches an app that's going away. It runs until the app's context closes, so an app meant to
-  exit once its work is done, such as a batch job, closes its context, as `SpringApplication.exit` does, rather than
-  leaving the JVM to exit when `main` returns.
+  paths, and no scrape reaches an app that's going away. Its thread doesn't keep the JVM running, so an app with no
+  web server or other thread to hold it, such as a batch job, exits once `main` returns, and the context's shutdown
+  stops the agent; one that should keep running sets `spring.main.keep-alive: true`.
 - **Its metrics at the proxy's `/roastery_metrics`,** the app's name followed by `_metrics`, read from the app's
   registry for each scrape, in the format Prometheus asks for, and with the agent's limits and the path's filter, as
   [Metrics Served In-Process](embedded-agent.md#metrics-served-in-process) describes.
@@ -67,7 +67,8 @@ With that, the app gets:
 
 Each property can also come straight from the environment, by Spring Boot's rules: `PROMETHEUSPROXY_AGENT_PROXY` sets
 `prometheus-proxy.agent.proxy`. As with any embedded agent, the agent's own environment variables, such as
-`AGENT_TOKEN` or `PROXY_HOSTNAME`, take precedence over its settings, so give the app's other names, as above.
+`AGENT_TOKEN` or `PROXY_HOSTNAME`, take precedence over its settings, and `PROXY_HOSTNAME` alone starts it, so give
+the app's other names, as above.
 
 ## Properties
 
@@ -75,7 +76,7 @@ Each is under `prometheus-proxy.agent`, and an IDE completes and describes them 
 
 | Property                   | Default                          | What it sets                                                                                                                                                                  |
 |----------------------------|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `proxy`                    |                                  | The proxy, as `host` or `host:port` (the port defaults to 50051), or several, separated by commas, in the order the agent fails over through them. Unset, the agent stays off |
+| `proxy`                    |                                  | The proxy, as `host` or `host:port` (the port defaults to 50051), or several, separated by commas, in the order the agent fails over through them. Unset, the agent stays off, unless a customizer, a `settings` key, or `PROXY_HOSTNAME` names one |
 | `token`                    |                                  | The token the agent presents to the proxy, which has to match the proxy's                                                                                                     |
 | `trust-certificate`        |                                  | The certificate the agent trusts the proxy's by, as PEM text or its base64, which turns [TLS](security/tls.md) on                                                             |
 | `authority`                |                                  | The name the proxy's certificate was issued to, when it isn't the host the agent connects to; used with `trust-certificate`                                                   |
@@ -106,7 +107,8 @@ bean, a `PrometheusProxyAgentCustomizer` bean is given the agent's
 [`EmbeddedAgentConfig.Builder`](embedded-agent.md#embeddedagentconfig) once the properties are applied, just before
 the agent starts. Several run in their `@Order`, each after the one before. A builder method a customizer calls
 replaces what a property set, but not a `settings.<key>` property, which takes precedence over the builder's methods,
-as anything `setting()` sets does: change one of those with `setting()` and its key.
+as anything `setting()` sets does: change one of those with `setting()` and its key. The starter decides whether to
+start the agent once they've run, so a customizer can give it its proxy, as `fromEnvironment()` does.
 
 ```java
 --8<-- "spring-boot-starter/src/test/java/website/AgentCustomizations.java:starter-customizer"

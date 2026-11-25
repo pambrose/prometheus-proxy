@@ -81,7 +81,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeoutException
+import kotlin.concurrent.thread
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.update
@@ -862,11 +864,26 @@ class Agent(
 
   // Set by startEmbedded before the agent starts. An agent embedded in a host registers no JVM shutdown hook: its host
   // stops it (EmbeddedAgentInfo, the Ktor plugin, the Spring Boot starter) once the work that needs it is done, where
-  // a hook would stop it at the same time as the host's own hooks, in no set order. The standalone agent, and an Agent
-  // built and started directly, keep the hook.
+  // a hook would stop it at the same time as the host's own hooks, in no set order. Nor does its thread keep the JVM
+  // up: see executor(). The standalone agent, and an Agent built and started directly, keep the hook, and a thread that
+  // isn't a daemon.
   internal var isEmbedded = false
 
   override val registersShutDownHook: Boolean get() = !isEmbedded
+
+  // The thread Guava runs startUp() and run() on, which startAsync() asks for, after startEmbedded has set isEmbedded.
+  // An embedded agent's is a daemon, so it never keeps its host's JVM up: the host's own threads do. A host that dies
+  // without stopping its agent then exits, as a Ktor app whose port is taken does, whose start throws after the plugin
+  // started the agent, leaving nothing to stop it; its agent stayed connected, holding up a process that should have
+  // died and been restarted (November 23 review, #10). So does one whose agent's startUp() never returns, which
+  // startWithin can't stop (#12). The admin and metrics servers' Jetty threads, which common-utils builds, aren't
+  // daemons, so with either port on they still hold the JVM. The standalone agent's thread isn't one: it keeps the JVM
+  // up until the agent stops.
+  override fun executor(): Executor =
+    if (isEmbedded)
+      Executor { command -> thread(isDaemon = true, name = serviceName(), block = command::run) }
+    else
+      super.executor()
 
   // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- a port already in use -- the service
   // goes straight to FAILED, so each part of the startup that fails releases what came before it. super.startUp()
@@ -939,10 +956,10 @@ class Agent(
 
   // Starts the agent and waits up to [timeout] for it to run, as startEmbedded does. Guava leaves a start that takes
   // longer STARTING, and runs it to the end, so an embedded agent whose start timed out then connected and served its
-  // paths with no handle to stop it, its thread, which isn't a daemon, holding up its host's JVM (November 23
+  // paths with no handle to stop it, its thread, which wasn't a daemon then, holding up its host's JVM (November 23
   // review, #12). stopAsync() on a STARTING service stops it as soon as startUp() returns: Guava skips run(), so the
   // agent never connects, and calls shutDown(), which releases what startUp() opened. A startUp() that fails
-  // releases it itself.
+  // releases it itself, and one that never returns holds only its own thread, a daemon (executor()).
   internal fun startWithin(timeout: Duration) {
     try {
       startSync(timeout)
@@ -1046,7 +1063,10 @@ class Agent(
      * lifecycle is then owned by the caller via the returned [EmbeddedAgentInfo], which exposes the agent's
      * `launchId`, `agentName`, and connection (`isConnected`, `proxyEndpoint`), and a `shutdown()` method for graceful
      * shutdown. Since 4.7.0 the Agent registers no JVM shutdown hook of its own: the host stops it, with `shutdown()`
-     * or `close()`, once the work that needs it is done.
+     * or `close()`, once the work that needs it is done. Its thread is a daemon too, so it doesn't keep the JVM
+     * running: a host that fails without stopping it still exits, and a `main()` that only starts it and returns
+     * ends the JVM, and the Agent with it. Its admin and metrics servers, when their ports are on, run threads that
+     * aren't daemons.
      *
      * @param configFilename Path or URL to the HOCON config file. Forwarded to the
      *   [AgentOptions] config-filename constructor so it follows the same resolution rules as the

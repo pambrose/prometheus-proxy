@@ -87,8 +87,10 @@ keep it compiling. IntelliJ links it as the coffee shop is, its wrapper properti
 The Spring Boot starter, `spring-boot-starter/`, is one of the build's two subprojects (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration
 (`io.prometheus.agent.spring`) that runs an embedded agent as a `SmartLifecycle` bean from the `prometheus-proxy.agent.*`
-properties and serves the app's `PrometheusRegistry` bean in-process (the builder's `source(path, registry)`), starting
-a required agent with `start()` and any other with `startIfConfigured()`. Its POM names no Spring
+properties and serves the app's `PrometheusRegistry` bean in-process (the builder's `source(path, registry)`). Once the
+customizers have run, it starts the agent only where `EmbeddedAgentConfig.namesProxy()` says the settings name a proxy,
+a required agent with `start()` and any other with `startIfConfigured()`; deciding from the `proxy` property alone, as
+it once did, left out a customizer's proxy, a `settings` key's, and `PROXY_HOSTNAME`. Its POM names no Spring
 Boot artifact and imports no BOM, so an app's own Spring Boot is the one it runs with: the Spring Boot artifacts are
 `compileOnly`, through the BOM at `spring-boot` in `libs.versions.toml`, and its JUnit 5 tests run the agent at Spring
 Boot's versions, enforced as an app's dependency management enforces them (`./gradlew :spring-boot-starter:test`, part
@@ -105,11 +107,14 @@ agent with a Ktor app and serves the `PrometheusRegistry` it's given in-process.
 `prometheus-proxy.agent` section of the app's config file, read through Ktor's `ApplicationConfig` by the starter's
 property names (`FileSettings`), then the install block's. `AgentLifecycle` starts the agent on `ApplicationStarted`,
 begins its stop on `ApplicationStopPreparing` on a thread of its own, so the engine's grace period stays the app's, and
-waits for it on `ApplicationStopping`; keep that split. A required agent starts with `start()`, and any other with
-`startIfConfigured()`, which logs a failure itself. Its POM puts the agent and `ktor-server-core` at compile scope, since
-its API names their types (the `PrometheusRegistry` it takes comes with the agent's), and `make consumer-check` resolves
-it as a Ktor app does (the consumer check's `ktor` profile) and compiles the docs site's Ktor Plugin examples, which
-`KtorPluginExamplesTest` runs.
+waits for it on `ApplicationStopping`; keep that split. Ktor raises `ApplicationStarted` before the engine binds, and an
+engine that can't bind throws without disposing the app, so no stop event comes: the embedded agent's daemon thread is
+what lets that app's JVM exit (`ServerBindFailureTest`). Once the file and the install block have made the settings, it
+starts the agent only where `EmbeddedAgentConfig.namesProxy()` says they name a proxy, a required agent with `start()`,
+and any other with `startIfConfigured()`, which logs a failure itself. Its POM puts the agent and `ktor-server-core` at
+compile scope, since its API names their types (the `PrometheusRegistry` it takes comes with the agent's), and
+`make consumer-check` resolves it as a Ktor app does (the consumer check's `ktor` profile) and compiles the docs site's
+Ktor Plugin examples, which `KtorPluginExamplesTest` runs.
 It applies kotlinter and detekt (the root's `config/detekt/detekt.yml`), and the root aggregates its coverage
 (`kover(project(":ktor-plugin"))`), so the coverage floors cover it; `./gradlew :ktor-plugin:test` runs its Kotest
 specs, and so does `build`.
@@ -144,7 +149,9 @@ Only these types are part of the supported, documented public API. Everything el
   typed methods (from Java, with `EmbeddedAgentConfig.builder()`). It builds the same `Config` that
   `startAsyncAgent(Config)` takes.
   - `start()` starts the agent, and throws on a setting the agent rejects or a start that fails.
-  - `startIfConfigured()` returns null in those cases instead, logging why, and also when no proxy is set.
+  - `startIfConfigured()` returns null in those cases instead, logging why, and also when no proxy is set, as
+    `namesProxy()` tells (the builder's `proxy`, a `setting()` of `proxy.endpoints` or `proxy.hostname`, or
+    `PROXY_HOSTNAME`), which the Ktor plugin and the Spring Boot starter read too.
   - `fromEnvironment()` reads `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and
     `PROMETHEUS_PROXY_AUTHORITY`, which nothing else reads. Its `internal` overload takes the lookup function, so
     tests can call it, as with `EnvVars`' parsing. The builder remembers which values it read, until code sets the same
@@ -185,7 +192,10 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 - **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`. One started that way
   (`Agent.startEmbedded`, which `EmbeddedAgentConfig` uses too) sets `isEmbedded`, so it registers no JVM shutdown
   hook (common-utils' `registersShutDownHook`): its host stops it after the work that needs it, where the hook stopped
-  it on SIGTERM alongside the host's own hooks, in no set order. The standalone agent keeps the hook.
+  it on SIGTERM alongside the host's own hooks, in no set order. Its service thread is a daemon (`Agent.executor()`),
+  so it never keeps the host's JVM up: a host that fails without stopping it, as a Ktor app whose port is taken does,
+  still exits, and so does one whose agent's `startUp()` never returns. Its admin and metrics servers' Jetty threads,
+  which common-utils builds, aren't daemons. The standalone agent keeps the hook and a thread that isn't a daemon.
 - **Proxy failover**: The agent rotates through an ordered `agent.proxy.endpoints` list (`AgentGrpcService.advanceEndpoint` / `resetEndpoint`, chosen by `EndpointFailover.beforeAttempt`); a failed connect or a rejected registration advances, and only a connection that registered and then dropped retries from the head.
 - **Path takeover**: a non-consolidated registration takes the path (`ProxyPathManager.takeOverPath`), and a displaced
   agent of another launch stays connected. The proxy tells it on `readPathNoticesFromProxy`

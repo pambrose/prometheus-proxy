@@ -86,7 +86,8 @@ class EmbeddedAgentConfig private constructor(
 
   /**
    * Starts an agent with these settings, as [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]
-   * does with a `Config`, and returns its handle once it has started.
+   * does with a `Config`, and returns its handle once it has started. It runs on a daemon thread, so it doesn't keep
+   * the JVM running: stop it with the handle once the work that needs it is done.
    *
    * @param logBanner When `true` (default), logs the agent's ASCII banner and version on startup.
    * @throws ConfigLoadException when a setting is invalid. One that [fromEnvironment][Builder.fromEnvironment] read is
@@ -158,9 +159,18 @@ class EmbeddedAgentConfig private constructor(
     }
   }
 
-  // Whether the settings name a proxy: the builder's, a setting() of the proxy's endpoints or host name, or the agent's
-  // own PROXY_HOSTNAME, which takes precedence over them. Without one, the agent would try localhost.
-  private fun namesProxy(env: (String) -> String?): Boolean =
+  /**
+   * Whether these settings name a proxy for the agent to connect to: with the builder's [proxy][Builder.proxy], which
+   * [fromEnvironment][Builder.fromEnvironment] reads from `PROMETHEUS_PROXY`, with a [setting][Builder.setting] of
+   * `proxy.endpoints` or `proxy.hostname`, or with the agent's own `PROXY_HOSTNAME` environment variable, which takes
+   * precedence over them. Without one, the agent would try a proxy on localhost. [startIfConfigured] starts the agent
+   * only when this is true; an app that decides for itself, as the Ktor plugin and the Spring Boot starter do, reads it
+   * once its settings are complete.
+   */
+  fun namesProxy(): Boolean = namesProxy(System::getenv)
+
+  // namesProxy, with the environment PROXY_HOSTNAME is read from, which tests give.
+  internal fun namesProxy(env: (String) -> String?): Boolean =
     !env(EnvVars.PROXY_HOSTNAME.name).isNullOrBlank() ||
       PROXY_KEYS.any { key ->
         config.hasPath(key) &&

@@ -34,9 +34,9 @@ import io.prometheus.common.TestCerts.CA_CERT
 import io.prometheus.common.TestCerts.CLIENT_CERT
 import io.prometheus.common.TestCerts.read
 import io.prometheus.common.captureLogs
+import java.io.IOException
 import java.net.BindException
 import java.net.ServerSocket
-import java.util.concurrent.TimeoutException
 
 // startIfConfigured, which keeps an app running without its agent: off without a proxy, and a failed start logged and
 // reported, with no token, password, or PEM in why.
@@ -94,6 +94,25 @@ class StartIfConfiguredTest : StringSpec() {
       started(env = mapOf("PROXY_HOSTNAME" to " ")) {}.shouldBeNull()
     }
 
+    // The rule above, public, for an app that decides for itself once its settings are complete, as the Ktor plugin and
+    // the Spring Boot starter do: theirs decided by their own proxy setting alone (November 23 review, #11)
+    "namesProxy says whether the builder's proxy, a setting of one, or PROXY_HOSTNAME names a proxy" {
+      fun namesProxy(
+        env: Map<String, String> = emptyMap(),
+        configure: EmbeddedAgentConfig.Builder.() -> Unit,
+      ) = embeddedAgent(configure).namesProxy(env::get)
+
+      namesProxy { proxy = "proxy.example.com" } shouldBe true
+      namesProxy { setting("proxy.hostname", "proxy.example.com") } shouldBe true
+      namesProxy { setting("proxy.endpoints", listOf("proxy.example.com")) } shouldBe true
+      namesProxy(env = mapOf("PROXY_HOSTNAME" to "proxy.example.com")) { name = "app" } shouldBe true
+      namesProxy { name = "app" } shouldBe false
+      namesProxy { proxy = " , " } shouldBe false
+      namesProxy(env = mapOf("PROXY_HOSTNAME" to " ")) { name = "app" } shouldBe false
+      // The public form, which reads PROXY_HOSTNAME from the process's environment
+      embeddedAgent { proxy = "proxy.example.com" }.namesProxy() shouldBe true
+    }
+
     "a start that fails returns null, logs why at ERROR, with its cause, and tells onFailure" {
       val thrown =
         IllegalStateException(
@@ -118,10 +137,10 @@ class StartIfConfiguredTest : StringSpec() {
       failures.single().thrown shouldBeSameInstanceAs thrown
     }
 
-    // Kotlin throws a checked exception undeclared, as the start's own timeout is
+    // Kotlin can throw a checked exception undeclared, so the start's catch takes any Exception
     "a checked exception from the start is caught too" {
       embeddedAgent { proxy = "proxy.example.com" }
-        .startIfConfigured(onFailure = null, env = { null }) { throw TimeoutException("too slow") }
+        .startIfConfigured(onFailure = null, env = { null }) { throw IOException("unreachable") }
         .shouldBeNull()
     }
 
