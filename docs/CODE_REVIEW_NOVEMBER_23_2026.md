@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — November 23, 2026
 
-**Status:** 72 issues — 24 fixed, 48 open (8 medium, 64 low, no high); #25 is partly fixed.
+**Status:** 72 issues — 26 fixed, 46 open (8 medium, 64 low, no high); #25 is partly fixed.
 
 **Progress:** Wave A (steps 2, 3, and 16, in #550–#552).
 
@@ -47,8 +47,8 @@ below points at `5c9f0a24`. Source paths below are relative to `src/main/kotlin/
 | 23 | Pages behind the dashboard's login can be framed and cached                                          | Security   | low      | ⬜      |
 | 24 | The starter's `Target.toString` shows URL query values such as an `api_key`                          | Security   | low      | ✅      |
 | 25 | Each release moves `NEEDS_RELEASE_AFTER` by hand, and `master`'s `make up` misstates the unpublished release | CI/build   | low      | ⬜      |
-| 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ⬜      |
-| 27 | The quick-start compose file publishes the agent, scrape, and admin ports on every interface         | CI/build   | low      | ⬜      |
+| 26 | Both Helm charts' dashboards listen on every pod interface                                           | CI/build   | low      | ✅      |
+| 27 | The quick-start compose file publishes the agent, scrape, and admin ports on every interface         | CI/build   | low      | ✅      |
 | 28 | `--tests=<spec>` runs the whole suite unfiltered, and `unitTest --tests X` fails                     | CI/build   | low      | ⬜      |
 | 29 | The files the `misc/` specs read aren't `Test` inputs, so an edit to them can take a cached pass     | CI/build   | low      | ⬜      |
 | 30 | `make site-version` doesn't scan the cloud-proxy compose file                                        | CI/build   | low      | ⬜      |
@@ -160,7 +160,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 12   | ⬜      | #6, #7, #46, #60             | Agent connections that count every result, pass on JVM errors, and retry at their pace | `agent/AgentGrpcService.kt`, `agent/AgentConnectionContext.kt`, `Agent.kt` (`launchConnectionTask`), `agent/AgentPathManager.kt`, `agent/discovery/PathDiscoveryService.kt`, `agent/EndpointFailover.kt`, a `Channels` spec, `proxy/ProxyPathManagerTest.kt`, `config/config.conf` (`reconnectPauseSecs`), the demos' reconnect text | #46 pins `receiveCatchingWithin` before this step reworks the stream tasks around it. #60's backoff reset goes in `connectAgent`. After step 4 or rebased on it, since both touch `Agent.kt` in separate places. |
 | 13   | ✅ #555 | #48, #52, #53, #57           | Tests for the agent's metrics and sources                             | `agent/MetricsSourceTest.kt`, `agent/AgentMetricsTest.kt`, `harness/AgentMetricsProxyPathTest.kt`, `agent/EmbeddedAgentConfigTest.kt` | Test-only, so it can go any time.                                                                                                                                                                |
 | 14   | ⬜      | #28, #29, #58, #59, #66, #68, #72 | Test runs and guards that see everything                              | `build.gradle.kts` (`configureTestPartitions`, `Test` inputs), `misc/ConfigFileKeysTest.kt`, `misc/WebsiteConfigKeysTest.kt` or a new `CliReferenceTest`, `misc/TestingGuideTest.kt`, `common/TestPortsTest.kt`, `docs/TESTING.md`, `misc/DemoTourTablesTest.kt` | Build and test infrastructure. #66 extends #58's guard to the settings tables' other columns. After step 3, which edits `build.gradle.kts`. #68 gives the XXLARGE heap to the harness JVM alone, and #72 extends #549's tour-table guard. |
-| 15   | ⬜      | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
+| 15   | ✅ #556 | #26, #27                     | Charts and compose files that keep dashboards and ports private       | `charts/prometheus-{proxy,agent}/`, `demos/kubernetes/values/proxy.yaml`, `etc/compose/proxy.yml`, `website/prometheus-proxy/docs/docker.md`, `src/test/kotlin/website/DockerExamples.txt` | Deployment defaults only. Independent of the other steps.                                                                                                                                        |
 | 16   | ✅ #552 | #32–#42, #63–#65, #69, #71   | User docs that describe 4.7.0                                         | `README.md`, `llms.txt`, `website/prometheus-proxy/docs/` (Embedded Agent, Embedded Upgrading, Getting Started, Agent Dashboard, Agent Configuration, Grafana, security, deployment, and the basics and Kubernetes demo pages), `docs/metrics-and-grafana.md`, `docs/security-agent-authentication.md`, `monitoring.md`, the demo READMEs and tours, `demos/basics/demo.sh`, `agent/EmbeddedAgentConfig.kt` KDoc, `agent/EnvironmentSetting.kt`, both changelogs | No behavior change. Before the 4.7.0 tag, since the site deploys only with a release. Any item can instead ride along with an earlier step that edits the same page.                             |
 | 17   | ⬜      | #43, #44, #45, #70           | Maintainer docs that describe what shipped                            | `docs/packages.md`, `docs/KDOC_SUMMARY.md`, `ConfigLoadException`'s KDoc, AGENTS.md, `docs/TESTING.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, the publishing-release skill, `.impeccable/config.json`, `extra.css` | No behavior change. Last, so they describe what the earlier steps settle.                                                                                                                        |
 
@@ -1380,7 +1380,7 @@ release tag pulls its images. Still open: the value is edited twice per release 
 `bin/docker-*.sh` mishandle the unpublished release between the bump and the publish, and the guard skips a demo it
 can't parse and has no test.
 
-### 26. ⬜ Both charts' dashboards listen on every pod interface, so keeping them off the Service doesn't keep them private
+### 26. ✅ Both charts' dashboards listen on every pod interface, so keeping them off the Service doesn't keep them private
 
 **Severity:** low · **Confidence:** confirmed by trace (the chart templates and `config/config.conf`'s default).
 
@@ -1411,7 +1411,9 @@ docs tell the reader that leaving the port off the Service is what keeps the das
 **Tests:** in `make helm-lint`, assert that the default render sets `DASHBOARD_HOST` to `127.0.0.1` when the dashboard is
 on, as the `secret-config-values.yaml` case is asserted now.
 
-### 27. ⬜ The Docker quick-start compose file publishes the agent, scrape, and admin ports on every interface with no token, and the docs tell readers to leave it running
+**Resolution:** Fixed in #556. Both charts have a `dashboard.host` value, default `127.0.0.1`, passed as `DASHBOARD_HOST`, which `kubectl port-forward` still reaches; a values file with no `host` key, as after `helm upgrade --reuse-values` from an older chart, gets `127.0.0.1` too, and an empty value leaves the address to the config. The install notes warn when the dashboard is on another address, the READMEs and pages say how to publish it deliberately, and the Kubernetes demo's proxy sets `0.0.0.0` for its NodePort. `make helm-lint` fails unless the all-features render sets `127.0.0.1`.
+
+### 27. ✅ The Docker quick-start compose file publishes the agent, scrape, and admin ports on every interface with no token, and the docs tell readers to leave it running
 
 **Severity:** low · **Confidence:** confirmed from the files.
 
@@ -1437,6 +1439,8 @@ line to `docker.md` pointing a reader who deploys it at the Cloud Platforms comp
 
 **Tests:** a `misc/` check, alongside `CiHygieneTest`, that every `ports:` entry in `etc/compose/*.yml` and in the site's
 compose snippets names `127.0.0.1`, as the demos' entries do.
+
+**Resolution:** Fixed in #556. `etc/compose/proxy.yml` and the site's compose example bind every port to `127.0.0.1`, and no longer publish 50051, which the compose agent reaches over the compose network; `docker.md` says so, and sends readers with remote agents to the cloud-proxy compose file. `DocsExamplesTest` fails on a compose file or docs snippet that publishes a port on every interface, the cloud-proxy example excepted.
 
 ### 28. ⬜ `--tests=<spec>` (the equals form) runs the whole suite unfiltered, and with `RUN_CONTAINER_TESTS` runs the harness specs three at a time
 
