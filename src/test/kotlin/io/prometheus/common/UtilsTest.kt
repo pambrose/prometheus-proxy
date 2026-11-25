@@ -19,6 +19,7 @@
 package io.prometheus.common
 
 import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.grpc.Status
@@ -53,6 +54,9 @@ import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.slf4j.LoggerFactory
+import java.nio.file.Files
+import java.nio.file.Paths
 
 class UtilsTest : StringSpec() {
   // ==================== Type Check Helper ====================
@@ -202,6 +206,44 @@ class UtilsTest : StringSpec() {
 
       exception.message shouldContain "Invalid"
       exception.message shouldContain "log level"
+    }
+
+    // Without Logback, as in an app that embeds the agent and logs with another SLF4J provider, a level is checked,
+    // and set no further, with a warning
+    "setLogLevel without Logback should warn and leave the level, and still refuse an invalid one" {
+      val logger = LoggerFactory.getLogger("io.prometheus.no.logback") as Logger
+      logger.level = Level.INFO
+
+      val logged = captureLogs("io.prometheus.no.logback") { setLogLevel("test", "trace", logger.name, false) }
+
+      logger.level shouldBe Level.INFO
+      logged.map { it.formattedMessage } shouldBe listOf("Cannot set log level: SLF4J binding is not Logback")
+      shouldThrow<IllegalArgumentException> { setLogLevel("test", "invalid", logger.name, false) }
+    }
+
+    "setLogLevel with Logback should set the logger's level" {
+      val logger = LoggerFactory.getLogger("io.prometheus.with.logback") as Logger
+
+      Utils.isLogbackPresent.shouldBeTrue()
+      setLogLevel("test", "WARN", logger.name)
+
+      logger.level shouldBe Level.WARN
+    }
+
+    // The library leaves Logback to the app that embeds it, so no class of the agent's but the one setLogLevel calls
+    // once it has found Logback may link against it: one that did would fail to load without it
+    "no main class but LogbackLevels should name a Logback class" {
+      val classes = Paths.get(Utils::class.java.protectionDomain.codeSource.location.toURI())
+      val naming =
+        Files.walk(classes).use { paths ->
+          paths
+            .filter { it.toString().endsWith(".class") }
+            .filter { "ch/qos/logback".toByteArray().let { needle -> Files.readAllBytes(it).contains(needle) } }
+            .map { classes.relativize(it).toString() }
+            .toList()
+        }
+
+      naming shouldBe listOf("io/prometheus/common/LogbackLevels.class")
     }
 
     // ==================== suppressKotlinLoggingStartupMessage Tests ====================
@@ -747,3 +789,7 @@ class UtilsTest : StringSpec() {
     }
   }
 }
+
+// Whether [needle]'s bytes occur in these, in order
+private fun ByteArray.contains(needle: ByteArray): Boolean =
+  (0..size - needle.size).any { start -> needle.indices.all { this[start + it] == needle[it] } }

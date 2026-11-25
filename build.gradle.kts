@@ -127,6 +127,13 @@ pambroseTesting {
 // The platforms netty-tcnative-boringssl-static has natives for (see dependencies).
 val tcnativeClassifiers = listOf("linux-x86_64", "linux-aarch_64", "osx-x86_64", "osx-aarch_64", "windows-x86_64")
 
+// What the standalone proxy and agent run with, beyond what the library publishes: Logback, their SLF4J provider. It's
+// on the main runtime classpath, which the fat JARs take, but not in runtimeElements, which the POM and the Gradle module
+// metadata publish, so an app that embeds the agent keeps its own provider (November 23 review, #9): a Logback the agent
+// brought displaced it, and had Spring Boot fail to start an app on Log4j2, or ignore its Log4j2 config.
+val standaloneRuntimeOnly = configurations.dependencyScope("standaloneRuntimeOnly")
+configurations.runtimeClasspath { extendsFrom(standaloneRuntimeOnly.get()) }
+
 dependencies {
   implementation(libs.kotlin.reflect)
   implementation(libs.kotlinx.serialization)
@@ -186,10 +193,14 @@ dependencies {
   implementation(libs.zipkin.brave)
 
   implementation(libs.kotlin.logging)
-  implementation(libs.logback.classic) // compile-time: Utils.setLogLevel uses Logback's Level/Logger
+  // Utils.setLogLevel sets a level through Logback when the app's SLF4J provider is Logback, which the library leaves to
+  // the app; the standalone proxy and agent run with it (standaloneRuntimeOnly), and so do the tests
+  compileOnly(libs.logback.classic)
+  add(standaloneRuntimeOnly.name, libs.logback.classic)
   runtimeOnly(libs.slf4j.jul) // jul-to-slf4j bridge: installed at runtime, no compile-time references
 
   testImplementation(libs.kaml)
+  testImplementation(libs.logback.classic)
   testImplementation(libs.kotest)
   testImplementation(libs.lincheck)
   testImplementation(libs.mockk)

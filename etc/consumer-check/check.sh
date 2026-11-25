@@ -26,13 +26,18 @@
 #   - every module of the Prometheus Java client resolves at the catalog's version, one release, as the agent's own
 #     build aligns them through the client's BOM, which Maven doesn't import from the POM, and the registry model and
 #     the text formats, which a registry the agent serves in-process needs, are among them;
-#   - no jar on the classpath carries a Logback config, which would replace the host application's own (#19), and the
-#     library jar still carries reference.conf;
+#   - Logback isn't on the classpath, which would displace the host application's own SLF4J provider (November 23
+#     review, #9), nor does any jar carry a Logback config, which would replace the host's own (#19), and the library
+#     jar still carries reference.conf;
 #   - the docs site's embedded-agent examples compile (#20).
 #
 # Then, for a Ktor app that adds com.pambrose:prometheus-proxy-ktor (the pom's ktor profile), that every Ktor module
-# resolves at the catalog's version, as the agent, which runs Ktor itself, needs, and that the docs site's Ktor plugin
-# examples compile.
+# resolves at the catalog's version, as the agent, which runs Ktor itself, needs, that Logback doesn't, and that the
+# docs site's Ktor plugin examples compile.
+#
+# And for a Spring Boot app that adds com.pambrose:prometheus-proxy-spring-boot-starter (the spring-boot-starter
+# profile), that Logback doesn't resolve either, where it would displace a provider such as Log4j2, as Spring Boot's
+# own logging starter swaps it out for.
 #
 # Every check runs, and the ones that failed are listed at the end. The reports Maven writes, the resolved
 # dependencies and the classpath, are left in build/consumer-check.
@@ -141,7 +146,10 @@ done
 bad="$(echo "$prometheus_resolved" | not_at "$prometheus_metrics" | joined)"
 [ -z "$bad" ] || fail "the Prometheus Java client isn't at $prometheus_metrics in every module: $bad"
 
-echo "==> Logback: no config on the classpath"
+echo "==> Logback: neither it nor a config of its on the classpath"
+logback_resolved="$(resolved '^ch[.]qos[.]logback$')"
+[ -z "$logback_resolved" ] ||
+  fail "Logback is on the classpath, which displaces the host's own SLF4J provider: $(joined <<< "$logback_resolved")"
 library=""
 while IFS= read -r jar; do
   [ -n "$jar" ] || continue
@@ -169,7 +177,22 @@ echo "$ktor_resolved" | awk -F: '$2 ~ /^ktor-server-core/ { found = 1 } END { ex
   || fail "Ktor: ktor-server-core isn't resolved for the Ktor plugin"
 bad="$(echo "$ktor_resolved" | not_at "$ktor" | joined)"
 [ -z "$bad" ] || fail "Ktor isn't at $ktor in every module: $bad"
+logback_resolved="$(resolved '^ch[.]qos[.]logback$' "$ktor_deps")"
+[ -z "$logback_resolved" ] ||
+  fail "Logback is on a Ktor app's classpath with the Ktor plugin: $(joined <<< "$logback_resolved")"
 "${mvn[@]}" -Pktor clean compile || fail "the Ktor plugin's examples don't compile against the published POM"
+
+echo "==> The Spring Boot starter, com.pambrose:prometheus-proxy-spring-boot-starter:$version"
+starter_deps="$out/spring-boot-starter-dependencies.txt"
+rm -f "$starter_deps"
+"${mvn[@]}" -Pspring-boot-starter dependency:list -Dsort=true "-DoutputFile=$starter_deps"
+resolved '^com[.]pambrose$' "$starter_deps" | indented
+resolved '^com[.]pambrose$' "$starter_deps" |
+  awk -F: '$2 == "prometheus-proxy-spring-boot-starter" { found = 1 } END { exit !found }' ||
+  fail "the Spring Boot starter isn't resolved"
+logback_resolved="$(resolved '^ch[.]qos[.]logback$' "$starter_deps")"
+[ -z "$logback_resolved" ] ||
+  fail "Logback is on a Spring Boot app's classpath with the starter: $(joined <<< "$logback_resolved")"
 
 if [ "${#failed[@]}" -gt 0 ]; then
   echo >&2

@@ -202,6 +202,10 @@ All notable changes to this project are documented in this file.
 - `agent_connect_count_total{type="success"}` counts a connect once the proxy has registered the agent, rather than as
   the connection opens, and `agent_scrape_result_count_total` counts a result as sent once gRPC takes it to send, and
   as `dropped` when the connection ends first
+- The published agent no longer brings Logback (`ch.qos.logback:logback-classic`, at runtime scope), which displaced an
+  embedding app's own SLF4J provider: Spring Boot failed to start an app on Log4j2, or ignored its Log4j2 config. The
+  fat JARs and the images still run with it. An app that logged only through the Logback the agent brought adds its
+  own, and `agent.logLevel` sets a level only through Logback, warning otherwise
 - `sendHeartBeat` calls are no longer traced
 - The unimplemented `internal.zipkin.grpcReportingEnabled` setting is removed; a config that sets it still loads
 - `BuildConfig.BUILD_TIME` and the release date the version and the dashboards show are the time of the commit the
@@ -226,6 +230,8 @@ All notable changes to this project are documented in this file.
 - The Spring Boot starter's tests also run under Spring Boot 4.0's last release (`oldestSpringBootTest`, which `test`
   runs), with kotlinx-coroutines and the Prometheus client set as the starter's page says, so a change the oldest
   Spring Boot it supports can't run fails the build
+- `make consumer-check` fails when Logback resolves for the agent alone, a Ktor app with the Ktor plugin, or a Spring
+  Boot app with the starter (its new `spring-boot-starter` profile)
 - `make release-check` refuses a release while any demo's `NEEDS_RELEASE_AFTER` isn't below the version, which
   would leave `make up` from the release's tag building the proxy and agent from source, and step 2 of
   `docs/RELEASE.md` says when to raise and lower it

@@ -136,6 +136,11 @@ _Released 2026-11-23_
   agent now holds, is logged at INFO instead of ERROR.
 - **A refused token is an ERROR, once.** When the proxy refuses an agent's token, the agent logs one ERROR line that
   says where the token is set, instead of a WARN with a stack trace, and a reminder every 10 minutes while it lasts.
+- **The agent no longer brings Logback into your app.** It came with the agent, and pushed aside your app's own
+  logging: a Spring Boot app on Log4j2 failed to start, or lost its Log4j2 configuration. The agent's logs now go
+  wherever your app's do, through its own SLF4J provider. If your app logged only through the Logback the agent
+  brought, add `ch.qos.logback:logback-classic` to it. The standalone proxy and agent, and their images, still log
+  with Logback.
 - **An embedded agent stops when your app stops it.** An agent started with `startAsyncAgent()` or
   `EmbeddedAgentConfig` no longer registers a JVM shutdown hook, which on SIGTERM stopped it at the same time as the
   app's own shutdown, in no set order. Stop it with `shutdown()` or `close()` where your app stops its own services;
