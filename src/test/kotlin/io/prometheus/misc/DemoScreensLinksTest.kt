@@ -155,6 +155,17 @@ class DemoScreensLinksTest : StringSpec() {
         }.shouldBeEmpty()
     }
 
+    // A terminal takes a URL to the next space, and a step's text is one paragraph, so a comma or period after a link
+    // becomes part of the address the reader opens: a link ends its sentence's text, unpunctuated. A comma after a
+    // link that names one screen, as #a+b, got by, since the page read it as part of the second pane's id and showed
+    // the first pane alone.
+    "no link into the screens page should end in punctuation" {
+      DEMOS
+        .flatMap { demo ->
+          demo.links().flatMap { (file, found) -> found.filter { it.last() in ",.;:" }.map { "$file: #$it" } }
+        }.shouldBeEmpty()
+    }
+
     // The page is the proxy's, so a link into it while the proxy is down opens only the browser's connection error,
     // where the demo means to show that a screen's own dashboard keeps answering.
     "while the page's proxy is down, the demo should point at a screen's own URL, not the page" {

@@ -844,11 +844,11 @@ cmd_tour() {
 
   if part 4 "Here you stop the primary proxy. Its connections close, so both agents know at once, and move to" \
     "the standby with nobody touching them."; then
-    step "Open agent-branch's Connection view beside the standby's dashboard," \
-      "${SCREENS_URL}#agent-branch/connection+proxy, then stop the primary proxy. The page stays up, since the" \
-      "standby serves it, and the primary's tab turns red. The proxies can show an agent only once it has" \
-      "connected to them; the Connection view shows the agent's side of the failover as it happens: the endpoint" \
-      "it's on or trying, and the last error it got connecting to each." -- proxy-down
+    step "Stop the primary proxy, and watch agent-branch's Connection view beside the standby's dashboard. The page" \
+      "stays up, since the standby serves it, and the primary's tab turns red. The proxies can show an agent only" \
+      "once it has connected to them; the Connection view shows the agent's side of the failover as it happens:" \
+      "the endpoint it's on or trying, and the last error it got connecting to each. Open the two side by side" \
+      "before you press Enter: ${SCREENS_URL}#agent-branch/connection+proxy" -- proxy-down
     step "Start the primary proxy again." -- proxy-up
     step "Send the agents back to the primary: heal closes each agent's connection through its link to the standby" \
       "once, so the agent reconnects through its link to the primary." -- heal
@@ -858,10 +858,10 @@ cmd_tour() {
     "agent's goodbye included, which is what a stateful firewall or NAT does when it drops a connection. Neither" \
     "end is told. It takes about 50 seconds to play out; the basics demo's frozen agent showed the proxy's" \
     "side of an eviction, and this shows the agent's."; then
-    step "Open agent-branch's Connection view beside the primary's dashboard," \
-      "${SCREENS_URL}#agent-branch/connection+primary, then silence agent-branch's link to the primary, without" \
-      "closing it. The primary's dashboard shows what the proxy hears from agent-branch, and the Connection view" \
-      "what the agent tries." -- cut
+    step "Silence agent-branch's link to the primary, without closing it, and watch agent-branch's Connection view" \
+      "beside the primary's dashboard: the primary's dashboard shows what the proxy hears from agent-branch, and the" \
+      "Connection view what the agent tries. Open the two side by side before you press Enter:" \
+      "${SCREENS_URL}#agent-branch/connection+primary" -- cut
     put_back "restore the link, once agent-branch is on the standby's dashboard, after about 50 seconds" heal
   fi
 
