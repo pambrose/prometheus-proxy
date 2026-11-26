@@ -171,7 +171,7 @@ EOF
 print_urls() {
   echo
   bold "Prometheus Proxy basics demo"
-  echo "  Every screen:     $SCREENS_URL"
+  echo "  All screens:      $SCREENS_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
   wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
