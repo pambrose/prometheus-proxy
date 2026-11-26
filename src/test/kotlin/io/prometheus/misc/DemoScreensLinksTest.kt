@@ -309,6 +309,23 @@ class DemoScreensLinksTest : StringSpec() {
         proxyDown = ProxyDown(scenario = "proxy-down", branch = "\n    else\n", directUrl = "\$DASHBOARD_URL"),
       )
 
-    val DEMOS = listOf(BASICS, NETWORK)
+    // The Ktor demo's page is the proxy's, which part 8 of its tour stops.
+    val KTOR =
+      ScreensDemo(
+        dir = "demos/ktor",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/ktor-demo.md",
+        pageUrl = "http://localhost:8394/screens",
+        proxyService = "proxy",
+        proxyDown =
+          ProxyDown(
+            scenario = "proxy-stop",
+            pageSection = "On the agent's dashboard, the Connection view reads `failing`",
+            directUrl = "\$AGENT_DASHBOARD_URL/connection",
+            directUrlOnPage = "http://localhost:8395/dashboard/connection",
+          ),
+      )
+
+    val DEMOS = listOf(BASICS, NETWORK, KTOR)
   }
 }

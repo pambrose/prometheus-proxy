@@ -61,7 +61,7 @@ RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # the release the docs give (make site-version) once it's later than this and its proxy image is on Docker Hub,
 # and otherwise builds everything from this checkout, as up-local does, so nothing here changes with a release.
 # When the demo comes to use something no release has yet, set this to the latest release on Docker Hub.
-NEEDS_RELEASE_AFTER=4.6.0
+NEEDS_RELEASE_AFTER=4.7.0
 # The secrets the demo's containers read (compose.yml), which up writes the first time it runs.
 ENV_FILE="$DEMO_DIR/docker/.env"
 CERTS_DIR="$REPO_DIR/testing/certs"
