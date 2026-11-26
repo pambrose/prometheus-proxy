@@ -54,8 +54,9 @@ minutes. After that it starts in under a minute, even without a network connecti
 
 Then open the standby proxy's [screens page](https://prometheus-proxy.com/web-dashboard/#screens), one browser tab that
 holds every screen in the demo, each in a tab of its own: both proxies' dashboards, each agent's, Prometheus, Grafana,
-and Zipkin. The standby serves it, since part 4 stops the primary and nothing stops the standby. `make open` opens it,
-and the guided tour's links open in it: <http://localhost:8195/>
+and Zipkin. The standby serves it, since part 4 stops the primary and no part of the tour stops the standby
+(`./demo.sh proxy-down proxy-standby` takes the page down with it). `make open` opens it, and the guided tour's links
+open in it: <http://localhost:8195/>
 
 Each screen also has an address of its own, which the table gives with the variable that moves its port:
 

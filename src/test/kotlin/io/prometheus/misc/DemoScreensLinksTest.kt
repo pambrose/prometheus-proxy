@@ -50,13 +50,15 @@ class DemoScreensLinksTest : StringSpec() {
     val docsLink = Regex(Regex.escape(pageUrl) + LINK_TAIL)
   }
 
-  // While the page's proxy is stopped: demo.sh's scenario case, the docs page's paragraph that starts with
-  // [pageSection], and the screen's own URL each gives instead, as the script writes it and as the page does.
+  // While the page's proxy is stopped: demo.sh's scenario case, or its text after [branch] where only that part of the
+  // case stops the page's proxy, and the docs page's paragraph that starts with [pageSection], if the page tells it,
+  // and the screen's own URL each gives instead, as the script writes it and as the page does.
   private data class ProxyDown(
     val scenario: String,
-    val pageSection: String,
+    val branch: String? = null,
     val directUrl: String,
-    val directUrlOnPage: String,
+    val pageSection: String? = null,
+    val directUrlOnPage: String? = null,
   )
 
   // A demo's screen entries, from its config, read without the environment, as each url is a default overridden by
@@ -173,11 +175,15 @@ class DemoScreensLinksTest : StringSpec() {
         val down = demo.proxyDown ?: return@forEach
         withClue(demo.dir) {
           val script = File(demo.dir, "demo.sh").readText()
-          val proxyDown = script.substringAfter("\n  ${down.scenario})").substringBefore("\n    ;;")
-          val stopped = File(demo.page).readText().substringAfter(down.pageSection).substringBefore("\n\n")
-          listOf(proxyDown, stopped).map { "/screens#" in it || "SCREENS_URL" in it } shouldBe listOf(false, false)
+          val case = script.substringAfter("\n  ${down.scenario})").substringBefore("\n    ;;")
+          val proxyDown = down.branch?.let { case.substringAfter(it, missingDelimiterValue = "") } ?: case
+          ("SCREENS_URL" in proxyDown) shouldBe false
           proxyDown shouldContain down.directUrl
-          stopped shouldContain down.directUrlOnPage
+          if (down.pageSection != null && down.directUrlOnPage != null) {
+            val stopped = File(demo.page).readText().substringAfter(down.pageSection).substringBefore("\n\n")
+            ("/screens#" in stopped) shouldBe false
+            stopped shouldContain down.directUrlOnPage
+          }
         }
       }
     }
@@ -197,19 +203,45 @@ class DemoScreensLinksTest : StringSpec() {
     }
 
     // A screen's url is its default port's, and compose gives the page's proxy the url a moved port makes, as ${?NAME},
-    // so a port moved with a *_PORT variable moves its tab too. A screen with no override, or one compose doesn't set,
-    // stays at the default port. Each ${?NAME} in the config is set to a marker, so each url says which it reads.
-    "every screen should follow its port: compose gives the page's proxy each url's variable" {
+    // so a port moved with a *_PORT variable moves its tab too. Each ${?NAME} in the config is set to a marker, so each
+    // url says which variable it reads. Compose's value, its ports at their defaults, must be the screen's url, and
+    // each port variable in it one that publishes a port: a screen with no override, a variable compose doesn't set,
+    // or one that names another screen's port, as a slip among the near-identical lines would, leaves the tab behind.
+    "every screen should follow its port: compose gives the page's proxy each url, from the port it publishes" {
       DEMOS.forEach { demo ->
         withClue(demo.dir) {
           val names = OPTIONAL.findAll(File(demo.dir, demo.config).readText()).map { it.groupValues[1] }.toSet()
           val urls = demo.entries(names.associateWith { "$MARKER$it" }).associate { it.name to it.url }
           urls.filterValues { !it.startsWith(MARKER) }.keys.shouldBeEmpty()
+          val defaults = demo.entries().associate { it.name to it.url }
           val service = demo.composeService(demo.proxyService)
-          urls.values
-            .map { it.removePrefix(MARKER) }
-            .filterNot { Regex("""(?m)^\s+${Regex.escape(it)}:""").containsMatchIn(service) }
-            .shouldBeEmpty()
+          val compose = File(demo.dir, COMPOSE).readText()
+          urls
+            .mapNotNull { (screen, marked) ->
+              val name = marked.removePrefix(MARKER)
+              val value =
+                Regex("""(?m)^\s+${Regex.escape(name)}:\s*(\S+)""").find(service)?.groupValues?.get(1)
+                  ?: return@mapNotNull "$screen: compose doesn't give ${demo.proxyService} $name"
+              val ports = PORT_DEFAULT.findAll(value).map { it.groupValues[1] }.toList()
+              val atDefaults = PORT_DEFAULT.replace(value) { it.groupValues[2] }
+              when {
+                atDefaults != defaults[screen] -> {
+                  "$screen: $name is $atDefaults at its defaults, not ${defaults[screen]}"
+                }
+
+                ports.isEmpty() -> {
+                  "$screen: $name names no port variable"
+                }
+
+                ports.any { !published(it).containsMatchIn(compose) } -> {
+                  "$screen: $name's port isn't one compose publishes"
+                }
+
+                else -> {
+                  null
+                }
+              }
+            }.shouldBeEmpty()
         }
       }
     }
@@ -233,6 +265,12 @@ class DemoScreensLinksTest : StringSpec() {
     val SCRIPT_LINK = Regex("""\$\{?SCREENS_URL}?$LINK_TAIL""")
     val OPTIONAL = Regex("""\$\{\?([A-Za-z0-9_]+)}""")
 
+    // A compose variable with its default, ${NAME:-default}.
+    val PORT_DEFAULT = Regex("""\$\{([A-Z0-9_]+):-([^}]*)}""")
+
+    // A port compose publishes on the host from [variable]: "127.0.0.1:${variable:-<port>}:<port in the container>".
+    fun published(variable: String) = Regex("""127\.0\.0\.1:\$\{${Regex.escape(variable)}:-\d+}:""")
+
     val BASICS =
       ScreensDemo(
         dir = "demos/basics",
@@ -243,13 +281,14 @@ class DemoScreensLinksTest : StringSpec() {
         proxyDown =
           ProxyDown(
             scenario = "proxy-down",
-            pageSection = "With the proxy stopped",
             directUrl = "\$EAST_DASHBOARD_URL/connection",
+            pageSection = "With the proxy stopped",
             directUrlOnPage = "http://localhost:8095/dashboard/connection",
           ),
       )
 
-    // The network demo's page is the standby's, which no part of its tour stops.
+    // The network demo's page is the standby's, which no part of its tour stops; proxy-down stops it only when it's
+    // given the standby, in its else branch, which points at the primary's own dashboard.
     val NETWORK =
       ScreensDemo(
         dir = "demos/network",
@@ -257,7 +296,7 @@ class DemoScreensLinksTest : StringSpec() {
         page = "website/prometheus-proxy/docs/network-demo.md",
         pageUrl = "http://localhost:8195/screens",
         proxyService = "proxy-standby",
-        proxyDown = null,
+        proxyDown = ProxyDown(scenario = "proxy-down", branch = "\n    else\n", directUrl = "\$DASHBOARD_URL"),
       )
 
     val DEMOS = listOf(BASICS, NETWORK)

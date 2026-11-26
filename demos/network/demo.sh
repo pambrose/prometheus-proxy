@@ -300,8 +300,10 @@ standby_link() { echo "${1#agent-}-to-standby"; }
 # The agent a scenario on this one leaves alone.
 other_agent() { if [[ "$1" == agent-hq ]]; then echo agent-branch; else echo agent-hq; fi; }
 
-# An agent's own dashboard, as a link into the screens page, whose screen ids are the agents' names. Joined with printf,
-# so the spec that checks the page's links reads the links that call it, not this line.
+# An agent's own dashboard, as a link into the screens page, whose screen ids are the agents' names (the screens in
+# proxy-standby.conf). DemoScreensLinksTest reads only links written out as ${SCREENS_URL}#<screen>, so it checks
+# neither this line, which printf keeps from reading as a link to a screen named $1, nor the links built from it:
+# renaming an agent's screen means renaming it here too.
 agent_dashboard() { printf '%s#%s' "$SCREENS_URL" "$1"; }
 
 # The jobs of an agent's paths (the job label in config/agent-*.conf), as a sentence lists them.
@@ -809,8 +811,8 @@ cmd_tour() {
     instruct "Open the demo's screens: $SCREENS_URL" \
       "This is the standby proxy's screens page, one browser tab that holds every screen in the demo: the standby's" \
       "own dashboard, the primary's, each agent's, Prometheus, Grafana, and Zipkin. The standby serves it because" \
-      "part 4 stops the primary, and nothing stops the standby, so the page stays up through the tour. The steps" \
-      "from here link into this page, so keep it open, and each link opens in it."
+      "part 4 stops the primary, and no part of the tour stops the standby, so the page stays up through it. The" \
+      "steps from here link into this page, so keep it open, and each link opens in it."
     instruct "Open the primary proxy's dashboard: ${SCREENS_URL}#primary" \
       "Two agents are connected. Click agent-hq: it's connected 'via hq-to-proxy:50051 (1 of 2)', its link to the" \
       "primary, the first of its two endpoints. agent-branch is connected 'via branch-to-proxy:50053 (1 of 2)'."
@@ -1032,17 +1034,20 @@ main() {
         if ((${#back[@]} == 1)); then
           point "${back[0]} was on the standby, so its connection closes, and it reconnects from the head of its" \
             "list, as a connection that registered and then dropped does. Within a few seconds the primary's" \
-            "dashboard shows it 'via' its link to the primary, '(1 of 2)': ${SCREENS_URL}#primary"
+            "dashboard shows it 'via' its link to the primary, '(1 of 2)': $DASHBOARD_URL"
         else
           point "Both agents were on the standby, so their connections close, and each reconnects from the head of" \
             "its list, as a connection that registered and then dropped does. Within a few seconds the primary's" \
-            "dashboard shows each 'via' its link to the primary, '(1 of 2)': ${SCREENS_URL}#primary"
+            "dashboard shows each 'via' its link to the primary, '(1 of 2)': $DASHBOARD_URL"
         fi
         point "In Grafana's 'Agents off their primary', each agent back on the primary returns to 0, and" \
           "NetworkAgentNotOnPrimary resolves for it."
       fi
       point "In Grafana, prometheus-proxy-standby, the standby's own metrics, goes down on 'Target health', and" \
         "NetworkTargetDown fires for it."
+      point "The screens page is the standby's, so it stopped too: a page already open keeps its other tabs, and" \
+        "until the standby is back, each screen answers at its own address, which the demo's page lists:" \
+        "${PAGE_URL}#running-it"
       follow_up "To bring it back, run" "$0 proxy-up proxy-standby"
     fi
     ;;
