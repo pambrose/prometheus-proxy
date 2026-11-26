@@ -41,7 +41,7 @@ Some behavior is by design and documented, so check the
   TLS, and no authentication until `proxy.dashboard.password` or `agent.dashboard.password` (`DASHBOARD_PASSWORD`) is
   set, which requires a login that crosses the network unencrypted. Keep their ports on an internal network.
 
-A way around a documented control (an identity registering a path its globs don't allow, one agent reading or
-answering another's scrapes, a dashboard request served without its login once a password is set, a dashboard page
-another site can show in a frame, credentials leaking into logs or the dashboard) is a vulnerability, and so is a
-weakness in the defaults themselves. Please report it.
+A way around a documented control (an identity registering a path its globs don't allow, one agent reading or answering
+another's scrapes, a dashboard request served without its login once a password is set, a dashboard page another site
+can show in a frame while `framingEnabled` is false, credentials leaking into logs or the dashboard) is a vulnerability,
+and so is a weakness in the defaults themselves. Please report it.

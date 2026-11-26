@@ -231,6 +231,7 @@ class DashboardPushTest : StringSpec() {
         maxSessions = maxSessions,
         allowedOrigins = emptyList(),
         allowedHosts = emptyList(),
+        framingEnabled = false,
         login = if (login) DashboardLogin("admin", "not used: the spec makes its sessions itself") else null,
         loginHeading = "Push test",
       )

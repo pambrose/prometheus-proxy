@@ -23,6 +23,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain as shouldContainElement
 import io.kotest.matchers.collections.shouldNotBeIn
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -167,9 +168,23 @@ class AgentDashboardOptionsTest : StringSpec() {
         this shouldNotContain LOGIN_PASSWORD
       }
     }
+
+    "the agent's framing should be logged while it's on, the default, and only with its dashboard on" {
+      fun framingLines(dashboard: String) =
+        captureLogs<AgentOptions>(Level.INFO) { agentOptionsFromConfig("agent.dashboard { $dashboard }") }
+          .map { it.formattedMessage }
+          .filter { it.startsWith("dashboard framing") }
+
+      framingLines("enabled = true") shouldBe listOf(AGENT_FRAMING_LINE)
+      framingLines("enabled = true, framingEnabled = false").shouldBeEmpty()
+      framingLines("enabled = false").shouldBeEmpty()
+    }
   }
 
   private companion object {
     const val LOGIN_PASSWORD = "s3cret-Passw0rd"
+    const val AGENT_FRAMING_LINE =
+      "dashboard framing: on; any web page can show the dashboard in a frame; " +
+        "set agent.dashboard.framingEnabled = false to refuse it"
   }
 }

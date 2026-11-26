@@ -263,9 +263,9 @@ class AgentWebDashboardTest : StringSpec() {
 
         client.post("$base/dashboard/scrape?path=$SCRAPED_PATH") { header(HX_REQUEST_HEADER, "true") }.apply {
           status shouldBe HttpStatusCode.OK
-          // No page on another site may frame the agent's dashboard, to steer a viewer's clicks to this button.
-          headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
-          headers["X-Frame-Options"] shouldBe "DENY"
+          // Framing is allowed by default (agent.dashboard.framingEnabled), so a page can embed the agent's dashboard.
+          headers["Content-Security-Policy"].orEmpty() shouldNotContain "frame-ancestors"
+          headers["X-Frame-Options"] shouldBe null
           bodyAsText().apply {
             this shouldContain """<span class="pill ok">200</span>"""
             this shouldContain "after the filter"
@@ -399,7 +399,8 @@ class AgentWebDashboardTest : StringSpec() {
         dashboardAgent(
           AGENT_DASHBOARD_UI_DOWN_GRPC_PORT,
           AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT,
-          extraArgs = ["-Dagent.dashboard.password=$PASSWORD"] + METRICS_ARGS,
+          // Framing refused here, so the login page's check below shows the setting reaches the dashboard.
+          extraArgs = ["-Dagent.dashboard.password=$PASSWORD", "-Dagent.dashboard.framingEnabled=false"] + METRICS_ARGS,
         )
       val base = "http://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT"
       val client = HttpClient(CIO) { followRedirects = false }

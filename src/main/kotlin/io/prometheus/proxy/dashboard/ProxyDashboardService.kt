@@ -171,6 +171,7 @@ internal class ProxyDashboardService(
         maxSessions = dashboardConfig.maxSessions,
         allowedOrigins = dashboardConfig.allowedOrigins,
         allowedHosts = dashboardConfig.allowedHosts,
+        framingEnabled = dashboardConfig.framingEnabled,
         login = login,
         loginHeading = LOGIN_HEADING,
         icons = LinkIcon.entries.associate { it.fileName to it.resource },

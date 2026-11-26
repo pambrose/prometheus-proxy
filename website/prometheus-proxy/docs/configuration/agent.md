@@ -466,6 +466,7 @@ agent {
 | `agent.dashboard.maxSessions`                                                                                    | 50          | Open WebSocket sessions; more are closed                                          |
 | `agent.dashboard.allowedOrigins`                                                                                 | []          | Browser origins allowed besides the dashboard's own host                          |
 | `agent.dashboard.allowedHosts`                                                                                   | []          | Host names the dashboard answers to; empty turns the check off                    |
+| `agent.dashboard.framingEnabled`                                                                                 | true        | Lets any web page show the dashboard in a frame; false refuses framing            |
 
 ## The Agent's Own Metrics
 
