@@ -251,9 +251,9 @@ object TestPorts {
   const val DASHBOARD_UI_LOGIN_METRICS_PORT = 9752
 
   // ProxyScreensTest: the proxy's /screens page, with screens listed and without, with a login and without.
-  const val SCREENS_HTTP_PORT = 9763
-  const val SCREENS_GRPC_PORT = 9764
-  const val SCREENS_DASHBOARD_PORT = 9765
+  const val SCREENS_HTTP_PORT = 9766
+  const val SCREENS_GRPC_PORT = 9767
+  const val SCREENS_DASHBOARD_PORT = 9768
 
   // AgentWebDashboardTest: the agent's dashboard, with its proxy up and with it down (nothing listens on the down
   // case's gRPC port), and with a login.
