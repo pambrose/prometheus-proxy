@@ -26,6 +26,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.dashboard.DashboardCss
 import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.common.dashboard.LoginHtml
 import io.prometheus.proxy.dashboard.DashboardFixtures.PROXY_NAME
 import io.prometheus.proxy.dashboard.ScreensHtml.renderScreens
 import kotlinx.html.html
@@ -163,6 +164,10 @@ class ScreensHtmlTest : StringSpec() {
     }
 
     // ==================== The bar and the head ====================
+
+    "the bar should name the product beside the logo" {
+      page() shouldContain """<span class="brand-name">${LoginHtml.PRODUCT}</span>"""
+    }
 
     "the bar should have the theme button, and Log out only with a login" {
       page().apply {

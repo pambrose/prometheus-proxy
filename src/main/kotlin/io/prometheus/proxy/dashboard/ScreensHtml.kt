@@ -20,6 +20,7 @@ import io.prometheus.common.dashboard.DashboardLogo.brand
 import io.prometheus.common.dashboard.DashboardPage.announcer
 import io.prometheus.common.dashboard.DashboardPage.barEnd
 import io.prometheus.common.dashboard.DashboardPage.dashboardHead
+import io.prometheus.common.dashboard.LoginHtml
 import kotlinx.html.ButtonType
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
@@ -56,7 +57,8 @@ internal object ScreensHtml {
   /** The notice a copy shows when its link went to the copy already open and it couldn't close itself. */
   const val HANDOFF_ID = "handoff"
 
-  private const val BRAND = "Screens"
+  /** The page's title, before the proxy's name; its bar names the product, as the login pages do. */
+  private const val TITLE = "Screens"
 
   /**
    * What the page shows.
@@ -80,13 +82,13 @@ internal object ScreensHtml {
     val all = listOf(proxy) + page.screens
     attributes["lang"] = "en"
     head {
-      dashboardHead("$BRAND · ${page.proxyName}", page.routeBase, htmx = false) {
+      dashboardHead("$TITLE · ${page.proxyName}", page.routeBase, htmx = false) {
         style { unsafe { raw(ScreensCss.CSS) } }
       }
     }
     body("screens") {
       div("bar") {
-        brand(BRAND)
+        brand(LoginHtml.PRODUCT)
         tabs(all)
         layoutButtons()
         barEnd(page.loginEnabled, page.routeBase)
