@@ -36,6 +36,20 @@ All notable changes to this project are documented in this file.
   frame it; `false` sends both on every response, as 4.7.0 did. A dashboard logs a line at startup while it's on, and
   its Settings view shows it
 
+### Bug Fixes
+
+- An agent whose proxy took its connect and then refused it, its registration or every static path, added about three
+  lines to its dashboard's Activity view on every retry: the connect, the refused paths, and a disconnect. Such a
+  refusal is now a failed connect: the view shows the attempt's lines and `connect failed` once, and again only when
+  the reason changes, and the connect once the proxy takes the agent; the log warns once, without a stack trace, then
+  at DEBUG with the 10-minute reminder; and the Connection view shows the agent `failing`, with the proxy's reason,
+  counting a connect once the proxy has registered the agent and its paths
+- A line of the agent's Activity view for a burst of more than three paths counted a path past the three it names
+  again each time it came back, overstating how many paths the line concerned
+- The agent's Activity view showed a discovery file that couldn't be read or parsed, but not that it could again, so
+  the failure looked current: a `discovery recovered` line, with the entries read, now follows, as the log's INFO
+  does, on the next connection too
+
 ### Behavior Changes
 
 - A dashboard allows framing by default, where 4.7.0 refused it on every response with no setting to allow it;

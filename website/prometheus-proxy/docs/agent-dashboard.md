@@ -147,7 +147,8 @@ The connection's state, `connected`, `connecting`, or `failing`, and the endpoin
 `failed over` when it isn't the first. Under it:
 
 - **Proxy endpoints**, in failover order, each with the last error the agent got connecting to it, until a connect to
-  it succeeds. A proxy that's down, a wrong port, a refused token, and a TLS mismatch each show here, rather than only
+  it succeeds, once the proxy has registered the agent and its paths. A proxy that's down, a wrong port, a refused
+  token, a TLS mismatch, and a proxy that refuses the agent or every one of its paths each show here, rather than only
   in the agent's log.
 - **Discovery**, when it's on: the file, how often it's read, whether the last read failed, and the entries it skipped,
   missing a path or a URL, or found colliding with a static path or listed twice.
@@ -160,24 +161,27 @@ What has happened to the agent, newest first: the history the other views can't 
 things stand now. It's where you see that a path was refused just after the agent failed over, or that a connection
 dropped and came back while nobody was watching.
 
-| Event            | Shown as | When                                                                             |
-|:-----------------|:---------|:---------------------------------------------------------------------------------|
-| connected        | plain    | The agent connected to a proxy endpoint                                          |
-| disconnected     | amber    | A connection ended, with why when an error ended it                              |
-| connect failed   | red      | A connect to an endpoint failed; a repeat of the same failure isn't listed again |
-| failed over      | amber    | The agent left its first endpoint for the next                                   |
-| back to primary  | plain    | The agent went back to its first endpoint                                        |
-| registered       | plain    | The proxy accepted a path, configured, discovered, or registered at runtime      |
-| refused          | red      | The proxy refused a path, with its reason                                        |
-| taken over       | amber    | The proxy gave a path to another agent, which it names                           |
-| unregistered     | plain    | A path was removed, such as one that left the discovery file                     |
-| discovery failed | red      | The discovery file couldn't be read, so the agent keeps the paths it last read   |
-| entries skipped  | red      | The discovery file listed entries without a path or a URL                        |
-| not filtered     | red      | A path's metric filter let a scrape through unfiltered, with why                 |
+| Event               | Shown as | When                                                                                           |
+|:--------------------|:---------|:-----------------------------------------------------------------------------------------------|
+| connected           | plain    | The agent connected to a proxy endpoint                                                        |
+| disconnected        | amber    | A connection ended, with why when an error ended it                                            |
+| connect failed      | red      | A connect failed, or the proxy refused the agent or all its paths; a repeat isn't listed again |
+| failed over         | amber    | The agent left its first endpoint for the next                                                 |
+| back to primary     | plain    | The agent went back to its first endpoint                                                      |
+| registered          | plain    | The proxy accepted a path, configured, discovered, or registered at runtime                    |
+| refused             | red      | The proxy refused a path, with its reason                                                      |
+| taken over          | amber    | The proxy gave a path to another agent, which it names                                         |
+| unregistered        | plain    | A path was removed, such as one that left the discovery file                                   |
+| discovery failed    | red      | The discovery file couldn't be read, so the agent keeps the paths it last read                 |
+| discovery recovered | plain    | The discovery file was read again after it failed, with how many entries it has                |
+| entries skipped     | red      | The discovery file listed entries without a path or a URL                                      |
+| not filtered        | red      | A path's metric filter let a scrape through unfiltered, with why                               |
 
 Like events in a burst share a line, such as the agent registering its paths as it connects, counted and naming the
 first few paths. The same event again, such as failing over on every retry through a long outage, adds to the line
-it repeats. An error shows as the first line of its message, up to 200 characters, here and in the other views; the
+it repeats. A proxy that keeps refusing the agent shows its connect, the refused paths, and **connect failed** once,
+and again only when the reason changes, not on every retry; the agent's connect and its paths show once the proxy
+takes them. An error shows as the first line of its message, up to 200 characters, here and in the other views; the
 agent's log has all of it. The view keeps `activityLogSize` lines (500), in memory, so a restart empties it. The
 search filters by event, path, with its slash or without, or detail, and **Problems only** keeps the red lines. The
 view updates as each line is added.

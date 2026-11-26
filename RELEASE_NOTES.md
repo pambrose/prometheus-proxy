@@ -38,6 +38,18 @@ your own, such as a portal, show the proxy's and the agents' dashboards in frame
   default, let any web page show the dashboard in a frame, such as a portal's; `false` refuses framing, as every
   dashboard did in 4.7.0. A login in a frame works only when the framing page is on the dashboard's own site.
 
+### Bug Fixes
+
+- **A proxy that keeps refusing an agent no longer floods its Activity view.** An agent whose proxy took its connects
+  and refused it, or every one of its paths, added about three lines to its dashboard's Activity view every few
+  seconds. The view now shows the refusal once, as `connect failed`, again only when the reason changes, and the
+  connect once the proxy takes the agent. The agent's log warns once instead of on every retry, and its Connection
+  view shows it failing, with the proxy's reason.
+- **The Activity view counts a burst's paths right.** A line for more than three paths could count one of them again
+  each time it came back, so the line said it concerned more paths than it did.
+- **The Activity view says when discovery works again.** After a `discovery failed` line, the agent now adds a
+  `discovery recovered` line once it reads the discovery file again, so the failure no longer looks current.
+
 ### Behavior Changes
 
 - **A failure handler that throws no longer escapes `startIfConfigured()`.** The `onFailure` it's given is guarded as
