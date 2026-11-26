@@ -542,6 +542,19 @@ guards against the first on its own, and against the other two with a setting ea
   (`Content-Security-Policy: frame-ancestors 'none'`, and `X-Frame-Options: DENY` for older browsers), so no page, on
   any site, can frame it.
 
+What framing lets a page do to the dashboard is small: it can't read the frame, and the only clicks it can steer are
+Scrape now, within its cooldown, and Log out. The setting is there mostly for audits. Security scanners such as ZAP,
+Burp, and Nessus flag a response with neither `X-Frame-Options` nor `frame-ancestors` as missing an anti-clickjacking
+header, so an organization that scans its internal services finds the dashboard by default, and
+`framingEnabled = false` answers that finding with one setting, no reverse proxy needed. If your policy requires the
+header and the dashboard is [behind a reverse proxy](#behind-a-reverse-proxy), you can add it there instead, as nginx
+does with:
+
+```nginx
+add_header Content-Security-Policy "frame-ancestors 'none'" always;
+add_header X-Frame-Options DENY always;
+```
+
 The dashboard logs a request it refuses for its `Origin` or `Host` at INFO, naming the setting that would allow it, at
 most once a minute for each address the requests come from, and the rest at DEBUG. It cuts the header to 270
 characters, the longest a real one can be, and escapes its control characters, since a client sends it before any
