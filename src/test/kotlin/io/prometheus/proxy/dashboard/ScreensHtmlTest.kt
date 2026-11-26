@@ -156,7 +156,7 @@ class ScreensHtmlTest : StringSpec() {
         this shouldContain
           """<button type="button" class="more" id="${ScreensHtml.MORE_ID}" """ +
           """popovertarget="${ScreensHtml.MENU_ID}" aria-label="More screens" hidden="hidden">""" +
-          """More <span class="count"></span><span class="down-count"></span></button>"""
+          """More <span class="count"></span><span class="crit"></span></button>"""
         indexOf("</nav>") shouldBeGreaterThan indexOf("id=\"${ScreensHtml.MORE_ID}\"")
         indexOf("id=\"${ScreensHtml.MENU_ID}\"") shouldBeGreaterThan indexOf("</nav>")
       }
@@ -180,11 +180,11 @@ class ScreensHtmlTest : StringSpec() {
     "the More button and the menu should use the dashboards' tokens, dots, and touch sizes" {
       ScreensCss.CSS.apply {
         this shouldContain ".more[hidden] { display:none; }"
-        this shouldContain ".more .down-count { color:var(--crit); }"
-        this shouldContain "width:min(320px, calc(100vw - 32px)); max-height:min(60vh, 480px);"
-        this shouldContain ".menu a.entry.up::before { background:var(--ok); }"
-        this shouldContain ".menu a.entry.down::before { background:var(--crit); }"
-        this shouldContain ".menu a.entry.up::before { background:LinkText; }"
+        this shouldContain ".more .crit { color:var(--crit); }"
+        this shouldContain "max-height:min(60vh, 480px);"
+        this shouldContain ".nav a.screen.up::before, .menu a.entry.up::before { background:var(--ok); }"
+        this shouldContain ".nav a.screen.down::before, .menu a.entry.down::before { background:var(--crit); }"
+        this shouldContain ".nav a.screen.up::before, .menu a.entry.up::before { background:LinkText; }"
         this shouldContain ".more, .menu input, .menu a.entry { min-height:46px; }"
       }
     }
@@ -195,13 +195,17 @@ class ScreensHtmlTest : StringSpec() {
       ScreensCss.CSS.substringAfter("@supports not selector(:popover-open) {").substringBefore("\n}").apply {
         this shouldContain ".menu, .more { display:none; }"
         this shouldContain "body.screens .nav { flex-wrap:wrap; }"
-        this shouldContain ".nav a.screen.out { display:inline-flex; }"
+      }
+      ScreensCss.CSS.substringAfter("@supports selector(:popover-open) {").substringBefore("\n}").apply {
+        this shouldContain ".nav a.screen.out { display:none; }"
+        this shouldContain ".nav.tight a.screen { min-width:0; }"
       }
     }
 
     // The count's crit colour holds 4.5:1 on --surface-2, the bar's end's hover ground, and not on --surface-3.
     "the More button's hover should keep its count readable" {
-      ScreensCss.CSS shouldContain ".more:hover { color:var(--ink); background-color:var(--surface-2); }"
+      ScreensCss.CSS shouldContain
+        ".layouts button:hover, .more:hover { color:var(--ink); background-color:var(--surface-2); }"
     }
 
     // Shown by the script only when a link went to the copy already open and the browser won't let it close this one.
@@ -217,13 +221,10 @@ class ScreensHtmlTest : StringSpec() {
     "a name with HTML or quote characters should be escaped everywhere it appears" {
       val text = page(Screen.parseAll([Screen.Entry(name = "<b>Ops \"A\"</b>", url = "http://ops:9000")]))
       text shouldNotContain "<b>Ops"
-      // The tab and its entry in the More menu.
-      Regex("""<span class="name">&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;</span> <span class="sr-only state">""")
-        .findAll(text)
-        .count() shouldBe 2
+      // The tab, its entry in the More menu, and its pane's bar.
+      Regex("""<span class="name">&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;</span>""").findAll(text).count() shouldBe 3
       // The tab's tooltip and the frame's title.
       Regex("""title="&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;"""").findAll(text).count() shouldBe 2
-      text shouldContain """<span class="name">&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;</span>"""
       text shouldContain """data-screen="b-ops-a-b""""
     }
 
@@ -274,8 +275,7 @@ class ScreensHtmlTest : StringSpec() {
     // give the tab the notice's ground.
     "the pane's down notice should be styled only inside its view, apart from a tab's state class" {
       val css = ScreensCss.CSS
-      // The class .down alone, not .down-count, the More button's count, which a hyphen ends no word of.
-      Regex("""\.down(?![\w-])""")
+      Regex("""\.down\b""")
         .findAll(css)
         .map { css.substring(0, it.range.first) }
         .filterNot { it.endsWith(".view ") || it.endsWith("a.screen") || it.endsWith("a.entry") }
@@ -292,8 +292,8 @@ class ScreensHtmlTest : StringSpec() {
     "a tab's dot should be 7px and coloured by its state" {
       ScreensCss.CSS shouldContain ".nav a.screen::before"
       ScreensCss.CSS shouldContain "width:7px; height:7px;"
-      ScreensCss.CSS shouldContain ".nav a.screen.up::before { background:var(--ok); }"
-      ScreensCss.CSS shouldContain ".nav a.screen.down::before { background:var(--crit); }"
+      ScreensCss.CSS shouldContain ".nav a.screen.up::before, .menu a.entry.up::before { background:var(--ok); }"
+      ScreensCss.CSS shouldContain ".nav a.screen.down::before, .menu a.entry.down::before { background:var(--crit); }"
     }
   }
 }

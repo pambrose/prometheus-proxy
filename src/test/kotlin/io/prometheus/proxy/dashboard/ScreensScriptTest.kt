@@ -187,8 +187,9 @@ class ScreensScriptTest : StringSpec() {
       // Nor change what it would show, or move focus, so Stay here finds it as the link left it.
       listOf("select", "fillRight", "setLayout").filterNot { "if (!isThePage) return;" in body(it) } shouldBe
         emptyList()
-      // Every one of them: the tabs' Left and Right, the More menu's keys, and the panes' pickers.
-      listOf("addEventListener('keydown'", "addEventListener('change'").forEach { listener ->
+      // Every one of the page's own: the tabs' Left and Right, the More menu's keys, and the panes' pickers, not the
+      // theme's change listener (ThemeScript), which changes nothing a copy shows.
+      listOf("addEventListener('keydown', function", "addEventListener('change', function").forEach { listener ->
         val handlers = js.split(listener).drop(1).map { it.substringBefore("});") }
         handlers.size shouldBeGreaterThan 0
         handlers.filterNot { "if (!isThePage) return;" in it } shouldBe emptyList()
@@ -196,7 +197,7 @@ class ScreensScriptTest : StringSpec() {
     }
 
     "each dot should say its state in words, for a screen reader" {
-      body("mark") shouldContain "state.textContent = up ? 'up' : 'not answering';"
+      body("mark") shouldContain "var text = up ? 'up' : 'not answering';"
     }
 
     // ==================== Tabs, layouts, and the theme ====================
@@ -213,7 +214,7 @@ class ScreensScriptTest : StringSpec() {
 
     // A tab that doesn't fit is hidden, never moved: the tabs keep the list's order for a screen reader and Left/Right.
     "the tabs should fit one row, the ones that don't fit hidden, never moved" {
-      ScreensCss.CSS shouldContain "body.screens .nav { flex:1 1 0; flex-wrap:nowrap; min-width:0; }"
+      ScreensCss.CSS shouldContain "body.screens .nav { flex:1 1 0; min-width:0; }"
       ScreensCss.CSS shouldContain ".nav a.screen.out { display:none; }"
       body("fitTabs").apply {
         this shouldContain "var room = nav.clientWidth;"
@@ -231,9 +232,11 @@ class ScreensScriptTest : StringSpec() {
 
     "each tab should be measured once, in bold, and the More button at its widest label" {
       body("measureTabs").apply {
-        this shouldContain "tab.classList.remove('out');"
-        this shouldContain "tab.classList.add('on');"
-        this shouldContain "' · ' + ids.length + ' down'"
+        this shouldContain "tabs[id].classList.remove('out');"
+        this shouldContain "tabs[id].classList.add('on');"
+        this shouldContain "labelMore(ids.length, ids.length);"
+        // The nav's own gap, added to each tab's width once.
+        this shouldContain "var gap = parseFloat(getComputedStyle(nav).columnGap) || 0;"
       }
     }
 
@@ -262,28 +265,35 @@ class ScreensScriptTest : StringSpec() {
       js shouldContain "nav.addEventListener('click', onScreenClick);"
       js shouldContain "menu.addEventListener('click', onScreenClick);"
       body("onScreenClick") shouldContain "closeMenu();"
-      body("closeMenu") shouldContain "if (menu.matches(':popover-open')) menu.hidePopover();"
+      body("closeMenu") shouldContain "if (menu.hidePopover && menu.matches(':popover-open')) menu.hidePopover();"
     }
 
     "each entry should mark the current screen, the right pane's, and its screen's state" {
       body("render").apply {
-        this shouldContain "var entry = menuItems[id];"
-        this shouldContain "entry.classList.toggle('on', current);"
-        this shouldContain "if (current) entry.setAttribute('aria-current', 'true');"
-        this shouldContain "else entry.removeAttribute('aria-current');"
-        this shouldContain "entry.classList.toggle('second', layout === 'split' && id === second);"
+        this shouldContain "var isSecond = layout === 'split' && id === second;"
+        this shouldContain "markLink(tabs[id], current, isSecond, 'page');"
+        this shouldContain "markLink(menuItems[id], current, isSecond, 'true');"
       }
-      body("mark") shouldContain "menuItems[id].classList.toggle('down', !up);"
-      body("mark") shouldContain "menuItems[id].querySelector('.state').textContent = state.textContent;"
+      body("markLink").apply {
+        this shouldContain "link.classList.toggle('on', current);"
+        this shouldContain "link.classList.toggle('second', isSecond);"
+        this shouldContain
+          "if (current) link.setAttribute('aria-current', currentValue); else link.removeAttribute('aria-current');"
+      }
+      body("mark").apply {
+        this shouldContain "[tab, menuItems[id]].forEach(function (link) {"
+        this shouldContain "link.classList.toggle('down', !up);"
+        this shouldContain "link.querySelector('.state').textContent = text;"
+      }
     }
 
     "the search should filter the entries by name, case-insensitively, as a substring" {
       body("filterMenu").apply {
-        this shouldContain "var query = text.trim().toLowerCase();"
+        this shouldContain "var query = search.value.trim().toLowerCase();"
         this shouldContain "entry.querySelector('.name').textContent.toLowerCase().indexOf(query) < 0"
         this shouldContain "entry.parentNode.hidden ="
       }
-      js shouldContain "search.addEventListener('input', function () { filterMenu(search.value); });"
+      js shouldContain "search.addEventListener('input', filterMenu);"
     }
 
     // A search that matches nothing leaves no entry: Enter and Down then do nothing (Review Focus 3).
@@ -311,7 +321,7 @@ class ScreensScriptTest : StringSpec() {
         this shouldContain "if (evt.newState !== 'open') return;"
         this shouldContain "placeMenu();"
         this shouldContain "search.value = '';"
-        this shouldContain "filterMenu('');"
+        this shouldContain "filterMenu();"
       }
       js.substringAfter("menu.addEventListener('toggle', function (evt) {").substringBefore("});").apply {
         this shouldContain "if (evt.newState === 'open') search.focus();"
@@ -322,9 +332,9 @@ class ScreensScriptTest : StringSpec() {
     // At a phone's width More sits nearer the left edge than the menu is wide, so aligning their right edges alone put
     // the menu's left, its search and every name's start, off the screen.
     "the menu should stay inside the window on both sides" {
-      ScreensCss.CSS shouldContain "width:min(${ScreensScript.MENU_WIDTH}px, calc(100vw - 32px));"
       body("placeMenu").apply {
-        this shouldContain "var menuWidth = Math.min(${ScreensScript.MENU_WIDTH}, window.innerWidth - 32);"
+        this shouldContain "var menuWidth = Math.min(${ScreensScript.MENU_WIDTH}, width - 32);"
+        this shouldContain "menu.style.width = menuWidth + 'px';"
         this shouldContain "Math.max(8, Math.min(width - rect.right, width - menuWidth - 8))"
       }
     }

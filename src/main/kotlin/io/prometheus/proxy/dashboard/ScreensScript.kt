@@ -79,24 +79,17 @@ internal object ScreensScript {
       var more = document.getElementById('$MORE_ID');
       var menu = document.getElementById('$MENU_ID');
       var search = document.getElementById('$SEARCH_ID');
-      // Each screen's pane and tab by its id, and the ids in the page's order, the proxy's first. Objects without a
-      // prototype, so an id such as "constructor" names only a screen.
+      // Each screen's pane, tab, and More menu entry by its id, and the ids in the page's order, the proxy's first.
+      // Objects without a prototype, so an id such as "constructor" names only a screen.
       var ids = [];
       var panes = Object.create(null);
-      var tabs = Object.create(null);
       Array.prototype.forEach.call(stage.querySelectorAll('section.pane'), function (pane) {
         var id = pane.getAttribute('data-screen');
         ids.push(id);
         panes[id] = pane;
       });
-      Array.prototype.forEach.call(nav.querySelectorAll('a.screen'), function (tab) {
-        tabs[tab.getAttribute('data-screen')] = tab;
-      });
-      // Each screen's entry in the More menu, as tabs holds its tab.
-      var menuItems = Object.create(null);
-      Array.prototype.forEach.call(menu.querySelectorAll('a.entry'), function (entry) {
-        menuItems[entry.getAttribute('data-screen')] = entry;
-      });
+      var tabs = byScreen(nav, 'a.screen');
+      var menuItems = byScreen(menu, 'a.entry');
       // What the page shows: the layout, the screen alone or on the left, and the one on the right in Split; and the
       // path each screen last loaded from a link, or null once it loaded its start, which the hash shows.
       var layout = 'one';
@@ -106,15 +99,24 @@ internal object ScreensScript {
       // Whether this copy is the page, which follows links other copies hand it; false while it waits to hand its own.
       var isThePage = false;
       var handedOver = false;
-      // The row's fit (fitTabs): each tab's width, measured once; the More button's, at its widest label; and the gap
-      // between them, the nav's (DashboardCss).
-      var TAB_GAP = 6;
+      // The row's fit (fitTabs): each tab's width with the gap after it, measured once, and the More button's at its
+      // widest label.
       var tabWidth = Object.create(null);
       var moreWidth = 0;
+      var moreCount = more.querySelector('.count');
+      var moreDown = more.querySelector('.crit');
 
       // The theme button and the live region's say, which every page with the bar shares (see ThemeScript).
       ${ThemeScript.indented("      ")}
 
+      // The elements under root that selector matches, by their screen's id.
+      function byScreen(root, selector) {
+        var found = Object.create(null);
+        Array.prototype.forEach.call(root.querySelectorAll(selector), function (el) {
+          found[el.getAttribute('data-screen')] = el;
+        });
+        return found;
+      }
       function frameOf(id) {
         return panes[id].querySelector('iframe');
       }
@@ -169,17 +171,12 @@ internal object ScreensScript {
         var shown = layout === 'all' ? ids : layout === 'split' ? [first, second] : [first];
         ids.forEach(function (id) {
           var at = shown.indexOf(id);
-          var tab = tabs[id];
           var current = layout !== 'all' && id === first;
+          var isSecond = layout === 'split' && id === second;
           panes[id].classList.toggle('shown', at >= 0);
           panes[id].style.gridColumn = layout === 'all' || at < 0 ? '' : String(at + 1);
-          tab.classList.toggle('on', current);
-          tab.classList.toggle('second', layout === 'split' && id === second);
-          if (current) tab.setAttribute('aria-current', 'page'); else tab.removeAttribute('aria-current');
-          var entry = menuItems[id];
-          entry.classList.toggle('on', current);
-          if (current) entry.setAttribute('aria-current', 'true'); else entry.removeAttribute('aria-current');
-          entry.classList.toggle('second', layout === 'split' && id === second);
+          markLink(tabs[id], current, isSecond, 'page');
+          markLink(menuItems[id], current, isSecond, 'true');
           if (at >= 0 && layout !== 'all') show(id);
         });
         Array.prototype.forEach.call(document.querySelectorAll('.layouts button'), function (b) {
@@ -189,23 +186,34 @@ internal object ScreensScript {
         var hash = layout === 'all' ? '$ALL_ID' : shown.map(linkOf).join('+');
         history.replaceState(null, '', '#' + hash);
       }
+      // Marks a tab or a menu entry current, and as the right pane's in Split; the tab is the page's current link
+      // (aria-current page), its entry only marked current, so the page has one.
+      function markLink(link, current, isSecond, currentValue) {
+        link.classList.toggle('on', current);
+        link.classList.toggle('second', isSecond);
+        if (current) link.setAttribute('aria-current', currentValue); else link.removeAttribute('aria-current');
+      }
+      // The More button's label: how many screens the row leaves out, and how many of those aren't answering.
+      function labelMore(out, down) {
+        moreCount.textContent = String(out);
+        moreDown.textContent = down ? ' · ' + down + ' down' : '';
+      }
       // Measures each tab once, shown and in bold, as the current one is, so selecting a tab never pushes its neighbour
       // out; and the More button at its widest label, every screen out and every one down, so a dot changing colour
-      // never moves a tab.
+      // never moves a tab. Every change first, then every reading, so the page lays out once.
       function measureTabs() {
+        var wasOn = ids.filter(function (id) { return tabs[id].classList.contains('on'); });
         nav.classList.remove('tight');
         ids.forEach(function (id) {
-          var tab = tabs[id];
-          var wasOn = tab.classList.contains('on');
-          tab.classList.remove('out');
-          tab.classList.add('on');
-          tabWidth[id] = tab.getBoundingClientRect().width;
-          tab.classList.toggle('on', wasOn);
+          tabs[id].classList.remove('out');
+          tabs[id].classList.add('on');
         });
         more.hidden = false;
-        more.querySelector('.count').textContent = String(ids.length);
-        more.querySelector('.down-count').textContent = ' · ' + ids.length + ' down';
+        labelMore(ids.length, ids.length);
+        var gap = parseFloat(getComputedStyle(nav).columnGap) || 0;
+        ids.forEach(function (id) { tabWidth[id] = tabs[id].getBoundingClientRect().width + gap; });
         moreWidth = more.getBoundingClientRect().width;
+        ids.forEach(function (id) { tabs[id].classList.toggle('on', wasOn.indexOf(id) >= 0); });
         more.hidden = true;
       }
       // Fits the tabs to one row, in the list's order, hiding (out) those from the first that doesn't fit beside the
@@ -216,7 +224,7 @@ internal object ScreensScript {
       function fitTabs() {
         var room = nav.clientWidth;
         var kept = layout === 'split' ? [first, second] : layout === 'one' ? [first] : [];
-        var widthOf = function (sum, id) { return sum + tabWidth[id] + TAB_GAP; };
+        var widthOf = function (sum, id) { return sum + tabWidth[id]; };
         var row = ids;
         var tight = false;
         if (ids.reduce(widthOf, 0) > room) {
@@ -225,8 +233,8 @@ internal object ScreensScript {
           var full = false;
           row = ids.filter(function (id) {
             if (kept.indexOf(id) >= 0) return true;
-            full = full || used + tabWidth[id] + TAB_GAP > room;
-            if (!full) used += tabWidth[id] + TAB_GAP;
+            full = full || used + tabWidth[id] > room;
+            if (!full) used += tabWidth[id];
             return !full;
           });
         }
@@ -240,8 +248,7 @@ internal object ScreensScript {
         var out = ids.filter(function (id) { return tabs[id].classList.contains('out'); });
         var down = out.filter(function (id) { return tabs[id].classList.contains('down'); }).length;
         var label = 'More screens: ' + out.length + ' hidden';
-        more.querySelector('.count').textContent = String(out.length);
-        more.querySelector('.down-count').textContent = down ? ' · ' + down + ' down' : '';
+        labelMore(out.length, down);
         more.setAttribute('aria-label', down ? label + ', ' + down + ' not answering' : label);
         more.hidden = out.length === 0;
       }
@@ -310,22 +317,22 @@ internal object ScreensScript {
       }
       // Closes the More menu if it's open; nothing where the browser has no popovers, whose selector would throw.
       function closeMenu() {
-        if (!menu.hidePopover) return;
-        if (menu.matches(':popover-open')) menu.hidePopover();
+        if (menu.hidePopover && menu.matches(':popover-open')) menu.hidePopover();
       }
-      // Places the menu under the More button, their right edges aligned, at least 8px in from the window's on both
-      // sides: at a phone's width More can sit nearer the left edge than the menu is wide. Its width is the CSS's,
-      // which a viewport's units measure, as innerWidth does.
+      // Sizes the menu, $MENU_WIDTH px or the window's width less 32px, and places it under the More button, their
+      // right edges aligned, at least 8px in from the window's on both sides: at a phone's width More can sit nearer
+      // the left edge than the menu is wide.
       function placeMenu() {
         var rect = more.getBoundingClientRect();
         var width = document.documentElement.clientWidth;
-        var menuWidth = Math.min($MENU_WIDTH, window.innerWidth - 32);
+        var menuWidth = Math.min($MENU_WIDTH, width - 32);
+        menu.style.width = menuWidth + 'px';
         menu.style.top = Math.round(rect.bottom + 4) + 'px';
         menu.style.right = Math.round(Math.max(8, Math.min(width - rect.right, width - menuWidth - 8))) + 'px';
       }
       // Narrows the menu to the screens whose name holds the search's text, in any case; empty, it shows them all.
-      function filterMenu(text) {
-        var query = text.trim().toLowerCase();
+      function filterMenu() {
+        var query = search.value.trim().toLowerCase();
         ids.forEach(function (id) {
           var entry = menuItems[id];
           entry.parentNode.hidden = entry.querySelector('.name').textContent.toLowerCase().indexOf(query) < 0;
@@ -353,16 +360,16 @@ internal object ScreensScript {
       // A click into a screen goes to its frame's document, which the menu's light dismiss never sees, and takes focus
       // out of this window, so the menu closes then.
       window.addEventListener('blur', closeMenu);
-      search.addEventListener('input', function () { filterMenu(search.value); });
-      // Opening the menu places it and starts a fresh search, before it shows, so it never draws a frame out of place;
-      // its search takes focus as it shows (autofocus), and again here, where a browser didn't.
+      search.addEventListener('input', filterMenu);
+      // Opening the menu places it and starts a fresh search, before it shows, so it never draws a frame out of place.
       menu.addEventListener('beforetoggle', function (evt) {
         if (evt.newState !== 'open') return;
         placeMenu();
         search.value = '';
-        filterMenu('');
+        filterMenu();
       });
-      // Closing the menu from inside it returns focus to the button.
+      // Its search takes focus as the menu shows (autofocus), and again here, where a browser didn't; closing the menu
+      // from inside it returns focus to the button.
       menu.addEventListener('toggle', function (evt) {
         if (evt.newState === 'open') search.focus();
         else if (menu.contains(document.activeElement) || document.activeElement === document.body) more.focus();
@@ -469,21 +476,21 @@ internal object ScreensScript {
         loader.observe(panes[id]);
       });
 
-      // Marks a screen up or down from its probe, on its tab, in words for a screen reader, and on its pane, when that
-      // changes. A screen that answers again reloads its frame, at once if it's shown, else when it next shows (show).
+      // Marks a screen up or down from its probe, on its tab and its menu entry, in words for a screen reader, and on
+      // its pane, when that changes. A screen that answers again reloads its frame, at once if it's shown, else when it
+      // next shows (show).
       function mark(id, up) {
         var tab = tabs[id];
         if (tab.classList.contains(up ? 'up' : 'down')) return;
         var pane = panes[id];
         var frame = frameOf(id);
         var wasDown = tab.classList.contains('down');
-        var state = tab.querySelector('.state');
-        tab.classList.toggle('up', up);
-        tab.classList.toggle('down', !up);
-        state.textContent = up ? 'up' : 'not answering';
-        menuItems[id].classList.toggle('up', up);
-        menuItems[id].classList.toggle('down', !up);
-        menuItems[id].querySelector('.state').textContent = state.textContent;
+        var text = up ? 'up' : 'not answering';
+        [tab, menuItems[id]].forEach(function (link) {
+          link.classList.toggle('up', up);
+          link.classList.toggle('down', !up);
+          link.querySelector('.state').textContent = text;
+        });
         pane.classList.toggle('is-down', !up);
         updateMore();
         if (up && wasDown && frame.getAttribute('src')) {

@@ -126,24 +126,30 @@ internal object ScreensHtml {
       attributes["id"] = NAV_ID
       attributes["aria-label"] = "Screens"
       screens.forEach { screen ->
-        val on = screen.id == Screen.PROXY_ID
-        a(href = "#${screen.id}", classes = if (on) "screen on" else "screen") {
-          attributes["data-screen"] = screen.id
-          if (on) attributes["aria-current"] = "page"
-          attributes["title"] = screen.name
-          screenLabel(screen)
-        }
+        screenLink(screen, "screen", "page") { attributes["title"] = screen.name }
       }
       moreButton()
     }
   }
 
-  // A tab's or a menu entry's text: the screen's name, then its state in a visually hidden word, which the script
-  // keeps in step with the dot.
-  private fun A.screenLabel(screen: Screen) {
-    span("name") { +screen.name }
-    +" "
-    span("sr-only state") { +"checking" }
+  // A tab or a menu entry: a link to its screen's id in the page, the proxy's current, with [current] its
+  // aria-current, then the screen's name and its state in a visually hidden word, which the script keeps in step with
+  // the dot.
+  private fun FlowContent.screenLink(
+    screen: Screen,
+    cssClass: String,
+    current: String,
+    extra: A.() -> Unit = {},
+  ) {
+    val on = screen.id == Screen.PROXY_ID
+    a(href = "#${screen.id}", classes = if (on) "$cssClass on" else cssClass) {
+      attributes["data-screen"] = screen.id
+      if (on) attributes["aria-current"] = current
+      extra()
+      span("name") { +screen.name }
+      +" "
+      span("sr-only state") { +"checking" }
+    }
   }
 
   // The tabs' last item, hidden until the script finds a tab that doesn't fit the row: how many screens the row
@@ -156,7 +162,7 @@ internal object ScreensHtml {
       attributes["hidden"] = "hidden"
       +"More "
       span("count") {}
-      span("down-count") {}
+      span("crit") {}
     }
   }
 
@@ -176,16 +182,7 @@ internal object ScreensHtml {
         attributes["autofocus"] = "autofocus"
       }
       ul("entries") {
-        screens.forEach { screen ->
-          val on = screen.id == Screen.PROXY_ID
-          li {
-            a(href = "#${screen.id}", classes = if (on) "entry on" else "entry") {
-              attributes["data-screen"] = screen.id
-              if (on) attributes["aria-current"] = "true"
-              screenLabel(screen)
-            }
-          }
-        }
+        screens.forEach { screen -> li { screenLink(screen, "entry", "true") } }
       }
     }
   }
