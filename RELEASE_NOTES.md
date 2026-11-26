@@ -41,10 +41,11 @@ its own that holds them all, with Prometheus and Grafana.
 - **One page for every screen.** List your screens, the agents' dashboards, Prometheus, Grafana, or any page that allows
   framing, in `proxy.dashboard.screens`, and the proxy serves `/screens` on its dashboard's port, where the port's root
   now leads, such as `http://proxy-host:8094/`: a tab per screen after its own dashboard, each with a dot that's green
-  while the screen answers, in One, Split, or All layouts. A link can open a screen, a view in it, or two side by side,
-  such as `/screens#proxy/paths+grafana`, and a link opened while the page is open goes to that page. With screens
-  listed, `framingEnabled = false` still lets the page show the proxy's dashboard, from its own origin. Behind a reverse
-  proxy, pass `/screens` on as well as `/dashboard`. The basics demo's tour now runs in it.
+  while the screen answers, in One, Split, or All layouts. Tabs that don't fit one row go into a More menu with a
+  search, and All scrolls, loading each screen as it comes into view. A link can open a screen, a view in it, or two
+  side by side, such as `/screens#proxy/paths+grafana`, and a link opened while the page is open goes to that page.
+  With screens listed, `framingEnabled = false` still lets the page show the proxy's dashboard, from its own origin.
+  Behind a reverse proxy, pass `/screens` on as well as `/dashboard`. The basics demo's tour now runs in it.
 
 ### Bug Fixes
 

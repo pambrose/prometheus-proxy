@@ -476,6 +476,12 @@ tab to put its screen on the right), and **All** every screen in a grid, each la
 tile; click a tile's title to open it. Switching tabs or layouts never reloads a screen, so a dashboard keeps the agent
 or path you selected. Each pane's **Open in a tab** opens its screen on its own.
 
+When the tabs don't fit one row, the row ends in **More**, which says how many screens it holds and how many of those
+aren't answering, such as *More 28 · 2 down*. It opens a list of every screen, each with its dot, and a search: type to
+narrow it, Up and Down to move through it, and Enter to open a screen; shift-click puts one in Split's right pane. The
+selected screen's tab, and in Split the right pane's, always stays in the row, and a name too long for its tab shows in
+full in its tooltip. In **All**, the grid scrolls, and each screen loads as its tile comes into view.
+
 <figure markdown="span">
   ![The screens page in Split, the proxy's failing paths beside Grafana](images/demo/screens.webp#only-dark){ loading=lazy }
   ![The screens page in Split, the proxy's failing paths beside Grafana](images/demo/screens-light.webp#only-light){ loading=lazy }

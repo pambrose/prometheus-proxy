@@ -19,6 +19,7 @@
 package io.prometheus.proxy.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -186,13 +187,17 @@ class ScreensScriptTest : StringSpec() {
       // Nor change what it would show, or move focus, so Stay here finds it as the link left it.
       listOf("select", "fillRight", "setLayout").filterNot { "if (!isThePage) return;" in body(it) } shouldBe
         emptyList()
-      listOf("addEventListener('keydown'", "addEventListener('change'").filterNot {
-        js.substringAfter(it).substringBefore("});").contains("if (!isThePage) return;")
-      } shouldBe emptyList()
+      // Every one of the page's own: the tabs' Left and Right, the More menu's keys, and the panes' pickers, not the
+      // theme's change listener (ThemeScript), which changes nothing a copy shows.
+      listOf("addEventListener('keydown', function", "addEventListener('change', function").forEach { listener ->
+        val handlers = js.split(listener).drop(1).map { it.substringBefore("});") }
+        handlers.size shouldBeGreaterThan 0
+        handlers.filterNot { "if (!isThePage) return;" in it } shouldBe emptyList()
+      }
     }
 
     "each dot should say its state in words, for a screen reader" {
-      body("mark") shouldContain "state.textContent = up ? 'up' : 'not answering';"
+      body("mark") shouldContain "var text = up ? 'up' : 'not answering';"
     }
 
     // ==================== Tabs, layouts, and the theme ====================
@@ -205,11 +210,181 @@ class ScreensScriptTest : StringSpec() {
       js shouldContain "evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat"
     }
 
+    // ==================== The row and the More button ====================
+
+    // A tab that doesn't fit is hidden, never moved: the tabs keep the list's order for a screen reader and Left/Right.
+    "the tabs should fit one row, the ones that don't fit hidden, never moved" {
+      ScreensCss.CSS shouldContain "body.screens .nav { flex:1 1 0; min-width:0; }"
+      ScreensCss.CSS shouldContain ".nav a.screen.out { display:none; }"
+      body("fitTabs").apply {
+        this shouldContain "var room = nav.clientWidth;"
+        this shouldContain "tabs[id].classList.toggle('out', row.indexOf(id) < 0);"
+        this shouldContain "updateMore();"
+      }
+      js shouldNotContain "style.order"
+    }
+
+    // A link into the page, a tab's click, or Left/Right can select a screen the menu holds (Review Focus 1).
+    "a screen a link or a tab selects, and Split's right one, should be kept in the row" {
+      body("fitTabs") shouldContain "var kept = layout === 'split' ? [first, second] : layout === 'one' ? [first] : [];"
+      body("render") shouldContain "fitTabs();"
+    }
+
+    "each tab should be measured once, in bold, and the More button at its widest label" {
+      body("measureTabs").apply {
+        this shouldContain "tabs[id].classList.remove('out');"
+        this shouldContain "tabs[id].classList.add('on');"
+        this shouldContain "labelMore(ids.length, ids.length);"
+        // The nav's own gap, added to each tab's width once.
+        this shouldContain "var gap = parseFloat(getComputedStyle(nav).columnGap) || 0;"
+      }
+    }
+
+    // Review Focus 5: the row is fitted with the More button's widest label, so its count can change alone.
+    "a screen going down or up should change the More button's count, never the row" {
+      body("updateMore").apply {
+        this shouldContain "'More screens: ' + out.length + ' hidden'"
+        this shouldContain "', ' + down + ' not answering'"
+        this shouldContain "more.hidden = out.length === 0;"
+        this shouldNotContain "fitTabs"
+      }
+      body("mark") shouldContain "updateMore();"
+      body("mark") shouldNotContain "fitTabs"
+    }
+
+    "the row should refit when the tabs' width changes, not their height" {
+      js shouldContain "tabSizer.observe(nav);"
+      js shouldContain "if (width === navWidth) return;"
+    }
+
+    // ==================== The More menu ====================
+
+    // The menu sits outside the nav (ScreensHtml), so the one handler listens on both.
+    "a menu entry should work as a tab does, and close the menu" {
+      js shouldContain "evt.target.closest('a.screen, a.entry')"
+      js shouldContain "nav.addEventListener('click', onScreenClick);"
+      js shouldContain "menu.addEventListener('click', onScreenClick);"
+      body("onScreenClick") shouldContain "closeMenu();"
+      body("closeMenu") shouldContain "if (menu.hidePopover && menu.matches(':popover-open')) menu.hidePopover();"
+    }
+
+    "each entry should mark the current screen, the right pane's, and its screen's state" {
+      body("render").apply {
+        this shouldContain "var isSecond = layout === 'split' && id === second;"
+        this shouldContain "markLink(tabs[id], current, isSecond, 'page');"
+        this shouldContain "markLink(menuItems[id], current, isSecond, 'true');"
+      }
+      body("markLink").apply {
+        this shouldContain "link.classList.toggle('on', current);"
+        this shouldContain "link.classList.toggle('second', isSecond);"
+        this shouldContain
+          "if (current) link.setAttribute('aria-current', currentValue); else link.removeAttribute('aria-current');"
+      }
+      body("mark").apply {
+        this shouldContain "[tab, menuItems[id]].forEach(function (link) {"
+        this shouldContain "link.classList.toggle('down', !up);"
+        this shouldContain "link.querySelector('.state').textContent = text;"
+      }
+    }
+
+    "the search should filter the entries by name, case-insensitively, as a substring" {
+      body("filterMenu").apply {
+        this shouldContain "var query = search.value.trim().toLowerCase();"
+        this shouldContain "entry.querySelector('.name').textContent.toLowerCase().indexOf(query) < 0"
+        this shouldContain "entry.parentNode.hidden ="
+      }
+      js shouldContain "search.addEventListener('input', filterMenu);"
+    }
+
+    // A search that matches nothing leaves no entry: Enter and Down then do nothing (Review Focus 3).
+    "the menu's keys should move through the entries left, and Enter in the search open the first" {
+      body("visibleEntries") shouldContain "!entry.parentNode.hidden"
+      // Prevented, or Enter's keypress reaches the More button, which the closing menu hands focus to, and reopens it.
+      Regex(
+        """if \(evt\.key === 'Enter' && evt\.target === search\) \{\s+evt\.preventDefault\(\);\s+""" +
+          """if \(list\.length\) list\[0]\.click\(\);""",
+      ).containsMatchIn(js) shouldBe true
+      js shouldContain "var next = evt.key === 'ArrowDown' ? list[at + 1] : at <= 0 ? search : list[at - 1];"
+      js shouldContain "if (next) next.focus();"
+    }
+
+    // Placed and cleared before it shows (beforetoggle, which runs as the menu opens, where toggle runs a task later),
+    // so it never draws a frame out of place; its search takes focus as it shows (autofocus, ScreensHtml), so no key
+    // pressed at once reaches the More button and steps the tabs behind the menu.
+    "opening the menu should place it under More and focus a cleared search; closing it should focus More" {
+      body("placeMenu").apply {
+        this shouldContain "var rect = more.getBoundingClientRect();"
+        this shouldContain "menu.style.top ="
+        this shouldContain "menu.style.right ="
+      }
+      js.substringAfter("menu.addEventListener('beforetoggle', function (evt) {").substringBefore("});").apply {
+        this shouldContain "if (evt.newState !== 'open') return;"
+        this shouldContain "placeMenu();"
+        this shouldContain "search.value = '';"
+        this shouldContain "filterMenu();"
+      }
+      js.substringAfter("menu.addEventListener('toggle', function (evt) {").substringBefore("});").apply {
+        this shouldContain "if (evt.newState === 'open') search.focus();"
+        this shouldContain "more.focus();"
+      }
+    }
+
+    // At a phone's width More sits nearer the left edge than the menu is wide, so aligning their right edges alone put
+    // the menu's left, its search and every name's start, off the screen.
+    "the menu should stay inside the window on both sides" {
+      body("placeMenu").apply {
+        this shouldContain "var menuWidth = Math.min(${ScreensScript.MENU_WIDTH}, width - 32);"
+        this shouldContain "menu.style.width = menuWidth + 'px';"
+        this shouldContain "Math.max(8, Math.min(width - rect.right, width - menuWidth - 8))"
+      }
+    }
+
+    // The kept tabs and More can be wider than the row, as two long names in Split at half a laptop's width are; the
+    // tabs then shrink, their names cut, rather than spill over the layout buttons or scroll the page sideways.
+    "kept tabs wider than the row should shrink rather than spill out of it" {
+      ScreensCss.CSS shouldContain ".nav.tight a.screen { min-width:0; }"
+      body("fitTabs").apply {
+        this shouldContain "tight = used > room;"
+        this shouldContain "nav.classList.toggle('tight', tight);"
+      }
+      body("measureTabs") shouldContain "nav.classList.remove('tight');"
+    }
+
+    // Light dismiss sees only the page's own clicks, and a click into a screen goes to its frame's document, which
+    // moves focus out of the page's window.
+    "a click into a screen should close the menu" {
+      js shouldContain "window.addEventListener('blur', closeMenu);"
+    }
+
+    "Left and Right should not step the tabs from inside the menu" {
+      js shouldContain "if (evt.target.closest('#${ScreensHtml.MENU_ID}')) return;"
+    }
+
+    // Review Focus 4: an open menu would otherwise float where the button was.
+    "a change in the tabs' width should close an open menu" {
+      Regex("""navWidth = width;\s+closeMenu\(\);""").containsMatchIn(js) shouldBe true
+    }
+
     "the All layout should scale each frame to its tile, laid out at 1280 by 800" {
       js shouldContain "new ResizeObserver("
       js shouldContain "var s = String(Math.min(1, entry.contentRect.width / ${ScreensScript.FRAME_WIDTH}));"
       js shouldContain "if (view.style.getPropertyValue('--s') !== s) view.style.setProperty('--s', s);"
       ScreensCss.CSS shouldContain "width:${ScreensScript.FRAME_WIDTH}px; height:${ScreensScript.FRAME_HEIGHT}px;"
+    }
+
+    // A pane is a scroll container (overflow:hidden), whose automatic minimum height is 0, so the grid's auto rows
+    // shrank to share the stage's height, and a tile drew its title bar alone.
+    "the All grid should size its rows to their tiles, and scroll" {
+      ScreensCss.CSS shouldContain "grid-auto-rows:max-content;"
+    }
+
+    // Every screen is a live page, a dashboard with its socket, so All loads the tiles near the view, not 33 at once.
+    "the All layout should load a tile's frame only once it comes near the stage's view" {
+      body("render") shouldContain "if (at >= 0 && layout !== 'all') show(id);"
+      js shouldContain "root: stage, rootMargin: '${ScreensScript.ALL_LOAD_MARGIN}'"
+      js shouldContain "if (!isThePage || layout !== 'all') return;"
+      js shouldContain "if (entry.isIntersecting) show(entry.target.getAttribute('data-screen'));"
+      js shouldContain "loader.observe(panes[id]);"
     }
 
     "the theme button should work as it does on the dashboards" {
