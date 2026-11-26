@@ -51,6 +51,7 @@ import io.prometheus.common.requirePositive
 import io.prometheus.common.requireSampleRate
 import io.prometheus.common.dashboard.Framing
 import io.prometheus.proxy.dashboard.PathLink
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.SCREENS_PATH
 import io.prometheus.proxy.dashboard.Screen
 
 // The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
@@ -339,6 +340,12 @@ class ProxyOptions internal constructor(
     logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
     dashboardScreens = Screen.parseAll(dashboard.screens.map { Screen.Entry(it.name, it.url, it.start) })
     logger.info { "dashboard.screens: ${dashboardScreens.joinToString { it.logged }.ifEmpty { "(none)" }}" }
+    // The screens page is at /screens, outside the dashboard's path, so a dashboard based there too would answer for
+    // both on one route, and the page's proxy tab would frame the page itself.
+    require(dashboardScreens.isEmpty() || "/" + dashboardPath.trim('/') != SCREENS_PATH) {
+      "proxy.dashboard.path $SCREENS_PATH is where the screens page is served; give the dashboard another path, or " +
+        "list no screens"
+    }
     // Off, the dashboard still lets its own /screens frame it (Framing.SAME_ORIGIN), so false means less than it says.
     if (dashboardFraming == Framing.SAME_ORIGIN)
       logger.info {

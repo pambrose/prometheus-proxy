@@ -499,11 +499,12 @@ tab**. For one login across every screen, put single sign-on in front of them al
 proxy on one domain. The page is the proxy's, so while the proxy is down a page already open keeps its frames, but
 can't be reloaded.
 
-The proxy refuses to start with a screen whose name is empty or longer than 64 characters, two names with the same id,
-a name whose id is `proxy` or `all`, a `url` that isn't an absolute `http` or `https` URL or that carries a username or
-password, which the page would show anyone who can read the dashboard, a `start` that doesn't begin with `/` or `?`, or
-more than 32 screens. A `url` read from an unset variable, as `${?GRAFANA_URL}` is, is empty, and refused by the
-screen's name. The **Settings** view lists each screen with its `url`, its query values masked, and where it starts.
+The proxy refuses to start with a screen whose name is empty or longer than 64 characters, two names with the same id, a
+name whose id is `proxy` or `all`, a `url` that isn't an absolute `http` or `https` URL or that carries a username or
+password, which the page would show anyone who can read the dashboard, a `start` that doesn't begin with `/` or `?`,
+more than 32 screens, or, with screens listed, a `proxy.dashboard.path` of `/screens`, the page's own path. A `url` read
+from an unset variable, as `${?GRAFANA_URL}` is, is empty, and refused by the screen's name. The **Settings** view lists
+each screen with its `url`, its query values masked, and where it starts.
 
 ## Why It Is on Its Own Port
 

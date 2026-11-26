@@ -590,7 +590,10 @@ Three support helpers also live here (not test classes themselves):
   at startup; only a wildcard address counted as listening on all interfaces; `proxy.dashboard.links` parsed from a
   config file in order and logged by name, with a link's `icon` read and logged too, and a link the dashboard can't
   render, or one with an icon it doesn't have, failing startup with an `Invalid configuration:` message, naming the
-  link, while the dashboard is on; and the login, its username `admin` until set and off until a password turns it
+  link, while the dashboard is on; `proxy.dashboard.screens` parsed in order and logged with where each opens, a
+  screen the page can't use (an unset variable's url included) failing startup by name, and, with screens listed, a
+  dashboard path of `/screens`, and the startup line framing off with screens listed logs; and the login, its
+  username `admin` until set and off until a password turns it
   on, logged with the password masked, its startup failures (an empty username, a colon in it, a control character in
   either) naming no value, the username left unchecked without a password, and the all-interfaces warning only
   without a login

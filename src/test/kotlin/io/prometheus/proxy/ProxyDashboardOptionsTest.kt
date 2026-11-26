@@ -258,6 +258,23 @@ class ProxyDashboardOptionsTest : StringSpec() {
         "Invalid configuration: proxy.dashboard.screens screen 'Grafana' has no url; is the variable it reads set?"
     }
 
+    // The screens page is at /screens, so a dashboard based there too would answer for both on one route, and the
+    // page's proxy tab would frame the page itself.
+    "a dashboard path of /screens with screens listed should fail startup, naming the setting" {
+      val screens = """proxy.dashboard.screens = [{ name = "Grafana", url = "http://g:3000" }]"""
+      listOf("screens", "/screens", "/screens/").forEach { path ->
+        shouldThrow<ConfigLoadException> {
+          failOnInvalidConfig(embedded = true) {
+            proxyOptionsFromConfig(screens, extraArgs = ["--dashboard", "--dashboard_path", path])
+          }
+        }.message shouldBe
+          "Invalid configuration: proxy.dashboard.path /screens is where the screens page is served; give the " +
+          "dashboard another path, or list no screens"
+      }
+      // Without screens there's no page, so the path is the dashboard's to take.
+      proxyOptions(["--dashboard", "--dashboard_path", "screens"]).dashboardPath shouldBe "screens"
+    }
+
     // ==================== Login ====================
 
     // A password turns the login on; the username is admin until it's set, as Grafana's is.
