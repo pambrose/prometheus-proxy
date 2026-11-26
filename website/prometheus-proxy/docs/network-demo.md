@@ -234,6 +234,12 @@ view](agent-dashboard.md#the-activity-view), <http://localhost:8195/screens#agen
 went through, newest first: **disconnected**, **connect failed** on `branch-to-proxy:50053`, **failed over** to
 `branch-to-standby:50054`, **connected**, and **registered**, one line for its three paths.
 
+<figure markdown="span">
+  ![agent-branch's Connection view beside the standby, with the primary stopped](images/network-demo/screens.webp#only-dark){ loading=lazy }
+  ![agent-branch's Connection view beside the standby, with the primary stopped](images/network-demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The standby's screens page: agent-branch's Connection view beside the standby, the primary's tab red</figcaption>
+</figure>
+
 `./demo.sh proxy-up` brings the primary back, but the agents stay on the standby: an agent returns to the head of its
 list only when its connection drops. **NetworkAgentNotOnPrimary** keeps firing, agent-branch's Connection view
 doesn't change, and `branch-to-proxy:50053` keeps its error until a connect through it succeeds. `./demo.sh heal`
