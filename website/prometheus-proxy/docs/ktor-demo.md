@@ -70,8 +70,16 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the coffee shop, which takes a few minutes. After that it starts in
 under a minute.
 
+Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8394/>, one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, the coffee shop, its agent's dashboard, 1.1's
+after a deploy, the agent's `/debug` page, Prometheus, and Grafana. `make open` opens it, and the tour's links open in
+it.
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8394/> | `KTOR_DEMO_DASHBOARD_PORT` |
 | The coffee shop, through its load balancer | <http://localhost:8390> | `KTOR_DEMO_APP_PORT` |
 | Proxy dashboard | <http://localhost:8394/dashboard> | `KTOR_DEMO_DASHBOARD_PORT` |
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3300> | `KTOR_DEMO_GRAFANA_PORT` |
@@ -133,7 +141,7 @@ paths: each one's registration with the proxy, and its recent scrapes as the age
 `coffee_shop_metrics`, whose target is `in-process`, and **Scrape now** reads the app's registry at once, from inside
 the app, and shows what came back, whether or not the proxy has the path. Its Connection view shows the agent's
 connection to the proxy, and its Activity view what the agent did, in order. Open it at
-<http://localhost:8395/dashboard>
+<http://localhost:8394/screens#agent>
 
 The coffee shop's environment turns the agent's dashboard on, with nothing in the app's code: `DASHBOARD_ENABLED=true`,
 and a `DASHBOARD_PORT` for each version, 8395 for 1.0 and 8396 for 1.1, which the agent reads itself, over anything the
@@ -202,7 +210,9 @@ Each part of the guided tour, `make tour`, makes one point. A part's name links 
 Grafana opens on the Coffee Shop dashboard: the shop right now, whether its agent is connected to the proxy, drinks
 served by type, orders by outcome, the queue against the baristas, brew time, the order counter's HTTP statuses, and,
 below them, Ktor's HTTP latency, the JVM's heap, and how long each scrape through the proxy took. Here a rush has filled
-the queue, and with the espresso machine broken, about three orders in four fail, and `CoffeeShopErrors` fires.
+the queue, and with the espresso machine broken, about three orders in four fail, and `CoffeeShopErrors` fires. Put
+the coffee shop's status page beside it to watch the queue on both:
+<http://localhost:8394/screens#coffee-shop+grafana>
 
 ```bash
 ./demo.sh rush            # customers order three times as often
@@ -229,7 +239,7 @@ Version 1.1. The proxy tells 1.0's agent it gave the paths away, so until 1.0 st
 agent would have taken them back within seconds. `./demo.sh rollback` puts 1.0 back.
 
 Each version's agent has its own dashboard, inside its own app, and 1.1's lists the two paths registered:
-<http://localhost:8396/dashboard>
+<http://localhost:8394/screens#agent-1-1>
 
 ## Debugging the Agent
 
@@ -271,11 +281,12 @@ A health check that restarted the app whenever the proxy was down would turn a p
 agent's `/healthcheck` reports the agent itself, not its connection, and the app never waits on its agent, so the shop
 keeps serving and stays healthy while its metrics stop.
 
-`./demo.sh proxy-stop` stops the proxy. The coffee shop keeps serving, and an order still goes through
-(`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach
-the proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown` fires. The agent's
-`/debug` page shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its
-`/healthcheck` still reads healthy: <http://localhost:8393/debug>
+`./demo.sh proxy-stop` stops the proxy. The screens page is the proxy's, so while it's down, a link into the page can't
+load, and this section gives each screen's own address. The coffee shop keeps serving, and an order still goes through
+(`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach the
+proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown` fires. The agent's `/debug` page
+shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its `/healthcheck`
+still reads healthy: <http://localhost:8393/debug>
 
 On the agent's dashboard, the Connection view reads `failing`, with the error the agent's last try to reach
 `proxy:50051` got, and its paths read `pending`. It's the first place to look when an agent won't connect:
@@ -283,7 +294,7 @@ On the agent's dashboard, the Connection view reads `failing`, with the error th
 
 `./demo.sh proxy-start` brings the proxy back, and the agent reconnects within a few seconds and registers its paths
 again. The dashboard's Activity view then tells the outage in order, newest first: the paths `registered`,
-`connected`, `connect failed`, and `disconnected`. Open it at <http://localhost:8395/dashboard/activity>
+`connected`, `connect failed`, and `disconnected`. Open it at <http://localhost:8394/screens#agent/activity>
 
 ## Secrets from the Environment
 
@@ -310,7 +321,7 @@ no shell to write a variable to a file, takes its certificate and key as base64 
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the coffee shop's state, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds the coffee shop, every dashboard, Prometheus, and Grafana, in the browser |  |
 
 `calm`, `fix-machine`, `rollback`, and `proxy-start` undo every scenario. For a clean slate, `make down && make up`.
 

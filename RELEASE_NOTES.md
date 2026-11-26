@@ -80,6 +80,9 @@ its own that holds them all, with Prometheus and Grafana.
 - **The network demo's tour runs in one browser tab.** Its standby proxy serves the screens page, which holds both
   proxies' dashboards, both agents', Prometheus, Grafana, and Zipkin, and stays up while the tour stops the primary:
   `make up` prints its address, `make open` opens it, and the tour's links open in it.
+- **The Ktor demo's tour runs in one browser tab.** The proxy's screens page holds the coffee shop, its agent's
+  dashboard, the agent's `/debug` page, Prometheus, and Grafana: `make up` prints its address, `make open` opens it,
+  and the tour's links open in it, but for the part that stops the proxy.
 - **The `docker run` examples keep their ports off the network.** The quick-start commands no longer publish the
   agents' port, 50051, which their agent reaches over the shared Docker network, and publish the scrape, admin, and
   metrics ports on `127.0.0.1` only. The Docker page's production example, for agents on other hosts, publishes 50051
