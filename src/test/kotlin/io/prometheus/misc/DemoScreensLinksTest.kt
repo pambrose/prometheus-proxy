@@ -157,6 +157,16 @@ class DemoScreensLinksTest : StringSpec() {
         }.shouldBeEmpty()
     }
 
+    // make open, and ./demo.sh open, open the screens page, so ./demo.sh help says so, as the Makefile's help does.
+    "each demo's help should say open opens the screens page" {
+      DEMOS.forEach { demo ->
+        withClue(demo.dir) {
+          val open = File(demo.dir, "demo.sh").readLines().firstOrNull { it.trimStart().startsWith("open ") }.orEmpty()
+          open shouldContain "screens page"
+        }
+      }
+    }
+
     // A terminal takes a URL to the next space, and a step's text is one paragraph, so a comma or period after a link
     // becomes part of the address the reader opens: a link ends its sentence's text, unpunctuated. A comma after a
     // link that names one screen, as #a+b, got by, since the page read it as part of the second pane's id and showed

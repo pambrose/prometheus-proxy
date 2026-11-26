@@ -154,7 +154,7 @@ Lifecycle:
   up-local                 Start it with the proxy and agent built from this checkout (needs a JDK 17 or later)
   down                     Stop the demo and remove its containers and network
   status                   Show the containers, the WAN's links and their toxics, and the URLs
-  open                     Open both proxy dashboards, agent-branch's dashboard, Grafana, and Prometheus in the browser
+  open                     Open the standby's screens page: every dashboard, Prometheus, Grafana, and Zipkin in one tab
   logs [service]           Follow the logs (proxy, agent-branch, wan, ...)
   tour [part]              Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
