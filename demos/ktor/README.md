@@ -65,8 +65,16 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the coffee shop, which takes a few minutes. After that it starts in
 under a minute.
 
+Then open the proxy's [screens page](https://prometheus-proxy.com/web-dashboard/#screens), one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, the coffee shop, its agent's dashboard, 1.1's
+after a deploy, the agent's `/debug` page, Prometheus, and Grafana. `make open` opens it, and the guided tour's links
+open in it: <http://localhost:8394/>
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8394/> | `KTOR_DEMO_DASHBOARD_PORT` |
 | The coffee shop, through its load balancer | <http://localhost:8390> | `KTOR_DEMO_APP_PORT` |
 | Proxy dashboard | <http://localhost:8394/dashboard> | `KTOR_DEMO_DASHBOARD_PORT` |
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3300> | `KTOR_DEMO_GRAFANA_PORT` |
@@ -75,9 +83,6 @@ under a minute.
 | The coffee shop agent's dashboard | <http://localhost:8395/dashboard> | `KTOR_DEMO_AGENT_DASHBOARD_PORT` |
 | Version 1.1's agent's dashboard, after `./demo.sh deploy` | <http://localhost:8396/dashboard> | `KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT` |
 | The agent's `/debug` page, on its admin port | <http://localhost:8393/debug> | `KTOR_DEMO_AGENT_ADMIN_PORT` |
-
-`make open` opens the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in your
-browser.
 
 Each port is the basics demo's plus 300, so the demos can run side by side. If a port is already taken, set its variable
 from the table for `make up`, for example `KTOR_DEMO_GRAFANA_PORT=3301 make up`. `make up` saves it in `docker/.env`,
@@ -132,7 +137,8 @@ An app on a platform such as ECS, Cloud Run, or Azure Container Apps can't be sc
 platform without opening its metrics to the internet. Here the agent runs inside the app instead, and connects out to
 the proxy.
 
-- Open the coffee shop. Its status page shows the queue, the baristas on shift, and the drinks served so far.
+- Open the coffee shop, <http://localhost:8394/screens#coffee-shop>. Its status page shows the queue, the baristas on
+  shift, and the drinks served so far.
 - Look for its metrics, then read them through the proxy:
 
   ```bash
@@ -141,8 +147,9 @@ the proxy.
 
   The coffee shop has no `/metrics`, so it answers 404. The agent reads the app's registry in-process, so Prometheus
   scrapes the proxy at `/coffee_shop_metrics` and needs no password, port, or way into the app.
-- Open the proxy dashboard. One agent is connected, `coffee-shop-1.0`, named after the app's version, with two paths:
-  the coffee shop's metrics, and the agent's own. It connected to the proxy over TLS.
+- Open the proxy dashboard, <http://localhost:8394/screens#proxy>. One agent is connected, `coffee-shop-1.0`, named
+  after the app's version, with two paths: the coffee shop's metrics, and the agent's own. It connected to the proxy
+  over TLS.
 
 ### 2. The Agent's Own Dashboard, Served from inside the App
 
@@ -150,7 +157,7 @@ The proxy's dashboard shows only what reaches the proxy. The agent serves a
 [dashboard of its own](https://prometheus-proxy.com/agent-dashboard/), from inside the app, that shows its side: its
 connection, each path's registration, its scrapes as it saw them, and what it did, in order.
 
-- Open it: <http://localhost:8395/dashboard>
+- Open it: <http://localhost:8394/screens#agent>
 
   Its **Paths** view lists the agent's two paths, each with a green light; select one and its header reads
   `registered`: the proxy routes its scrapes to this agent. Beside each are the status of its last scrape and a strip
@@ -161,12 +168,12 @@ connection, each path's registration, its scrapes as it saw them, and what it di
   works whether or not the proxy has the path, so when a path doesn't scrape, it tells you whether the agent can read
   the app's metrics.
 - The **Connection** view reads `connected`, to `proxy:50051`, over TLS, with its token set, and in part 8 it says
-  why the agent can't connect: <http://localhost:8395/dashboard/connection>
+  why the agent can't connect: <http://localhost:8394/screens#agent/connection>
 - The **Settings** view lists the settings the agent resolved, its token shown only as set:
-  <http://localhost:8395/dashboard/settings>
+  <http://localhost:8394/screens#agent/settings>
 - The **Activity** view lists what the agent did, newest first: the two paths `registered`, above `connected`. If the
   agent tried before the proxy was listening, a `connect failed` sits below them. Open it at
-  <http://localhost:8395/dashboard/activity>
+  <http://localhost:8394/screens#agent/activity>
 
 The coffee shop's environment turns it on, with nothing in its code: `DASHBOARD_ENABLED: "true"` in the
 `x-coffee-shop-env` block of `docker/compose.yml`, for both versions, and a `DASHBOARD_PORT` for each, 8395 for 1.0 and
@@ -177,7 +184,7 @@ internal network.
 
 ### 3. The Coffee Shop's Metrics in Grafana
 
-Open Grafana. It lands on the **Coffee Shop** dashboard.
+Open Grafana, <http://localhost:8394/screens#grafana>. It lands on the **Coffee Shop** dashboard.
 
 - **The coffee shop, scraped through its embedded agent**: the shop right now, drinks served a minute, the queue, the
   baristas, the rush, the espresso machine, whether the last scrape through the proxy succeeded, and whether the agent
@@ -197,7 +204,8 @@ The customers order about one and a half drinks a second, which three baristas k
 ./demo.sh calm          # ends the rush, and sends the extra baristas home
 ```
 
-The queue climbs on the status page and in **Queue and baristas**. Once it holds 40, the counter turns customers away
+Put the status page beside Grafana, <http://localhost:8394/screens#coffee-shop+grafana>. The queue climbs on the
+status page and in **Queue and baristas**. Once it holds 40, the counter turns customers away
 with a 429, and **Orders / sec, by outcome** shows them rejected. Eight baristas drain it.
 
 ### 5. The Espresso Machine Breaks, and an Alert Fires
@@ -228,7 +236,7 @@ go on without a gap.
 
 Each version's agent has its own dashboard, inside its own app. 1.1's lists the two paths registered. Until 1.0
 stopped, its dashboard showed them as `retrying`, taken over by `coffee-shop-1.1`. 1.0's dashboard stops with its app,
-and answers again, starting over, after the rollback. 1.1's is at <http://localhost:8396/dashboard>
+and answers again, starting over, after the rollback. 1.1's is at <http://localhost:8394/screens#agent-1-1>
 
 ### 7. The Agent's Admin Endpoints, for Debugging It
 
@@ -258,8 +266,8 @@ It calls each endpoint and shows what it answered:
 | `/threaddump` | Every thread in the coffee shop's JVM, the app's as well as the agent's |
 | `/debug` | Only with `DEBUG_ENABLED`: the agent's name, the ID the proxy gave it when it connected, which is empty while it isn't connected, the proxy it's connected to or trying, and each path with the URL it scrapes, or `in-process` for the app's registry |
 
-When a path doesn't scrape, its URL on `/debug` is the first thing to check. Keep the page open for the next part,
-where the proxy goes away: <http://localhost:8393/debug>
+When a path doesn't scrape, its URL on `/debug` is the first thing to check: <http://localhost:8394/screens#debug>. The
+next part comes back to it, with the proxy down, at its own address.
 
 Turn them off once the agent works, since the admin port has no authentication and `/threaddump` shows the app's
 threads: take `ADMIN_ENABLED` and `DEBUG_ENABLED` out of the app's environment and restart it, with no new build, and
@@ -280,19 +288,22 @@ keeps serving and stays healthy while its metrics stop.
 ```
 
 The agent retries in the background, and the app's requests never wait on it. Grafana's **Scrape** turns Down,
-**Agent** reads Disconnected, its graphs stop, and `CoffeeShopDown` fires. The agent's `/debug` page shows an empty
-AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its `/healthcheck` still reads
-healthy. Once the proxy is back, the agent reconnects within a few seconds and registers its paths again, `/debug`
-shows the AgentId the proxy gave it, and the graphs resume, with a gap for the time the proxy was down.
+**Agent** reads Disconnected, its graphs stop, and `CoffeeShopDown` fires. The screens page is the proxy's, so until
+the proxy is back, a link into it can't load, and this part gives each screen's own address. The agent's `/debug` page
+shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its
+`/healthcheck` still reads healthy: <http://localhost:8393/debug>
 
-The agent's dashboard shows the outage more directly. While the proxy is gone, its **Connection** view reads
-`failing`, with the error the agent's last try to reach `proxy:50051` got, and its paths read `pending`. A proxy that's
-down, a wrong port, a refused token, and a TLS mismatch each show there, which makes it the first place to look when an
-agent won't connect: <http://localhost:8395/dashboard/connection>
+Once the proxy is back, the agent reconnects within a few seconds and registers its paths again, `/debug` shows the
+AgentId the proxy gave it, and the graphs resume, with a gap for the time the proxy was down.
+
+The agent's dashboard shows the outage more directly. Its **Connection** view reads `failing`,
+with the error the agent's last try to reach `proxy:50051` got, and its paths read `pending`. A proxy that's down, a
+wrong port, a refused token, and a TLS mismatch each show there, which makes it the first place to look when an agent
+won't connect: <http://localhost:8395/dashboard/connection>
 
 Once the proxy is back, the newest lines of the dashboard's **Activity** view, read from the bottom up, tell the outage
 in order: `disconnected`, `connect failed`, then `connected` and the paths `registered`. **Problems only** keeps just
-the `connect failed` lines. Open it at <http://localhost:8395/dashboard/activity>
+the `connect failed` lines. Open it at <http://localhost:8394/screens#agent/activity>
 
 ### 9. The Secrets Come from the Environment
 
@@ -345,7 +356,7 @@ and frees its resources.
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the coffee shop's state, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds the coffee shop, every dashboard, Prometheus, and Grafana, in the browser |  |
 
 The drinks are `espresso`, `latte`, `cappuccino`, `mocha`, `tea`, and `cold-brew`; the first four need the espresso
 machine.
@@ -364,7 +375,7 @@ machine.
 | `grafana/` | The provisioned datasource, dashboard folder, and Coffee Shop dashboard |
 | `Makefile` | The demo's targets: `make up`, `make up-local`, `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios. It writes the secrets to `docker/.env` the first time the demo starts, and saves there any port moved for `make up`. Its `NEEDS_RELEASE_AFTER` is the newest release that lacks something the demo shows: until the release the docs give is later and its images are on Docker Hub, `make up` builds from this checkout, as `make up-local` does, so set it to the latest release on Docker Hub when the demo comes to use something no release has yet |
-| `bin/screenshots.sh` | The Ktor Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits three minutes so Grafana's graphs have some history, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/ktor-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_HISTORY_WAIT=1` skips the wait, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
+| `bin/screenshots.sh` | The Ktor Demo page's screenshots, the proxy's screens page among them, in the dark and light themes. `make screenshots` builds and starts the demo, waits three minutes so Grafana's graphs have some history, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/ktor-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_HISTORY_WAIT=1` skips the wait, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
 
 From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool,
 `ConfigFileKeysTest` checks every key in `config/proxy.conf` against `config/config.conf`, and CI builds the coffee
@@ -379,7 +390,7 @@ that breaks it fails the build.
   the next build takes seconds.
 - **The proxy dashboard shows no agent**: the coffee shop's agent connects a few seconds after the proxy starts. Give
   it ten seconds, or run `make logs SERVICE=coffee-shop`, or check the Connection view of the agent's dashboard for the
-  proxy it's trying and why it can't connect: <http://localhost:8395/dashboard/connection>
+  proxy it's trying and why it can't connect: <http://localhost:8394/screens#agent/connection>
 - **A scenario left things in an odd state**: `./demo.sh calm`, `fix-machine`, `rollback`, and `proxy-start` undo every
   scenario. For a clean slate, `make down && make up`.
 - **New secrets**: delete `docker/.env`, and the next `make up` writes a new one, with a new token. Set any port you had

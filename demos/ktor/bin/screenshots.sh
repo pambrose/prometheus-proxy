@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Ktor Demo page (website/prometheus-proxy/docs/ktor-demo.md) from the
-# running demo: it plays the page's scenarios, captures the coffee shop, the proxy dashboard, and Grafana in headless
-# Chrome at three times the pixel density in both themes, each a whole window, and writes lossless WebP to
-# website/prometheus-proxy/docs/images/ktor-demo/: <name>.webp in the dark theme and <name>-light.webp in the light
-# one, which the page shows by the reader's theme. It puts the demo back to normal when it finishes, or when it fails.
+# running demo: it plays the page's scenarios, captures the coffee shop, the proxy dashboard, its screens page, and
+# Grafana in headless Chrome at three times the pixel density in both themes, each a whole window, and writes lossless
+# WebP to website/prometheus-proxy/docs/images/ktor-demo/: <name>.webp in the dark theme and <name>-light.webp in the
+# light one, which the page shows by the reader's theme. It puts the demo back to normal when it finishes, or when it
+# fails.
 #
 # `make screenshots`, in demos/ktor, builds the demo from this checkout and starts it first, so the screenshots
 # show the code as it is. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7 (`magick`), and `cwebp`.
@@ -38,6 +39,7 @@ load_saved_ports
 
 APP_URL="http://localhost:${KTOR_DEMO_APP_PORT:-8390}"
 DASHBOARD_URL="http://localhost:${KTOR_DEMO_DASHBOARD_PORT:-8394}/dashboard"
+SCREENS_URL="http://localhost:${KTOR_DEMO_DASHBOARD_PORT:-8394}/screens"
 GRAFANA_URL="http://localhost:${KTOR_DEMO_GRAFANA_PORT:-3300}"
 PROMETHEUS_URL="http://localhost:${KTOR_DEMO_PROMETHEUS_PORT:-9390}"
 
@@ -49,6 +51,10 @@ SKIP_HISTORY_WAIT="${SKIP_HISTORY_WAIT:-}"
 # website's page and in the lightbox that opens it full size. THEMES are the themes each is taken in.
 WIDTH=1280
 HEIGHT=800
+# The screens page is taken in a wider window of the same shape, so each of Split's two panes is about as wide as a
+# page needs.
+SCREENS_WIDTH=1680
+SCREENS_HEIGHT=1050
 THEMES=(dark light)
 # SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
 # opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
@@ -160,12 +166,12 @@ history_of() {
 # the browser's preferred color scheme. Grafana renders after loading its data, so its captures get a longer
 # virtual-time budget.
 capture() {
-  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" scheme=0 profile
+  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
     --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$WIDTH,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
+    --window-size="$width,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
@@ -179,6 +185,17 @@ shoot() {
     png="$WORK/$(named "$name" "$theme").png"
     capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
     magick "$png" -crop "$((WIDTH * SCALE))x$((HEIGHT * SCALE))+0+0" +repage "$png"
+  done
+}
+
+# The proxy's screens page in each theme, opened on a link (its part after the #), a whole SCREENS_WIDTH x
+# SCREENS_HEIGHT window. A {theme} in the link becomes the theme's name, for a Grafana pane, which doesn't follow the
+# browser's scheme. Its budget is Grafana's, which renders after loading its data. shoot_screens <name> <link>
+shoot_screens() {
+  local name="$1" link="$2" theme
+  for theme in "${THEMES[@]}"; do
+    capture "$SCREENS_URL#${link//\{theme\}/$theme}" "$WORK/$(named "$name" "$theme").png" "$SCREENS_HEIGHT" "$theme" \
+      15000 "$SCREENS_WIDTH"
   done
 }
 
@@ -210,6 +227,10 @@ wait_until "the queue to pass 30" queue_at_least 30
 wait_until "CoffeeShopErrors to fire" firing CoffeeShopErrors
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
 shoot grafana "$GRAFANA_URL/d/coffee-shop?orgId=1&kiosk&from=now-10m&to=now&theme={theme}" "$((HEIGHT + 100))" 15000
+# The screens page as part 4 of the tour opens it: the coffee shop's status page beside Grafana, the shop's without its
+# refresh, as above.
+shoot_screens screens \
+  "coffee-shop/?refresh=false+grafana/d/coffee-shop?orgId=1&kiosk&from=now-10m&to=now&theme={theme}"
 "$DEMO" fix-machine >/dev/null
 "$DEMO" calm >/dev/null
 
@@ -222,7 +243,7 @@ shoot deploy "$DASHBOARD_URL/paths"
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in coffee-shop agents grafana deploy; do
+for name in coffee-shop agents grafana screens deploy; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"

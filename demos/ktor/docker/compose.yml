@@ -129,6 +129,14 @@ services:
       AGENT_TOKEN: ${AGENT_TOKEN:-}
       CERT_CHAIN_PEM: ${CERT_CHAIN_PEM:-}
       PRIVATE_KEY_PEM: ${PRIVATE_KEY_PEM:-}
+      # Where a browser on this machine reaches each screen of the proxy's screens page (proxy.conf), at the ports this
+      # file publishes them on.
+      KTOR_DEMO_APP_URL: http://localhost:${KTOR_DEMO_APP_PORT:-8390}
+      KTOR_DEMO_AGENT_URL: http://localhost:${KTOR_DEMO_AGENT_DASHBOARD_PORT:-8395}/dashboard
+      KTOR_DEMO_NEXT_AGENT_URL: http://localhost:${KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT:-8396}/dashboard
+      KTOR_DEMO_DEBUG_URL: http://localhost:${KTOR_DEMO_AGENT_ADMIN_PORT:-8393}
+      KTOR_DEMO_PROMETHEUS_URL: http://localhost:${KTOR_DEMO_PROMETHEUS_PORT:-9390}
+      KTOR_DEMO_GRAFANA_URL: http://localhost:${KTOR_DEMO_GRAFANA_PORT:-3300}
     volumes:
       - ../config/proxy.conf:/app/proxy.conf:ro
     ports:
@@ -160,6 +168,8 @@ services:
       # Anyone who opens Grafana sees the dashboards without signing in, as a Viewer, the only role Grafana gives
       # anonymous users. To use Explore or change a dashboard, sign in as admin / admin.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
+      # Lets the proxy's screens page show Grafana in a frame, which Grafana refuses by default.
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/coffee-shop.json
       # Nothing phones home or downloads at startup, so the demo runs offline once the images are pulled.
       GF_ANALYTICS_REPORTING_ENABLED: "false"

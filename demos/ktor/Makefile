@@ -42,7 +42,7 @@ down:  ## Stop the demo and remove its containers and network
 status:  ## Show the containers, the coffee shop's state, and the URLs
 	@$(DEMO) status
 
-open:  ## Open the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in the browser
+open:  ## Open the proxy's screens page: the coffee shop, every dashboard, Prometheus, and Grafana, in the browser
 	@$(DEMO) open
 
 tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)

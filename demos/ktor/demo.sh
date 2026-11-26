@@ -61,7 +61,7 @@ RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # the release the docs give (make site-version) once it's later than this and its proxy image is on Docker Hub,
 # and otherwise builds everything from this checkout, as up-local does, so nothing here changes with a release.
 # When the demo comes to use something no release has yet, set this to the latest release on Docker Hub.
-NEEDS_RELEASE_AFTER=4.6.0
+NEEDS_RELEASE_AFTER=4.7.0
 # The secrets the demo's containers read (compose.yml), which up writes the first time it runs.
 ENV_FILE="$DEMO_DIR/docker/.env"
 CERTS_DIR="$REPO_DIR/testing/certs"
@@ -80,6 +80,12 @@ AGENT_ADMIN_URL="http://localhost:${KTOR_DEMO_AGENT_ADMIN_PORT:-8393}"
 # The dashboards of the coffee shop's agents: 1.0's, and 1.1's, which runs only after a deploy.
 AGENT_DASHBOARD_URL="http://localhost:${KTOR_DEMO_AGENT_DASHBOARD_PORT:-8395}/dashboard"
 NEXT_AGENT_DASHBOARD_URL="http://localhost:${KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT:-8396}/dashboard"
+# The proxy's screens page, which holds every screen above in one browser tab (proxy.conf's screens). The tour links
+# into it: ${SCREENS_URL}#<screen>, #<screen>/<view>, or #<screen>+<screen> for two side by side. It's the proxy's, so
+# while part 8 has the proxy stopped, the tour gives each screen's own address instead.
+SCREENS_URL="http://localhost:${KTOR_DEMO_DASHBOARD_PORT:-8394}/screens"
+# The proxy's dashboard port's root, which leads to the screens page: the short address make up prints.
+SCREENS_HOME_URL="http://localhost:${KTOR_DEMO_DASHBOARD_PORT:-8394}/"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -143,7 +149,7 @@ Lifecycle:
                      or later)
   down               Stop the demo and remove its containers and network
   status             Show the containers, the coffee shop's state, and the URLs
-  open               Open the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in
+  open               Open the proxy's screens page: the coffee shop, every dashboard, Prometheus, and Grafana in
                      the browser
   logs [service]     Follow the logs (coffee-shop, load-balancer, proxy, prometheus, grafana)
   tour [part]        Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
@@ -170,14 +176,8 @@ EOF
 print_urls() {
   echo
   bold "Prometheus Proxy Ktor demo"
-  echo "  Coffee shop:            $APP_URL"
-  echo "  Proxy dashboard:        $DASHBOARD_URL"
-  echo "  Grafana:                $GRAFANA_URL"
-  echo "  Prometheus:             $PROMETHEUS_URL"
-  echo "  Through the proxy:      $PROXY_URL/coffee_shop_metrics"
-  echo "  Agent's dashboard:      $AGENT_DASHBOARD_URL"
-  echo "  1.1's, after a deploy:  $NEXT_AGENT_DASHBOARD_URL"
-  echo "  Agent's /debug:         $AGENT_ADMIN_URL/debug"
+  echo "  All screens:        $SCREENS_HOME_URL"
+  echo "  Through the proxy:  $PROXY_URL/coffee_shop_metrics"
   echo
   wrap "" "" "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   echo
@@ -399,6 +399,7 @@ start_demo() {
   wait_for "$AGENT_DASHBOARD_URL" "The coffee shop agent's dashboard"
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   wait_for "$GRAFANA_URL/api/health" "Grafana"
+  wait_for "$SCREENS_URL" "The proxy's screens page"
   print_urls
 }
 
@@ -418,18 +419,13 @@ cmd_status() {
 }
 
 cmd_open() {
-  local opener url
   if command -v open >/dev/null 2>&1; then
-    opener=open
+    open "$SCREENS_HOME_URL"
   elif command -v xdg-open >/dev/null 2>&1; then
-    opener=xdg-open
+    xdg-open "$SCREENS_HOME_URL"
   else
     print_urls
-    return
   fi
-  for url in "$APP_URL" "$DASHBOARD_URL" "$AGENT_DASHBOARD_URL" "$GRAFANA_URL" "$PROMETHEUS_URL/alerts"; do
-    "$opener" "$url"
-  done
 }
 
 # The tour: the presenter's script (README.md), one part at a time. It numbers each part's steps, and waits for Enter
@@ -649,11 +645,16 @@ cmd_tour() {
       "prometheus-proxy agent runs inside it, started from the app's own code: one container, one JVM. Outside it" \
       "are the proxy," \
       "Prometheus, and Grafana, as on a proxy host in the cloud, and a load balancer in front of the coffee shop," \
-      "its one address, as a platform has. The coffee shop's status page shows the queue, the baristas on shift, and" \
-      "the drinks served so far, and refreshes every two seconds: $APP_URL"
+      "its one address, as a platform has."
+    instruct "Open the demo's screens, on the coffee shop's status page: ${SCREENS_URL}#coffee-shop" \
+      "This is the proxy's screens page, one browser tab that holds every screen in the demo: the proxy's" \
+      "dashboard, the coffee shop, its agent's dashboard, 1.1's (whose tab stays red until part 6's deploy starts" \
+      "it), the agent's /debug page, Prometheus, and Grafana. The steps from here link into this page, so keep it" \
+      "open, and each link opens in it. The status page shows the queue, the baristas on shift, and the drinks" \
+      "served so far, and refreshes every two seconds."
     step "Look for the coffee shop's /metrics, then read its metrics through the proxy." \
       -- peek
-    instruct "Open the proxy dashboard: $DASHBOARD_URL" \
+    instruct "Open the proxy dashboard: ${SCREENS_URL}#proxy" \
       "Its Agents view lists one agent, coffee-shop-1.0, named after the app's version, with two paths: the coffee" \
       "shop's metrics, and the agent's own. The agent connected to the proxy over TLS, and registered them. The" \
       "version in its name is what makes part 6's deploy, from 1.0 to 1.1, plain on the dashboard."
@@ -662,7 +663,7 @@ cmd_tour() {
   if part 2 "The proxy's dashboard shows only what reaches the proxy. The agent serves a dashboard of its own," \
     "from inside the app, that shows its side: its connection, each path's registration, its scrapes as it saw" \
     "them, and what it did, in order. The coffee shop's environment turns it on, with nothing in the app's code."; then
-    instruct "Open the coffee shop agent's dashboard: $AGENT_DASHBOARD_URL" \
+    instruct "Open the coffee shop agent's dashboard: ${SCREENS_URL}#agent" \
       "Its Paths view lists the agent's two paths, each with a green light; select one and its header reads" \
       "registered: the proxy routes its scrapes to this agent. Beside each are the status of its last scrape and its" \
       "recent scrapes, a strip of dots, green for a success, which fills as Prometheus scrapes every five seconds."
@@ -675,11 +676,11 @@ cmd_tour() {
       "status, the size, the metric families and samples, and the start of the body, as Prometheus would get it. It" \
       "works whether or not the proxy has the path, so when a path doesn't scrape, it tells you whether the agent can" \
       "read the app's metrics. It leaves no trace in Recent scrapes or the agent's metrics."
-    instruct "Open the dashboard's Connection view: $AGENT_DASHBOARD_URL/connection" \
+    instruct "Open the dashboard's Connection view: ${SCREENS_URL}#agent/connection" \
       "It reads connected, to proxy:50051, the one proxy endpoint the coffee shop gives its agent, over TLS. In" \
       "part 8, when the proxy goes away, this view says why the agent can't connect. The Settings view, the last" \
-      "tab, lists the settings the agent resolved, its token shown only as set: $AGENT_DASHBOARD_URL/settings"
-    instruct "Open the dashboard's Activity view: $AGENT_DASHBOARD_URL/activity" \
+      "tab, lists the settings the agent resolved, its token shown only as set: ${SCREENS_URL}#agent/settings"
+    instruct "Open the dashboard's Activity view: ${SCREENS_URL}#agent/activity" \
       "It lists what the agent did, newest first: registered, the two paths on one line, above connected, to" \
       "proxy:50051, from when the app started. If the agent tried before the proxy was listening, a connect failed" \
       "sits below them. The search box and Problems only narrow the list."
@@ -694,7 +695,7 @@ cmd_tour() {
   if part 3 "Prometheus scrapes the proxy at the paths the agent registered, and Grafana shows what it" \
     "collected."; then
     instruct "Open Grafana, and look at the top section, 'The coffee shop, scraped through its embedded agent':" \
-      "$GRAFANA_URL" \
+      "${SCREENS_URL}#grafana" \
       "Grafana opens on the 'Coffee Shop' dashboard, with no sign-in needed. The section's first row is the shop" \
       "right now: drinks served a minute, the queue, the baristas, the rush, the espresso" \
       "machine, whether Prometheus's last scrape through the proxy succeeded, and whether the agent is connected" \
@@ -710,7 +711,8 @@ cmd_tour() {
   if part 4 "The shop's customers order about one and a half drinks a second, which three baristas keep up" \
     "with. Here a rush triples the orders, and you watch the queue grow, then drain once more baristas are on" \
     "shift."; then
-    step "Put the coffee shop's status page beside Grafana, to watch the queue on both, then start a rush." -- rush
+    step "Start a rush, and watch the queue on the coffee shop's status page and in Grafana. Open the two side by" \
+      "side before you press Enter: ${SCREENS_URL}#coffee-shop+grafana" -- rush
     step "Once the queue has passed 30 and CoffeeQueueBacklog has fired, put eight baristas on shift." -- baristas 8
     put_back "end the rush, and send the extra baristas home" calm
   fi
@@ -724,9 +726,10 @@ cmd_tour() {
   if part 6 "A deploy starts the new version beside the old one, then stops the old. Each runs its own agent," \
     "which registers the same path. Here you deploy version 1.1, and watch the path move to it with no gap in the" \
     "metrics."; then
-    step "Put the coffee shop's status page, the proxy dashboard's Agents view, and Grafana side by side, to watch" \
-      "the version the shop answers from, the agents, and the graphs, then deploy version 1.1." -- deploy
-    instruct "Open version 1.1's agent dashboard: $NEXT_AGENT_DASHBOARD_URL" \
+    step "Deploy version 1.1, and watch the version the shop answers from on its status page, and the agents on the" \
+      "proxy dashboard's Agents view; Grafana's tab shows the graphs go on. Open the two side by side before you" \
+      "press Enter: ${SCREENS_URL}#coffee-shop+proxy" -- deploy
+    instruct "Open version 1.1's agent dashboard, its tab green now: ${SCREENS_URL}#agent-1-1" \
       "Each version's agent serves its own dashboard, from inside its own app. 1.1's lists the two paths registered," \
       "with Prometheus's scrapes arriving, and its Activity view shows it connecting and registering them. 1.0's" \
       "stopped with its app. Until then, it showed the paths as retrying, taken over by coffee-shop-1.1: the proxy" \
@@ -739,9 +742,9 @@ cmd_tour() {
     "it's doing. The coffee shop's environment turns them on with ADMIN_ENABLED, and its /debug page with" \
     "DEBUG_ENABLED, with nothing in its code."; then
     step "Call each of the agent's admin endpoints, and read its /debug page." -- debug
-    instruct "Open the agent's /debug page: $AGENT_ADMIN_URL/debug" \
-      "It's there because the coffee shop's environment sets DEBUG_ENABLED=true, beside ADMIN_ENABLED=true. Keep" \
-      "it open: in the next part, the proxy goes away, and the page shows it. As with the dashboard, the environment" \
+    instruct "Open the agent's /debug page: ${SCREENS_URL}#debug" \
+      "It's there because the coffee shop's environment sets DEBUG_ENABLED=true, beside ADMIN_ENABLED=true. The next" \
+      "part comes back to it, with the proxy down, at its own address. As with the dashboard, the environment" \
       "turns them off once the agent works, or on again later, with a restart and no new build; ADMIN_PORT moves" \
       "them from 8093. In code, setting(\"admin.enabled\", true) and setting(\"admin.debugEnabled\", true) do the" \
       "same, though the environment overrides them."
@@ -753,23 +756,25 @@ cmd_tour() {
     "resume on their own, and the agent's dashboard and /debug page show it losing the proxy and finding it" \
     "again."; then
     step "Stop the proxy." -- proxy-stop
-    instruct "Open the Connection view of the agent's dashboard: $AGENT_DASHBOARD_URL/connection" \
-      "Once the agent's first try to reconnect has failed, it reads failing, and under Proxy endpoints, proxy:50051" \
-      "shows the error the last try got. A proxy that's down, a wrong port, a refused token, and a TLS mismatch each" \
-      "show there, which makes it the first place to look when an agent won't connect. On the Paths view, both paths" \
-      "read pending. The tab's title counts the failing connection as a problem, so a dashboard in a background tab" \
-      "still says so."
-    instruct "Reload the agent's /debug page: $AGENT_ADMIN_URL/debug" \
+    instruct "Open the Connection view of the agent's dashboard on its own: $AGENT_DASHBOARD_URL/connection" \
+      "The screens page is the proxy's, so while the proxy is down, a link into it can't load; the page you have" \
+      "open keeps working, and until the proxy is back, these steps give each screen's own address. Once the" \
+      "agent's first try to reconnect has failed, it reads failing, and under Proxy endpoints, proxy:50051 shows" \
+      "the error the last try got. A proxy that's down, a wrong port, a refused token, and a TLS mismatch each" \
+      "show there, which makes it the first place to look when an agent won't connect. On the Paths view, both" \
+      "paths read pending. The tab's title counts the failing connection as a problem, so a dashboard in a" \
+      "background tab still says so."
+    instruct "Open the agent's /debug page on its own: $AGENT_ADMIN_URL/debug" \
       "Its AgentId is empty: the agent has lost its connection, and has no ID until the proxy gives it one" \
       "again. ProxyHost is the proxy it keeps trying. Its /healthcheck still reads healthy, since it reports the" \
       "agent's own state, not its connection: $AGENT_ADMIN_URL/healthcheck"
     step "Once CoffeeShopDown has fired, start the proxy again." -- proxy-start
-    instruct "Open the Activity view of the agent's dashboard: $AGENT_DASHBOARD_URL/activity" \
+    instruct "Open the Activity view of the agent's dashboard: ${SCREENS_URL}#agent/activity" \
       "Its newest lines, read from the bottom up, tell the outage in order: disconnected, when the proxy went," \
       "connect failed, with the error, then connected and the two paths registered once the proxy was back. The" \
       "agent logs each of these too, but the feed keeps them together, in order. Check Problems only, and the" \
       "connect failed lines are all that's left. The /debug page's AgentId is back too, the one the proxy gave the" \
-      "agent when it reconnected: $AGENT_ADMIN_URL/debug"
+      "agent when it reconnected: ${SCREENS_URL}#debug"
   fi
 
   if part 9 "The coffee shop and the proxy hold a token and TLS certificates, and neither reads them from a" \
@@ -842,7 +847,7 @@ main() {
     watch_for
     point "On the status page and in Grafana's 'Queue and baristas', the queue climbs."
     point "Once it has passed 30 for 15 seconds, CoffeeQueueBacklog fires on Prometheus's alerts page:" \
-      "$PROMETHEUS_URL/alerts"
+      "${SCREENS_URL}#prometheus/alerts"
     point "When the queue is full, 'Orders / sec, by outcome' shows rejected orders, and 'Order requests / sec, by" \
       "status' shows the counter's 429s."
     follow_up "To drain the queue, run" "$0 baristas 8"
@@ -883,7 +888,7 @@ main() {
       "and 'Order requests / sec, by status' shows the counter's 503s."
     point "CoffeeShopErrors fires within about half a minute, not at once: its rule reads the failed orders' share" \
       "over a 30-second window, which takes a few scrapes to cross one in ten, and then has to stay above it for 10" \
-      "seconds. Watch it go from pending to firing on Prometheus's alerts page: $PROMETHEUS_URL/alerts"
+      "seconds. Watch it go from pending to firing on Prometheus's alerts page: ${SCREENS_URL}#prometheus/alerts"
     point "The proxy, the agent, and the scrapes are untouched: the metrics report the failure, they don't fail."
     follow_up "To fix it, run" "$0 fix-machine"
     ;;
@@ -926,15 +931,15 @@ main() {
     watch_for
     point "1.1 is a new process, so its counts start from zero, and its queue, baristas, and machine are as the shop" \
       "opened: the knobs now act on it. The coffee shop's page, at the same address, now reads Version 1.1:" \
-      "$APP_URL"
+      "${SCREENS_URL}#coffee-shop"
     point "On the proxy dashboard's Agents view, coffee-shop-1.1 has the two paths, and coffee-shop-1.0 goes once it" \
       "stops."
     point "Version 1.1's agent has a dashboard of its own, inside its app, which lists the two paths registered:" \
-      "$NEXT_AGENT_DASHBOARD_URL"
+      "${SCREENS_URL}#agent-1-1"
     point "The proxy told 1.0's agent it gave the paths to 1.1: until 1.0 stopped, its dashboard showed them as" \
       "retrying, taken over by coffee-shop-1.1. Had 1.1 stopped first, as a failed deploy's does, 1.0's agent would" \
       "have taken them back within seconds. Its dashboard stopped with its app, and answers again after a rollback:" \
-      "$AGENT_DASHBOARD_URL"
+      "${SCREENS_URL}#agent"
     point "In Grafana, the graphs go on without a gap: Prometheus scraped the path through 1.0's agent, then 1.1's," \
       "and rate() takes the counters starting again in its stride."
     follow_up "To put 1.0 back, run" "$0 rollback"
@@ -963,7 +968,7 @@ main() {
     point "The coffee shop's page reads Version 1.0 again, starting from zero."
     point "coffee-shop-1.0 has the paths again on the Agents view, and coffee-shop-1.1 is gone."
     point "1.0's agent dashboard answers again, starting over, since 1.0 is a new process, and 1.1's has gone with" \
-      "its container: $AGENT_DASHBOARD_URL"
+      "its container: ${SCREENS_URL}#agent"
     ;;
   proxy-stop)
     "${COMPOSE[@]}" stop proxy
@@ -993,10 +998,10 @@ main() {
     point "coffee-shop-1.0 reappears on the proxy dashboard's Agents view, with its two paths."
     point "Grafana's graphs resume, with a gap for the time the proxy was down, and CoffeeShopDown resolves."
     point "The agent's /debug page shows an AgentId again, the one the proxy gave it when it reconnected:" \
-      "$AGENT_ADMIN_URL/debug"
+      "${SCREENS_URL}#debug"
     point "On the agent's dashboard, the Connection view reads connected again, and the Activity view tells the" \
       "outage in order: disconnected, connect failed, then connected and the two paths registered:" \
-      "$AGENT_DASHBOARD_URL/activity"
+      "${SCREENS_URL}#agent/activity"
     ;;
   debug)
     local health threads
