@@ -52,8 +52,16 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, Zipkin, Toxiproxy, and Python images, which takes a few
 minutes. After that it starts in under a minute, even without a network connection.
 
+Then open the standby proxy's [screens page](https://prometheus-proxy.com/web-dashboard/#screens), one browser tab that
+holds every screen in the demo, each in a tab of its own: both proxies' dashboards, each agent's, Prometheus, Grafana,
+and Zipkin. The standby serves it, since part 4 stops the primary and nothing stops the standby. `make open` opens it,
+and the guided tour's links open in it: <http://localhost:8195/>
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8195/> | `NETWORK_DEMO_STANDBY_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8194/dashboard> | `NETWORK_DEMO_DASHBOARD_PORT` |
 | Standby proxy's dashboard | <http://localhost:8195/dashboard> | `NETWORK_DEMO_STANDBY_DASHBOARD_PORT` |
 | agent-hq's dashboard | <http://localhost:8196/dashboard> | `NETWORK_DEMO_HQ_DASHBOARD_PORT` |
@@ -62,8 +70,6 @@ minutes. After that it starts in under a minute, even without a network connecti
 | Prometheus | <http://localhost:9190> (alerts at `/alerts`) | `NETWORK_DEMO_PROMETHEUS_PORT` |
 | The proxy's service discovery | <http://localhost:8180/discovery> | `NETWORK_DEMO_PROXY_PORT` |
 | Zipkin | <http://localhost:9511/zipkin/> | `NETWORK_DEMO_ZIPKIN_PORT` |
-
-`make open` opens both proxy dashboards, agent-branch's dashboard, Grafana, and Prometheus's alerts in your browser.
 
 Each port is the basics demo's plus 100, so the demos can run side by side. If a port is already taken, set its variable
 from the table for `make up`, for example `NETWORK_DEMO_GRAFANA_PORT=3101 make up`. `make up` saves it in `docker/.env`,
@@ -115,16 +121,17 @@ catch up.
 
 These are the basics demo's proxy and agents, now with a simulated WAN between them.
 
-- Open the proxy's dashboard at <http://localhost:8194/dashboard>. Two agents are connected; click agent-hq: **via
-  hq-to-proxy:50051 (1 of 2)**, its link to the primary, the first of its two endpoints. agent-branch is **via
-  branch-to-proxy:50053 (1 of 2)**. The standby's dashboard, <http://localhost:8195/dashboard>, has no agents.
-- Open agent-branch's own dashboard, <http://localhost:8197/dashboard>. Each agent serves one, from behind the
-  firewall, showing what only the agent can see. Its three paths are registered, each with a green light and its last
-  scrapes under its URL. On its **Connection** tab it's connected through branch-to-proxy:50053, and **Proxy
+- Open the primary proxy's dashboard, <http://localhost:8195/screens#primary>. Two agents are connected; click agent-hq:
+  **via hq-to-proxy:50051 (1 of 2)**, its link to the primary, the first of its two endpoints. agent-branch is **via
+  branch-to-proxy:50053 (1 of 2)**. The standby's dashboard, the page's first tab,
+  <http://localhost:8195/screens#proxy>, has no agents.
+- Open agent-branch's own dashboard, <http://localhost:8195/screens#agent-branch>. Each agent serves one, from behind
+  the firewall, showing what only the agent can see. Its three paths are registered, each with a green light and its
+  last scrapes under its URL. On its **Connection** tab it's connected through branch-to-proxy:50053, and **Proxy
   endpoints** lists its two links in failover order, the one in use tagged **in use**. agent-hq's is at
-  <http://localhost:8196/dashboard>. The later parts come back to the Connection view and the **Activity** tab.
-- Open Grafana. Every target is up on **Target health**, and **Scrape time through the WAN, by agent** shows the two
-  agents side by side, each well under a tenth of a second.
+  <http://localhost:8195/screens#agent-hq>. The later parts come back to the Connection view and the **Activity** tab.
+- Open Grafana, <http://localhost:8195/screens#grafana>. Every target is up on **Target health**, and **Scrape time
+  through the WAN, by agent** shows the two agents side by side, each well under a tenth of a second.
 
 ### 2. A High-Latency Link Slows Scrapes, but Nothing Fails
 
@@ -170,8 +177,8 @@ These are the basics demo's proxy and agents, now with a simulated WAN between t
 - The restarted agent connects at once. Its old connection stays on the proxy dashboard's agent list, with no paths,
   for about 20 seconds more: what it had queued has to drain through the thin link before its close gets through.
 - agent-branch's own dashboard reconnects to the restarted agent by itself. The inventory path's page,
-  <http://localhost:8197/dashboard/paths/inventory_metrics>, shows the filter's rules and how many lines and bytes it
-  has dropped, and its **Recent scrapes** give each body's size before and after the filter.
+  <http://localhost:8195/screens#agent-branch/paths/inventory_metrics>, shows the filter's rules and how many lines and
+  bytes it has dropped, and its **Recent scrapes** give each body's size before and after the filter.
 
 ```bash
 ./demo.sh heal
@@ -183,16 +190,18 @@ drains at full speed.
 
 ### 4. The Primary Proxy Stops, and the Agents Fail Over to the Standby
 
-Open agent-branch's **Connection** view, <http://localhost:8197/dashboard/connection>, beside the standby's
-dashboard. The proxies can show an agent only once it has connected to them; this view shows the agent's side of the
-failover as it happens: the endpoint it's on or trying, and the last error it got connecting to each.
+Open agent-branch's **Connection** view beside the standby's dashboard,
+<http://localhost:8195/screens#agent-branch/connection+proxy>. The page stays up when the primary stops, since the
+standby serves it, and the primary's tab turns red. The proxies can show an agent only once it has connected to them;
+this view shows the agent's side of the failover as it happens: the endpoint it's on or trying, and the last error it
+got connecting to each.
 
 ```bash
 ./demo.sh proxy-down      # stops the primary proxy
 ```
 
 - The primary's connections close, so both agents know at once. Within about 4 seconds they're on the standby: its
-  dashboard, <http://localhost:8195/dashboard>, shows each one **via hq-to-standby:50052 (2 of 2)** or
+  dashboard, <http://localhost:8195/screens#proxy>, shows each one **via hq-to-standby:50052 (2 of 2)** or
   **via branch-to-standby:50054 (2 of 2)**, marked **failed over**. Nobody touched the agents.
 - Grafana: within about 15 seconds every service is up again on **Target health**, scraped through the standby, and
   **Connected agents, by proxy** has moved to the standby. Only `prometheus-proxy`, the primary's own metrics, stays
@@ -202,10 +211,10 @@ failover as it happens: the endpoint it's on or trying, and the last error it go
 - agent-branch's Connection view reads **connecting**, then **failing**, as its connect through branch-to-proxy:50053
   fails, then **connected** through branch-to-standby:50054, marked **failed over**. Under **Proxy endpoints**,
   branch-to-proxy:50053 keeps the error its connect got: a proxy that's down shows there, not only in the agent's log.
-- Its **Activity** view, <http://localhost:8197/dashboard/activity>, lists what the agent went through, newest first:
-  **disconnected**, **connect failed** on branch-to-proxy:50053, **failed over** from it to branch-to-standby:50054,
-  **connected**, and **registered**, one line for its three paths. agent-hq's dashboard,
-  <http://localhost:8196/dashboard/activity>, shows the same for its own links.
+- Its **Activity** view, <http://localhost:8195/screens#agent-branch/activity>, lists what the agent went through,
+  newest first: **disconnected**, **connect failed** on branch-to-proxy:50053, **failed over** from it to
+  branch-to-standby:50054, **connected**, and **registered**, one line for its three paths. agent-hq's dashboard,
+  <http://localhost:8195/screens#agent-hq/activity>, shows the same for its own links.
 
 ```bash
 ./demo.sh proxy-up        # the primary returns; the agents stay on the standby
@@ -225,9 +234,9 @@ once, and they return to the primary within seconds, which resolves the alert. a
 
 Contrast this with part 4, where the connection closed. Here agent-branch's link to the primary stops passing anything,
 the agent's goodbye included, and closes nothing: what a stateful firewall or NAT that drops a connection does. Nothing
-tells either end. It takes about 50 seconds to play out. Open agent-branch's Connection view,
-<http://localhost:8197/dashboard/connection>, beside the primary's dashboard: one shows what the proxy hears, the other
-what the agent tries.
+tells either end. It takes about 50 seconds to play out. Open agent-branch's Connection view beside
+the primary's dashboard, <http://localhost:8195/screens#agent-branch/connection+primary>: one shows what the proxy
+hears, the other what the agent tries.
 
 ```bash
 ./demo.sh cut             # agent-branch's link to the primary goes silent
@@ -250,7 +259,7 @@ what the agent tries.
   branch-to-standby:50054 (2 of 2)**, failed over, while the primary is still up, and Grafana's **Agents off their
   primary** shows it at 1. About 20 seconds later **NetworkAgentNotOnPrimary** fires for agent-branch alone, until
   `heal` brings it back. agent-hq is untouched throughout.
-- agent-branch's **Activity** view, <http://localhost:8197/dashboard/activity>, keeps the whole sequence:
+- agent-branch's **Activity** view, <http://localhost:8195/screens#agent-branch/activity>, keeps the whole sequence:
   **disconnected**, **connect failed** on branch-to-proxy:50053, **failed over** to branch-to-standby:50054,
   **connected**, and **registered**. The proxies saw only the eviction and the new connection.
 
@@ -273,20 +282,21 @@ what the agent tries.
 - On agent-branch's Connection view, the line under its state counts its connects, one more with each drop, and it
   stays on branch-to-proxy:50053 with no **failed over** tag. Its Activity view shows each drop as **disconnected**,
   then **connected** and **registered**.
-- Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats and the stream of
-  path notices, under its own service name. In Zipkin, the search is `serviceName` = `agent-branch` and `spanName` =
+- Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats and the stream of path
+  notices, under its own service name. In Zipkin, the search is `serviceName` = `agent-branch` and `spanName` =
   `proxyservice/connectagent`. Open
-  <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that
-  search in, and click **Run Query**. Each reconnect is a `connectagent` trace, then `registeragent` and a
+  <http://localhost:8195/screens#zipkin/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which
+  fills that search in, and click **Run Query**. Each reconnect is a `connectagent` trace, then `registeragent` and a
   `registerpath` for each path. Zipkin joins the agent's client side and the proxy's server side of each call into one
-  span, so the trace names both services, and its annotations mark when the agent sent the call and the proxy
-  answered it.
+  span, so the trace names both services, and its annotations mark when the agent sent the call and the proxy answered
+  it.
 - A connection's scrape streams (`readrequestsfromproxy`, `writeresponsestoproxy`, `writechunkedresponsestoproxy`) are
   traced too, and appear as the connection closes, each about 15 seconds long: as long as the connection lasted.
 - Each scrape is a trace of its own: the proxy's `scrape` span, a `forward` span for the agent it went to, and under
   that agent-branch's `fetch` of the target, which joins the trace the proxy sent with the request. Open
-  <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A failed scrape's
-  spans are red: the one in flight as a connection drops ends its `forward` span as `agent_disconnected`.
+  <http://localhost:8195/screens#zipkin/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A
+  failed scrape's spans are red: the one in flight as a connection drops ends its `forward` span as
+  `agent_disconnected`.
 
 ```bash
 ./demo.sh heal
@@ -407,8 +417,8 @@ running demo resets the links it has: every link up, with no toxics.
   `demo.sh` refuses; run `./demo.sh heal` first. `heal` creates a cut link again rather than clearing it. If the
   `wan` service ever restarts on its own, every connection through it drops: the agents reconnect, perhaps onto the
   standby, and `heal` sorts them out.
-- **The primary's dashboard doesn't load during part 4**: that's the point; use the standby's at
-  <http://localhost:8195/dashboard>, and agent-branch's Connection view for the agent's side.
+- **The primary's tab is red during part 4**: that's the point; the standby's tab and agent-branch's Connection view
+  keep working, side by side at <http://localhost:8195/screens#agent-branch/connection+proxy>.
 - **agent-branch's Activity view is empty, or starts over**: `filter` and `unfilter` restart agent-branch, and an agent
   keeps its activity in memory only. Its dashboard reconnects to the restarted agent on its own.
 - The proxies log warnings at startup that the dashboard has no authentication, and that the agents' token crosses

@@ -77,6 +77,9 @@ its own that holds them all, with Prometheus and Grafana.
   as do the basics and network demos' agents, `examples/federate.conf`'s, and the Compose stack's
   (`etc/compose/proxy.yml`), which no longer publishes port 8083. `examples/prom-agent.conf`, for debugging, serves
   them at `/agent_metrics` too, and keeps the port on.
+- **The network demo's tour runs in one browser tab.** Its standby proxy serves the screens page, which holds both
+  proxies' dashboards, both agents', Prometheus, Grafana, and Zipkin, and stays up while the tour stops the primary:
+  `make up` prints its address, `make open` opens it, and the tour's links open in it.
 - **The `docker run` examples keep their ports off the network.** The quick-start commands no longer publish the
   agents' port, 50051, which their agent reaches over the shared Docker network, and publish the scrape, admin, and
   metrics ports on `127.0.0.1` only. The Docker page's production example, for agents on other hosts, publishes 50051
