@@ -238,6 +238,17 @@ class DemoScreensLinksTest : StringSpec() {
           ),
       )
 
-    val DEMOS = listOf(BASICS)
+    // The network demo's page is the standby's, which no part of its tour stops.
+    val NETWORK =
+      ScreensDemo(
+        dir = "demos/network",
+        config = "config/proxy-standby.conf",
+        page = "website/prometheus-proxy/docs/network-demo.md",
+        pageUrl = "http://localhost:8195/screens",
+        proxyService = "proxy-standby",
+        proxyDown = null,
+      )
+
+    val DEMOS = listOf(BASICS, NETWORK)
   }
 }

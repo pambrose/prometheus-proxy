@@ -61,7 +61,7 @@ RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # once it's later than this and its images are on Docker Hub, and otherwise builds the proxy and agent from this
 # checkout, as up-local does, so nothing here changes with a release. When the demo comes to use something no
 # release has yet, set this to the latest release on Docker Hub.
-NEEDS_RELEASE_AFTER=4.6.0
+NEEDS_RELEASE_AFTER=4.7.0
 AGENTS=(agent-hq agent-branch)
 PROXIES=(proxy proxy-standby)
 # The WAN's links (config/toxiproxy.json), one per agent per proxy. An agent's are named for its site, the part of its
