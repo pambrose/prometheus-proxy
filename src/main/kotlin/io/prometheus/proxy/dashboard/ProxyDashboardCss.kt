@@ -25,6 +25,17 @@ import io.prometheus.common.dashboard.DashboardServer
  */
 internal object ProxyDashboardCss {
   /**
+   * The bar's link to the screens page, before the bar's end, in a second `<style>` in the page's head while the proxy
+   * serves the page: quiet as Log out is, in its ink and border, and as tall as the theme button.
+   */
+  const val SCREENS_LINK_CSS =
+    ".screens-link { display:inline-flex; align-items:center; flex:none; height:26px; margin-bottom:6px; " +
+      "padding:0 10px; color:var(--ink-2); text-decoration:none; border:1px solid var(--line); border-radius:3px; }\n" +
+      ".screens-link:hover { color:var(--ink); background-color:var(--surface-2); }\n" +
+      ".screens-link:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }\n" +
+      "@media (pointer: coarse) { .screens-link { height:46px; } }"
+
+  /**
    * The rules that give each of [icons] its mark and its colour in each theme, for a second `<style>` in the page's
    * head, which [PathTableHtml.linkIconStyle] renders only when a link shows an icon.
    *

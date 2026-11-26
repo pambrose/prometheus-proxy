@@ -8,6 +8,9 @@
 # Compose resolves every relative path here against this file's directory, demos/basics/docker: the demo's configs
 # are one level up, and the repository root three.
 #
+# The proxy's screens page, http://localhost:8094/screens, holds every dashboard, Prometheus, and Grafana in one browser
+# tab (proxy.conf's screens), so the reader needn't keep track of their URLs.
+#
 # Every published port binds to 127.0.0.1 only: the proxy's dashboard has no login unless ./demo.sh login turns it on,
 # the agents' dashboards have none, Grafana lets anyone view it without signing in, and its admin password is the
 # default, which suits a demo on a laptop and nothing else. Set DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT,
@@ -50,6 +53,15 @@ services:
       # The dashboard's login, which ./demo.sh login turns on, from the environment rather than proxy.conf, so no
       # password sits in a file. Empty, as make up leaves it, turns it off.
       DASHBOARD_PASSWORD: ${DEMO_DASHBOARD_PASSWORD:-}
+      # Where a browser on this machine reaches each screen of the proxy's screens page (proxy.conf's screens), on the
+      # host ports published below, so a port moved with its DEMO_*_PORT moves its screen too.
+      DEMO_AGENT_EAST_URL: http://localhost:${DEMO_AGENT_EAST_DASHBOARD_PORT:-8095}/dashboard
+      DEMO_AGENT_WEST_1_URL: http://localhost:${DEMO_AGENT_WEST_1_DASHBOARD_PORT:-8096}/dashboard
+      DEMO_AGENT_WEST_2_URL: http://localhost:${DEMO_AGENT_WEST_2_DASHBOARD_PORT:-8097}/dashboard
+      DEMO_AGENT_ROGUE_URL: http://localhost:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}/dashboard
+      DEMO_AGENT_EAST_COPY_URL: http://localhost:${DEMO_AGENT_EAST_COPY_DASHBOARD_PORT:-8099}/dashboard
+      DEMO_PROMETHEUS_URL: http://localhost:${DEMO_PROMETHEUS_PORT:-9090}
+      DEMO_GRAFANA_URL: http://localhost:${DEMO_GRAFANA_PORT:-3000}
     volumes:
       - ../config/proxy.conf:/app/proxy.conf:ro
     ports:
@@ -141,6 +153,8 @@ services:
       # Anyone who opens Grafana sees the dashboards without signing in, as a Viewer, the only role Grafana gives
       # anonymous users. To use Explore or change a dashboard, sign in as admin / admin.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
+      # Lets the proxy's screens page show Grafana in a frame, which Grafana refuses by default.
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/demo-overview.json
       # Nothing phones home or downloads at startup, so the demo runs offline once the images are pulled.
       GF_ANALYTICS_REPORTING_ENABLED: "false"

@@ -211,6 +211,53 @@ class ProxyDashboardOptionsTest : StringSpec() {
         "Invalid configuration: proxy.dashboard.links link 'Logs' has an unknown icon 'loki'; use prometheus or grafana"
     }
 
+    // ==================== Dashboard screens ====================
+
+    // A list, so only a config file sets it, as links are. Each is logged by name with where it opens, not the proxy's
+    // own tab, which every page has.
+    "dashboard screens should be parsed from the config file in order, and logged with where each opens" {
+      val config =
+        """
+        proxy.dashboard.screens = [
+          { name = "Grafana", url = "http://g:3000", start = "/d/x?kiosk" }
+          { name = "agent-east", url = "http://a:8095/dashboard" }
+        ]
+        """
+      var options: ProxyOptions? = null
+      captureLogs<ProxyOptions>(Level.INFO) { options = proxyOptionsFromConfig(config, extraArgs = ["--dashboard"]) }
+        .map { it.formattedMessage } shouldContainElement
+        "dashboard.screens: Grafana (http://g:3000/d/x?kiosk), agent-east (http://a:8095/dashboard)"
+      options.shouldNotBeNull().dashboardScreens.map { it.id } shouldBe ["grafana", "agent-east"]
+    }
+
+    "with no dashboard screens, startup should log none" {
+      var options: ProxyOptions? = null
+      captureLogs<ProxyOptions>(Level.INFO) { options = proxyOptions(["--dashboard"]) }
+        .map { it.formattedMessage } shouldContainElement "dashboard.screens: (none)"
+      options.shouldNotBeNull().dashboardScreens.shouldBeEmpty()
+    }
+
+    // ScreenTest has each refusal; this is how a standalone proxy reports one, and that it waits for the dashboard.
+    "a dashboard screen the page can't use should fail startup, naming it, while the dashboard is on" {
+      val screens = """proxy.dashboard.screens = [{ name = "Grafana", url = "ftp://g.example.com" }]"""
+      shouldThrow<ConfigLoadException> {
+        failOnInvalidConfig(embedded = true) { proxyOptionsFromConfig(screens, extraArgs = ["--dashboard"]) }
+      }.message shouldBe
+        "Invalid configuration: proxy.dashboard.screens screen 'Grafana' has a url that isn't an absolute http or " +
+        "https URL: ftp://g.example.com"
+      proxyOptionsFromConfig(screens).dashboardScreens.shouldBeEmpty()
+    }
+
+    // The schema gives url an empty default, so an unset variable reaches the check that names the entry rather than
+    // failing in the config loader with a message that names none.
+    "a dashboard screen whose url reads an unset variable should fail startup, naming the screen" {
+      val screens = """proxy.dashboard.screens = [{ name = "Grafana", url = ${'$'}{?SCREENS_TEST_UNSET} }]"""
+      shouldThrow<ConfigLoadException> {
+        failOnInvalidConfig(embedded = true) { proxyOptionsFromConfig(screens, extraArgs = ["--dashboard"]) }
+      }.message shouldBe
+        "Invalid configuration: proxy.dashboard.screens screen 'Grafana' has no url; is the variable it reads set?"
+    }
+
     // ==================== Login ====================
 
     // A password turns the login on; the username is admin until it's set, as Grafana's is.
@@ -285,6 +332,25 @@ class ProxyDashboardOptionsTest : StringSpec() {
       framingLines(["--dashboard"]) shouldBe listOf(PROXY_FRAMING_LINE)
       framingLines(["--dashboard", "-Dproxy.dashboard.framingEnabled=false"]).shouldBeEmpty()
       framingLines([]).shouldBeEmpty()
+    }
+
+    // Off, with screens listed, the dashboard still lets its own /screens frame it, so the log says what false means
+    // there; with framing on, the line it always logs says enough.
+    "with framing off and screens listed, startup should say /screens still shows the dashboard" {
+      val screens = """proxy.dashboard.screens = [{ name = "Grafana", url = "http://g:3000" }]"""
+
+      fun framingLines(args: List<String>) =
+        captureLogs<ProxyOptions>(Level.INFO) { proxyOptionsFromConfig(screens, extraArgs = args) }
+          .map { it.formattedMessage }
+          .filter { it.startsWith("dashboard framing") }
+
+      framingLines(["--dashboard", "-Dproxy.dashboard.framingEnabled=false"]) shouldBe
+        listOf(
+          "dashboard framing: refused, but for /screens, which shows the dashboard from its own origin " +
+            "(proxy.dashboard.framingEnabled = false)",
+        )
+      framingLines(["--dashboard"]) shouldBe listOf(PROXY_FRAMING_LINE)
+      framingLines(["-Dproxy.dashboard.framingEnabled=false"]).shouldBeEmpty()
     }
   }
 

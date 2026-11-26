@@ -50,6 +50,7 @@ import io.prometheus.common.requireDefaultOrPositive
 import io.prometheus.common.requirePositive
 import io.prometheus.common.requireSampleRate
 import io.prometheus.proxy.dashboard.PathLink
+import io.prometheus.proxy.dashboard.Screen
 
 // The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
 // the (args) signature that code compiled against earlier releases calls.
@@ -144,6 +145,12 @@ class ProxyOptions internal constructor(
   // fails startup. A list, so it can only be set in a config file. Declared above the init block that assigns it, or
   // its initializer would run after and empty it again.
   internal var dashboardLinks: List<PathLink> = emptyList()
+    private set
+
+  // The screens /screens shows beside the dashboard, proxy.dashboard.screens, parsed here so a list the page can't use
+  // fails startup, naming the entry. A list, so config-file only, and declared above the init block, as dashboardLinks
+  // is.
+  internal var dashboardScreens: List<Screen> = emptyList()
     private set
 
   /**
@@ -324,6 +331,14 @@ class ProxyOptions internal constructor(
     logger.requirePositive("dashboard.activityLogSize", dashboard.activityLogSize)
     dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url, it.icon) })
     logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
+    dashboardScreens = Screen.parseAll(dashboard.screens.map { Screen.Entry(it.name, it.url, it.start) })
+    logger.info { "dashboard.screens: ${dashboardScreens.joinToString { it.logged }.ifEmpty { "(none)" }}" }
+    // Off, the dashboard still lets its own /screens frame it (Framing.SAME_ORIGIN), so false means less than it says.
+    if (!dashboard.framingEnabled && dashboardScreens.isNotEmpty())
+      logger.info {
+        "dashboard framing: refused, but for /screens, which shows the dashboard from its own origin " +
+          "(proxy.dashboard.framingEnabled = false)"
+      }
   }
 
   private fun assignGrpcConfigVals(proxyConfigVals: ConfigVals.Proxy2) {

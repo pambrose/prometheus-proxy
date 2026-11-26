@@ -145,7 +145,7 @@ class CommonSettingsTest : StringSpec() {
               maxSessions = 50,
               allowedOrigins = emptyList(),
               allowedHosts = ["proxy.example", "proxy"],
-              framingEnabled = false,
+              framing = Framing.NONE,
             ),
           extra = [Setting("Departed paths kept", "3600s")],
         ).apply {
@@ -161,23 +161,31 @@ class CommonSettingsTest : StringSpec() {
         }
     }
 
-    // Allowed by default, so the page that shows the settings says so, beside the guards it loosens.
-    "the Dashboard group should say when any site can frame the dashboard" {
-      CommonSettings
-        .dashboard(
-          options = proxyOptionsFromConfig("""proxy.dashboard { enabled = true }"""),
-          values =
-            DashboardValues(
-              refreshIntervalSecs = 2,
-              pathHistorySize = 20,
-              activityLogSize = 500,
-              scrapeNowEnabled = true,
-              maxSessions = 50,
-              allowedOrigins = emptyList(),
-              allowedHosts = emptyList(),
-              framingEnabled = true,
-            ),
-        ).value("Framing") shouldBe "allowed, by any site"
+    // Allowed by default, so the page that shows the settings says so, beside the guards it loosens. Off, a proxy that
+    // lists screens still lets its own /screens frame it, which the row says.
+    "the Dashboard group should say which pages can frame the dashboard" {
+      val options = proxyOptionsFromConfig("""proxy.dashboard { enabled = true }""")
+
+      fun framingRow(framing: Framing) =
+        CommonSettings
+          .dashboard(
+            options = options,
+            values =
+              DashboardValues(
+                refreshIntervalSecs = 2,
+                pathHistorySize = 20,
+                activityLogSize = 500,
+                scrapeNowEnabled = true,
+                maxSessions = 50,
+                allowedOrigins = emptyList(),
+                allowedHosts = emptyList(),
+                framing = framing,
+              ),
+          ).value("Framing")
+
+      framingRow(Framing.ANY) shouldBe "allowed, by any site"
+      framingRow(Framing.SAME_ORIGIN) shouldBe "refused, but for this proxy's /screens"
+      framingRow(Framing.NONE) shouldBe "refused"
     }
 
     "the Tracing and Logging groups should show Zipkin and the log level" {

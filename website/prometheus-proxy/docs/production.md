@@ -37,8 +37,10 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
   `proxy.dashboard.allowedHosts` to the names you use, and behind a reverse proxy list its public
   origin in `proxy.dashboard.allowedOrigins`. Unless a page of yours embeds the dashboard, set
   `proxy.dashboard.framingEnabled = false`, so no other site's page can frame it, and a security scan doesn't report
-  the dashboard as missing an anti-clickjacking header. See
-  [Exposure](web-dashboard.md#exposure).
+  the dashboard as missing an anti-clickjacking header; with `proxy.dashboard.screens` listed, the proxy's own
+  [screens page](web-dashboard.md#screens) still frames it, from the dashboard's own origin. Each screen that page
+  lists must allow framing, and keeps its own login, which works in a frame only on the same site; for one login across
+  them, put single sign-on in front of them all. See [Exposure](web-dashboard.md#exposure).
 - When forwarding auth headers to targets, **require TLS** so credentials aren't sent in
   plaintext between proxy and agent. See
   [Auth Header Forwarding](security/index.md#auth-header-forwarding).

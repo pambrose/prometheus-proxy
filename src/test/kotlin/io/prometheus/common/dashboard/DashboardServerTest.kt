@@ -83,6 +83,20 @@ class DashboardServerTest : StringSpec() {
       listOf("//evil.example", "/\\evil.example", null).forEach { safeNext(it, "") shouldBe "/" }
     }
 
+    // The proxy's /screens is outside its dashboard's base, and a login from it must return there, with its query; no
+    // other path outside the base, nor one that only starts like the page.
+    "safeNext should keep a page the site lists outside its base, and only that page" {
+      val outside = setOf("/outside")
+      safeNext("/outside", "/dashboard", outside) shouldBe "/outside"
+      safeNext("/outside?x=1", "/dashboard", outside) shouldBe "/outside?x=1"
+      listOf("/outside/../x", "/outside/x", "/outsider", "/elsewhere", "//outside", "/outside\\x").forEach {
+        safeNext(it, "/dashboard", outside) shouldBe "/dashboard"
+      }
+      safeNext("/outside", "/dashboard") shouldBe "/dashboard"
+      // At a root mount, where every page is under the base anyway.
+      safeNext("/outside", "", outside) shouldBe "/outside"
+    }
+
     // Cookies are kept per host, not per port, so two proxies on one host, an HA pair, would overwrite each other's.
     "each dashboard port should have its own session cookie" {
       cookieName("proxy", 8094) shouldBe "prometheus_proxy_dashboard_8094"

@@ -43,7 +43,7 @@ internal data class DashboardValues(
   val maxSessions: Int,
   val allowedOrigins: List<String>,
   val allowedHosts: List<String>,
-  val framingEnabled: Boolean,
+  val framing: Framing,
 )
 
 /**
@@ -176,9 +176,17 @@ internal object CommonSettings {
           Setting("Max sessions", "$maxSessions"),
           Setting("Allowed origins", names(allowedOrigins, empty = "the dashboard's own host")),
           Setting("Allowed hosts", names(allowedHosts, empty = "any")),
-          Setting("Framing", if (framingEnabled) "allowed, by any site" else "refused"),
+          Setting("Framing", framingShown(framing)),
         ) + extra,
       )
+    }
+
+  // Which pages may frame the dashboard, as the Framing row says it.
+  private fun framingShown(framing: Framing) =
+    when (framing) {
+      Framing.ANY -> "allowed, by any site"
+      Framing.SAME_ORIGIN -> "refused, but for this proxy's /screens"
+      Framing.NONE -> "refused"
     }
 
   /** Zipkin tracing, and the share of traces it keeps, [sampleRate]. */

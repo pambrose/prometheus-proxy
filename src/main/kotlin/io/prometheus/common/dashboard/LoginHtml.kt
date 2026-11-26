@@ -61,6 +61,15 @@ internal object LoginHtml {
   const val PRODUCT = "Prometheus Proxy"
 
   /**
+   * Keeps a link's hash through the sign-in. A link into the proxy's `/screens` names its screen and view in its hash,
+   * which never reaches the server: the redirect to this page keeps it, since a browser keeps a fragment across a
+   * redirect that has none, and this puts it on the form's action, so the 303 back to the page keeps it too.
+   */
+  const val KEEP_HASH_SCRIPT =
+    "(function () { var form = document.querySelector(\"form.card\"); " +
+      "if (form && location.hash) form.setAttribute(\"action\", form.getAttribute(\"action\") + location.hash); })();"
+
+  /**
    * What a login page shows.
    *
    * @param heading the dashboard's name, the page's heading, under the logo and the [PRODUCT]'s name
@@ -146,6 +155,7 @@ internal object LoginHtml {
           input(type = InputType.hidden, name = NEXT_FIELD) { value = next }
           button(type = ButtonType.submit) { +"Log in" }
         }
+        script { unsafe { raw(KEEP_HASH_SCRIPT) } }
       }
     }
   }

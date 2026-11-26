@@ -104,10 +104,11 @@ environment, or from a Secret on a platform that has them, rather than in a conf
 A login starts a session, which the browser keeps in a cookie. It ends after 24 hours without a request, 7 days after
 the login, or with **Log out**, the exit icon at the end of the top bar. The proxy keeps sessions in memory, so a
 restart signs everyone out; a page left open then goes to the login page by itself. The cookie is `HttpOnly`,
-`SameSite=Lax`, named for the dashboard's port (so two proxies on one host keep their own), and `Secure` when the
-browser reached the dashboard over `https`, as through a reverse proxy. With a login set, the dashboard tells the
-browser to keep none of its pages (`Cache-Control: no-store`), so a page behind the login isn't kept to be shown again
-after Log out.
+`SameSite=Lax`, named for the dashboard's port (so two proxies on one host keep their own), set at the dashboard's path,
+and at `/screens` too while [screens](#screens) are listed, so the screens page gets it, and `Secure` when the browser
+reached the dashboard over `https`, as through a reverse proxy. Signing in from a link into the screens page returns to
+it, with the screen and view the link named. With a login set, the dashboard tells the browser to keep none of its pages
+(`Cache-Control: no-store`), so a page behind the login isn't kept to be shown again after Log out.
 
 A script sends the login with each request as HTTP Basic Auth instead, and needs no session. A browser can't: it always
 gets the login page, even with a Basic login it saved for the dashboard's address earlier, so Log out signs it out.
@@ -437,7 +438,7 @@ what it runs with without reading its startup log:
 | Agent limits | the stale-agent check, and the limits on what one agent, or one identity's agents, may register and report |
 | gRPC server | handshake, keepalive, and connection age settings, with gRPC's default named where one is left unset |
 | Service discovery | the endpoint's path and target, and whether agents' `job` and `instance` labels are kept |
-| Dashboard | where it listens, its login's username, its limits, what it keeps, and its links |
+| Dashboard | where it listens, its login's username, its limits, what it keeps, its links, and its screens |
 | Admin, Metrics, Tracing, Logging | each service's port and paths, the JVM metrics turned on, Zipkin, and the log level |
 
 No secret reaches the page. The agent token, each identity's token, the dashboard's password, and TLS material given as
@@ -449,6 +450,60 @@ sent without TLS.
 
 The settings don't change while the proxy runs, so the page is sent them once when it opens, and a value you select
 stays selected. If the proxy restarts, the page reconnects and shows the new process's settings.
+
+## The Screens Page { #screens }
+
+An operator works across several screens: the proxy's dashboard, each agent's, Prometheus, Grafana, and tools of their
+own. List them in `proxy.dashboard.screens`, and the proxy serves one page that holds them all, at `/screens` on the
+dashboard's port, for example `http://proxy-host:8094/screens`. The dashboard's top bar links to it.
+
+```hocon
+proxy.dashboard.screens = [
+  { name = "agent-east", url = "http://agent-east.corp.example.com:8095/dashboard" }
+  { name = "Prometheus", url = "http://prometheus.corp.example.com:9090", start = "/alerts" }
+  { name = "Grafana",    url = ${?GRAFANA_URL}, start = "/d/overview?kiosk" }
+]
+```
+
+Each screen has a tab, after the proxy's own dashboard, which is always first. A tab's dot is green while its screen
+answers and red while it doesn't, checked every 5 seconds while the page is open, and a pane whose screen isn't
+answering says so, then reloads by itself once it answers again. **One** shows the selected screen at full size,
+**Split** two side by side, each at its own narrow layout (shift-click a tab to put its screen on the right), and
+**All** every screen in a grid, each laid out at 1280×800 and scaled to its tile; click a tile's title to open it.
+Switching tabs or layouts never reloads a screen, so a dashboard keeps the agent or path you selected. Each pane's
+**Open in a tab** opens its screen on its own.
+
+A link can say what the page shows, after its `#`:
+
+| Link | Shows |
+|---|---|
+| `/screens#all` | Every screen in the grid |
+| `/screens#agent-east` | One screen, as you left it, or where it starts the first time |
+| `/screens#agent-east/connection` | One screen, at its `url` plus `/connection`, query string included, such as `#proxy/activity?q=agent-rogue` |
+| `/screens#proxy/paths+grafana` | Two screens side by side, left then right |
+
+A screen's id in a link is its name in lowercase, each run of other characters a `-`; the proxy's own is `proxy`. A link
+with a path loads it, reloading a screen already open; a bare id only brings the screen up. A link opened while the page
+is already open in another tab goes to that tab, and the new tab closes itself, or, where the browser won't let it,
+says where the link went.
+
+Every screen has to allow framing, and the page can't tell a screen that refused it from a blank one, so it looks
+empty; use **Open in a tab** for such a screen. Agents' dashboards allow it from 4.7.1 unless their
+`agent.dashboard.framingEnabled` is `false`, and Prometheus always does. Grafana refuses it until `allow_embedding` is
+on, `GF_SECURITY_ALLOW_EMBEDDING=true` in its environment.
+
+The page is behind the dashboard's [login](#login), and each screen keeps its own, which it shows in its frame the first
+time. A login inside a frame works only when the screen is on the same site as the page, a scheme and a registered
+domain, since the dashboards' session cookies and Grafana's are `SameSite=Lax`; otherwise sign in with **Open in a
+tab**. For one login across every screen, put single sign-on in front of them all, such as an authenticating reverse
+proxy on one domain. The page is the proxy's, so while the proxy is down a page already open keeps its frames, but
+can't be reloaded.
+
+The proxy refuses to start with a screen whose name is empty or longer than 64 characters, two names with the same id,
+a name whose id is `proxy` or `all`, a `url` that isn't an absolute `http` or `https` URL or that carries a username or
+password, which the page would show anyone who can read the dashboard, a `start` that doesn't begin with `/` or `?`, or
+more than 32 screens. A `url` read from an unset variable, as `${?GRAFANA_URL}` is, is empty, and refused by the
+screen's name. The **Settings** view lists each screen with its `url`, its query values masked, and where it starts.
 
 ## Why It Is on Its Own Port
 
@@ -540,7 +595,9 @@ guards against the first on its own, and against the other two with a setting ea
   registered domain, so a page on another port of the dashboard's host, or on a sibling subdomain, is on the same site,
   and frames the signed-in dashboard. Set `proxy.dashboard.framingEnabled = false` and every response forbids framing
   (`Content-Security-Policy: frame-ancestors 'none'`, and `X-Frame-Options: DENY` for older browsers), so no page, on
-  any site, can frame it.
+  any site, can frame it. With [screens](#screens) listed, `false` still lets the proxy's own `/screens` show the
+  dashboard: every response says `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` instead, so only a page of
+  the dashboard's own origin can frame it.
 
 What framing lets a page do to the dashboard is small: it can't read the frame, and the only clicks it can steer are
 Scrape now, within its cooldown, and Log out. The setting is there mostly for audits. Security scanners such as ZAP,
@@ -608,16 +665,24 @@ server {
     proxy_set_header Connection $connection_upgrade;
     proxy_set_header Host $http_host;
   }
+
+  # The screens page, outside the dashboard's path, which opens no WebSocket.
+  location = /screens {
+    proxy_pass http://proxy-host:8094;
+    proxy_set_header Host $http_host;
+  }
 }
 ```
 
 `$http_host` is the `Host` header as the browser sent it, port included; `$host` drops the port, which breaks the match
 on a port other than the scheme's. To keep nginx's own `Host`, list the address the browser opens in
 `proxy.dashboard.allowedOrigins` instead, for example `["https://dashboard.example.com"]`. Keep the path as it is: the
-page's links, its assets, its WebSocket, and its session cookie are all under `proxy.dashboard.path`, so a prefix nginx
-adds or strips breaks them. Over `https`, the dashboard marks its session cookie `Secure`. Every login reaches the
-dashboard from nginx's address, so the per-address limit on wrong logins is everyone's. The agent's dashboard takes
-the same settings under `agent.dashboard`. The [nginx Demo](nginx-demo.md) shows each step.
+page's links, its assets, and its WebSocket are all under `proxy.dashboard.path`, and the [screens page](#screens) is at
+`/screens`, so a prefix nginx adds or strips breaks them. The session cookie is set at those two paths, so leave its
+paths alone too, rather than have nginx rewrite cookie paths. Over `https`, the dashboard marks its session cookie
+`Secure`. Every login reaches the dashboard from nginx's address, so the per-address limit on wrong logins is
+everyone's. The agent's dashboard takes the same settings under `agent.dashboard`. The [nginx Demo](nginx-demo.md) shows
+each step.
 
 ## Limits
 

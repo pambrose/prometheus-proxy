@@ -711,6 +711,26 @@ Three support helpers also live here (not test classes themselves):
   placeholder in the URL's scheme or host. Also a link's brand icon (`LinkIcon`): read ignoring case, a blank one
   showing the name, an unknown one refused, the startup log naming it, each mark on the classpath (which catches a
   Simple Icons bump that drops a brand), and each colour clearing 3:1 on `--surface-2` in both themes
+- **ScreenTest** (`dashboard/`) — a screen of the proxy's screens page (`proxy.dashboard.screens`, `Screen`): its id,
+  the name in lowercase with each run of other characters a dash; `start` empty by default and the config's order kept;
+  and each refusal at startup, naming the entry: a blank name (by position), one with no letter or digit, one over 64
+  characters, two names with one id, the ids `proxy` and `all`, an empty url (an unset variable), one that isn't an
+  absolute http or https URL, one with a username or password, a host the URI class can't parse as a server included, a
+  start that doesn't begin with `/` or `?`, and more than 32 screens
+- **ScreensHtmlTest** (`dashboard/`) — the screens page's markup (`ScreensHtml`): a tab and a pane per screen in the
+  config's order after the proxy's, which is named for the proxy and current; each tab's state in words; the layout
+  buttons and the stage; each frame with no `src`, its url and start in data attributes, and its down notice; each
+  pane's picker and Open in a tab; the handoff's notice, hidden; a name with HTML or quotes escaped in its tab, pane,
+  frame title, and id; the proxy's pane at `/` at a root mount; the theme button, and Log out only with a login; the
+  dashboards' head, with the page's styles after it and no socket; no bare dark rule; the tab's 7px dot coloured by its
+  state; and the down notice styled only inside its view, apart from a tab's `down` class
+- **ScreensScriptTest** (`dashboard/`) — the screens page's script (`ScreensScript`), checked as DashboardScriptTest
+  checks the dashboards': links parsed as `all`, `<id>`, `<id>/<path>`, and `<a>+<b>`, an unknown id falling back to the
+  proxy's tab; the hash read and kept in step with `history.replaceState`; a path loading and a bare id never
+  reloading; every `src` set in one place and no frame moved; a url joined with one slash, and a path's leading
+  slashes and backslashes dropped; the handoff over a `BroadcastChannel`, closing the new tab or showing its notice;
+  the dots' `no-cors` probe, paused while hidden, in words, reloading a screen that answers again; Left and Right
+  and shift-click; the All grid's scale; and the theme button's script, shared with the dashboards (`ThemeScript`)
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent, and an agent not yet registered named by `agentLabel`; the Identity column while agent auth is on; escaped
@@ -819,7 +839,12 @@ Two support helpers also live here (not test classes themselves):
   `no-store` once on every response but the assets, the login page, a 303 to it, a 401, a 404, and a 500 included; and
   an `Origin`, then a `Host`, of `ESC[2J` and 5,000 characters more, sent twice from one address over a raw socket,
   since the HTTP client refuses a control character, refused with 403 and logged at INFO and then DEBUG, the escape
-  written out and the line under 400 characters; and with framing enabled, the default, no response with either header,
+  written out and the line under 400 characters; framed by its own origin only (`Framing.SAME_ORIGIN`, framing off with
+  screens listed), every response saying so once (`frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`), a page
+  outside the base path included; the session cookie set at the base path and at the page outside it on sign-in, and
+  expired at both on sign-out, and only at the root at a root mount; a page outside the base path
+  sending a browser to the login page and a login returning to it, and to nothing else outside the base; and with
+  framing enabled, the default, no response with either header,
   a login's `no-store` and a brand mark's `sandbox` policy kept
 - **DashboardServiceTest** (`dashboard/`) — a dashboard's service lifecycle over a mocked `DashboardServer`: a
   server that fails to start stopped, so Ktor's shutdown hook and application don't outlive it, with a stop that
@@ -999,6 +1024,10 @@ These support helpers also live here (not test classes themselves):
   Docker demos also run a release whose images Docker has without asking Docker Hub, and leave a Docker Hub they can't
   reach to the pull, while the Kubernetes demo, whose clusters pull the images themselves, stops. Each demo's
   `NEEDS_RELEASE_AFTER` is a release no later than the docs'
+- **DemoScreensLinksTest** — every link into the proxy's screens page in the basics demo's `demo.sh` (`$SCREENS_URL#…`),
+  README, and docs page (`http://localhost:8094/screens#…`) parses as the page parses it and names only the proxy's tab,
+  the grid, or a screen `demos/basics/config/proxy.conf` lists (read without the environment), each file has one, and
+  the links include a screen, a screen's view, and two screens side by side
 - **DemoTourTablesTest** — each demo's README and its page on the docs site have a What This Demo Shows table that
   names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
   of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the
@@ -1209,6 +1238,12 @@ mechanism that the standard suite cannot reach:
   included, and not logged as wrong; a root mount's login at `/login`; with no password, no login page and no Log out;
   and each login counted in `proxy_dashboard_logins_total` by outcome, a script's right Basic Auth not counted as a
   sign-in
+- **ProxyScreensTest** — the proxy's screens page on a real proxy (`config/test-configs/web-ui-screens.conf`, two
+  screens): with none listed, `/screens` a 404 and no link to it on the dashboard; with screens, a page of its own with
+  the proxy's tab first and no socket, and the dashboard's bar linking to it; behind the login, a 303 to the login page
+  with `/screens` as `next`, and signing in returning there with the session cookie at `/dashboard` and `/screens`;
+  and with
+  `framingEnabled = false`, the dashboard and the page framed only by their own origin, and with no screens, by none
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 - **TlsPemTest** — TLS over Netty with every certificate and key given as PEM, none as a file: the proxy's as base64

@@ -950,6 +950,18 @@ bar, master–detail panes, key–value rows, filtered table, and script, from `
 The status bar names the connection's state in its color, warn for `connecting`, where amber means true but not yet a
 failure, and counts the paths not registered in crit.
 
+### Screens Page
+
+The proxy's `/screens` (`ScreensHtml`, `ScreensCss`), a page of its own that holds the proxy's dashboard and every
+screen `proxy.dashboard.screens` lists, on this system without exception. Its bar is the dashboards': the logo beside
+"Screens", then a tab per screen, the Navigation component reused rather than restyled, each screen's 7px Status LED
+standing where a view's icon would (`ink-3` until the first check, then `ok` or `crit`, with its state in words for a
+screen reader), the right pane's screen in Split marked by an `ink-3` line under its tab, then One, Split, and All as a
+segmented control quiet as the bar's end, the pressed one on `surface-2` at weight 600, and the Theme Button and Log
+Out. Below, a pane per screen on a `surface` card with a 3px radius: a 30px bar in the secondary type with its name (in
+Split, a picker), and "Open in a tab ↗" at its end, over the screen's frame. All lays each frame out at 1280×800 and
+scales it to its tile. A screen not answering says so over its frame, its name in `crit`, on `bg`.
+
 ### Named Rules
 
 **The Still Interface Rule.** No CSS transitions. Hover, selection, and live swaps land instantly.

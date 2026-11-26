@@ -60,8 +60,9 @@ RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The newest release that lacks something the demo shows. up runs the release the docs give (make site-version)
 # once it's later than this and its images are on Docker Hub, and otherwise builds the proxy and agent from this
 # checkout, as up-local does, so nothing here changes with a release. When the demo comes to use something no
-# release has yet, set this to the latest release on Docker Hub.
-NEEDS_RELEASE_AFTER=4.6.0
+# release has yet, set this to the latest release on Docker Hub. 4.7.0 lacks the proxy's screens page and the
+# dashboards' framing, which 4.7.1 brings.
+NEEDS_RELEASE_AFTER=4.7.0
 # The dashboard password the login scenario gives the proxy. A demo's, in a public file, as Grafana's admin password
 # is: never use it anywhere else.
 LOGIN_PASSWORD="admin"
@@ -75,6 +76,9 @@ ON_DEMAND=(--profile rogue --profile duplicate)
 # there, never to a raw Markdown file, which isn't readable without a viewer.
 PAGE_URL="https://prometheus-proxy.com/basics-demo/"
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
+# The proxy's screens page, which holds every screen above and below in one browser tab (proxy.conf's screens). The
+# tour links into it: ${SCREENS_URL}#<screen>, #<screen>/<view>, or #<screen>+<screen> for two side by side.
+SCREENS_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/screens"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 PROXY_URL="http://localhost:${DEMO_PROXY_PORT:-8080}"
@@ -82,8 +86,6 @@ PROXY_URL="http://localhost:${DEMO_PROXY_PORT:-8080}"
 EAST_DASHBOARD_URL="http://localhost:${DEMO_AGENT_EAST_DASHBOARD_PORT:-8095}/dashboard"
 WEST_1_DASHBOARD_URL="http://localhost:${DEMO_AGENT_WEST_1_DASHBOARD_PORT:-8096}/dashboard"
 WEST_2_DASHBOARD_URL="http://localhost:${DEMO_AGENT_WEST_2_DASHBOARD_PORT:-8097}/dashboard"
-ROGUE_DASHBOARD_URL="http://localhost:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}/dashboard"
-COPY_DASHBOARD_URL="http://localhost:${DEMO_AGENT_EAST_COPY_DASHBOARD_PORT:-8099}/dashboard"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -138,7 +140,7 @@ Lifecycle:
   up-local                 Start it with the proxy and agent built from this checkout (needs a JDK 17 or later)
   down                     Stop the demo and remove its containers, network, and volume
   status                   Show the containers, the simulated services' state, and the URLs
-  open                     Open the proxy's and agent-east's dashboards, Grafana, and Prometheus in the browser
+  open                     Open the proxy's screens page, every dashboard, Prometheus, and Grafana in one tab
   logs [service]           Follow the logs (proxy, agent-east, demo-app, ...)
   tour [part]              Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
@@ -169,12 +171,7 @@ EOF
 print_urls() {
   echo
   bold "Prometheus Proxy basics demo"
-  echo "  Proxy dashboard:  $DASHBOARD_URL"
-  echo "  Agent dashboards: $EAST_DASHBOARD_URL  (agent-east)"
-  echo "                    $WEST_1_DASHBOARD_URL  (agent-west-1)"
-  echo "                    $WEST_2_DASHBOARD_URL  (agent-west-2)"
-  echo "  Grafana:          $GRAFANA_URL"
-  echo "  Prometheus:       $PROMETHEUS_URL"
+  echo "  Every screen:     $SCREENS_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
   wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
@@ -376,6 +373,7 @@ start_demo() {
   done
 
   wait_for "$DASHBOARD_URL" "The proxy dashboard" login
+  wait_for "$SCREENS_URL" "The proxy's screens page" login
   wait_for "$EAST_DASHBOARD_URL" "agent-east's dashboard"
   wait_for "$WEST_1_DASHBOARD_URL" "agent-west-1's dashboard"
   wait_for "$WEST_2_DASHBOARD_URL" "agent-west-2's dashboard"
@@ -399,19 +397,15 @@ cmd_status() {
   print_urls
 }
 
+# Opens the proxy's screens page, which holds every screen, or prints the URLs with no way to open a browser.
 cmd_open() {
-  local opener url
   if command -v open >/dev/null 2>&1; then
-    opener=open
+    open "$SCREENS_URL"
   elif command -v xdg-open >/dev/null 2>&1; then
-    opener=xdg-open
+    xdg-open "$SCREENS_URL"
   else
     print_urls
-    return
   fi
-  for url in "$DASHBOARD_URL" "$EAST_DASHBOARD_URL" "$GRAFANA_URL" "$PROMETHEUS_URL/alerts"; do
-    "$opener" "$url"
-  done
 }
 
 # The tour: the presenter's script (README.md), one part at a time. It numbers each part's steps, and waits for Enter
@@ -641,11 +635,16 @@ cmd_tour() {
       "Three agents run behind the firewall. agent-east, in the east data center, scrapes the orders, payments," \
       "inventory, and catalog services. agent-west-1 and agent-west-2, in the west data center, are a redundant" \
       "pair that both serve the shipping service. Outside the firewall are the proxy, Prometheus, and Grafana."
+    instruct "Open the demo's screens: $SCREENS_URL" \
+      "This is the proxy's screens page, one browser tab that holds every screen in the demo. Each tab along its" \
+      "top is one of the boxes in the diagram: the proxy's dashboard, each agent's own, Prometheus, and Grafana." \
+      "A tab's dot is green while its screen answers; agent-rogue's and agent-east-copy's stay red until the parts" \
+      "that start them. The steps from here link into this page, so keep it open, and each link opens in it."
   fi
 
   if part 2 "The proxy's dashboard shows every agent connected to it, the paths each one registered, and the" \
     "scrapes passing through them as they happen."; then
-    instruct "Open the proxy dashboard: $DASHBOARD_URL" \
+    instruct "Open the proxy dashboard: ${SCREENS_URL}#proxy" \
       "It opens on the Agents view, which lists the three connected agents, each with its address and the number" \
       "of paths it registered."
     instruct "Click agent-east." \
@@ -668,7 +667,7 @@ cmd_tour() {
 
   if part 3 "Grafana shows what Prometheus collected through the proxy: the health of every target, and the" \
     "services' own metrics."; then
-    instruct "Open Grafana, and look at the section titled 'Through the firewall': $GRAFANA_URL" \
+    instruct "Open Grafana, and look at the section titled 'Through the firewall': ${SCREENS_URL}#grafana" \
       "Grafana opens on the 'Prometheus Proxy Demo' dashboard, with no sign-in needed. The section shows the health" \
       "of every target, the outcome of every scrape, and each path's scrape latency and payload size."
     instruct "Look at the section titled 'Business metrics from behind the firewall'." \
@@ -683,8 +682,10 @@ cmd_tour() {
 
   if part 4 "Here you break two of the services, one at a time, and see that the proxy reports each failure" \
     "clearly while the other services keep answering."; then
-    step "Put the proxy dashboard's Paths view beside Grafana, then make the payments service answer every scrape" \
-      "with an error." \
+    instruct "Put the proxy dashboard's Paths view beside Grafana: ${SCREENS_URL}#proxy/paths+grafana" \
+      "The page's Split layout shows two screens side by side, each at its own narrow layout. Its two pane pickers" \
+      "change either one, and shift-clicking a tab puts its screen on the right."
+    step "Make the payments service answer every scrape with an error." \
       "agent-east scrapes the payments service, at /payments_metrics, so the failure shows on that path in the" \
       "dashboard's Paths view and in agent-east's recent scrapes in its Agents view." -- outage
     step "Once DemoTargetDown has fired, make the inventory service hang, so it never answers." -- slow
@@ -715,7 +716,7 @@ cmd_tour() {
     "register a path that belongs to another team."; then
     step "Start a contractor's agent, which tries to register /contractor_metrics and /payments_metrics." \
       -- rogue-agent
-    instruct "Search the proxy dashboard's Activity view for agent-rogue: $DASHBOARD_URL/activity?q=agent-rogue" \
+    instruct "Search the proxy dashboard's Activity view for agent-rogue: ${SCREENS_URL}#proxy/activity?q=agent-rogue" \
       "It lists agent-rogue connected, its /contractor_metrics registered, and its /payments_metrics rejected, with" \
       "the proxy's reason. The Agents and Paths views can't show a refusal, since the proxy added nothing."
   fi
@@ -724,7 +725,7 @@ cmd_tour() {
     "can't reach, shows on the agent's side, so each agent in this demo serves a dashboard of its own, on a port of" \
     "its own. Here you read agent-rogue's refusal on its own dashboard, then stop the proxy and watch agent-east" \
     "lose it and get it back."; then
-    instruct "Open agent-rogue's dashboard: $ROGUE_DASHBOARD_URL" \
+    instruct "Open agent-rogue's dashboard: ${SCREENS_URL}#agent-rogue" \
       "It opens on the Paths view, which lists every path the agent has, each with a light that's green while the" \
       "proxy routes the path's scrapes to this agent. /contractor_metrics is green. /payments_metrics is red, tagged" \
       "refused: the refusal the proxy's Activity view showed, seen from the agent's side."
@@ -737,11 +738,13 @@ cmd_tour() {
       "registering /contractor_metrics, and being refused /payments_metrics, with the same reason. Checking Problems" \
       "only leaves just the refusal."
     put_back "stop and remove the contractor's agent" rogue-agent-stop
-    instruct "Open agent-east's dashboard on its Connection view: $EAST_DASHBOARD_URL/connection" \
+    instruct "Open agent-east's dashboard on its Connection view: ${SCREENS_URL}#agent-east/connection" \
       "agent-east is connected to proxy:50051, its one proxy endpoint. Below that is its discovery file. The settings" \
-      "it resolved are on its Settings view: $EAST_DASHBOARD_URL/settings"
+      "it resolved are on its Settings view: ${SCREENS_URL}#agent-east/settings"
     step "Stop the proxy, as an outage or a bad deploy would. The proxy's dashboard goes with it, but agent-east's" \
-      "keeps answering, since it runs on the agent." -- proxy-down
+      "keeps answering, since it runs on the agent. The screens page stays open, since your browser already has it:" \
+      "its proxy tab turns red, and agent-east's keeps working. Don't reload the page until the proxy is back." \
+      -- proxy-down
     instruct "On agent-east's dashboard, open the Paths view, click /orders_metrics, then Scrape now." \
       "Scrape now is the circular arrow after the path's name in its details. The agent fetches the orders service" \
       "at once and shows the result: status 200, the metric families and samples, and the start of the body" \
@@ -759,10 +762,11 @@ cmd_tour() {
   if part 11 "The proxy's dashboard can ask for a login, with a password from the proxy's environment. Here you" \
     "turn it on, sign in and out, and turn it off again. It comes last because it restarts the proxy."; then
     step "Restart the proxy with a password for its dashboard." -- login
-    instruct "Reload the dashboard: $DASHBOARD_URL" \
-      "It shows the login page instead. Sign in as admin, with the password $LOGIN_PASSWORD, and it opens the page" \
-      "you asked for, with the agents reconnected. Log out, the exit icon at the right end of the top bar, ends your" \
-      "session and brings the login page back."
+    instruct "Look at the screens page's proxy tab." \
+      "It shows the login page in its frame, since the restarted proxy asks for one. Sign in there as admin, with the" \
+      "password $LOGIN_PASSWORD, and the dashboard comes back, with the agents reconnected: a login inside a frame" \
+      "works when the screen is on the same site as the page. Log out, the exit icon at the right end of the" \
+      "dashboard's top bar, ends your session and brings the login page back."
     put_back "restart the proxy without the password" login-off
   fi
 
@@ -944,7 +948,7 @@ main() {
     point "/payments_metrics keeps coming from agent-east, untouched. With one token shared by everyone, the newer" \
       "agent would have taken the path over."
     point "agent-rogue's own dashboard shows the refusal from its side: /payments_metrics tagged refused, and the" \
-      "proxy's reason once you select it, at $ROGUE_DASHBOARD_URL"
+      "proxy's reason once you select it, at ${SCREENS_URL}#agent-rogue"
     point "Grafana's 'Path rejections at the proxy, by cause' counts the refusal as not_authorized."
     follow_up "To remove it, run" "$0 rogue-agent-stop"
     proxy_said "denied registration of path /payments_metrics"
@@ -967,7 +971,7 @@ main() {
       "agent, so it keeps answering, and shows what the agent sees."
     watch_for
     point "Within a few seconds, agent-east's Connection view turns from connected to failing, and proxy:50051 shows" \
-      "the error the agent got trying it, at $EAST_DASHBOARD_URL/connection"
+      "the error the agent got trying it, on the screens page's agent-east tab, or at $EAST_DASHBOARD_URL/connection"
     point "Its Activity view lists disconnected, then connect failed, which carries the same error. The feed lists" \
       "the failure once, not each retry."
     point "On its Paths view, every path's light turns red, tagged pending: with no proxy, none is registered."
@@ -1001,11 +1005,11 @@ main() {
     point "The two settle. agent-east stays connected without paths and waits, rather than the two taking the paths" \
       "from each other every few seconds."
     point "The proxy told agent-east. Its own dashboard lists its six paths as retrying, each taken over by" \
-      "agent-east-copy, and its Activity view has the takeover, at $EAST_DASHBOARD_URL"
+      "agent-east-copy, and its Activity view has the takeover, at ${SCREENS_URL}#agent-east"
     point "The proxy's log line, printed below, names both agents by agentId and gives the fix: set" \
       "agent.consolidated = true on each, if both should serve the paths."
     point "The copy's own dashboard lists the six paths, each with a green light, since the proxy accepted every one," \
-      "at $COPY_DASHBOARD_URL"
+      "at ${SCREENS_URL}#agent-east-copy"
     follow_up "To undo it, run" "$0 duplicate-agent-stop"
     proxy_said "keeps its connection without paths"
     ;;

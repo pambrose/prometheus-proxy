@@ -38,7 +38,6 @@ import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
 import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
 import io.prometheus.common.dashboard.DashboardPage.VIEW_ATTR
 import io.prometheus.common.dashboard.DashboardPage.THEME_BUTTON_ID
-import io.prometheus.common.dashboard.DashboardPage.THEME_KEY
 
 /**
  * A dashboard page's one script, which each dashboard's renderer inlines. Apart from the renderers so each stays a size
@@ -353,38 +352,8 @@ internal class DashboardScript(
         var toggle = document.getElementById('$COLUMN_GUIDE_TOGGLE_ID');
         if (toggle) toggle.focus();
       }
-      // The theme: light, dark, or auto, which follows the system's, from the bar's button, and kept in this browser.
-      // The head applies a stored one before the page draws (DashboardPage.THEME_SCRIPT), so the theme in force is the
-      // page's own, whose icon the stylesheet draws on the button. This keeps the button's name and tooltip in step
-      // with it, naming the theme in force, auto's with the system's theme as that changes, and the next; and on a
-      // press moves to the next, in the order light, dark, auto, wrapping, applies it, stores it, and says it. Auto is
-      // stored as nothing.
-      var THEMES = ['light', 'dark', 'auto'];
-      var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
-      function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'auto'; }
-      function nextTheme(t) { return THEMES[(THEMES.indexOf(t) + 1) % THEMES.length]; }
-      function showTheme() {
-        var btn = document.getElementById('$THEME_BUTTON_ID');
-        if (!btn) return;
-        var current = currentTheme();
-        var label = 'Theme: ' + current;
-        if (current === 'auto') label += ', following your system, now ' + (systemDark.matches ? 'dark' : 'light');
-        label += '. Press for ' + nextTheme(current) + '.';
-        btn.setAttribute('aria-label', label);
-        btn.title = label;
-      }
-      function cycleTheme() {
-        var t = nextTheme(currentTheme());
-        if (t === 'auto') document.documentElement.removeAttribute('data-theme');
-        else document.documentElement.setAttribute('data-theme', t);
-        try {
-          if (t === 'auto') localStorage.removeItem('$THEME_KEY'); else localStorage.setItem('$THEME_KEY', t);
-        } catch (e) {}
-        showTheme();
-        say('Theme: ' + t + '.');
-      }
-      showTheme();
-      systemDark.addEventListener('change', showTheme);
+      // The theme button, which every page with the bar shares (see ThemeScript).
+      ${ThemeScript.indented("      ")}
       // One listener on <body> for every button in the table, the result panel, the column guide, and the theme button:
       // the push loop replaces the table every frame, and a back or forward the theme button, so a button's own
       // listener would last one frame.
