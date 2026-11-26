@@ -211,7 +211,8 @@ file, and a link the dashboard can't use stops the proxy at startup. See [Links]
 each in a tab: agents' dashboards, Prometheus, Grafana, or any page that allows framing. Each has a `name`, the tab's
 title, whose lowercase form is its id in links into the page; a `url`, an absolute `http` or `https` URL, which a value
 from the environment can set with `${?NAME}`; and optionally a `start`, the path it opens on, appended to `url`, such as
-`/alerts`. With none, `/screens` answers 404. It too must be set in a config file, and a list the page can't use stops
+`/alerts`. While it lists any, the dashboard port's root leads to the page; with none, it leads to the dashboard, and
+`/screens` answers 404. It too must be set in a config file, and a list the page can't use stops
 the proxy at startup, naming the screen. See [The Screens Page](../web-dashboard.md#screens).
 
 It runs on its own port rather than the admin port, partly because the admin port is a servlet container

@@ -172,6 +172,12 @@ internal interface DashboardSite<V : Any, S : Any> {
   val outsidePages: Set<String>
 
   /**
+   * Where the bare root sends a browser, unless the dashboard is mounted there: one of [outsidePages], such as the
+   * proxy's `/screens`, or null for the dashboard's base path.
+   */
+  val home: String?
+
+  /**
    * The site's pages and actions, under [DashboardServer.routeBase] but for [outsidePages]. Each action installs its
    * `pageGuard`.
    */
@@ -204,8 +210,9 @@ internal interface DashboardSite<V : Any, S : Any> {
  *   buffered for, and a page request or a browser message renders the recent snapshot rather than collecting one (see
  *   [SnapshotCache]). Setting `allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
  *   With `framingEnabled` false, no response may be framed by another page, and with a password set, none but the
- *   versioned assets may be kept in a browser's cache. A refused Origin or Host, which needs no login, is logged cut
- *   and escaped, at INFO at most once a minute for each address.
+ *   versioned assets may be kept in a browser's cache. The root's redirect to the site's [DashboardSite.home] and a
+ *   HEAD asking whether the dashboard is up need no login. A refused Origin or Host, which needs no login, is logged
+ *   cut and escaped, at INFO at most once a minute for each address.
  * - **Assets.** htmx and its WebSocket extension, and the site's brand marks, from the classpath, under URLs that carry
  *   their WebJar's version, so a year-long cache can never run an old script against new markup.
  * - **Updates.** One shared push loop, not one per session. It wakes on one of the site's [DashboardSite.changes] or a
@@ -389,16 +396,22 @@ internal class DashboardServer<V : Any, S : Any>(
       refuseWithoutLogin(call)
   }
 
-  // Whether [request] may proceed without a login: one for the login or logout route, a liveness check, or with a
-  // valid session.
+  // Whether [request] may proceed without a login: one for the login or logout route, a liveness check, the root's
+  // redirect, or with a valid session.
   private fun needsNoLogin(request: ApplicationRequest): Boolean {
     val path = request.path()
     if (path == loginPath || path == logoutPath)
       return true
-    if (isLivenessCheck(request))
+    if (isLivenessCheck(request) || isRootRedirect(request))
       return true
     return logins.isValid(request.cookies[sessionCookie])
   }
+
+  // A GET of the bare root while the dashboard isn't mounted there, which only redirects (see rootRedirect), so it
+  // needs no login: the page it leads to asks for one, and a login asked for here would return to the dashboard,
+  // never to the proxy's /screens, the root's home while screens are listed.
+  private fun isRootRedirect(request: ApplicationRequest) =
+    routeBase.isNotEmpty() && request.httpMethod == HttpMethod.Get && request.path() == "/"
 
   // A HEAD of the base path or of /session, which the proxy's screens page sends every few seconds to see whether a
   // dashboard answers. It says only that the dashboard is up, as the login page does to anyone, so it needs no login,
@@ -608,12 +621,13 @@ internal class DashboardServer<V : Any, S : Any>(
     }
 
   // The dashboard lives under basePath (default /dashboard), so the bare root would otherwise 404. Send it to the
-  // dashboard. Skipped when basePath is already "/" -- there the site's page route owns the root, and a second handler
-  // would be a duplicate. Temporary rather than permanent: basePath is configurable, so a cached 301 would be wrong if
-  // it ever changed.
+  // site's home, the proxy's /screens while it lists screens, else the dashboard. Skipped when basePath is already "/"
+  // -- there the site's page route owns the root, and a second handler would be a duplicate. Temporary rather than
+  // permanent: basePath and the screens are configurable, so a cached 301 would be wrong if either changed. It needs no
+  // login (see isRootRedirect).
   private fun Route.rootRedirect() {
     if (routeBase.isNotEmpty())
-      get("/") { call.respondRedirect(basePath, permanent = false) }
+      get("/") { call.respondRedirect(site.home ?: basePath, permanent = false) }
   }
 
   // A year for what ASSET_DIR and ICON_DIR serve (see CachingHeaders above). With a login set, no-store for every other

@@ -86,6 +86,8 @@ class DashboardResponsesTest : StringSpec() {
 
     override val outsidePages = setOf(OUTSIDE)
 
+    override val home = OUTSIDE
+
     override suspend fun collect() = 0
 
     override fun Route.pages(server: DashboardServer<String, Int>) {
@@ -407,6 +409,30 @@ class DashboardResponsesTest : StringSpec() {
       withServer(TestPorts.DASHBOARD_RESPONSES_COOKIE_ROOT_PORT, login = true, path = "/") {
         signIn(next = "/").sessionCookies().map { it.attributes()[1] } shouldBe listOf("Path=/")
         post("/logout").sessionCookies().map { it.attributes()[1] } shouldBe listOf("Path=/")
+      }
+    }
+
+    // ==================== The root ====================
+
+    // The root sends a browser to the site's home, as the proxy's /screens while screens are listed. A redirect shows
+    // nothing, so it needs no login; the page it sends the browser to asks for one. Through the login, the root came
+    // back to the dashboard, never to the screens page.
+    "the root should send a browser to the site's home, before any login" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_ROOT_PORT, login = true) {
+        get("/") { header(HttpHeaders.Accept, "text/html") }.apply {
+          status shouldBe HttpStatusCode.Found
+          headers[HttpHeaders.Location] shouldBe OUTSIDE
+        }
+      }
+    }
+
+    // At a root mount the root is the dashboard's page, not a redirect, so it still needs the login.
+    "at a root mount, the root should be the dashboard's page, behind the login" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_ROOT_MOUNT_PORT, login = true, path = "/") {
+        get("/") { header(HttpHeaders.Accept, "text/html") }.apply {
+          status shouldBe HttpStatusCode.SeeOther
+          headers[HttpHeaders.Location] shouldBe "/login?next=%2F"
+        }
       }
     }
 

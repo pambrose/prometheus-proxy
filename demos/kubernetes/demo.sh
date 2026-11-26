@@ -150,10 +150,9 @@ print_urls() {
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo "  kubectl:          kubectl --context kind-$MONITORING ...   kubectl --context kind-$TARGET ..."
   echo
-  wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   echo
-  echo "Scenarios: $0 clusters | add-service | delete-agent-pod | change-config ...  (no arguments for help)"
-  echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
+  echo "Start the demo with: $MAKE_NAME tour, or $0 tour"
 }
 
 # Whether version $1 (x.y.z) is at least $2. bash 3.2, macOS's, has no sort -V everywhere, so field by field.
@@ -853,7 +852,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. To start from another part, run" \
     "$MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

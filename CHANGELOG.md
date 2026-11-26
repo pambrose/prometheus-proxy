@@ -39,7 +39,8 @@ All notable changes to this project are documented in this file.
   `/screens` on the dashboard's port: a tab per screen after the proxy's own dashboard, each with a dot that's green
   while the screen answers, in One, Split, or All layouts, with links into it (`#<id>`, `#<id>/<path>`, `#<a>+<b>`,
   `#all`), a link opened while the page is open handed to that page, and an Open in a tab on each pane. The
-  dashboard's bar links to it, its Settings view lists the screens, a login from a link into it returns there, with the
+  dashboard's bar links to it, and the port's root leads to it, before any login, where it led to the dashboard; its
+  Settings view lists the screens, a login from a link into it returns there, with the
   session cookie set at `/screens` as well as the dashboard's path, and startup refuses a list the page can't use,
   naming the screen
 

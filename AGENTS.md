@@ -268,12 +268,13 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   the runtime classpath and out of the POM and the fat JARs; a new icon needs its slug in `configureDashboardIcons` too.
   The proxy's screens page, `/screens` (`ProxyDashboardService.SCREENS_PATH`), served while `proxy.dashboard.screens`
   (checked at startup by `Screen.parseAll`) lists any, is a page of its own outside the base path, which a login may
-  return to (`DashboardSite.outsidePages`): `ScreensHtml`, `ScreensCss`, and `ScreensScript`, which shares the theme
-  button's script (`ThemeScript`) with the dashboards. Its script shows, hides, and sizes frames, and never moves one in
-  the page, which would reload it. With screens listed, `framingEnabled = false` is `Framing.SAME_ORIGIN`
-  (`frame-ancestors 'self'`), so the page can frame its own dashboard, and the session cookie goes at each outside page
-  as well as the base path (`DashboardServer.cookiePaths`), never at `/` but for a root mount, which would send the
-  token to every app on the host and leave a rollback to 4.7.0 reading a dead root cookie.
+  return to (`DashboardSite.outsidePages`) and to which the port's root redirects, before any login
+  (`DashboardSite.home`, `DashboardServer.isRootRedirect`): `ScreensHtml`, `ScreensCss`, and `ScreensScript`, which
+  shares the theme button's script (`ThemeScript`) with the dashboards. Its script shows, hides, and sizes frames, and
+  never moves one in the page, which would reload it. With screens listed, `framingEnabled = false` is
+  `Framing.SAME_ORIGIN` (`frame-ancestors 'self'`), so the page can frame its own dashboard, and the session cookie goes
+  at each outside page as well as the base path (`DashboardServer.cookiePaths`), never at `/` but for a root mount,
+  which would send the token to every app on the host and leave a rollback to 4.7.0 reading a dead root cookie.
 
 Two load-bearing constraint sets live in `.claude/rules/` (Claude Code loads them when you touch the matching files; other agents should read them first): `dashboard-constraints.md` (dashboard live-region, contrast, and agent-label invariants) and `shadow-jar.md` (fat-JAR service-file merging).
 

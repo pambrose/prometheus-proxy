@@ -70,7 +70,7 @@ make down    # stops it and removes its containers, network, and volume
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, and Python images, which takes a few minutes. After
 that it starts in under a minute, and runs without a network connection.
 
-Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8094/screens>, one browser tab that
+Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8094/>, one browser tab that
 holds every screen in the demo, each in a tab of its own: the proxy's dashboard, each agent's, Prometheus, and Grafana.
 `make open` opens it. A link can name what the page shows, as the tour's links do:
 <http://localhost:8094/screens#proxy/paths?problems=1+grafana> puts the proxy's Paths view, filtered to problems,
@@ -80,7 +80,7 @@ Each screen also has an address of its own, which the table gives with the varia
 
 | What | URL | Port variable |
 |---|---|---|
-| The screens page, every screen in one tab | <http://localhost:8094/screens> | `DEMO_DASHBOARD_PORT` |
+| The screens page, every screen in one tab | <http://localhost:8094/> | `DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8094/dashboard> | `DEMO_DASHBOARD_PORT` |
 | agent-east's dashboard | <http://localhost:8095/dashboard> | `DEMO_AGENT_EAST_DASHBOARD_PORT` |
 | agent-west-1's dashboard | <http://localhost:8096/dashboard> | `DEMO_AGENT_WEST_1_DASHBOARD_PORT` |

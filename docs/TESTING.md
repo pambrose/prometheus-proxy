@@ -858,7 +858,8 @@ Two support helpers also live here (not test classes themselves):
   expired at both on sign-out, and only at the root at a root mount; a page outside the base path
   sending a browser to the login page and a login returning to it, and to nothing else outside the base; a HEAD of
   the base path or `/session` answering 204 before any login, while any other HEAD, and a GET of `/session`, still
-  need one; and with
+  need one; the root sending a browser to the site's home before any login, and at a root mount, where the root is the
+  dashboard's page, to the login page; and with
   framing enabled, the default, no response with either header,
   a login's `no-store` and a brand mark's `sandbox` policy kept
 - **DashboardServiceTest** (`dashboard/`) — a dashboard's service lifecycle over a mocked `DashboardServer`: a
@@ -1255,7 +1256,8 @@ mechanism that the standard suite cannot reach:
   and each login counted in `proxy_dashboard_logins_total` by outcome, a script's right Basic Auth not counted as a
   sign-in
 - **ProxyScreensTest** — the proxy's screens page on a real proxy (`config/test-configs/web-ui-screens.conf`, two
-  screens): with none listed, `/screens` a 404 and no link to it on the dashboard; with screens, a page of its own with
+  screens): with none listed, `/screens` a 404, the root a 302 to the dashboard, and no link to it on the dashboard;
+  with screens listed and a login, the root a 302 to `/screens` before any login; with screens, a page of its own with
   the proxy's tab first and no socket, and the dashboard's bar linking to it; behind the login, a 303 to the login page
   with `/screens` as `next`, and signing in returning there with the session cookie at `/dashboard` and `/screens`;
   and with

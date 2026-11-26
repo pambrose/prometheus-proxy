@@ -79,6 +79,8 @@ DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
 # The proxy's screens page, which holds every screen above and below in one browser tab (proxy.conf's screens). The
 # tour links into it: ${SCREENS_URL}#<screen>, #<screen>/<view>, or #<screen>+<screen> for two side by side.
 SCREENS_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/screens"
+# The dashboard port's root, which leads to the screens page: the short address make up prints.
+SCREENS_HOME_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 PROXY_URL="http://localhost:${DEMO_PROXY_PORT:-8080}"
@@ -171,13 +173,12 @@ EOF
 print_urls() {
   echo
   bold "Prometheus Proxy basics demo"
-  echo "  All screens:      $SCREENS_URL"
+  echo "  All screens:      $SCREENS_HOME_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
-  wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   echo
-  echo "Scenarios: $0 outage | slow | discover | agent-freeze | rogue-agent ...  (no arguments for help)"
-  echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
+  echo "Start the demo with: $MAKE_NAME tour, or $0 tour"
 }
 
 # POSTs to (or, with GET, reads) the simulated services' control API, from inside the demo-app container, so the API
@@ -458,7 +459,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
     "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 
