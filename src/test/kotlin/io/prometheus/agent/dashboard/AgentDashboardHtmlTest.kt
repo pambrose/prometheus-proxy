@@ -447,14 +447,24 @@ class AgentDashboardHtmlTest : StringSpec() {
         this shouldContain """<div class="section"><span>Scraping</span></div>"""
         this shouldContain """<span class="k">Scrape timeout</span><span class="v">15s</span>"""
         this shouldContain "&lt;JDK default&gt;"
-        this shouldContain """href="/dashboard/settings" class="on" aria-current="page">Settings</a>"""
+        this shouldContain """href="/dashboard/settings" class="tab-settings on" aria-current="page">Settings</a>"""
       }
       page(snapshot(), layout = AgentLayout.CONNECTION).apply {
         this shouldNotContain "Scrape timeout"
         this shouldNotContain """<span>Settings</span>"""
-        this shouldContain """<a href="/dashboard/settings">Settings</a>"""
+        this shouldContain """<a href="/dashboard/settings" class="tab-settings">Settings</a>"""
       }
       page(snapshot().copy(settings = emptyList()), layout = AgentLayout.SETTINGS) shouldContain "No settings to show"
+    }
+
+    // Each tab's icon comes from its class, so its name is its title alone, and each view's is its own.
+    "every tab should carry its view's icon, a different one for each view" {
+      val page = page(snapshot(), layout = AgentLayout.CONNECTION)
+      AgentLayout.entries.map { it.icon }.toSet().size shouldBe AgentLayout.entries.size
+      AgentLayout.entries.forEach { view ->
+        page shouldContain Regex("""<a href="[^"]*" class="${view.icon.cssClass}( on)?"[^>]*>${view.title}</a>""")
+      }
+      page shouldContain """class="tab-connection on" aria-current="page">Connection</a>"""
     }
 
     // Sent once to a page, which then keeps them selectable; the frames after carry the status bar alone.
@@ -500,13 +510,13 @@ class AgentDashboardHtmlTest : StringSpec() {
         """<link href="${DashboardLogo.SMALL_LOGO_URL}" rel="icon" type="image/svg+xml">"""
     }
 
-    "the agent's page should apply a stored theme in its head, with the theme picker in its bar and in no push" {
+    "the agent's page should apply a stored theme in its head, with the theme button in its bar and in no push" {
       page(snapshot()).apply {
         substringBefore("</head>") shouldContain DashboardPage.THEME_SCRIPT
-        this shouldContain """<div class="theme" id="${DashboardPage.THEME_PICKER_ID}" role="group""""
+        this shouldContain """<button type="button" class="theme" id="${DashboardPage.THEME_BUTTON_ID}""""
       }
       AgentDashboardHtml.pushFragment(snapshot(), AgentView(), "/dashboard") shouldNotContain
-        DashboardPage.THEME_PICKER_ID
+        DashboardPage.THEME_BUTTON_ID
     }
 
     "a path row should select it by its URL, encoded, and the page's script should know the agent's views" {

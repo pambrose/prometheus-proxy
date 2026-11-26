@@ -42,11 +42,19 @@ All notable changes to this project are documented in this file.
   `framingEnabled = false` restores the refusal
 - `startIfConfigured(onFailure)` guards its `onFailure` as it does the builder's handlers: one that throws is logged,
   and the start still returns null, where it threw out of the call
+- The dashboards' theme picker is one button in place of three, to take less of the top bar: it shows the theme in
+  force, light, dark, or auto, and each click moves to the next, in that order; its tooltip names the theme in force
+  and the next
+- The dashboards' tabs are underlined, as a code host's are, in place of outlined folder tabs: each is a borderless
+  link with an icon before its name, a rounded ground on hover, and the current one bold over the accent line along
+  the bar's rule
 
 ### Build & Tooling
 
 - `make release` ends by printing the GitHub release's link and the one step left, the Homebrew tap, where it asked
   the releaser to do steps it had already done
+- The build compiles without warnings: the embedded agent's thread, a deprecated Prometheus client getter in a test,
+  and the Spring Boot starter's tests, which lacked the Jackson annotations on Spring's `Health`
 
 ### Documentation
 

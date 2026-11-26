@@ -32,6 +32,7 @@ import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardView
+import io.prometheus.common.dashboard.TabIcon
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import io.prometheus.proxy.ScrapeRecord
@@ -72,17 +73,19 @@ import io.prometheus.common.dashboard.SettingsHtml.settingsInner
  *
  * @param segment the layout's route below the dashboard's base, which the agent layout is served at itself
  * @param title the layout's name in the nav
+ * @param icon the layout's icon in the nav, before its name
  * @param searchFields what the search above the layout's table matches, for its placeholder; the agent layout has none
  */
 internal enum class DashboardLayout(
   override val segment: String,
   override val title: String,
+  override val icon: TabIcon,
   override val searchFields: String = "",
 ) : DashboardView {
-  AGENT("", "Agents"),
-  PATH("paths", "Paths", "path, agent, target, or identity"),
-  ACTIVITY("activity", "Activity", "event, agent, identity, path, or detail"),
-  SETTINGS("settings", "Settings"),
+  AGENT("", "Agents", TabIcon.AGENTS),
+  PATH("paths", "Paths", TabIcon.PATHS, "path, agent, target, or identity"),
+  ACTIVITY("activity", "Activity", TabIcon.ACTIVITY, "event, agent, identity, path, or detail"),
+  SETTINGS("settings", "Settings", TabIcon.SETTINGS),
 }
 
 /**

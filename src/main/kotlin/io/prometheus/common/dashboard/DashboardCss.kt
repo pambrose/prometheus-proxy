@@ -24,7 +24,7 @@ package io.prometheus.common.dashboard
  * Apart from the markup because it answers to a different contract.
  */
 internal object DashboardCss {
-  // The page's theme, as the bar's picker sets it on <html> (DashboardPage.themePicker): absent for auto, which follows
+  // The page's theme, as the bar's button sets it on <html> (DashboardPage.themeButton): absent for auto, which follows
   // the system's, or light or dark.
   private const val AUTO_DARK = """:root:not([data-theme="light"])"""
   private const val SET_DARK = """:root[data-theme="dark"]"""
@@ -83,54 +83,43 @@ internal object DashboardCss {
     body { background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12.5px; line-height:1.5;
            display:flex; flex-direction:column; min-height:100vh; }
     body > main { flex:1; }
-    /* The tabs stand on the bar's bottom rule, so the bar has no bottom padding and sets its items on its floor; the
-       brand and the status carry their own, which puts their text on the tabs' line. One row above 720px: the status
-       wraps inside itself, so it never pushes the tabs off the rule. */
+    /* The current tab's line lies on the bar's bottom rule, so the bar has no bottom padding and sets its items on its
+       floor; the brand and the status carry their own, which puts their text on the tabs' line. One row above 720px:
+       the status wraps inside itself, so it never pushes the tabs off the rule. */
     .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
            background:var(--surface); }
     /* The logo's small-size cut beside the name, centered on its line, which the mark is shorter than, so the bar's
        height and the name's place on the tabs' line are as they were without it. */
-    .brand { display:flex; align-items:center; gap:7px; font-weight:600; flex:none; padding-bottom:6px; }
+    .brand { display:flex; align-items:center; gap:7px; font-weight:600; flex:none; padding-bottom:10px; }
     .brand img { flex:none; }
     /* The dashboard's name, cut with an ellipsis past DashboardLogo.BRAND_MAX_CHARS characters of its monospaced type,
        which a ch measures. */
     .brand-name { max-width:${DashboardLogo.BRAND_MAX_CHARS}ch; overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; }
-    /* The bar's end: the theme picker and Log out, quieter than the tabs, in one box that stretches each to the
-       taller's height, so Log out is as tall as the picker however tall a coarse pointer makes it. */
-    .bar-end { display:flex; align-items:stretch; gap:10px; flex:none; margin-bottom:5px; }
-    /* Log out: an exit icon, a door with an arrow leaving it, in the picker's quiet border, as wide as one of its
-       buttons and, through the bar's end, as tall as the picker; its glyph a CSS mask in currentColor as theirs are. */
+    /* The bar's end: the theme button and Log out, quieter than the tabs, in one box that stretches each to the
+       taller's height, so Log out is as tall as the theme button however tall a coarse pointer makes it. */
+    .bar-end { display:flex; align-items:stretch; gap:10px; flex:none; margin-bottom:6px; }
+    /* The bar's end's two icon buttons, the theme button and Log out, each in a quiet border, 30px wide, its glyph a
+       CSS mask in currentColor as the table's icon buttons' are. The theme button is 26px tall, a 24px target, the
+       minimum size, inside its border, and Log out takes its height through the bar's end. */
     .logout { display:flex; }
-    .logout button { display:inline-flex; align-items:center; justify-content:center; width:30px; padding:0;
-      color:var(--ink-2); background:none; border:1px solid var(--line); border-radius:3px; cursor:pointer;
+    .theme, .logout button { display:inline-flex; align-items:center; justify-content:center; width:30px; padding:0;
+      color:var(--ink-2); background:none; border:1px solid var(--line); border-radius:3px; cursor:pointer; }
+    .theme:hover, .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
+    .theme:focus-visible, .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    /* Log out: an exit icon, a door with an arrow leaving it. */
+    .logout button {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6.5 2.75H3.75a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1H6.5'/><path d='M10.25 5l3 3-3 3M13.25 8H6.75'/></svg>"); }
-    .theme button:hover, .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
-    .theme button:focus-visible, .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-    /* The theme picker: light, dark, and auto, a row of icon buttons in Log out's quiet border, each a 24px target, the
-       minimum size, its glyph a CSS mask in currentColor as the table's icon buttons' are. The theme in force is marked
-       as the current tab is, by a 2px accent line along its bottom, on the tonal step with its glyph in --ink; and from
-       <html data-theme>, which the head sets before the page draws, so the mark is right before the script runs. */
-    .theme { display:flex; border:1px solid var(--line); border-radius:3px; }
-    .theme button { display:inline-flex; align-items:center; justify-content:center; width:28px; height:24px;
-      padding:0; border:0; border-top:2px solid transparent; border-bottom:2px solid transparent; background:none;
-      color:var(--ink-2); cursor:pointer; }
-    .theme button + button { border-left:1px solid var(--line-soft); }
-    :root:not([data-theme]) .theme-auto, :root[data-theme="light"] .theme-light,
-    :root[data-theme="dark"] .theme-dark { color:var(--ink); background-color:var(--surface-2);
-      border-bottom-color:var(--accent); }
-    .theme-light { --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'><circle cx='8' cy='8' r='2.75'/><path d='M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06'/></svg>"); }
-    .theme-dark { --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><path d='M13.5 9.75A5.75 5.75 0 1 1 6.25 2.5a4.75 4.75 0 0 0 7.25 7.25z'/></svg>"); }
-    .theme-auto { --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5'><circle cx='8' cy='8' r='5.75'/><path d='M8 2.25a5.75 5.75 0 0 0 0 11.5z' fill='black'/></svg>"); }
-    /* Forced colours replace every background, the masks' paint included, and every border colour. The picker keeps
-       its own paint, in system colours, through the tokens it reads: the glyphs in ButtonText, and the theme in
-       force's line, and the focus ring, in Highlight, as the current tab's are. */
-    @media (forced-colors: active) {
-      .theme { --ink:ButtonText; --surface-2:ButtonFace; --line-soft:ButtonText; --accent:Highlight; }
-      .theme button { forced-color-adjust:none; color:ButtonText; background-color:ButtonFace; }
-    }
+    /* The theme button: the theme in force's icon, light's sun, dark's moon, or auto's half-filled circle, from
+       <html data-theme>, which the head sets before the page draws, so the icon is right before the script runs. */
+    .theme { height:26px;
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5'><circle cx='8' cy='8' r='5.75'/><path d='M8 2.25a5.75 5.75 0 0 0 0 11.5z' fill='black'/></svg>"); }
+    :root[data-theme="light"] .theme {
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'><circle cx='8' cy='8' r='2.75'/><path d='M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06'/></svg>"); }
+    :root[data-theme="dark"] .theme {
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><path d='M13.5 9.75A5.75 5.75 0 1 1 6.25 2.5a4.75 4.75 0 0 0 7.25 7.25z'/></svg>"); }
     .bar-right { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:2px 14px;
-      margin-left:auto; min-width:0; padding-bottom:6px; color:var(--ink-3); font-size:11.5px; }
+      margin-left:auto; min-width:0; padding-bottom:10px; color:var(--ink-3); font-size:11.5px; }
     /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
        splitting "0 agents" across two lines. */
     .bar-right > span { white-space:nowrap; }
@@ -159,7 +148,7 @@ internal object DashboardCss {
       border:0; border-bottom:1px solid var(--line-soft); border-left:2px solid transparent;
       padding:10px 15px 10px 16px; color:var(--ink); }
     .md-row:hover { background:var(--surface-3); }
-    /* Inside the row, and inside a tab, which meets the strip below it. */
+    /* Inside the row, which meets the rows around it, and inside a tab, around the ground its hover lays. */
     .md-row:focus-visible, .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
     .md-row[aria-current="true"] { background:var(--surface); border-left-color:var(--accent); }
     /* 11.5px, matching .bar-right and .hero-meta: this is the same job -- quiet supporting metadata --
@@ -187,26 +176,32 @@ internal object DashboardCss {
     .empty { color:var(--ink-3); padding:14px 15px; }
     .empty.pad { padding:22px 18px; }
     .empty.gone { color:var(--crit); }
-    /* Folder tabs, their top corners rounded as a folder tab's are. The nav reaches 1px below the bar into its rule,
-       so a tab's bottom edge lies on the rule: every tab is outlined in the rule's colour across its top and down its
-       sides, and a tab at rest leaves the rule showing through its transparent bottom, so the outline and the rule
-       read as one line. The current tab's bottom is a 2px accent line that covers the rule beneath it, the tab's edge
-       as the selected row's left border is the row's; its bottom padding gives up the extra pixel, so it stands as
-       tall as the others. */
-    .nav { display:flex; align-items:flex-end; gap:2px; flex:none; margin:0 0 -1px 18px; }
-    .nav a { color:var(--ink-3); text-decoration:none; padding:7px 14px 6px; border:1px solid var(--line);
-      border-bottom-color:transparent; border-radius:6px 6px 0 0; background-clip:padding-box; }
-    .nav a:hover { background-color:var(--surface-2); color:var(--ink); }
-    .nav a.on { background-color:var(--surface-2); color:var(--ink); font-weight:600;
-      border-bottom:2px solid var(--accent); padding-bottom:5px; }
+    /* The tabs, a borderless link per view, its icon before its name, as a code host's are. The nav reaches 1px below
+       the bar into its rule, and each tab stands 7px above the nav's floor, so its name sits on the brand's and the
+       status's line, and the current tab's 2px accent line, along the floor, covers the rule beneath it: the tab's
+       edge, as the selected row's left border is the row's. A tab is 26px tall, the bar's end's height, and hover lays
+       the surface-3 ground under it, its corners rounded 6px, so the ground is a handle, not a container. Its icon
+       is ink-3, a step quieter than its name, which is ink-2 at rest and ink when hovered or current, at weight 600
+       when current. */
+    .nav { display:flex; align-items:flex-end; gap:6px; flex:none; margin:0 0 -1px 18px; }
+    .nav a { position:relative; display:inline-flex; align-items:center; gap:7px; height:26px; margin-bottom:7px;
+      padding:0 8px; color:var(--ink-2); text-decoration:none; border-radius:6px; }
+    .nav a::before { content:""; flex:none; width:14px; height:14px; background:var(--ink-3);
+      -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
+    .nav a:hover { background-color:var(--surface-3); color:var(--ink); }
+    .nav a:hover::before { background:var(--ink-2); }
+    .nav a.on { color:var(--ink); font-weight:600; }
+    .nav a.on::after { content:""; position:absolute; left:0; right:0; bottom:-7px; height:2px;
+      background:var(--accent); }
     /* The tabs keep their own paint in forced colours, in system colours, so the current one is told apart by more
-       than its weight: every tab outlined in CanvasText as the rule is, a link at rest, and the current tab's bottom
-       line in Highlight. */
+       than its weight: a link at rest, its icon too, and the current tab in CanvasText over a Highlight line. */
     @media (forced-colors: active) {
-      .nav a { forced-color-adjust:none; color:LinkText; background-color:Canvas; border-color:CanvasText;
-        border-bottom-color:transparent; }
+      .nav a { forced-color-adjust:none; color:LinkText; background-color:Canvas; }
+      .nav a::before, .nav a:hover::before { background:LinkText; }
       .nav a:hover { background-color:Canvas; text-decoration:underline; }
-      .nav a.on { color:CanvasText; background-color:Canvas; border-bottom-color:Highlight; }
+      .nav a.on { color:CanvasText; }
+      .nav a.on::before { background:CanvasText; }
+      .nav a.on::after { background:Highlight; }
       .nav a:focus-visible { outline-color:Highlight; }
     }
     /* The focus ring of every control but a list row and a tab, whose rings are inset (above). */
@@ -268,7 +263,7 @@ internal object DashboardCss {
     .scrape-now {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M13 8a5 5 0 1 1-1.46-3.54'/><path d='M12.5 2.25v2.5H10'/></svg>"); }
     .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .logout button::before,
-      .theme button::before { content:"";
+      .theme::before { content:"";
       width:13px; height:13px; background:currentColor; -webkit-mask:var(--icon) center/contain no-repeat;
       mask:var(--icon) center/contain no-repeat; }
     .copy:hover, .scrape-now:hover, .close:hover { background:var(--surface-3); color:var(--ink); }
@@ -281,7 +276,7 @@ internal object DashboardCss {
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) {
       .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .logout button::before,
-      .theme button::before {
+      .theme::before {
         forced-color-adjust:none; background:ButtonText; } }
     /* A scrape-now's result, above the Paths view's table or list: a heading line, then the start of the body. The
        body is the one block of a target's own text on the page, in a bounded box that scrolls rather than pushing the
@@ -336,22 +331,27 @@ internal object DashboardCss {
     /* Forced colours drop backgrounds, the dots included. */
     @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
     /* Narrow, the tabs take a row of their own, the bar's last, so they still stand on its rule; the brand and the
-       status share the rows above. */
+       status share the rows above, off the tabs' line, so they keep only the room their own rows need. */
     @media (max-width:720px) {
       .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); }
       .bar { flex-wrap:wrap; row-gap:4px; }
+      .brand, .bar-right { padding-bottom:6px; }
       .nav { order:1; flex-basis:100%; margin-left:0; }
     }
     /* Touch, not width: a 34px tab is a comfortable mouse target and a poor thumb one, and the two do
        not correlate with viewport size -- a tablet is wide and touch-driven. The dense bar is kept for
        pointer devices rather than spending vertical space everyone pays for. */
     @media (pointer: coarse) {
-      .nav a, .nav a.on { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
-      .theme button { width:44px; height:44px; }
+      .nav a { height:44px; }
+      .theme { width:46px; height:46px; }
       .logout button { width:46px; }
     }
     """.trimIndent()
 
-  /** The tokens and the rules. */
-  val CSS = TOKENS + "\n" + RULES
+  // Each tab's icon (TabIcon), which its class gives it. Declared before CSS, as RULES is.
+  private val TAB_ICONS =
+    TabIcon.entries.joinToString("\n") { """.nav a.${it.cssClass} { --icon:url("data:image/svg+xml,${it.svg}"); }""" }
+
+  /** The tokens, the rules, and the tabs' icons. */
+  val CSS = TOKENS + "\n" + RULES + "\n" + TAB_ICONS
 }

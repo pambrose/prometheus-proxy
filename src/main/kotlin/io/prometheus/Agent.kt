@@ -887,7 +887,7 @@ class Agent(
   // up until the agent stops.
   override fun executor(): Executor =
     if (isEmbedded)
-      Executor { command -> thread(isDaemon = true, name = serviceName(), block = command::run) }
+      Executor { command -> val _ = thread(isDaemon = true, name = serviceName(), block = command::run) }
     else
       super.executor()
 

@@ -54,6 +54,8 @@ dependencies {
   oldestSpringBootTestPlatform(enforcedPlatform(libs.spring.boot.oldest))
   testImplementation("org.springframework.boot:spring-boot-starter-test")
   testImplementation("org.springframework.boot:spring-boot-starter-actuator")
+  // The same annotations on Health, which the tests read too, and compileOnly doesn't reach their compile
+  testCompileOnly("com.fasterxml.jackson.core:jackson-annotations")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

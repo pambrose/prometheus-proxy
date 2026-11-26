@@ -52,14 +52,61 @@ import kotlinx.html.dd
 
 /**
  * One of a dashboard's views, as its tabs, its routes, and its page's script know it: an enum entry's [name], the route
- * [segment] below the dashboard's base, empty for the view served at the base itself, the [title] its tab shows, and,
- * for a view with a filtered table, the [searchFields] its search says it matches, empty for one without.
+ * [segment] below the dashboard's base, empty for the view served at the base itself, the [title] its tab shows, the
+ * [icon] before the title, and, for a view with a filtered table, the [searchFields] its search says it matches, empty
+ * for one without.
  */
 internal interface DashboardView {
   val name: String
   val segment: String
   val title: String
+  val icon: TabIcon
   val searchFields: String
+}
+
+// What every tab icon's SVG shares: a 16-unit box, drawn in strokes, black, as a mask takes only its shape.
+private const val TAB_SVG =
+  "xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' " +
+    "stroke-linecap='round' stroke-linejoin='round'"
+
+/**
+ * A tab's icon, before its title: an [svg] the stylesheet paints as a CSS mask, as the table's icon buttons are
+ * painted, through the tab's [cssClass] (`DashboardCss.TAB_ICONS`), so the nav's markup carries only the class.
+ */
+internal enum class TabIcon(
+  val svg: String,
+) {
+  // Two stacked servers, each with its light.
+  AGENTS(
+    "<svg $TAB_SVG><rect x='2.25' y='2.25' width='11.5' height='4.75' rx='1'/>" +
+      "<rect x='2.25' y='9' width='11.5' height='4.75' rx='1'/><path d='M5 4.625h.01M5 11.375h.01'/></svg>",
+  ),
+
+  // A route from one point to another.
+  PATHS(
+    "<svg $TAB_SVG><circle cx='4' cy='12' r='1.75'/><circle cx='12' cy='4' r='1.75'/>" +
+      "<path d='M5.75 12H10a2 2 0 0 0 0-4H6a2 2 0 0 1 0-4h4.25'/></svg>",
+  ),
+
+  // A pulse.
+  ACTIVITY("<svg $TAB_SVG><path d='M1.75 8h2.5l2-4.5 3.5 9 2-4.5h2.5'/></svg>"),
+
+  // A gear.
+  SETTINGS(
+    "<svg $TAB_SVG><circle cx='8' cy='8' r='2'/><path d='M6.9 1.75h2.2l.35 1.8 1.3.75 1.75-.6 1.1 1.9-1.4 1.2v1.5" +
+      "l1.4 1.2-1.1 1.9-1.75-.6-1.3.75-.35 1.8H6.9l-.35-1.8-1.3-.75-1.75.6-1.1-1.9 1.4-1.2V7.25l-1.4-1.2 1.1-1.9 " +
+      "1.75.6 1.3-.75z'/></svg>",
+  ),
+
+  // A plug.
+  CONNECTION(
+    "<svg $TAB_SVG><path d='M6 1.75v3M10 1.75v3M4.25 4.75h7.5v2.5a3.75 3.75 0 0 1-7.5 0zM8 11v3.25'/></svg>",
+  ),
+  ;
+
+  /** The class that gives a tab this icon. */
+  val cssClass: String
+    get() = "tab-${name.lowercase()}"
 }
 
 /**
@@ -116,14 +163,15 @@ internal object DashboardPage {
   const val LOGOUT_ID = "logout"
   const val LOGOUT_LABEL = "Log out"
 
-  // The theme picker, in the bar, whose buttons each name their theme in THEME_CHOICE_ATTR; and where the theme it sets
-  // is kept: this browser's localStorage, which is the dashboard's own, since a dashboard's origin includes its port.
-  const val THEME_PICKER_ID = "theme-picker"
-  const val THEME_CHOICE_ATTR = "data-theme-choice"
+  // The theme button, in the bar, and its name before the page's script names the theme in force; and where the theme
+  // it sets is kept: this browser's localStorage, which is the dashboard's own, since a dashboard's origin includes its
+  // port.
+  const val THEME_BUTTON_ID = "theme-button"
+  const val THEME_LABEL = "Theme"
   const val THEME_KEY = "prometheus-dashboard-theme"
 
   /**
-   * Applies the theme the bar's picker left in this browser, light or dark, to `<html>` as its `data-theme`, which the
+   * Applies the theme the bar's button left in this browser, light or dark, to `<html>` as its `data-theme`, which the
    * stylesheet's dark rules read (see DashboardCss.darkRule); none, the default, is auto, which follows the system's.
    * In the head, before the page draws, so a page set to light never flashes dark first. Anything else stored, or no
    * storage at all, leaves auto.
@@ -188,7 +236,8 @@ internal object DashboardPage {
    * re-announces the new view as soon as it opens.
    *
    * Links in a `<nav>` with `aria-current`, not ARIA tabs: each opens a page of its own, which `role="tab"` would
-   * misstate. The page's script adds the arrow keys (see DashboardScript).
+   * misstate. The page's script adds the arrow keys (see DashboardScript). Each link's class gives it its view's icon,
+   * which the stylesheet draws before its title, so its name is its title alone.
    */
   fun FlowContent.tabs(
     views: List<DashboardView>,
@@ -199,7 +248,7 @@ internal object DashboardPage {
       attributes["id"] = NAV_ID
       views.forEach { view ->
         val on = view == current
-        a(href = view.href(routeBase), classes = if (on) "on" else null) {
+        a(href = view.href(routeBase), classes = if (on) "${view.icon.cssClass} on" else view.icon.cssClass) {
           if (on) attributes["aria-current"] = "page"
           +view.title
         }
@@ -237,30 +286,24 @@ internal object DashboardPage {
   }
 
   /**
-   * The theme picker, at the bar's end, after the status and outside it, which a push replaces: a button for light, one
-   * for dark, and one for auto, which follows the system's, in the order the system's appearance settings list them.
-   * Each is an icon, named for its theme. Which is pressed, and the tooltips, are the page's script's, which reads the
-   * theme the head applied from this browser's storage, which the server can't know, and sets and stores a theme on a
-   * press (see DashboardScript). The stylesheet marks the theme in force from `<html data-theme>`, so the mark is right
-   * before the script runs.
+   * The theme button, at the bar's end, after the status and outside it, which a push replaces: one icon, the theme in
+   * force's, light (a sun), dark (a moon), or auto (a half-filled circle), which follows the system's, and each press
+   * moves to the next, in that order, wrapping. The stylesheet draws the icon from `<html data-theme>`, which the head
+   * sets before the page draws, so it is right before the script runs. Its name and tooltip, which name the theme in
+   * force and the next, are the page's script's, which reads the theme the head applied from this browser's storage,
+   * which the server can't know, and sets and stores the next on a press (see DashboardScript); until then it is
+   * named [THEME_LABEL].
    */
-  fun FlowContent.themePicker() {
-    div("theme") {
-      attributes["id"] = THEME_PICKER_ID
-      attributes["role"] = "group"
-      attributes["aria-label"] = "Theme"
-      for ((theme, name) in listOf("light" to "Light", "dark" to "Dark", "auto" to "Auto")) {
-        button(type = ButtonType.button, classes = "theme-$theme") {
-          attributes[THEME_CHOICE_ATTR] = theme
-          attributes["aria-label"] = name
-        }
-      }
+  fun FlowContent.themeButton() {
+    button(type = ButtonType.button, classes = "theme") {
+      attributes["id"] = THEME_BUTTON_ID
+      attributes["aria-label"] = THEME_LABEL
     }
   }
 
   /**
-   * The bar's end, after the status and outside it, which a push replaces: the theme picker, then Log out when
-   * [loginEnabled]. One box, which sizes the two alike, so Log out is as tall as the picker however tall a coarse
+   * The bar's end, after the status and outside it, which a push replaces: the theme button, then Log out when
+   * [loginEnabled]. One box, which sizes the two alike, so Log out is as tall as the theme button however tall a coarse
    * pointer makes it.
    */
   fun FlowContent.barEnd(
@@ -268,7 +311,7 @@ internal object DashboardPage {
     routeBase: String,
   ) {
     div("bar-end") {
-      themePicker()
+      themeButton()
       if (loginEnabled) logoutForm(routeBase)
     }
   }

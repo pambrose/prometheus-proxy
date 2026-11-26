@@ -26,14 +26,14 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.dashboard.DashboardPage.barEnd
 import io.prometheus.common.dashboard.DashboardPage.logoutForm
-import io.prometheus.common.dashboard.DashboardPage.themePicker
+import io.prometheus.common.dashboard.DashboardPage.themeButton
 import kotlinx.html.div
 import kotlinx.html.stream.createHTML
 import kotlin.math.pow
 
 /**
- * The dashboards' theme: auto, which follows the system's, light, or dark, chosen with the bar's button. Every dark
- * rule applies under the system's dark preference unless the page is set to light, and whenever it is set to dark;
+ * The dashboards' theme: auto, which follows the system's, light, or dark, moved through with the bar's button. Every
+ * dark rule applies under the system's dark preference unless the page is set to light, and whenever it is set to dark;
  * the page's head applies a stored choice before it draws.
  */
 class DashboardThemeTest : StringSpec() {
@@ -99,29 +99,28 @@ class DashboardThemeTest : StringSpec() {
       }
     }
 
-    // Light, dark, and auto, each a press away, in the order the system's own appearance settings list them. Each is
-    // named for its theme; which is pressed, and the tooltips, are the page's script's, which reads the theme the head
-    // applied (see DashboardScriptTest), since the server can't know it.
-    "the theme picker should offer light, dark, and auto, each a button named for its theme" {
-      createHTML().div { themePicker() }.apply {
-        this shouldContain
-          """<div class="theme" id="${DashboardPage.THEME_PICKER_ID}" role="group" aria-label="Theme">"""
+    // One button, which takes the bar's end's room of one, not three. Its name and tooltip, which name the theme in
+    // force and the next, are the page's script's, which reads the theme the head applied (see DashboardScriptTest),
+    // since the server can't know it; until then it is named for what it sets.
+    "the theme button should be one button, named Theme until the page's script names the theme in force" {
+      createHTML(prettyPrint = false).div { themeButton() }.apply {
         Regex("<button[^>]*>").findAll(this).map { it.value }.toList() shouldBe
-          listOf("light" to "Light", "dark" to "Dark", "auto" to "Auto").map { (theme, name) ->
-            val choice = """${DashboardPage.THEME_CHOICE_ATTR}="$theme""""
-            """<button type="button" class="theme-$theme" $choice aria-label="$name">"""
-          }
+          listOf(
+            """<button type="button" class="theme" id="${DashboardPage.THEME_BUTTON_ID}" aria-label="Theme">""",
+          )
         this shouldNotContain "aria-pressed"
         this shouldNotContain "title="
+        this shouldNotContain "role=\"group\""
       }
     }
 
-    // One box for the bar's end, which sizes its controls alike, so Log out is as tall as the picker however tall a
-    // coarse pointer makes it.
-    "the bar's end should hold the theme picker, then Log out with a login, in one box that sizes them alike" {
+    // One box for the bar's end, which sizes its controls alike, so Log out is as tall as the theme button however
+    // tall a coarse pointer makes it.
+    "the bar's end should hold the theme button, then Log out with a login, in one box that sizes them alike" {
       createHTML(prettyPrint = false).div { barEnd(loginEnabled = true, routeBase = "/dashboard") }.apply {
-        this shouldContain """<div class="bar-end"><div class="theme" id="${DashboardPage.THEME_PICKER_ID}""""
-        substringAfter(DashboardPage.THEME_PICKER_ID) shouldContain """action="/dashboard/logout""""
+        val button = """<button type="button" class="theme" id="${DashboardPage.THEME_BUTTON_ID}""""
+        this shouldContain """<div class="bar-end">$button"""
+        substringAfter(DashboardPage.THEME_BUTTON_ID) shouldContain """action="/dashboard/logout""""
       }
       createHTML().div { barEnd(loginEnabled = false, routeBase = "/dashboard") } shouldNotContain "logout"
       DashboardCss.CSS.apply {
@@ -130,8 +129,8 @@ class DashboardThemeTest : StringSpec() {
       }
     }
 
-    // An exit icon rather than words, named for assistive tech and in its tooltip, its glyph a mask as the picker's
-    // are, which keeps its paint in forced colours as theirs does.
+    // An exit icon rather than words, named for assistive tech and in its tooltip, its glyph a mask as the theme
+    // button's is, which keeps its paint in forced colours as its does.
     "Log out should be an exit icon, named Log out" {
       createHTML(prettyPrint = false).div { logoutForm(routeBase = "/dashboard") }.apply {
         val label = DashboardPage.LOGOUT_LABEL
@@ -139,23 +138,30 @@ class DashboardThemeTest : StringSpec() {
       }
       DashboardCss.CSS.apply {
         this shouldContain Regex("""\.logout button \{[^}]*--icon:url\("data:image/svg\+xml,""")
-        this shouldContain Regex("""\.logout button::before,\s*\.theme button::before \{\s*content:"";""")
+        this shouldContain Regex("""\.logout button::before,\s*\.theme::before \{\s*content:"";""")
         val forced = """\{\s*forced-color-adjust:none; background:ButtonText;"""
-        this shouldContain Regex("""\.logout button::before,\s*\.theme button::before $forced""")
+        this shouldContain Regex("""\.logout button::before,\s*\.theme::before $forced""")
       }
     }
 
-    // From <html data-theme>, which the head sets before the page draws, so the mark is right before the page's script
-    // runs; and the current tab's mark, an accent line along the bottom, so a tonal step isn't the only sign.
-    "the picker should mark the theme in force from the page's own data-theme, as the current tab is marked" {
+    // From <html data-theme>, which the head sets before the page draws, so the icon is right before the page's script
+    // runs: auto's with no data-theme, then light's and dark's, each a different glyph.
+    "the theme button should show the theme in force's icon from the page's own data-theme" {
       DashboardCss.CSS.apply {
-        this shouldContain """:root:not([data-theme]) .theme-auto, :root[data-theme="light"] .theme-light,"""
-        this shouldContain
-          """:root[data-theme="dark"] .theme-dark { color:var(--ink); background-color:var(--surface-2);"""
-        this shouldContain "border-bottom-color:var(--accent); }"
-        // Its glyphs are the icon buttons', and keep their paint in forced colours as theirs do.
-        this shouldContain Regex("""\.theme button::before \{\s*content:"";""")
-        this shouldContain Regex("""\.theme button::before \{\s*forced-color-adjust:none; background:ButtonText;""")
+        val icon = """\s*--icon:url\("data:image/svg\+xml,([^"]+)"\); \}"""
+        val auto = Regex("""\n\s*\.theme \{ height:26px;$icon""").find(this)?.groupValues?.get(1)
+        val light = Regex(""":root\[data-theme="light"] \.theme \{$icon""").find(this)?.groupValues?.get(1)
+        val dark = Regex(""":root\[data-theme="dark"] \.theme \{$icon""").find(this)?.groupValues?.get(1)
+        listOfNotNull(auto, light, dark).toSet().size shouldBe 3
+        // The theme in force is the icon itself, so no button is marked as the current tab is.
+        this shouldNotContain ".theme-auto"
+        this shouldNotContain "border-bottom-color:var(--accent)"
+        // Its glyph is the icon buttons', and keeps its paint in forced colours as theirs do; a coarse pointer makes
+        // it a 44px target inside its border, as wide as Log out.
+        this shouldContain Regex("""\.theme::before \{\s*content:"";""")
+        this shouldContain Regex("""\.theme::before \{\s*forced-color-adjust:none; background:ButtonText;""")
+        this shouldContain ".theme { width:46px; height:46px; }"
+        this shouldContain ".logout button { width:46px; }"
       }
     }
   }

@@ -79,7 +79,7 @@ typography:
     letterSpacing: "normal"
 rounded:
   none: "0"
-  tab: "6px 6px 0 0"
+  tab: "6px"
   bar-end: "3px"
   pill: "20px"
   dot: "50%"
@@ -107,15 +107,16 @@ components:
     textColor: "{colors.ink}"
   nav-tab:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-3}"
+    textColor: "{colors.ink-2}"
     typography: "{typography.body}"
     rounded: "{rounded.tab}"
-    padding: "7px 14px 6px"
+    padding: "0 8px"
+    height: "26px"
   nav-tab-hover:
-    backgroundColor: "{colors.surface-2}"
+    backgroundColor: "{colors.surface-3}"
     textColor: "{colors.ink}"
   nav-tab-active:
-    backgroundColor: "{colors.surface-2}"
+    backgroundColor: "transparent"
     textColor: "{colors.ink}"
     typography: "{typography.body-emphasis}"
   pill-ok:
@@ -244,7 +245,7 @@ is a system built by subtraction, and the remaining elements are load-bearing.
 - Zero shadows. Depth is four tonal planes plus two hairline weights. The one `box-shadow`, the Links column's hover
   ring, is a hairline.
 - Two radii: `0` and fully round. Rectangles hold content; circles report status. The exceptions are the top corners
-  of the folder tabs and the `3px` corners of the bar's end, the Theme Picker and Log out.
+  of the tabs' hover ground and the `3px` corners of the bar's end, the Theme Button and Log out.
 - The accent is used twice: focus rings and the current item's edge. It never fills a surface.
 - No CSS transitions. The only animation in the system is the connection beacon.
 - Full-bleed layout — no centered container, no max-width, no page margins.
@@ -260,13 +261,13 @@ Every token exists as a light/dark pair; the frontmatter carries both (`accent` 
 light theme is `:root`; the dark theme is an override that applies under `prefers-color-scheme: dark` unless
 the page is set to light, and whenever it is set to dark (`DashboardCss.darkRule`, which writes each dark
 rule once for both). Neither is a tinted derivative of the other — the dark status colors are re-picked for a
-dark ground, not algorithmically dimmed. The page follows the system by default; the Theme Picker sets it.
+dark ground, not algorithmically dimmed. The page follows the system by default; the Theme Button sets it.
 
 ### Primary
 
 - **Burnt Orange** (`accent`): The only warm hue on the surface, and deliberately the rarest. It draws
-  the edge of the current item (the selected row's 2px left edge, the 2px line along the current tab's
-  bottom, and the one along the Theme Picker's button for the theme in force) and the 2px focus-visible outline.
+  the edge of the current item (the selected row's 2px left edge and the 2px line along the current tab's
+  bottom) and the 2px focus-visible outline.
   That is the complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
   themes differ in character rather than only in value — against black it reads as a lit filament
   rather than as rust.
@@ -277,12 +278,12 @@ dark ground, not algorithmically dimmed. The page follows the system by default;
   plane, so panels sit forward on it. In dark mode it is the darkest value in the system.
 - **Reading Plane** (`surface`): Pure white in light, near-black in dark. Where content that must be
   read carefully lives — the detail pane, the table body, the top bar.
-- **Recessed Plane** (`surface-2`): The agent list, section headers, sticky table headers, the
-  search strip, and the current tab. Structurally
+- **Recessed Plane** (`surface-2`): The agent list, section headers, sticky table headers, and the
+  search strip. Structurally
   *behind* the reading plane in both themes.
-- **Pressed Plane** (`surface-3`): The furthest step from the reading plane. Row hover and neutral tag
-  backgrounds. `ink-3` falls under 4.5:1 here (4.18:1 light, 4.30:1 dark), so a hovered row's `ink-3` line
-  steps up to `ink-2`.
+- **Pressed Plane** (`surface-3`): The furthest step from the reading plane. Row and tab hover, and neutral tag
+  backgrounds. `ink-3` falls under 4.5:1 here (4.18:1 light, 4.30:1 dark), so a hovered row's `ink-3` line,
+  and a hovered tab's `ink-3` icon, step up to `ink-2`.
 - **Structural Rule** (`line`): 1px hairlines that separate regions — bar from body, list from detail.
 - **Soft Rule** (`line-soft`): 1px hairlines that separate rows *within* a region. Always lower
   contrast than `line`, so the eye reads region boundaries before it reads row boundaries.
@@ -307,10 +308,9 @@ Three levels, each shipping as a **solid** and a **soft** companion.
 ### Named Rules
 
 **The Two Places Rule.** The accent appears on focus rings and the current item's edge: the selected row's 2px
-left edge, the current tab's 2px bottom edge, and the 2px bottom edge of the Theme Picker's button for the
-theme in force, which all mean the same thing. Nowhere else. It never fills a background, never sets body
-type, never becomes a button, never appears in a chart. Its rarity is what makes selection findable in a field
-of monospace at a glance.
+left edge and the current tab's 2px bottom edge, which mean the same thing. Nowhere else. It never fills a
+background, never sets body type, never becomes a button, never appears in a chart. Its rarity is what makes
+selection findable in a field of monospace at a glance.
 
 **The Paired Status Rule.** Solid status colors carry meaning on type, dots, and borders. Soft status
 colors have exactly one job: backing a pill or tag. A soft color never becomes a row background, a
@@ -341,8 +341,8 @@ clears 3:1.
 
 Non-text: LEDs and the beacon measure 4.57–6.88:1 against every ground they sit on at rest (4.16:1 at the least on a
 hovered row's `surface-3`, computed from the tokens), and the `accent`
-current-item edge 4.83:1 light / 6.37:1 dark against `surface`, and 4.10:1 / 5.83:1 against the
-`surface-2` of the current tab's fill above it and the strip below it.
+current-item edge 4.83:1 light / 6.37:1 dark against `surface`, the bar the current tab's line lies in, and
+4.10:1 / 5.83:1 against the `surface-2` of the strip below it.
 
 **The binding constraint is `surface-2`, not `surface`.** Every quiet color lands on the recessed plane
 somewhere — `ink-3` under every table and section header — and that pairing is a full tonal step
@@ -428,14 +428,14 @@ values align down the pane without a table.
 
 **Responsive.** One width breakpoint: **720px**. Below it the master–detail grid collapses to a single
 column and the list's right border becomes a bottom border, and the tabs take a row of their own, the
-top bar's last, so they still stand on its rule and open into the strip below. Nothing else changes —
+top bar's last, so the current tab's line still lies on its rule. Nothing else changes —
 no hamburger, no drawer, no reflowed table. The table keeps its horizontal scroller, which is the correct mobile
 behavior for tabular data.
 
-**One input-mode breakpoint: `pointer: coarse`.** Tabs grow to a 44px minimum height on touch
+**One input-mode breakpoint: `pointer: coarse`.** Tabs grow to 44px tall on touch
 devices only. Target size is a property of the *input*, not the viewport — a tablet is wide and
 touch-driven, a narrow desktop window is neither — so this is deliberately not folded into the 720px
-rule, and pointer devices keep the dense 34px tab rather than paying for vertical space they cannot
+rule, and pointer devices keep the dense 26px tab rather than paying for vertical space they cannot
 use.
 
 ### Named Rules
@@ -479,28 +479,28 @@ The form language is **two radii and nothing between them.**
 
 - **`0` — everything structural.** Panels, rows, cells, the top bar, section headers, empty states, the
   table. No rounded corners on any container, with one exception, below.
-- **`6px` on the top corners of the folder tabs, and only there.** A tab is a handle on the layout below
-  it, not a container, and its rounded top is what reads as a folder tab rather than a box on the bar.
-- **`3px` on the bar's end: the Theme Picker's group and the Log out button.** The corners of their quiet `line`
+- **`6px` on the tabs' hover ground, and only there.** A tab is a handle on the layout below it, not a
+  container, and the ground its hover lays is rounded, as a code host's tabs are, so it reads as a control on
+  the bar rather than a box.
+- **`3px` on the bar's end: the Theme Button and the Log out button.** The corners of their quiet `line`
   border. They're controls, neither a container nor a report of state.
 - **Fully round (`20px` on short elements, `50%` on dots) — everything that reports state.** Status
   pills, tags, LEDs, the connection beacon.
 
 The split is semantic, not decorative: **rectangles hold content, round things report status.** A
 7px circle is a lamp. A 20px-radius capsule is a badge. Neither shape is ever used for a container,
-and no container is ever softened toward them. Apart from the tabs' top corners and the bar's end, there is no
+and no container is ever softened toward them. Apart from the tabs and the bar's end, there is no
 `4px`, no `6px`, no `8px` radius in the system (the Login Page, its one deliberate exception, aside), and introducing
 one would blur a distinction that currently does real work.
 
-Borders carry the remaining form language: 1px hairlines for structure, among them the tabs' `line` outlines,
+Borders carry the remaining form language: 1px hairlines for structure,
 and the current-item edges in `accent`, the only borders in the system thicker than a hairline: the row item's
-2px left border, transparent at rest, the current tab's 2px bottom, and the Theme Picker's 2px bottom,
-transparent at rest, under a transparent 2px top that keeps its glyph centred.
+2px left border, transparent at rest, and the current tab's 2px bottom.
 
 ### Named Rules
 
 **The Square-or-Circle Rule.** Radius is `0` or fully round. Nothing in between ships, but for the
-folder tabs' top corners and the bar's end's `3px`. If a new element feels like it wants `6px`, it is a container
+tabs' hover ground and the bar's end's `3px`. If a new element feels like it wants `6px`, it is a container
 and it wants `0`.
 
 ## Components
@@ -549,23 +549,24 @@ relative position in both panes.
 
 ### Navigation
 
-Folder tabs, one per layout: Agents, Paths, Activity, Settings.
+Underlined tabs, as a code host's are, one per layout: Agents, Paths, Activity, Settings on the proxy's
+dashboard; Paths, Connection, Activity, Settings on the agent's. Each is a borderless link, its icon before
+its name (`TabIcon`): two stacked servers for Agents, a route for Paths, a pulse for Activity, a gear for
+Settings, and a plug for Connection.
 
-- **Style:** top corners rounded `6px`, `7px 14px 6px`, `ink-3` at rest, outlined in `line` across the
-  top and down the sides, and open at the bottom. The tabs stand on the top bar's bottom rule: the nav
-  reaches 1px into it, so a tab at rest lets the rule show through its transparent bottom, and its
-  outline and the rule read as one line.
-- **Hover:** `surface-2` background, `ink` text. The rule still shows below it.
-- **Active:** `surface-2` background, `ink` text, weight 600, the same `line` outline, and a `2px`
-  `accent` bottom that covers the rule beneath it: the tab's edge, as the row item's left border is the
-  row's. Its bottom padding drops to `5px` to pay for the extra pixel, so it stands as tall as the
-  others. Marked `aria-current="page"`.
-- **Focus:** `2px solid accent`, `outline-offset: -2px`, *inside* the tab, as on the row item: the tab
-  meets the strip below it, which an outside ring would cross.
+- **Style:** `26px` tall, the bar's end's height, `0 8px`, `6px` apart, name in `ink-2`, its `14px` icon in
+  `ink-3`, a CSS mask, as the Copy Button's glyphs are, `7px` before it. Each stands `7px` above the bar's
+  floor, which sets its name on the brand mark's line. The icon is drawn from the tab's class, so the nav's
+  markup carries no SVG, and the link's name is its title alone.
+- **Hover:** a `surface-3` ground with `6px` corners, `ink` name, `ink-2` icon.
+- **Active:** no ground, `ink` name, weight 600, and a `2px` `accent` line along the bar's floor, the
+  tab's width, which covers the rule beneath it: the tab's edge, as the row item's left border is the
+  row's. Marked `aria-current="page"`.
+- **Focus:** `2px solid accent`, `outline-offset: -2px`, *inside* the tab, as on the row item, around the
+  ground its hover lays.
 - **Forced colors:** the tabs paint themselves in system colors (`forced-color-adjust: none`), so the
-  current tab is told apart by more than its weight: every tab outlined in `CanvasText` as the rule is,
-  `LinkText` at rest, and the current tab in `CanvasText` with a `Highlight` bottom line. Its focus ring
-  is `Highlight`.
+  current tab is told apart by more than its weight: `LinkText` at rest, icon and name, underlined on hover,
+  and the current tab in `CanvasText` over a `Highlight` line. Its focus ring is `Highlight`.
 - **Behavior:** real navigation, not a swap. The layouts are bookmarkable URLs, so they are links
   in a `<nav>`, not ARIA tabs. **Keyboard:** Tab reaches each one; Left and Right open the layout before
   or after the current one, wrapping at the ends, from anywhere on the page but a text field, where they
@@ -822,8 +823,9 @@ label, both in the top bar.
 
 ### Status Bar
 
-`surface`, `8px 15px 0`, Meta type in `ink-3`: no bottom padding, because the tabs stand on the bar's rule,
-and the brand mark and the counters carry `6px` of their own, which sets their text on the tabs' line. The brand mark
+`surface`, `8px 15px 0`, Meta type in `ink-3`: no bottom padding, because the current tab's line lies on the
+bar's rule, and the brand mark and the counters carry `10px` of their own, which sets their text on the tabs'
+line (`6px` below 720px, where the tabs take a row of their own). The brand mark
 leads with the logo's small-size cut, `18px`, `7px` before the dashboard's name (`DashboardLogo.brand`) and centered on
 its line, which is taller, so the mark changes neither the bar's height nor the name's place. The name says which
 process the page is, `Proxy: ` and the proxy's host and scrape port, or `Agent: ` and the agent's name, cut with an
@@ -843,25 +845,24 @@ because the paths counter reports *registrations*, so a departed path is deliber
 which without explanation reads as the bar contradicting the table directly beneath it. Every stat
 carries `white-space: nowrap` so a narrow viewport wraps between stats rather than through one.
 
-### Theme Picker
+### Theme Button
 
-At the bar's end, before Log out, in Log out's quiet border (`1px` `line`, `3px` corners): three icon buttons in one
-group, light (a sun), dark (a moon), and auto (a half-filled circle), in the order the system's own appearance settings
-list them, so each theme is one press away and none is passed through on the way to another. Auto follows the system's
-preference and is the default.
+At the bar's end, before Log out, in Log out's quiet border (`1px` `line`, `3px` corners): one icon button that shows
+the theme in force, light (a sun), dark (a moon), or auto (a half-filled circle), and moves to the next on each press,
+in that order, wrapping. One button rather than a group of three keeps the bar's end to two small controls; the cost
+is that reaching a theme can take two presses. Auto follows the system's preference and is the default.
 
-- **Size:** each button is a `24px`-tall target, the minimum size, `44px` square under a coarse pointer. It
-  shares the bar's end with Log out in one box that stretches each to the taller's height, so Log out is as
-  tall as the group at either size.
+- **Size:** `30px` wide and `26px` tall, a `24px` target, the minimum size, inside its border, `46px` square under a
+  coarse pointer. It shares the bar's end with Log out in one box that stretches each to the taller's height, so
+  Log out is as tall as it at either size.
 - **Rest:** transparent, a `13px` glyph in `ink-2`, a CSS mask in `currentColor`, as the Copy Button's glyphs
-  are. The buttons are parted by `line-soft`. **Hover:** `surface-2`, glyph in `ink`.
-- **Current:** marked as the current tab is, by a `2px` `accent` line along its bottom, on `surface-2` with its
-  glyph in `ink`, so the tonal step is never the only sign. The mark comes from `<html data-theme>`, not from the
-  script, so it is right before the script runs. In forced colours the glyphs are `ButtonText` and the line
-  `Highlight`.
-- **Names:** each button is named for assistive tech (Light, Dark, Auto). The script, which alone knows the
-  stored theme, sets each one's `aria-pressed` and tooltip, and again on the new picker a back or forward
-  swaps in: the theme, auto's which way the system leans now, and "(current)" on the one in force.
+  are. **Hover:** `surface-2`, glyph in `ink`. In forced colours the glyph is `ButtonText`.
+- **Current:** the glyph is the theme in force, so nothing else marks it. The glyph comes from
+  `<html data-theme>`, not from the script, so it is right before the script runs.
+- **Names:** the server names it "Theme". The script, which alone knows the stored theme, sets its name and
+  tooltip, and again on the new button a back or forward swaps in: the theme in force, auto's with which way the
+  system leans now, and the theme a press moves to ("Theme: auto, following your system, now dark. Press for
+  light.").
 
 The choice is kept in the browser's `localStorage`, one per dashboard, since each is its own origin, and a script
 in the head applies it as `<html data-theme>` before the page draws, so a page set to light never flashes dark;
@@ -870,10 +871,10 @@ its change is said in the Connection Announcer.
 
 ### Log Out Button
 
-At the bar's end, after the Theme Picker, with a login set: one icon button, an exit (a door with an arrow leaving
-it), in the picker's quiet border, a form the browser posts. It is `30px` wide, a picker button's width with the
-border, and as tall as the picker through the bar's end (`46px` wide under a coarse pointer); its `13px` glyph is a
-CSS mask in `ink-2`, `ink` on hover, `ButtonText` in forced colours, as the picker's are. It is named "Log out" for
+At the bar's end, after the Theme Button, with a login set: one icon button, an exit (a door with an arrow leaving
+it), in the Theme Button's quiet border, a form the browser posts. It is `30px` wide, the Theme Button's width, and
+as tall as it through the bar's end (`46px` wide under a coarse pointer); its `13px` glyph is a CSS mask in `ink-2`,
+`ink` on hover, `ButtonText` in forced colours, as the Theme Button's is. It is named "Log out" for
 assistive tech and in its tooltip, which the server renders, since nothing about it changes.
 
 ### Connection Announcer
@@ -881,7 +882,7 @@ assistive tech and in its tooltip, which the server renders, since nothing about
 A visually-hidden `role="status" aria-live="polite"` region, written by the WebSocket lifecycle
 handlers: *"Connection to the proxy lost. Reconnecting."* and, on recovery from a real outage,
 *"Connection to the proxy restored."*, naming the agent on the agent's dashboard. The Copy Button writes its result
-there too, once per click, the Scrape Button its result, the Theme Picker the theme chosen, and the Path Search its
+there too, once per click, the Scrape Button its result, the Theme Button the theme it moved to, and the Path Search its
 match count, on either table, once per change of filter.
 
 It exists because the beacon reports connection state through color and a change of rhythm, and
@@ -996,7 +997,7 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
   anti-reference.)*
 - **Don't** add a `box-shadow`. There are no shadows in the system and that is the elevation strategy, not
   an oversight; the one declaration, the Links column's hover ring, draws a hairline, not a shadow.
-- **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`. The folder tabs' top corners and
+- **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`. The tabs' `6px` hover ground and
   the bar's end's `3px` are the only ones.
 - **Don't** fill anything with the accent. It draws focus rings and the current item's edge; that is the
   complete list.

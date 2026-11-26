@@ -168,10 +168,10 @@ health gauges, **chunks** and **scrapes**.
 The browser tab's title names the proxy the same way and counts the failing and departed paths too, as
 `(3 problems) Proxy: proxy:8080`, so a dashboard left in a background tab still says when something is wrong.
 
-At the bar's end, the theme picker sets the dashboard **light** (the sun) or **dark** (the moon), or **auto** (the
-half-filled circle), the default, which follows your system's light or dark setting. The theme in force is underlined,
-and each button's tooltip names its theme. The browser remembers the choice for that dashboard, and its login page uses
-it too.
+At the bar's end, the theme button shows the theme in force, **light** (the sun), **dark** (the moon), or **auto**
+(the half-filled circle), the default, which follows your system's light or dark setting. Each click moves to the next
+theme, in that order, and its tooltip names the theme in force and the next. The browser remembers the choice for that
+dashboard, and its login page uses it too.
 
 ### The Live Indicator
 

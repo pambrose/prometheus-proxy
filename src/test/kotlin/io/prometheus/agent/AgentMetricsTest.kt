@@ -60,6 +60,9 @@ class AgentMetricsTest : StringSpec() {
     AgentMetrics::class.java.getDeclaredField("COLLECTORS").apply { isAccessible = true }.get(null)
       as List<MetricWithFixedMetadata>
 
+  // [metric]'s family name, as the registry reads it, from its descriptor, as AgentMetrics' FAMILY_NAMES does.
+  private fun familyName(metric: MetricWithFixedMetadata): String? = metric.metricFamilyDescriptor?.prometheusName
+
   // [metric]'s label names, in the order its builder declared them, which is the order a series' values take; the
   // library keeps them in a protected field, and its getLabelNames() gives an unordered set.
   private fun declaredLabelNames(metric: MetricWithFixedMetadata): List<String> =
@@ -384,9 +387,9 @@ class AgentMetricsTest : StringSpec() {
       val collectors = agentCollectors()
 
       // Read at all, so the checks below can't pass on an empty list
-      collectors.map { it.prometheusName } shouldContain "agent_scrape_queue_wait_seconds"
+      collectors.map { familyName(it) } shouldContain "agent_scrape_queue_wait_seconds"
       // By family name, so a failure names the family
-      collectors.associate { it.prometheusName to declaredLabelNames(it) }.entries.forAll { (_, labelNames) ->
+      collectors.associate { familyName(it) to declaredLabelNames(it) }.entries.forAll { (_, labelNames) ->
         labelNames.first() shouldBe AgentMetrics.LAUNCH_ID
       }
       collectors.filterIsInstance<StatefulMetric<*, *>>().forEach { metric ->
@@ -402,7 +405,7 @@ class AgentMetricsTest : StringSpec() {
       fun launchIds() =
         collectors
           .associate { collector ->
-            collector.prometheusName to collector.collect().dataPoints.map { it.labels.get(AgentMetrics.LAUNCH_ID) }
+            familyName(collector) to collector.collect().dataPoints.map { it.labels.get(AgentMetrics.LAUNCH_ID) }
           }.entries
 
       launchIds().forAll { (_, launchIds) -> launchIds shouldContainAll listOf(LEAVING, STAYING) }
