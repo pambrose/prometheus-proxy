@@ -101,8 +101,15 @@ class ScreensScriptTest : StringSpec() {
     // A url at the root, as the proxy's own at a root mount, mustn't double its slash before a path. Where a screen
     // starts is joined once, by the page (ScreensHtml), and read from its frame.
     "a path should join its screen's url with one slash, and the start come joined from the page" {
-      body("pathUrl") shouldContain "return rest === '' ? url : url.replace(/\\/+$/, '') + '/' + rest;"
+      body("pathUrl") shouldContain "if (rest === '') return url;"
+      body("pathUrl") shouldContain "return url.replace(/\\/+$/, '') + '/' + rest;"
       body("startUrl") shouldContain "return frame.getAttribute('data-start');"
+    }
+
+    // A query alone follows the url with no slash: the dashboards don't ignore a trailing slash, so
+    // #agent-east/?q=orders as /dashboard/?q=orders would be a 404; at a root mount, / and the query make /?q=orders.
+    "a link's query alone should follow its screen's url with no slash between" {
+      body("pathUrl") shouldContain "if (rest.charAt(0) === '?') return url + rest;"
     }
 
     // At a root mount the proxy's url is /, so #proxy//evil.example would join to //evil.example, which a browser
@@ -140,10 +147,12 @@ class ScreensScriptTest : StringSpec() {
     "each screen should be probed without reading its answer, and not while the page is hidden" {
       // Without the session cookie, so a page left open doesn't keep its login from going idle.
       // A HEAD, so no screen renders a page for it, one at a time for each screen.
-      js shouldContain
-        "fetch(frame.getAttribute('data-probe'), { method: 'HEAD', mode: 'no-cors', cache: 'no-store', " +
-        "credentials: 'omit' })"
+      js shouldContain "fetch(frame.getAttribute('data-probe'), {"
+      js shouldContain "method: 'HEAD', mode: 'no-cors', cache: 'no-store', credentials: 'omit', signal: signal"
       body("probe") shouldContain "if (probing[id]) return;"
+      // A screen whose host drops the request counts as not answering once the interval is up, not when the browser
+      // gives up on the connection.
+      body("probe") shouldContain "AbortSignal.timeout(PROBE_INTERVAL_MILLIS)"
       js shouldContain "PROBE_INTERVAL_MILLIS = ${ScreensScript.PROBE_INTERVAL_MILLIS}"
       js shouldContain "document.addEventListener('visibilitychange'"
       js shouldContain "if (document.hidden) return;"
@@ -151,6 +160,23 @@ class ScreensScriptTest : StringSpec() {
       body("mark") shouldContain "if (up && wasDown && frame.getAttribute('src'))"
       // Only on a change, so a probe that finds the screen as it was touches nothing.
       body("mark") shouldContain "if (tab.classList.contains(up ? 'up' : 'down')) return;"
+    }
+
+    // A copy that hands its link over isn't the page, and shows no screens, so it checks none.
+    "only the page should check its screens, starting once it becomes the page" {
+      body("becomeThePage") shouldContain "startProbing();"
+      body("startProbing").apply {
+        this shouldContain "if (probingStarted) return;"
+        this shouldContain "setInterval(probeAll, PROBE_INTERVAL_MILLIS);"
+        this shouldContain "document.addEventListener('visibilitychange', probeAll);"
+      }
+      Regex("""setInterval\(""").findAll(js).count() shouldBe 1
+    }
+
+    // A copy whose close the browser refused shows its notice; a tab or layout clicked there changes nothing until
+    // Stay here makes it the page, so it loads no screens while it isn't.
+    "a copy that isn't the page should show no screens until it becomes the page" {
+      body("render") shouldContain "if (!isThePage) return;"
     }
 
     "each dot should say its state in words, for a screen reader" {

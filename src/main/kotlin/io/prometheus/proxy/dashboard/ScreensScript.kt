@@ -92,13 +92,16 @@ internal object ScreensScript {
       function startUrl(frame) {
         return frame.getAttribute('data-start');
       }
-      // A link's path, after the screen's url with one slash between; empty is the url itself. Its leading slashes and
+      // A link's path, after the screen's url with one slash between; empty is the url itself, and a query alone
+      // follows it with none, since the dashboards don't take /dashboard/ for /dashboard. Its leading slashes and
       // backslashes go, so at a root mount, where the proxy's url is /, a path can't join to //host, which a browser
       // reads as another site.
       function pathUrl(frame, path) {
         var url = frame.getAttribute('data-url');
         var rest = path.replace(/^[\/\\]+/, '');
-        return rest === '' ? url : url.replace(/\/+$/, '') + '/' + rest;
+        if (rest === '') return url;
+        if (rest.charAt(0) === '?') return url + rest;
+        return url.replace(/\/+$/, '') + '/' + rest;
       }
       // The one place a frame's src is set: by the load rule (load), and for a screen that answers again (mark). The
       // pane's Open in a tab follows it.
@@ -128,8 +131,10 @@ internal object ScreensScript {
         var path = loaded[id];
         return path === null || path === undefined ? id : id + '/' + path;
       }
-      // Shows the layout and its screens, marks the tabs and the layout buttons, and puts it in the hash.
+      // Shows the layout and its screens, marks the tabs and the layout buttons, and puts it in the hash; nothing in a
+      // copy that isn't the page, which shows its handoff notice until Stay here makes it the page.
       function render() {
+        if (!isThePage) return;
         stage.className = 'stage ' + layout;
         var shown = layout === 'all' ? ids : layout === 'split' ? [first, second] : [first];
         ids.forEach(function (id) {
@@ -298,13 +303,18 @@ internal object ScreensScript {
       }
       // A request the page can't read, which succeeds whenever the screen answers and fails when its port doesn't. A
       // HEAD, so no screen renders a page for it, and with no cookie, so a page left open doesn't keep its login from
-      // going idle, as the dashboards' pages don't. One at a time for each screen, so a slow one doesn't pile them up.
+      // going idle, as the dashboards' pages don't. One at a time for each screen, so a slow one doesn't pile them up,
+      // and given up after the interval, so a host that drops the request is marked as not answering then, not when
+      // the browser gives up on the connection.
       var probing = Object.create(null);
       function probe(id) {
         if (probing[id]) return;
         probing[id] = true;
         var frame = frameOf(id);
-        fetch(frame.getAttribute('data-probe'), { method: 'HEAD', mode: 'no-cors', cache: 'no-store', credentials: 'omit' })
+        var signal = window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(PROBE_INTERVAL_MILLIS) : undefined;
+        fetch(frame.getAttribute('data-probe'), {
+          method: 'HEAD', mode: 'no-cors', cache: 'no-store', credentials: 'omit', signal: signal
+        })
           .then(function () { mark(id, true); }, function () { mark(id, false); })
           .then(function () { probing[id] = false; });
       }
@@ -312,9 +322,15 @@ internal object ScreensScript {
         if (document.hidden) return;
         ids.forEach(probe);
       }
-      document.addEventListener('visibilitychange', probeAll);
-      setInterval(probeAll, PROBE_INTERVAL_MILLIS);
-      probeAll();
+      // Only the page checks its screens, from when it becomes the page: a copy that hands its link over shows none.
+      var probingStarted = false;
+      function startProbing() {
+        if (probingStarted) return;
+        probingStarted = true;
+        document.addEventListener('visibilitychange', probeAll);
+        setInterval(probeAll, PROBE_INTERVAL_MILLIS);
+        probeAll();
+      }
 
       // The handoff. A page opened with a link asks whether a copy is open on this origin; one that is follows the link
       // and answers, and this one closes, or, where the browser won't let it, says where the link went and offers to
@@ -329,6 +345,7 @@ internal object ScreensScript {
         isThePage = true;
         handoff.hidden = true;
         follow(parseLink(link || '$PROXY_ID'));
+        startProbing();
       }
       if (channel) {
         channel.onmessage = function (evt) {
