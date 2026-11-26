@@ -67,14 +67,13 @@ internal object ScreensCss {
       background:var(--surface-2); border-bottom:1px solid var(--line); }
     .handoff button { height:26px; padding:0 10px; font:inherit; color:var(--ink); background:var(--surface);
       border:1px solid var(--line); border-radius:3px; cursor:pointer; }
-    .handoff button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     .handoff[hidden] { display:none; }
     /* The stage: one screen, two side by side, or every screen in a grid of tiles. */
     .stage { flex:1; min-height:0; display:grid; gap:10px; padding:10px; }
     .stage.one { grid-template-columns:1fr; }
     .stage.split { grid-template-columns:1fr 1fr; }
     .stage.all { grid-template-columns:repeat(auto-fill, minmax(min(100%, 380px), 1fr)); align-content:start;
-      overflow:auto; }
+      overflow:auto; scrollbar-gutter:stable; }
     /* A pane is shown or hidden, never moved in the page, which would reload its frame. */
     .pane { display:none; flex-direction:column; min-width:0; min-height:0; background:var(--surface);
       border:1px solid var(--line); border-radius:3px; overflow:hidden; }
@@ -88,10 +87,10 @@ internal object ScreensCss {
       border:1px solid var(--line); border-radius:3px; padding:1px 4px; }
     .stage.split .pane-bar select { display:block; }
     .stage.split .pane-bar .name { display:none; }
-    .pane-bar select:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     .pane-bar .open { margin-left:auto; flex:none; color:var(--ink-2); text-underline-offset:2px; }
     .pane-bar .open:hover { color:var(--ink); }
-    .pane-bar .open:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    .handoff button:focus-visible, .pane-bar select:focus-visible, .pane-bar .open:focus-visible {
+      outline:2px solid var(--accent); outline-offset:1px; }
     /* In All, a tile's bar opens it in One. */
     .stage.all .pane-bar { cursor:pointer; }
     .stage.all .pane-bar:hover { background:var(--surface-2); }

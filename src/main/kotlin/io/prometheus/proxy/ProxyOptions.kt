@@ -49,6 +49,7 @@ import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.requireDefaultOrPositive
 import io.prometheus.common.requirePositive
 import io.prometheus.common.requireSampleRate
+import io.prometheus.common.dashboard.Framing
 import io.prometheus.proxy.dashboard.PathLink
 import io.prometheus.proxy.dashboard.Screen
 
@@ -152,6 +153,11 @@ class ProxyOptions internal constructor(
   // is.
   internal var dashboardScreens: List<Screen> = emptyList()
     private set
+
+  // Which pages may frame the dashboard: proxy.dashboard.framingEnabled, and with it false, whether /screens, which
+  // frames the proxy's own dashboard, is served. The dashboard's headers and its Settings row both read it.
+  internal val dashboardFraming: Framing
+    get() = Framing.of(configVals.proxy.dashboard.framingEnabled, hasScreens = dashboardScreens.isNotEmpty())
 
   /**
    * Disables the gRPC server reflection service on the Proxy.
@@ -334,7 +340,7 @@ class ProxyOptions internal constructor(
     dashboardScreens = Screen.parseAll(dashboard.screens.map { Screen.Entry(it.name, it.url, it.start) })
     logger.info { "dashboard.screens: ${dashboardScreens.joinToString { it.logged }.ifEmpty { "(none)" }}" }
     // Off, the dashboard still lets its own /screens frame it (Framing.SAME_ORIGIN), so false means less than it says.
-    if (!dashboard.framingEnabled && dashboardScreens.isNotEmpty())
+    if (dashboardFraming == Framing.SAME_ORIGIN)
       logger.info {
         "dashboard framing: refused, but for /screens, which shows the dashboard from its own origin " +
           "(proxy.dashboard.framingEnabled = false)"

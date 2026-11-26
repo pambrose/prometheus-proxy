@@ -211,7 +211,7 @@ internal data class ProxySnapshot(
   val screensPage: Boolean = false,
 ) {
   /** Which proxy this is, in the bar and the tab's title: its host and the port Prometheus scrapes. */
-  val dashboardName: String get() = "Proxy: $hostName:$scrapePort"
+  val dashboardName: String get() = dashboardName(hostName, scrapePort)
 
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -270,6 +270,12 @@ internal data class ProxySnapshot(
   fun goneAgentName(agentId: String): String? = goneAgentNames[agentId]
 
   companion object {
+    /** A proxy's name, in the bar and the tab's title, and the screens page's proxy tab: its host and scrape port. */
+    fun dashboardName(
+      hostName: String,
+      scrapePort: Int,
+    ) = "Proxy: $hostName:$scrapePort"
+
     /** The most scrapes an agent's detail lists, its latest. */
     const val MAX_DETAIL_SCRAPES = 25
 

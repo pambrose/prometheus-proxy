@@ -42,10 +42,13 @@ internal enum class Framing(
   ;
 
   companion object {
-    /** The framing for a dashboard with [framingEnabled], on a proxy that lists screens when [hasScreens]. */
+    /**
+     * The framing for a dashboard with [framingEnabled], on a proxy that lists screens when [hasScreens]; an agent's
+     * dashboard, which has no screens page, leaves it out.
+     */
     fun of(
       framingEnabled: Boolean,
-      hasScreens: Boolean,
+      hasScreens: Boolean = false,
     ): Framing =
       when {
         framingEnabled -> ANY

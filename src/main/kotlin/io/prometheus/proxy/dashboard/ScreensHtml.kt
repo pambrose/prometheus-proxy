@@ -158,6 +158,7 @@ internal object ScreensHtml {
     all: List<Screen>,
     probe: String,
   ) {
+    val start = startUrl(screen)
     section("pane") {
       attributes["data-screen"] = screen.id
       div("pane-bar") {
@@ -173,7 +174,7 @@ internal object ScreensHtml {
           }
         }
         a(classes = "open") {
-          href = startUrl(screen)
+          href = start
           target = "_blank"
           rel = "noopener"
           +"Open in a tab ↗"
@@ -183,7 +184,7 @@ internal object ScreensHtml {
         iframe(classes = "frame") {
           attributes["title"] = screen.name
           attributes["data-url"] = screen.url
-          attributes["data-start"] = screen.start
+          attributes["data-start"] = start
           attributes["data-probe"] = probe
         }
         div("down") {
@@ -194,7 +195,8 @@ internal object ScreensHtml {
     }
   }
 
-  // Where a screen opens, its url and its start, joined as the script joins them, with one slash between.
+  // Where a screen opens, its url and its start with one slash between, which its frame's data-start gives the script
+  // and Open in a tab starts at.
   private fun startUrl(screen: Screen): String =
     if (screen.start.startsWith("/")) screen.url.trimEnd('/') + screen.start else screen.url + screen.start
 }

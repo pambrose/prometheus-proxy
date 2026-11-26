@@ -16,14 +16,15 @@
 
 package io.prometheus.common.dashboard
 
+import io.prometheus.common.dashboard.DashboardPage.ANNOUNCER_ID
 import io.prometheus.common.dashboard.DashboardPage.THEME_BUTTON_ID
 import io.prometheus.common.dashboard.DashboardPage.THEME_KEY
 
 /**
  * The bar's theme button's part of a page's script, which the dashboards' ([DashboardScript]) and the proxy's screens
- * page's include, so the button works the same on every page that has it. It defines `showTheme` and `cycleTheme`, and
- * names the button now; the including script calls `cycleTheme` on a click of the button, and defines `say`, which
- * speaks into the page's live region.
+ * page's include, so the button works the same on every page that has it. It defines `say`, which speaks into the
+ * page's live region ([DashboardPage.announcer]), and `showTheme` and `cycleTheme`, and names the button now; the
+ * including script calls `cycleTheme` on a click of the button.
  */
 internal object ThemeScript {
   /**
@@ -35,6 +36,10 @@ internal object ThemeScript {
    */
   val JS =
     """
+    function say(text) {
+      var region = document.getElementById('$ANNOUNCER_ID');
+      if (region) region.textContent = text;
+    }
     var THEMES = ['light', 'dark', 'auto'];
     var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
     function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'auto'; }

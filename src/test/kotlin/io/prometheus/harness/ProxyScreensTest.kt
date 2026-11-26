@@ -103,7 +103,8 @@ class ProxyScreensTest : StringSpec() {
         screens.bodyAsText().apply {
           Regex("""<a href="#([^"]+)" class="screen""").findAll(this).map { it.groupValues[1] }.toList() shouldBe
             ["proxy", "agent-east", "grafana"]
-          this shouldContain """data-url="http://grafana.example.com:3000" data-start="/d/overview?kiosk""""
+          this shouldContain
+            """data-url="http://grafana.example.com:3000" data-start="http://grafana.example.com:3000/d/overview?kiosk""""
           // A whole page, with no socket: nothing pushes to it, nor swaps a fragment into it.
           this shouldNotContain "hx-ws:connect"
           this shouldNotContain "hx-swap-oob"

@@ -22,6 +22,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.ThemeScript
 
@@ -97,9 +98,11 @@ class ScreensScriptTest : StringSpec() {
         .filter { it in js } shouldBe emptyList()
     }
 
-    // A url at the root, as the proxy's own at a root mount, mustn't double its slash before a path.
-    "a path should join its screen's url with one slash" {
-      body("join") shouldContain "return rest.charAt(0) === '/' ? url.replace(/\\/+$/, '') + rest : url + rest;"
+    // A url at the root, as the proxy's own at a root mount, mustn't double its slash before a path. Where a screen
+    // starts is joined once, by the page (ScreensHtml), and read from its frame.
+    "a path should join its screen's url with one slash, and the start come joined from the page" {
+      body("pathUrl") shouldContain "return rest === '' ? url : url.replace(/\\/+$/, '') + '/' + rest;"
+      body("startUrl") shouldContain "return frame.getAttribute('data-start');"
     }
 
     // At a root mount the proxy's url is /, so #proxy//evil.example would join to //evil.example, which a browser
@@ -119,12 +122,16 @@ class ScreensScriptTest : StringSpec() {
       js shouldContain "channel.postMessage({ type: 'taken', id: data.id });"
       js shouldContain "window.close();"
       // The notice the page renders hidden, for a browser that won't let the script close its tab.
-      js shouldContain "document.getElementById('${ScreensHtml.HANDOFF_ID}').hidden = false;"
-      js shouldContain "if (evt.target.closest('#${ScreensHtml.HANDOFF_ID} button')) stayHere();"
+      js shouldContain "var handoff = document.getElementById('${ScreensHtml.HANDOFF_ID}');"
+      js shouldContain "setTimeout(function () { handoff.hidden = false; }, 100);"
+      js shouldContain "if (evt.target.closest('#${ScreensHtml.HANDOFF_ID} button')) becomeThePage();"
     }
 
     "a page opened without a link should be the page at once, with no handoff" {
-      js shouldContain "if (!link || !channel) { becomeThePage(link); return; }"
+      js shouldContain "if (link && channel) {"
+      js.substringAfter("if (link && channel) {").substringAfter("} else {").trimStart() shouldStartWith
+        "becomeThePage();"
+      body("becomeThePage") shouldContain "follow(parseLink(link || '${Screen.PROXY_ID}'));"
     }
 
     // ==================== The dots ====================
@@ -132,13 +139,18 @@ class ScreensScriptTest : StringSpec() {
     // A request the page can't read, which succeeds whenever the screen answers, and none while the page is hidden.
     "each screen should be probed without reading its answer, and not while the page is hidden" {
       // Without the session cookie, so a page left open doesn't keep its login from going idle.
+      // A HEAD, so no screen renders a page for it, one at a time for each screen.
       js shouldContain
-        "fetch(frame.getAttribute('data-probe'), { mode: 'no-cors', cache: 'no-store', credentials: 'omit' })"
+        "fetch(frame.getAttribute('data-probe'), { method: 'HEAD', mode: 'no-cors', cache: 'no-store', " +
+        "credentials: 'omit' })"
+      body("probe") shouldContain "if (probing[id]) return;"
       js shouldContain "PROBE_INTERVAL_MILLIS = ${ScreensScript.PROBE_INTERVAL_MILLIS}"
       js shouldContain "document.addEventListener('visibilitychange'"
       js shouldContain "if (document.hidden) return;"
       // A screen that comes back reloads its frame, now if it's shown, else when it next is.
       body("mark") shouldContain "if (up && wasDown && frame.getAttribute('src'))"
+      // Only on a change, so a probe that finds the screen as it was touches nothing.
+      body("mark") shouldContain "if (tab.classList.contains(up ? 'up' : 'down')) return;"
     }
 
     "each dot should say its state in words, for a screen reader" {
@@ -151,11 +163,14 @@ class ScreensScriptTest : StringSpec() {
       js shouldContain "evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight'"
       js shouldContain "if (evt.shiftKey) fillRight(id); else select(id);"
       js shouldContain "evt.metaKey || evt.ctrlKey"
+      // Not a held key, which would load every screen on the way.
+      js shouldContain "evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat"
     }
 
     "the All layout should scale each frame to its tile, laid out at 1280 by 800" {
       js shouldContain "new ResizeObserver("
-      js shouldContain "view.style.setProperty('--s', Math.min(1, view.clientWidth / ${ScreensScript.FRAME_WIDTH}))"
+      js shouldContain "var s = String(Math.min(1, entry.contentRect.width / ${ScreensScript.FRAME_WIDTH}));"
+      js shouldContain "if (view.style.getPropertyValue('--s') !== s) view.style.setProperty('--s', s);"
       ScreensCss.CSS shouldContain "width:${ScreensScript.FRAME_WIDTH}px; height:${ScreensScript.FRAME_HEIGHT}px;"
     }
 

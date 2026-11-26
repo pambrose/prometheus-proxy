@@ -26,6 +26,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.dashboard.DashboardCss
 import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.proxy.dashboard.DashboardFixtures.PROXY_NAME
 import io.prometheus.proxy.dashboard.ScreensHtml.renderScreens
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
@@ -100,12 +101,14 @@ class ScreensHtmlTest : StringSpec() {
       }
     }
 
-    // A frame loads the first time its pane shows, so a page holding many screens loads only the one it opens on.
+    // A frame loads the first time its pane shows, so a page holding many screens loads only the one it opens on. Its
+    // start is its url and start joined, which the script loads and Open in a tab opens.
     "each pane should hold a frame with no src, its url and start in data attributes, and its down notice" {
       page().apply {
         attributeValues("iframe", "frame", "data-url") shouldBe
           ["/dashboard", "http://a:8095/dashboard", "http://g:3000"]
-        attributeValues("iframe", "frame", "data-start") shouldBe ["", "", "/d/x?kiosk"]
+        attributeValues("iframe", "frame", "data-start") shouldBe
+          ["/dashboard", "http://a:8095/dashboard", "http://g:3000/d/x?kiosk"]
         attributeValues("iframe", "frame", "title") shouldBe [PROXY_NAME, "agent-east", "Grafana"]
         Regex("""<iframe\b[^>]*\ssrc=""").containsMatchIn(this) shouldBe false
         this shouldContain """<div class="down"><strong>Grafana isn't answering.</strong>"""
@@ -206,9 +209,5 @@ class ScreensHtmlTest : StringSpec() {
       ScreensCss.CSS shouldContain ".nav a.screen.up::before { background:var(--ok); }"
       ScreensCss.CSS shouldContain ".nav a.screen.down::before { background:var(--crit); }"
     }
-  }
-
-  private companion object {
-    const val PROXY_NAME = "Proxy: proxy-host:8080"
   }
 }

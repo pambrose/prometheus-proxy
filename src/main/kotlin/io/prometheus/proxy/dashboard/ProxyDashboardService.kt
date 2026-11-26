@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import com.pambrose.common.util.hostInfo
 import io.prometheus.common.MetricBuilders.metricLabel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -36,7 +37,6 @@ import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardService
 import io.prometheus.common.dashboard.DashboardSettings
 import io.prometheus.common.dashboard.DashboardSite
-import io.prometheus.common.dashboard.Framing
 import io.prometheus.common.dashboard.ScrapeNowHtml
 import io.prometheus.common.dashboard.href
 import io.prometheus.proxy.ProxyEvent
@@ -178,7 +178,7 @@ internal class ProxyDashboardService(
         maxSessions = dashboardConfig.maxSessions,
         allowedOrigins = dashboardConfig.allowedOrigins,
         allowedHosts = dashboardConfig.allowedHosts,
-        framing = Framing.of(dashboardConfig.framingEnabled, hasScreens = screens.isNotEmpty()),
+        framing = proxy.options.dashboardFraming,
         login = login,
         loginHeading = LOGIN_HEADING,
         icons = LinkIcon.entries.associate { it.fileName to it.resource },
@@ -191,12 +191,14 @@ internal class ProxyDashboardService(
     val routeBase = server.routeBase
     val loginEnabled = server.loginEnabled
     // Outside the base, while screens are listed; with none it's left unrouted, so it answers 404. A page of its own,
-    // which nothing pushes to, rendered from the screens checked at startup and the proxy's name, as its bar gives it.
+    // which nothing pushes to, rendered from what startup settled: the screens, and the proxy's name, as its bar gives
+    // it, without collecting a snapshot.
+    val screensPage by lazy {
+      val proxyName = ProxySnapshot.dashboardName(hostInfo.hostName, proxy.scrapePort)
+      ScreensHtml.Page(proxyName, routeBase, screens, loginEnabled)
+    }
     if (screens.isNotEmpty())
-      get(SCREENS_PATH) {
-        val page = ScreensHtml.Page(server.snapshots.recent().dashboardName, routeBase, screens, loginEnabled)
-        call.respondHtml { with(ScreensHtml) { renderScreens(page) } }
-      }
+      get(SCREENS_PATH) { call.respondHtml { with(ScreensHtml) { renderScreens(screensPage) } } }
     get(server.basePath) {
       val snapshot = server.snapshots.recent()
       call.respondHtml {

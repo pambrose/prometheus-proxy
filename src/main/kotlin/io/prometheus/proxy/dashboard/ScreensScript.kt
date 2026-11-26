@@ -16,7 +16,6 @@
 
 package io.prometheus.proxy.dashboard
 
-import io.prometheus.common.dashboard.DashboardPage.ANNOUNCER_ID
 import io.prometheus.common.dashboard.DashboardPage.THEME_BUTTON_ID
 import io.prometheus.common.dashboard.ThemeScript
 import io.prometheus.proxy.dashboard.Screen.Companion.ALL_ID
@@ -83,28 +82,23 @@ internal object ScreensScript {
       var isThePage = false;
       var handedOver = false;
 
-      function say(text) {
-        var region = document.getElementById('$ANNOUNCER_ID');
-        if (region) region.textContent = text;
-      }
-      // The theme button, which every page with the bar shares (see ThemeScript).
+      // The theme button and the live region's say, which every page with the bar shares (see ThemeScript).
       ${ThemeScript.indented("      ")}
 
       function frameOf(id) {
         return panes[id].querySelector('iframe');
       }
-      // A screen's url and what follows it, a path from / or a query from ?, with one slash between.
-      function join(url, rest) {
-        return rest.charAt(0) === '/' ? url.replace(/\/+$/, '') + rest : url + rest;
-      }
+      // Where a screen starts, its url and its start, which the page renders joined (ScreensHtml).
       function startUrl(frame) {
-        return join(frame.getAttribute('data-url'), frame.getAttribute('data-start'));
+        return frame.getAttribute('data-start');
       }
-      // A link's path: empty is the screen's url itself. Its leading slashes and backslashes go, so at a root mount,
-      // where the proxy's url is /, a path can't join to //host, which a browser reads as another site.
+      // A link's path, after the screen's url with one slash between; empty is the url itself. Its leading slashes and
+      // backslashes go, so at a root mount, where the proxy's url is /, a path can't join to //host, which a browser
+      // reads as another site.
       function pathUrl(frame, path) {
+        var url = frame.getAttribute('data-url');
         var rest = path.replace(/^[\/\\]+/, '');
-        return rest === '' ? frame.getAttribute('data-url') : join(frame.getAttribute('data-url'), '/' + rest);
+        return rest === '' ? url : url.replace(/\/+$/, '') + '/' + rest;
       }
       // The one place a frame's src is set: by the load rule (load), and for a screen that answers again (mark). The
       // pane's Open in a tab follows it.
@@ -128,7 +122,7 @@ internal object ScreensScript {
         else if (panes[id].hasAttribute('data-reload')) setSrc(frame, frame.getAttribute('src'));
       }
       function otherThan(id) {
-        return second && second !== id && panes[second] ? second : ids.filter(function (o) { return o !== id; })[0];
+        return second && second !== id ? second : ids.filter(function (o) { return o !== id; })[0];
       }
       function linkOf(id) {
         var path = loaded[id];
@@ -137,13 +131,13 @@ internal object ScreensScript {
       // Shows the layout and its screens, marks the tabs and the layout buttons, and puts it in the hash.
       function render() {
         stage.className = 'stage ' + layout;
-        var shown = layout === '$ALL_ID' ? ids : layout === 'split' ? [first, second] : [first];
+        var shown = layout === 'all' ? ids : layout === 'split' ? [first, second] : [first];
         ids.forEach(function (id) {
           var at = shown.indexOf(id);
           var tab = tabs[id];
-          var current = layout !== '$ALL_ID' && id === first;
+          var current = layout !== 'all' && id === first;
           panes[id].classList.toggle('shown', at >= 0);
-          panes[id].style.gridColumn = layout === '$ALL_ID' || at < 0 ? '' : String(at + 1);
+          panes[id].style.gridColumn = layout === 'all' || at < 0 ? '' : String(at + 1);
           tab.classList.toggle('on', current);
           tab.classList.toggle('second', layout === 'split' && id === second);
           if (current) tab.setAttribute('aria-current', 'page'); else tab.removeAttribute('aria-current');
@@ -152,7 +146,7 @@ internal object ScreensScript {
         Array.prototype.forEach.call(document.querySelectorAll('.layouts button'), function (b) {
           b.setAttribute('aria-pressed', String(b.getAttribute('data-layout') === layout));
         });
-        var hash = layout === '$ALL_ID' ? '$ALL_ID' : layout === 'split' ? linkOf(first) + '+' + linkOf(second) : linkOf(first);
+        var hash = layout === 'all' ? '$ALL_ID' : shown.map(linkOf).join('+');
         history.replaceState(null, '', '#' + hash);
       }
       // A link's pane, or the proxy's tab, with no path, for an id the page doesn't have.
@@ -184,18 +178,9 @@ internal object ScreensScript {
       // Follows a link: its layout and its screens, loading each pane's path when it has one, and bringing up a bare
       // id's screen as it was.
       function follow(link) {
-        if (link.layout === '$ALL_ID') {
-          layout = '$ALL_ID';
-          render();
-          return;
-        }
-        first = link.panes[0].id;
-        if (link.panes.length > 1) {
-          layout = 'split';
-          second = link.panes[1].id === first ? otherThan(first) : link.panes[1].id;
-        } else {
-          layout = 'one';
-        }
+        layout = link.layout;
+        if (link.panes.length) first = link.panes[0].id;
+        if (layout === 'split') second = link.panes[1].id === first ? otherThan(first) : link.panes[1].id;
         link.panes.forEach(function (pane) {
           if (pane.path !== null) load(pane.id, pane.path);
         });
@@ -203,7 +188,7 @@ internal object ScreensScript {
       }
       // A tab's click: its screen alone, or on the left in Split, trading places with the right pane's if it was there.
       function select(id) {
-        if (layout === '$ALL_ID') layout = 'one';
+        if (layout === 'all') layout = 'one';
         if (layout === 'split' && id === second) second = first;
         first = id;
         render();
@@ -239,8 +224,8 @@ internal object ScreensScript {
         var bar = evt.target.closest('.pane-bar');
         if (evt.target.closest('#$THEME_BUTTON_ID')) cycleTheme();
         else if (layoutButton) setLayout(layoutButton.getAttribute('data-layout'));
-        else if (evt.target.closest('#$HANDOFF_ID button')) stayHere();
-        else if (bar && layout === '$ALL_ID' && !evt.target.closest('a, select'))
+        else if (evt.target.closest('#$HANDOFF_ID button')) becomeThePage();
+        else if (bar && layout === 'all' && !evt.target.closest('a, select'))
           select(bar.closest('.pane').getAttribute('data-screen'));
       });
       // A pane's screen picker, in Split: the pane's slot takes the screen picked, which trades places with the other
@@ -252,19 +237,19 @@ internal object ScreensScript {
         var picked = picker.value;
         picker.value = own;
         if (own === first) {
-          if (picked === second) second = first;
-          first = picked;
+          select(picked);
         } else {
           if (picked === first) first = second;
           second = picked;
+          render();
         }
-        render();
       });
       // Left and Right step through the tabs, from a focused tab or the current one, wrapping, as the dashboards' do.
-      // Not while typing, nor with a modifier, and not from inside a frame, whose keys are its own.
+      // Not while typing, nor with a modifier, nor a held key, which would load every screen on the way, and not from
+      // inside a frame, whose keys are its own.
       document.body.addEventListener('keydown', function (evt) {
         if (evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight') return;
-        if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || !evt.target.closest) return;
+        if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat || !evt.target.closest) return;
         if (typingIn(evt.target)) return;
         var focusedTab = evt.target.closest('#$NAV_ID a');
         var from = focusedTab ? focusedTab.getAttribute('data-screen') : first;
@@ -277,12 +262,15 @@ internal object ScreensScript {
         if (isThePage) follow(parseLink(location.hash.slice(1)));
       });
 
-      // All: each screen lays out at $FRAME_WIDTH wide and is drawn at its tile's width.
+      // All: each screen lays out at $FRAME_WIDTH wide and is drawn at its tile's width, from the size the observer
+      // measured, so no tile forces a layout, and only on a change, since the scale sets the view's height, which the
+      // observer sees again.
       if (window.ResizeObserver) {
         var sizer = new ResizeObserver(function (entries) {
           entries.forEach(function (entry) {
             var view = entry.target;
-            view.style.setProperty('--s', Math.min(1, view.clientWidth / $FRAME_WIDTH));
+            var s = String(Math.min(1, entry.contentRect.width / $FRAME_WIDTH));
+            if (view.style.getPropertyValue('--s') !== s) view.style.setProperty('--s', s);
           });
         });
         ids.forEach(function (id) {
@@ -290,10 +278,11 @@ internal object ScreensScript {
         });
       }
 
-      // Marks a screen up or down from its probe, on its tab, in words for a screen reader, and on its pane. A screen
-      // that answers again reloads its frame, at once if it's shown, else when it next shows (show).
+      // Marks a screen up or down from its probe, on its tab, in words for a screen reader, and on its pane, when that
+      // changes. A screen that answers again reloads its frame, at once if it's shown, else when it next shows (show).
       function mark(id, up) {
         var tab = tabs[id];
+        if (tab.classList.contains(up ? 'up' : 'down')) return;
         var pane = panes[id];
         var frame = frameOf(id);
         var wasDown = tab.classList.contains('down');
@@ -303,16 +292,21 @@ internal object ScreensScript {
         state.textContent = up ? 'up' : 'not answering';
         pane.classList.toggle('is-down', !up);
         if (up && wasDown && frame.getAttribute('src')) {
-          if (pane.classList.contains('shown')) setSrc(frame, frame.getAttribute('src'));
-          else pane.setAttribute('data-reload', '');
+          pane.setAttribute('data-reload', '');
+          if (pane.classList.contains('shown')) show(id);
         }
       }
-      // A request the page can't read, which succeeds whenever the screen answers and fails when its port doesn't. It
-      // sends no cookie, so a page left open doesn't keep its login from going idle, as the dashboards' pages don't.
+      // A request the page can't read, which succeeds whenever the screen answers and fails when its port doesn't. A
+      // HEAD, so no screen renders a page for it, and with no cookie, so a page left open doesn't keep its login from
+      // going idle, as the dashboards' pages don't. One at a time for each screen, so a slow one doesn't pile them up.
+      var probing = Object.create(null);
       function probe(id) {
+        if (probing[id]) return;
+        probing[id] = true;
         var frame = frameOf(id);
-        fetch(frame.getAttribute('data-probe'), { mode: 'no-cors', cache: 'no-store', credentials: 'omit' })
-          .then(function () { mark(id, true); }, function () { mark(id, false); });
+        fetch(frame.getAttribute('data-probe'), { method: 'HEAD', mode: 'no-cors', cache: 'no-store', credentials: 'omit' })
+          .then(function () { mark(id, true); }, function () { mark(id, false); })
+          .then(function () { probing[id] = false; });
       }
       function probeAll() {
         if (document.hidden) return;
@@ -331,13 +325,10 @@ internal object ScreensScript {
       try {
         channel = new BroadcastChannel('prometheus-proxy-screens');
       } catch (e) {}
-      function becomeThePage(text) {
+      function becomeThePage() {
         isThePage = true;
         handoff.hidden = true;
-        follow(text ? parseLink(text) : { layout: 'one', panes: [{ id: '$PROXY_ID', path: null }] });
-      }
-      function stayHere() {
-        becomeThePage(link);
+        follow(parseLink(link || '$PROXY_ID'));
       }
       if (channel) {
         channel.onmessage = function (evt) {
@@ -348,15 +339,16 @@ internal object ScreensScript {
           } else if (data.type === 'taken' && data.id === ticket && !isThePage && !handedOver) {
             handedOver = true;
             window.close();
-            setTimeout(function () { document.getElementById('$HANDOFF_ID').hidden = false; }, 100);
+            setTimeout(function () { handoff.hidden = false; }, 100);
           }
         };
       }
-      (function () {
-        if (!link || !channel) { becomeThePage(link); return; }
+      if (link && channel) {
         channel.postMessage({ type: 'link', link: link, id: ticket });
-        setTimeout(function () { if (!handedOver) becomeThePage(link); }, HANDOFF_WAIT_MILLIS);
-      })();
+        setTimeout(function () { if (!handedOver) becomeThePage(); }, HANDOFF_WAIT_MILLIS);
+      } else {
+        becomeThePage();
+      }
     })();
     """.trimIndent()
 }

@@ -24,7 +24,6 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.dashboard.CommonSettings
 import io.prometheus.common.dashboard.DashboardValues
-import io.prometheus.common.dashboard.Framing
 import io.prometheus.common.dashboard.Setting
 import io.prometheus.common.dashboard.SettingText.grpcDefault
 import io.prometheus.common.dashboard.SettingText.limit
@@ -251,7 +250,7 @@ internal object ProxySettings {
             maxSessions = maxSessions,
             allowedOrigins = allowedOrigins,
             allowedHosts = allowedHosts,
-            framing = Framing.of(framingEnabled, hasScreens = options.dashboardScreens.isNotEmpty()),
+            framing = options.dashboardFraming,
           ),
         extra = listOf(Setting("Departed paths kept", secs(departedPathRetentionSecs))) +
           links.ifEmpty { listOf(Setting("Links", "none")) } +

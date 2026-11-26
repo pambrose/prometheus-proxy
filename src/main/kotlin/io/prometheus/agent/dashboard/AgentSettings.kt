@@ -169,7 +169,7 @@ internal object AgentSettings {
             maxSessions = maxSessions,
             allowedOrigins = allowedOrigins,
             allowedHosts = allowedHosts,
-            framing = Framing.of(framingEnabled, hasScreens = false),
+            framing = Framing.of(framingEnabled),
           ),
       )
     }

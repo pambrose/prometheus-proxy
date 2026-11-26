@@ -278,10 +278,6 @@ internal class DashboardScript(
       }
       // The result goes to the live region too: the mark is an icon and a colour, which a screen reader
       // does not report. A click is the user's own act, so this speaks once per click, never per push.
-      function say(text) {
-        var region = document.getElementById('$ANNOUNCER_ID');
-        if (region) region.textContent = text;
-      }
       function copyFrom(btn) {
         // The id, not the element: a push can replace the button before the clipboard write settles.
         var id = btn.id;
@@ -352,7 +348,7 @@ internal class DashboardScript(
         var toggle = document.getElementById('$COLUMN_GUIDE_TOGGLE_ID');
         if (toggle) toggle.focus();
       }
-      // The theme button, which every page with the bar shares (see ThemeScript).
+      // The theme button and the live region's say, which every page with the bar shares (see ThemeScript).
       ${ThemeScript.indented("      ")}
       // One listener on <body> for every button in the table, the result panel, the column guide, and the theme button:
       // the push loop replaces the table every frame, and a back or forward the theme button, so a button's own
