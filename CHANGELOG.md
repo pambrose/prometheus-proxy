@@ -61,6 +61,23 @@ All notable changes to this project are documented in this file.
 - The dashboards' top bar drew the status's last line over the tabs in a window about 720 to 900 pixels wide, as a
   screens page's Split pane often is, since the status shrank without a floor. The status and the buttons after it
   (`DashboardPage.barTail`) now keep together, beside the tabs while they fit, else on a row of their own above them
+- A path with a second leading slash, such as `//metrics`, lost one slash at the agent and one at the proxy, which took
+  it as `metrics`, while the agent kept it as `/metrics`: a `pathConfigs` entry 404ed on every scrape, a discovery
+  entry was unregistered and registered again on every reconcile, taking over a static `metrics` as it did, and
+  `agent.metrics.proxyPath = "//"` left the agent collecting its metrics for a path it never registered. The agent now
+  refuses such a path, as it does one of more than one segment (see Behavior Changes)
+- With `agent.internal.rejectedPathRetryMaxSecs = 1`, an agent whose path another agent took over sent reclaims as fast
+  as the proxy refused them, since its reclaim task slept until a second before the next try was due, and woke at the
+  proxy's notice after each refusal to try a path due within a second. Otherwise it tried each reclaim a second early.
+  It now sleeps until a try is due, and tries the paths due within a second of it only once one is
+- The proxy let a second `writeChunkedResponsesToProxy` stream on a connection, or of an identity with the transport
+  filter disabled, extend or finish a chunked transfer the first had opened, and the two could update its checksum,
+  byte count, and buffer at once, which could corrupt the result or let it past `maxZippedContentSizeMBytes`. Only the
+  stream that opened a transfer may now; the proxy warns once of another's data and ignores it
+- The Helm charts failed `helm upgrade --reuse-values` from a 4.6.0 release, as the agent chart's README tells, with a
+  nil pointer on `dashboard.login` (both charts) or `dashboard` (the agent chart, whose 4.6.0 had none), since that
+  upgrade keeps the old chart's values. Each dashboard value the release lacks now takes its default, and `make
+  helm-lint` renders both charts with such values
 
 ### Behavior Changes
 
@@ -70,6 +87,10 @@ All notable changes to this project are documented in this file.
   `X-Frame-Options: SAMEORIGIN`, so its own `/screens` can still frame the dashboard and no other site can
 - `startIfConfigured(onFailure)` guards its `onFailure` as it does the builder's handlers: one that throws is logged,
   and the start still returns null, where it threw out of the call
+- An agent refuses a path of more than one segment, such as `app/metrics` or `//metrics`, which the proxy refuses at
+  registration: a `pathConfigs` entry, a `source()` path, or `agent.metrics.proxyPath` fails the agent's startup,
+  naming it, where the proxy refused the path at each connect, and a discovery entry is skipped when the file is read,
+  as one without a path or a URL is
 - The dashboards' theme picker is one button in place of three, to take less of the top bar: it shows the theme in
   force, light, dark, or auto, and each click moves to the next, in that order; its tooltip names the theme in force
   and the next
@@ -86,6 +107,10 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
+- Add the November 26, 2026 code review (`docs/CODE_REVIEW_NOVEMBER_26_2026.md`): 70 findings (4 high, 35 medium,
+  31 low), each with a status, and a 15-step fix plan in waves of steps that can run in parallel. The November 23
+  review moves to `docs/archive/`, since all 72 of its findings are resolved, and
+  `docs/security-agent-authentication.md` links it there
 - The Embedded Agent page's builder table and `EmbeddedAgentInfo` section give `onFailure`, `reportFailure`, and
   `stopTimeout`, its failure example adds the handler to the builder, and its shutdown examples set a stop timeout
   inside the hook's wait.
@@ -675,10 +700,10 @@ All notable changes to this project are documented in this file.
   demo isn't running; the nginx demo's config scenarios wait for nginx's reload and print their headline first. Every
   demo page's scenario table has a How it works column, the Ktor and plain Kotlin demos' images are named
   `ktor-app` and `plain-kotlin-app`, and the demos' messages end each URL's sentence with it
-- Add the November 23, 2026 code review (`docs/CODE_REVIEW_NOVEMBER_23_2026.md`): 72 findings (8 medium, 64 low, none
-  high), each with a status, and a 17-step fix plan in waves of steps that can run in parallel. The November 11 review
-  moves to `docs/archive/`, since all 43 of its findings are resolved, and `docs/security-agent-authentication.md`
-  links it there
+- Add the November 23, 2026 code review (`docs/archive/CODE_REVIEW_NOVEMBER_23_2026.md`, archived once all 72 of its
+  findings were resolved): 72 findings (8 medium, 64 low, none high), each with a status, and a 17-step fix plan in
+  waves of steps that can run in parallel. The November 11 review moves to `docs/archive/`, since all 43 of its
+  findings are resolved, and `docs/security-agent-authentication.md` links it there
 - Each demo's README and page has a What This Demo Shows table, a row for each part of its tour, with what it shows
   and why, linked from `make up` and `make tour`. The demos point to their READMEs and to their pages on the docs site,
   which describe the latest release, so a demo run from `master` between releases still names a guide that matches

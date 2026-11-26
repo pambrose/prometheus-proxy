@@ -10,7 +10,8 @@ The agent re-reads it every {{ .Values.discovery.reconcileIntervalSecs }}s, afte
 
 Check that it connected and registered its paths:
   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "prometheus-agent.fullname" . }}
-{{- if .Values.dashboard.enabled }}
+{{- $dashboard := include "prometheus-agent.dashboard" . | fromYaml }}
+{{- if $dashboard.enabled }}
 {{- if include "prometheus-agent.dashboardIsLocal" . }}
 
 The agent's dashboard listens on the pod's loopback only (dashboard.host), so nothing but kubectl port-forward
@@ -19,14 +20,14 @@ reaches it.
 
 The agent's dashboard is not on the Service.
 {{- end }}
-{{- if .Values.dashboard.login.existingSecret }}
-It asks for the login ({{ .Values.dashboard.login.username }}, with the password in the
-{{ .Values.dashboard.login.existingSecret }} Secret). Reach it with:
+{{- if $dashboard.login.existingSecret }}
+It asks for the login ({{ $dashboard.login.username }}, with the password in the
+{{ $dashboard.login.existingSecret }} Secret). Reach it with:
 {{- else }}
 It is unauthenticated (set dashboard.login.existingSecret to require a login). Reach it with:
 {{- end }}
-  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-agent.fullname" . }} {{ .Values.dashboard.port }}
-then open http://localhost:{{ .Values.dashboard.port }}/dashboard
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-agent.fullname" . }} {{ $dashboard.port }}
+then open http://localhost:{{ $dashboard.port }}/dashboard
 {{- if not (include "prometheus-agent.dashboardIsLocal" .) }}
 {{- with include "prometheus-agent.dashboardHost" . }}
 

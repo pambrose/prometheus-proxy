@@ -29,6 +29,9 @@ import java.util.zip.CRC32
  * a single byte stream, validating running CRC32 checksums and byte/chunk counts at each
  * step. On successful summary validation, it produces a complete [ScrapeResults].
  *
+ * Not thread-safe: only the `writeChunkedResponsesToProxy` stream that opened a transfer may apply its chunks and
+ * summary, which a single coroutine reads in turn (`ProxyServiceImpl`'s `ChunkedResponseReader.owns`).
+ *
  * @param response the initial chunked response containing the header
  * @param maxZippedContentSize maximum allowed total zipped content size in bytes
  * @param owner the agent the scrape was sent to, taken from its tracked request when the header arrived. It decides

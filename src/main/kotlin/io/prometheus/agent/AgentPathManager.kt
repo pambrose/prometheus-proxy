@@ -28,6 +28,7 @@ import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.AgentValues.labelsProblem
 import io.prometheus.common.AgentValues.pathCharacterProblem
+import io.prometheus.common.AgentValues.segmentProblem
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.grpc.PathNotice
@@ -189,10 +190,12 @@ internal class AgentPathManager(
             "Path /${shownValue(path)} is given by ${given.joinToString(" and ") { it.origin }}"
           }
         }
-        // The proxy refuses a path no scrape can reach for a character in it (November #16), so such an entry fails
-        // here, at startup, where it can be fixed, rather than at every connect.
+        // The proxy refuses a path no scrape can reach for a character in it (November #16), or for a slash left in it
+        // (November 26 #11), so such an entry fails here, at startup, where it can be fixed, rather than at every
+        // connect, or, for "//foo", which the proxy took as "foo", at every scrape.
         configs.forEach { c ->
-          val problem = pathCharacterProblem(c.path.removePrefix("/"))
+          val key = c.path.removePrefix("/")
+          val problem = pathCharacterProblem(key) ?: segmentProblem(key)
           require(problem == null) {
             "Path '${shownValue(c.path)}', given by ${c.origin}, is one the proxy refuses: $problem"
           }
@@ -485,8 +488,13 @@ internal class AgentPathManager(
   // Tries to take back each taken-over path whose retry is due within RECLAIM_WINDOW, as a reclaim, which the proxy
   // refuses while a live agent of another launch holds it. Each path's refusal sets its own next try, so the tries of
   // many taken-over paths spread out, and waking for each alone made every round scan them all once per path. Each
-  // path is isolated, as in retryRejectedStaticPaths.
+  // path is isolated, as in retryRejectedStaticPaths. Nothing is tried until a path is due: the window gathers the
+  // paths due soon after it. The proxy's notice after each refused reclaim wakes the reclaim task, and a pass that
+  // tried any path due within the window tried one just refused again at once when its backoff was no longer than the
+  // window, as with rejectedPathRetryMaxSecs = 1, as fast as the proxy could refuse it (November 26 #12).
   suspend fun reclaimTakenOverPaths() {
+    if (paths.values.none { it.takenOver?.backoff?.isDue == true })
+      return
     for ((path, entry) in paths) {
       val due = entry.takenOver?.backoff?.remaining?.let { it <= RECLAIM_WINDOW } ?: false
       if (!due)
@@ -546,12 +554,13 @@ internal class AgentPathManager(
   }
 
   // Runs reclaimTakenOverPaths while [active] holds -- the connection's reclaim task, which Agent.launchConnectionTasks
-  // starts -- sleeping until the next path's try is due within RECLAIM_WINDOW, or until a notice, with none taken over.
+  // starts -- sleeping until the next path's try is due, or until a notice, with none taken over. It slept until a
+  // second before, RECLAIM_WINDOW, which tried every path a second early, and with rejectedPathRetryMaxSecs = 1, never
+  // slept at all (November 26 #12).
   suspend fun reclaimTakenOverPathsWhile(active: () -> Boolean) {
     while (active()) {
       val wait = paths.values.minOfOrNull { it.takenOver?.backoff?.remaining ?: Duration.INFINITE }
         ?.takeIf { it.isFinite() }
-        ?.minus(RECLAIM_WINDOW)
       when {
         wait == null -> reclaimWake.receive()
         wait > Duration.ZERO -> withTimeoutOrNull(wait) { reclaimWake.receive() }
@@ -618,12 +627,15 @@ internal class AgentPathManager(
   }
 
   // The desired discovered entries keyed by normalized path, the last one winning for a path listed twice. An entry
-  // colliding with a static path is dropped (static wins). Callers MUST hold pathMutex.
+  // colliding with a static path is dropped (static wins). So is one a source should have dropped as unusable, which
+  // FileDiscoverySource does, and reports: a key with a slash left, as "//foo" gives, would lose it again when
+  // registered, and be registered on every reconcile under a key it isn't kept by (November 26 #11). Callers MUST hold
+  // pathMutex.
   private fun desiredDiscoveredPaths(desired: List<DiscoveredPath>): Map<String, DiscoveredPath> {
     val desiredByPath = LinkedHashMap<String, DiscoveredPath>()
     val collisions = LinkedHashSet<String>()
     val duplicates = LinkedHashSet<String>()
-    for (entry in desired) {
+    for (entry in desired.filter { it.usable }) {
       val path = entry.path.removePrefix("/")
       if (isStaticPath(path)) {
         collisions += path
@@ -763,6 +775,11 @@ internal class AgentPathManager(
     require(url.isNotBlank()) { "Blank URL" }
 
     val path = pathVal.removePrefix("/")
+    // Each path is checked as it comes in: pathConfigs at startup, and a discovered one by DiscoveredPath.usable, which
+    // keeps a key, a discovered path or a reclaim's, from starting with a slash this would drop. A slash left here
+    // would be dropped again by the proxy, which would take the path under a key this agent never looks it up by
+    // (November 26 #11).
+    require(segmentProblem(path) == null) { "Path /${shownValue(path)} isn't one segment" }
     val labelsJson = labels.defaultEmptyJsonObject()
     val context = PathContext(0L, path, url, labelsJson, source, filtersByPath[path], target.source)
     registering[path] = NO_NOTICE
@@ -959,7 +976,7 @@ internal class AgentPathManager(
     // eventually. No other cause does, including none (a proxy predating the field) and one this agent doesn't know.
     private val RETRYABLE_CAUSES = setOf(HELD_BY_ANOTHER_IDENTITY, CONSOLIDATION_MISMATCH, HELD_BY_ANOTHER_AGENT)
 
-    // How close together reclaims are tried in one pass; see reclaimTakenOverPaths.
+    // How soon after a path that's due the others are tried in its pass; see reclaimTakenOverPaths.
     private val RECLAIM_WINDOW = 1.seconds
 
     // A path's place in registering while no notice about it has come.

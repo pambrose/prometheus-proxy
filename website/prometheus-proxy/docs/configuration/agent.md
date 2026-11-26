@@ -53,10 +53,11 @@ Each path config entry has these fields:
     warning naming it, and the agent's other paths still register: the proxy answers a blank path with a
     404, so such an entry could only ever be a dead registration.
 
-    A `path` is one URL segment — it must not contain an embedded `/`. The proxy serves each
-    registered path at `/<path>` (a one-segment route), so a multi-segment value like
-    `app/metrics` is rejected at registration: the agent logs the failure and keeps its other paths,
-    but reconnects if the proxy rejects every static path this way. Use `app_metrics` instead.
+    A `path` is one URL segment — it must not contain an embedded `/`, nor a second leading one, as
+    `//app_metrics` has. The proxy serves each registered path at `/<path>` (a one-segment route),
+    so a multi-segment value like `app/metrics` could never be scraped: the agent refuses a
+    `pathConfigs` entry with one at startup, naming it, and skips a discovery entry with one, and the
+    proxy refuses such a path at registration. Use `app_metrics` instead.
 
     A `path` also can't contain whitespace, a control character, `?`, or `#`: no scrape's request path
     can carry one, so Prometheus could never reach such a path. The agent refuses a `pathConfigs` entry
@@ -118,6 +119,7 @@ and is shown verbatim on the [Example Configs](../examples.md) page.
 | File missing / unreadable / malformed            | Keeps the last-known-good set (a read failure drops nothing), and registers it again after a reconnect                                                                                                                                                                                                    |
 | Valid but empty file                             | Removes all discovered paths                                                                                                                                                                                                                                                                              |
 | Entry with a blank `path` (or just `/`) or `url` | Skipped when the file is read, reported once until the set of skipped entries changes; the file's other entries still apply                                                                                                                                                                               |
+| Entry whose `path` has more than one segment     | Skipped the same way, whether `app/metrics` or `//app_metrics`, whose first segment is empty                                                                                                                                                                                                              |
 | Seeing what discovery did                        | The agent's `/debug` page lists the discovered paths it registered and the entries it skipped                                                                                                                                                                                                             |
 | `pathConfigs` empty                              | Discovery-only — every path comes from the file                                                                                                                                                                                                                                                           |
 | Proxy rejects a discovered path                  | Logged once. A rejection that can clear is retried with a backoff: on the next poll, then after one `reconcileIntervalSecs`, then after waits that double up to `agent.internal.rejectedPathRetryMaxSecs` (5 min). Any other rejection is tried again only when the entry changes or the agent reconnects |

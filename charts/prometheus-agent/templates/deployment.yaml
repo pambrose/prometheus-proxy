@@ -1,3 +1,4 @@
+{{- $dashboard := include "prometheus-agent.dashboard" . | fromYaml -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,7 +52,7 @@ spec:
           {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          {{- if or .Values.metrics.enabled .Values.admin.enabled .Values.dashboard.enabled }}
+          {{- if or .Values.metrics.enabled .Values.admin.enabled $dashboard.enabled }}
           ports:
             {{- if .Values.metrics.enabled }}
             - name: metrics
@@ -61,9 +62,9 @@ spec:
             - name: admin
               containerPort: {{ .Values.admin.port }}
             {{- end }}
-            {{- if .Values.dashboard.enabled }}
+            {{- if $dashboard.enabled }}
             - name: dashboard
-              containerPort: {{ .Values.dashboard.port }}
+              containerPort: {{ $dashboard.port }}
             {{- end }}
           {{- end }}
           env:
@@ -80,21 +81,21 @@ spec:
             - name: METRICS_PORT
               value: {{ .Values.metrics.port | quote }}
             - name: DASHBOARD_ENABLED
-              value: {{ .Values.dashboard.enabled | quote }}
+              value: {{ $dashboard.enabled | quote }}
             - name: DASHBOARD_PORT
-              value: {{ .Values.dashboard.port | quote }}
+              value: {{ $dashboard.port | quote }}
             {{- with include "prometheus-agent.dashboardHost" . }}
             - name: DASHBOARD_HOST
               value: {{ . | quote }}
             {{- end }}
-            {{- with .Values.dashboard.login.existingSecret }}
+            {{- with $dashboard.login.existingSecret }}
             - name: DASHBOARD_USERNAME
-              value: {{ $.Values.dashboard.login.username | quote }}
+              value: {{ $dashboard.login.username | quote }}
             - name: DASHBOARD_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ . }}
-                  key: {{ $.Values.dashboard.login.key }}
+                  key: {{ $dashboard.login.key }}
             {{- end }}
             {{- with .Values.agentToken.existingSecret }}
             - name: AGENT_TOKEN

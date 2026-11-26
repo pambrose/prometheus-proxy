@@ -88,13 +88,13 @@ internal class FileDiscoverySource(
     val fixed = reportedUnusable.isNotEmpty() && dropped.isEmpty()
     reportedUnusable = dropped
     if (fixed) {
-      logger.info { "Every discovery entry in $filePath has a path and a url again" }
+      logger.info { "Every discovery entry in $filePath has a single-segment path and a url again" }
     } else if (dropped.isNotEmpty()) {
       val described = dropped.map { "(path='${it.path}', url='${sanitizeUrl(it.url)}')" }
-      logger.warn { "Skipping ${dropped.size} discovery entries needing a path and a url: $described" }
+      logger.warn { "Skipping ${dropped.size} discovery entries needing a single-segment path and a url: $described" }
       activityLog?.record(
         AgentActivityKind.DISCOVERY_SKIPPED,
-        detail = "${dropped.size} entries need a path and a url: ${described.joinToString(", ")}",
+        detail = "${dropped.size} entries need a single-segment path and a url: ${described.joinToString(", ")}",
       )
     }
   }

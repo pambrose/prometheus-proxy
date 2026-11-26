@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -68,6 +69,18 @@ class AgentMetricsProxyPathOptionsTest : StringSpec() {
       shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "--metrics_proxy_path", "/"], false)
       }.message shouldContain "metricsProxyPath must name a path"
+    }
+
+    // "//" lost one slash here, leaving "/", which the path's check dropped as no path at all, so the agent collected
+    // its metrics for a path it never registered (November 26 #11). The proxy serves a path as one segment.
+    "a metricsProxyPath of more than one segment should be rejected" {
+      for (given in ["//", "//agent_metrics", "agent/metrics"]) {
+        withClue(given) {
+          shouldBeRejected {
+            agentOptions(["--name", "test", "--proxy", "host", "--metrics_proxy_path", given], false)
+          }.message shouldContain "one segment"
+        }
+      }
     }
 
     "proxyPathLabels without a proxyPath should be warned of, as they do nothing" {

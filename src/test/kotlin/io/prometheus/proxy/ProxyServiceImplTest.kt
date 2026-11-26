@@ -43,6 +43,7 @@ import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
+import io.mockk.CapturingSlot
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -80,6 +81,9 @@ import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
 import io.prometheus.proxy.ProxyPathManager.PathRejection
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow
@@ -119,8 +123,15 @@ class ProxyServiceImplTest : StringSpec() {
   private fun trackedScrape(owner: AgentContext = mockk(relaxed = true)): ScrapeRequestWrapper =
     mockk<ScrapeRequestWrapper>(relaxed = true).also { every { it.agentContext } returns owner }
 
-  // The owner a ChunkedContext built directly by a test records; ownership isn't what those tests check.
-  private val transferOwner = AgentContext("transfer-owner")
+  // Has this relaxed mock hand back the transfer a stream opens for [scrapeId], as the real manager does, since only
+  // the stream that opened a transfer may extend or finish it (November 26 #1). Returns the slot holding what it
+  // opened.
+  private fun AgentContextManager.keepsTransferFor(scrapeId: Long): CapturingSlot<ChunkedContext> {
+    val opened = slot<ChunkedContext>()
+    every { putChunkedContext(scrapeId, capture(opened)) } returns true
+    every { getChunkedContext(scrapeId) } answers { if (opened.isCaptured) opened.captured else null }
+    return opened
+  }
 
   // A test that checks what really happens to a scrape or a chunked transfer passes real managers (or spies on them);
   // the rest get relaxed mocks.
@@ -1992,8 +2003,9 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
 
-      // One context for the whole transfer: the chunk is applied to it, then the summary reads it.
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000, transferOwner)
+      // One context for the whole transfer, the one the header opened: the chunk is applied to it, then the summary
+      // reads it.
+      contextManager.keepsTransferFor(scrapeId)
 
       // NOT_SET message first, then a valid header-chunk-summary sequence
       val result = service.writeChunkedResponsesToProxy(flowOf(emptyResponse, header, chunk, summary))
@@ -2161,23 +2173,8 @@ class ProxyServiceImplTest : StringSpec() {
       val crc = CRC32()
       crc.update(data)
 
-      // The completed transfer's context, which its chunk is applied to and its summary then removes
-      val completedChunkedContext = ChunkedContext(
-        chunkedScrapeResponse {
-          header = headerData {
-            headerValidResponse = true
-            headerScrapeId = completedScrapeId
-            headerAgentId = "agent-1"
-            headerStatusCode = 200
-            headerContentType = "text/plain"
-            headerUrl = "http://test/metrics"
-          }
-        },
-        1000000,
-        transferOwner,
-      )
-
-      every { contextManager.getChunkedContext(completedScrapeId) } returns completedChunkedContext
+      // The completed transfer's context, which its header opens, its chunk is applied to, and its summary then removes
+      val completed = contextManager.keepsTransferFor(completedScrapeId)
       every { contextManager.removeChunkedContext(orphanedScrapeId) } returns mockk(relaxed = true)
 
       val header1 = chunkedScrapeResponse {
@@ -2234,7 +2231,7 @@ class ProxyServiceImplTest : StringSpec() {
       result shouldBe EMPTY_INSTANCE
 
       // Completed context was removed by summary processing (assignScrapeResults called), and not again by the sweep
-      verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId, completedChunkedContext) }
+      verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId, completed.captured) }
       verify(exactly = 0) { contextManager.removeChunkedContext(completedScrapeId) }
       verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any(), any()) }
       // Orphaned context should be cleaned up and failed during cleanup phase
@@ -2287,12 +2284,12 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
 
-      // Use a real ChunkedContext so applyChunk() actually validates
-      val context = ChunkedContext(header, 1000000, transferOwner)
-      every { contextManager.getChunkedContext(scrapeId) } returns context
+      // The real ChunkedContext the header opens, so applyChunk() actually validates
+      val opened = contextManager.keepsTransferFor(scrapeId)
 
       val service = ProxyServiceImpl(proxy)
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk))
+      val context = opened.captured
 
       result shouldBe EMPTY_INSTANCE
 
@@ -2350,8 +2347,8 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
 
-      // Use a real ChunkedContext, which the chunk is applied to, so applySummary() validates
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000, transferOwner)
+      // The real ChunkedContext the header opens, which the chunk is applied to, so applySummary() validates
+      contextManager.keepsTransferFor(scrapeId)
 
       val service = ProxyServiceImpl(proxy)
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk, summary))
@@ -2681,6 +2678,78 @@ class ProxyServiceImplTest : StringSpec() {
       // The chunk received before the second header still completes the scrape, under the first header.
       scrape.proxyFailure.shouldBeNull()
       scrape.scrapeResults?.srUrl shouldBe "http://first/metrics"
+      contextManager.chunkedContextMapView.shouldBeEmpty()
+    }
+
+    // A connection can carry more than one writeChunkedResponsesToProxy stream, and each passed the owner check, which
+    // is the connection's, so a second stream could extend or finish a transfer the first had opened, and the two could
+    // update its checksum, counts, and buffer at once (November 26 #1). Only the stream that opened a transfer may now.
+    "writeChunkedResponsesToProxy should not let a second stream extend or finish a transfer another opened" {
+      val owner = AgentContext("own-host")
+      val scrape = victimScrape(owner)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+      val service = ProxyServiceImpl(proxy)
+
+      fun chunkAndSummary(text: String): List<ChunkedScrapeResponse> {
+        val data = text.toByteArray()
+        val crc = CRC32().apply { update(data) }
+        return [
+          chunkedScrapeResponse {
+            chunk = chunkData {
+              chunkScrapeId = scrape.scrapeId
+              chunkCount = 1
+              chunkByteCount = data.size
+              chunkChecksum = crc.value
+              chunkBytes = ByteString.copyFrom(data)
+            }
+          },
+          chunkedScrapeResponse {
+            summary = summaryData {
+              summaryScrapeId = scrape.scrapeId
+              summaryChunkCount = 1
+              summaryByteCount = data.size
+              summaryChecksum = crc.value
+            }
+          },
+        ]
+      }
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrape.scrapeId
+          headerAgentId = owner.agentId
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+      val opened = CompletableDeferred<Unit>()
+      val resume = CompletableDeferred<Unit>()
+
+      onConnection(owner.agentId) {
+        coroutineScope {
+          // The first stream opens the transfer, then waits; undispatched, so it reads this connection as it starts.
+          val first =
+            launch(start = CoroutineStart.UNDISPATCHED) {
+              service.writeChunkedResponsesToProxy(
+                flow {
+                  emit(header)
+                  opened.complete(Unit)
+                  resume.await()
+                  chunkAndSummary("first 1").forEach { emit(it) }
+                },
+              )
+            }
+          opened.await()
+          service.writeChunkedResponsesToProxy(chunkAndSummary("second 2").asFlow())
+          resume.complete(Unit)
+          first.join()
+        }
+      }
+
+      scrape.proxyFailure.shouldBeNull()
+      scrape.scrapeResults?.srContentAsZipped?.decodeToString() shouldBe "first 1"
       contextManager.chunkedContextMapView.shouldBeEmpty()
     }
 

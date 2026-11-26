@@ -22,6 +22,7 @@ import com.beust.jcommander.Parameter
 import com.typesafe.config.Config
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
+import io.prometheus.common.AgentValues.segmentProblem
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.ConfigVals
@@ -440,13 +441,17 @@ class AgentOptions internal constructor(
 
   // The proxy path the agent serves its own metrics at, in-process, without a leading slash, as the proxy serves it,
   // and its labels. AgentPathManager adds it to the agent's paths and checks it with them. A slash alone is refused
-  // here, as it would leave no path, which reads as none.
+  // here, as it would leave no path, which reads as none, and so is a path of more than one segment, which the proxy
+  // refuses: "//" left "/" here, which the path's check dropped as no path, so the agent collected its metrics for a
+  // path it never registered (November 26 #11).
   private fun assignMetricsProxyPath(metrics: ConfigVals.Agent.Metrics) {
     val given = resolveStringOption(metricsProxyPath, METRICS_PROXY_PATH, metrics.proxyPath).trim()
     metricsProxyPath = given.removePrefix("/")
     require(given.isEmpty() || metricsProxyPath.isNotEmpty()) {
       "metricsProxyPath must name a path, not only a slash; leave it empty for none"
     }
+    val problem = segmentProblem(metricsProxyPath)
+    require(problem == null) { "metricsProxyPath '${shownValue(given)}' is one the proxy refuses: $problem" }
     metricsProxyPathLabels = metrics.proxyPathLabels
     logger.info { "metricsProxyPath: ${shownValue(metricsProxyPath.ifEmpty { "(none)" })}" }
     if (metricsProxyPath.isEmpty() && metricsProxyPathLabels.filterNot { it.isWhitespace() } != "{}")

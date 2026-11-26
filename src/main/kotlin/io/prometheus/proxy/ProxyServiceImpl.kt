@@ -681,12 +681,13 @@ internal class ProxyServiceImpl(
   private inner class ChunkedResponseReader(
     private val connectionAgentId: String?,
   ) {
-    // The scrapes with a transfer this stream opened and hasn't finished. A plain (non-thread-safe) set, which is safe
+    // The transfers this stream opened and hasn't finished, by scrapeId. A plain (non-thread-safe) map, which is safe
     // ONLY because grpc-kotlin confines a client-streaming RPC's collect{} and the cleanup in its finally to a single
     // coroutine -- there is no launch/async/flowOn here that would fan the body across threads. The genuinely shared
     // chunkedContextMap is a ConcurrentHashMap. If this RPC is ever refactored to process chunks concurrently, switch
-    // this to a thread-safe/synchronized set.
-    private val activeScrapeIds = mutableSetOf<Long>()
+    // this to a thread-safe/synchronized map. A ChunkedContext isn't thread-safe either, so only the stream that opened
+    // it may touch it; see owns.
+    private val transfers = mutableMapOf<Long, ChunkedContext>()
     private val contextManager get() = proxy.agentContextManager
     private val isOwner = ownedByConnection(connectionAgentId, RPC_NAME)
     private val sender = StreamSender(connectionAgentId)
@@ -697,6 +698,9 @@ internal class ProxyServiceImpl(
 
     // The scrapeId of the last chunk that found no transfer, so a late transfer's chunks log that once, not each time.
     private var lastMissingChunkScrapeId: Long? = null
+
+    // The scrapeId of the last message for a transfer another stream opened, so its chunks warn once, not each time.
+    private var lastForeignScrapeId: Long? = null
 
     fun read(response: ChunkedScrapeResponse) {
       // The agent keeping the stream open, as on writeResponsesToProxy: none of the three parts, and no warning.
@@ -718,12 +722,27 @@ internal class ProxyServiceImpl(
       }
     }
 
-    // Whether this connection may extend [context], the transfer for [scrapeId]: checked on the owner the transfer
-    // recorded when it was opened, not on a fresh lookup of the scrape.
+    // Whether this stream may extend or finish [context], the transfer for [scrapeId]: its connection may, checked on
+    // the owner the transfer recorded when it was opened, not on a fresh lookup of the scrape, and it opened the
+    // transfer. A connection can carry more than one stream, as can an identity with the transport filter disabled, and
+    // a second stream passed the connection's check, so it could extend a transfer the first had opened, and the two
+    // updated its checksum, counts, and buffer at once (November 26 #1).
     private fun owns(
       context: ChunkedContext,
       scrapeId: Long,
-    ) = isScrapeOwnedByConnection(connectionAgentId, context.owner, scrapeId, RPC_NAME)
+    ): Boolean {
+      if (!isScrapeOwnedByConnection(connectionAgentId, context.owner, scrapeId, RPC_NAME))
+        return false
+      if (transfers[scrapeId] === context)
+        return true
+      if (scrapeId != lastForeignScrapeId) {
+        lastForeignScrapeId = scrapeId
+        logger.warn {
+          "Agent sent $RPC_NAME() data for scrapeId $scrapeId, whose transfer another stream opened; ignoring"
+        }
+      }
+      return false
+    }
 
     // The scrape is looked up once: that wrapper is both what the owner check reads and the owner the transfer records,
     // so a scrapeId that isn't tracked yet can't pass the check and then be opened for the agent that tracks it next.
@@ -770,7 +789,7 @@ internal class ProxyServiceImpl(
         }
 
         else -> {
-          activeScrapeIds += scrapeId
+          transfers[scrapeId] = context
         }
       }
     }
@@ -778,9 +797,9 @@ internal class ProxyServiceImpl(
     // Whether this stream may open one more transfer: fewer than maxTransfers are under way, once the IDs whose
     // transfer has already gone, removed by its scrape's handler or by removeAgentContext, are let go.
     private fun hasRoomForTransfer(): Boolean {
-      if (activeScrapeIds.size >= maxTransfers)
-        activeScrapeIds.retainAll { contextManager.getChunkedContext(it) != null }
-      return activeScrapeIds.size < maxTransfers
+      if (transfers.size >= maxTransfers)
+        transfers.entries.retainAll { (scrapeId, context) -> contextManager.getChunkedContext(scrapeId) === context }
+      return transfers.size < maxTransfers
     }
 
     // Whether [scrapeId]'s scrape is still tracked. When it isn't, its handler has returned and nobody awaits the
@@ -791,7 +810,7 @@ internal class ProxyServiceImpl(
     ): Boolean =
       proxy.scrapeRequestManager.containsScrapeRequest(scrapeId).also { tracked ->
         if (!tracked) {
-          activeScrapeIds -= scrapeId
+          transfers -= scrapeId
           if (contextManager.removeChunkedContext(scrapeId, context)) {
             logger.debug { "Dropped the chunked transfer for scrapeId: $scrapeId, whose scrape has ended" }
             countAbandonedTransfer()
@@ -807,7 +826,7 @@ internal class ProxyServiceImpl(
         if (context == null) {
           // Gone with its scrape, or never opened. Logged at DEBUG, and for the first such chunk of a transfer only:
           // a late result of 5 MB at 32 KB a chunk logged 160 WARNs (November #3).
-          activeScrapeIds -= chunkScrapeId
+          transfers -= chunkScrapeId
           if (chunkScrapeId != lastMissingChunkScrapeId) {
             lastMissingChunkScrapeId = chunkScrapeId
             logger.debug { "Missing chunked context for chunk with scrapeId: $chunkScrapeId, skipping" }
@@ -826,7 +845,7 @@ internal class ProxyServiceImpl(
         } catch (e: ChunkValidationException) {
           logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
           contextManager.removeChunkedContext(chunkScrapeId, context)
-          activeScrapeIds -= chunkScrapeId
+          transfers -= chunkScrapeId
           proxy.scrapeRequestManager.failScrapeRequest(
             chunkScrapeId,
             "Chunk validation failed: ${e.message}",
@@ -843,7 +862,7 @@ internal class ProxyServiceImpl(
         val context = contextManager.getChunkedContext(summaryScrapeId)
         if (context != null && !owns(context, summaryScrapeId))
           return
-        activeScrapeIds -= summaryScrapeId
+        transfers -= summaryScrapeId
         // Removes only the transfer just checked, which a concurrent removeAgentContext may already have reclaimed. A
         // summary for a transfer that went with its scrape is routine, so it's logged at DEBUG (November #3).
         if (context == null || !contextManager.removeChunkedContext(summaryScrapeId, context)) {
@@ -894,7 +913,7 @@ internal class ProxyServiceImpl(
     // this sweep removed; and (b) failScrapeRequest() -> ScrapeRequestWrapper.complete() is idempotent
     // via an AtomicBoolean compareAndSet, so even a double-fail has no observable effect.
     fun abandonUnfinished() {
-      activeScrapeIds.forEach { scrapeId ->
+      transfers.keys.forEach { scrapeId ->
         contextManager.removeChunkedContext(scrapeId)
           ?.also {
             logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" }

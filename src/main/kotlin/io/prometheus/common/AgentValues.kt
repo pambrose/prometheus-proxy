@@ -108,6 +108,15 @@ internal object AgentValues {
     path.firstOrNull { it.isISOControl() || it.isWhitespace() || it == '?' || it == '#' }
       ?.let { "'${shownValue(it.toString())}' can't appear in a scrape's request path" }
 
+  /**
+   * Why [path], a path without its leading slash, isn't one segment, or null when it is. The proxy serves each path at
+   * `/<path>`, one segment, and refuses one with a slash left in it once it drops a leading one. The agent drops one
+   * too, so `//metrics` lost one slash on each side, and the proxy took it as `metrics`, a key the agent never looked
+   * it up by, and every scrape of it 404ed (November 26 #11). The agent refuses such a path where it comes in.
+   */
+  fun segmentProblem(path: String): String? =
+    if ('/' in path) "a path is one segment, with no '/' after its leading one" else null
+
   /** Whether [name] is a label name every Prometheus version accepts in service discovery. */
   fun isValidLabelName(name: String): Boolean = LABEL_NAME.matches(name)
 
