@@ -288,11 +288,11 @@ agent's `/healthcheck` reports the agent itself, not its connection, and the app
 keeps serving and stays healthy while its metrics stop.
 
 `./demo.sh proxy-stop` stops the proxy. The screens page is the proxy's, so while it's down, a link into the page can't
-load, and this section gives each screen's own address. The coffee shop keeps serving, and an order still goes through
-(`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach the
-proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown` fires. The agent's `/debug` page
-shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its `/healthcheck`
-still reads healthy: <http://localhost:8393/debug>
+load, and until it's back, this section gives each screen's own address. The coffee shop keeps serving, and an order
+still goes through (`./demo.sh order`), since its agent retries in the background and the app never waits on it.
+Prometheus can't reach the proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown`
+fires. The agent's `/debug` page shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps
+trying, while its `/healthcheck` still reads healthy: <http://localhost:8393/debug>
 
 On the agent's dashboard, the Connection view reads `failing`, with the error the agent's last try to reach
 `proxy:50051` got, and its paths read `pending`. It's the first place to look when an agent won't connect:

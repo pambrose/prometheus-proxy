@@ -37,28 +37,26 @@ import java.io.File
 class DemoScreensLinksTest : StringSpec() {
   // A demo whose tour runs in a screens page: its directory, the proxy config (in the directory) that lists the
   // screens, its docs page, the page's address at the default port, the compose service of the proxy that serves it,
-  // and, for a demo that stops that proxy, where the tour points while it's down.
+  // and, for a demo that stops that proxy, the stretches of its files read while it's down.
   private data class ScreensDemo(
     val dir: String,
     val config: String,
     val page: String,
     val pageUrl: String,
     val proxyService: String,
-    val proxyDown: ProxyDown?,
+    val proxyDown: List<ProxyDown> = emptyList(),
   ) {
     // A link in the README or docs page, which give the page's address at the default port.
     val docsLink = Regex(Regex.escape(pageUrl) + LINK_TAIL)
   }
 
-  // While the page's proxy is stopped: demo.sh's scenario case, or its text after [branch] where only that part of the
-  // case stops the page's proxy, and the docs page's paragraph that starts with [pageSection], if the page tells it,
-  // and the screen's own URL each gives instead, as the script writes it and as the page does.
+  // A stretch of one of a demo's files that runs, or is read, while the page's proxy is stopped: in [file], after each
+  // of [after] in turn, up to [before]. It gives [directUrl], a screen's own address, and no link into the page.
   private data class ProxyDown(
-    val scenario: String,
-    val branch: String? = null,
+    val file: String,
+    val after: List<String>,
+    val before: String,
     val directUrl: String,
-    val pageSection: String? = null,
-    val directUrlOnPage: String? = null,
   )
 
   // A demo's screen entries, from its config, read without the environment, as each url is a default overridden by
@@ -181,19 +179,16 @@ class DemoScreensLinksTest : StringSpec() {
     // The page is the proxy's, so a link into it while the proxy is down opens only the browser's connection error,
     // where the demo means to show that a screen's own dashboard keeps answering.
     "while the page's proxy is down, the demo should point at a screen's own URL, not the page" {
-      DEMOS.forEach { demo ->
-        val down = demo.proxyDown ?: return@forEach
-        withClue(demo.dir) {
-          val script = File(demo.dir, "demo.sh").readText()
-          val case = script.substringAfter("\n  ${down.scenario})").substringBefore("\n    ;;")
-          val proxyDown = down.branch?.let { case.substringAfter(it, missingDelimiterValue = "") } ?: case
-          ("SCREENS_URL" in proxyDown) shouldBe false
-          proxyDown shouldContain down.directUrl
-          if (down.pageSection != null && down.directUrlOnPage != null) {
-            val stopped = File(demo.page).readText().substringAfter(down.pageSection).substringBefore("\n\n")
-            ("/screens#" in stopped) shouldBe false
-            stopped shouldContain down.directUrlOnPage
-          }
+      DEMOS.flatMap { it.proxyDown }.forEach { down ->
+        withClue("${down.file} after ${down.after.last().trim()}") {
+          val stretch =
+            down.after
+              .fold(File(down.file).readText()) { text, marker ->
+                text.substringAfter(marker, missingDelimiterValue = "")
+              }
+              .substringBefore(down.before)
+          listOf("SCREENS_URL" in stretch, "/screens#" in stretch) shouldBe listOf(false, false)
+          stretch shouldContain down.directUrl
         }
       }
     }
@@ -289,11 +284,19 @@ class DemoScreensLinksTest : StringSpec() {
         pageUrl = "http://localhost:8094/screens",
         proxyService = "proxy",
         proxyDown =
-          ProxyDown(
-            scenario = "proxy-down",
-            directUrl = "\$EAST_DASHBOARD_URL/connection",
-            pageSection = "With the proxy stopped",
-            directUrlOnPage = "http://localhost:8095/dashboard/connection",
+          listOf(
+            ProxyDown(
+              file = "demos/basics/demo.sh",
+              after = listOf("\n  proxy-down)"),
+              before = "\n    ;;",
+              directUrl = "\$EAST_DASHBOARD_URL/connection",
+            ),
+            ProxyDown(
+              file = "website/prometheus-proxy/docs/basics-demo.md",
+              after = listOf("With the proxy stopped"),
+              before = "\n\n",
+              directUrl = "http://localhost:8095/dashboard/connection",
+            ),
           ),
       )
 
@@ -306,7 +309,15 @@ class DemoScreensLinksTest : StringSpec() {
         page = "website/prometheus-proxy/docs/network-demo.md",
         pageUrl = "http://localhost:8195/screens",
         proxyService = "proxy-standby",
-        proxyDown = ProxyDown(scenario = "proxy-down", branch = "\n    else\n", directUrl = "\$DASHBOARD_URL"),
+        proxyDown =
+          listOf(
+            ProxyDown(
+              file = "demos/network/demo.sh",
+              after = listOf("\n  proxy-down)", "\n    else\n"),
+              before = "\n    ;;",
+              directUrl = "\$DASHBOARD_URL",
+            ),
+          ),
       )
 
     // The Ktor demo's page is the proxy's, which part 8 of its tour stops.
@@ -318,11 +329,32 @@ class DemoScreensLinksTest : StringSpec() {
         pageUrl = "http://localhost:8394/screens",
         proxyService = "proxy",
         proxyDown =
-          ProxyDown(
-            scenario = "proxy-stop",
-            pageSection = "On the agent's dashboard, the Connection view reads `failing`",
-            directUrl = "\$AGENT_DASHBOARD_URL/connection",
-            directUrlOnPage = "http://localhost:8395/dashboard/connection",
+          listOf(
+            ProxyDown(
+              file = "demos/ktor/demo.sh",
+              after = listOf("\n  proxy-stop)"),
+              before = "\n    ;;",
+              directUrl = "\$AGENT_DASHBOARD_URL/connection",
+            ),
+            // Part 8 of the tour, from its proxy-stop to its proxy-start.
+            ProxyDown(
+              file = "demos/ktor/demo.sh",
+              after = listOf("\n  if part 8 ", "-- proxy-stop"),
+              before = "-- proxy-start",
+              directUrl = "\$AGENT_ADMIN_URL/debug",
+            ),
+            ProxyDown(
+              file = "demos/ktor/README.md",
+              after = listOf("### 8. The Proxy Goes Away"),
+              before = "Once the proxy is back, the newest lines",
+              directUrl = "http://localhost:8393/debug",
+            ),
+            ProxyDown(
+              file = "website/prometheus-proxy/docs/ktor-demo.md",
+              after = listOf("## The Proxy Goes Away"),
+              before = "`./demo.sh proxy-start`",
+              directUrl = "http://localhost:8395/dashboard/connection",
+            ),
           ),
       )
 

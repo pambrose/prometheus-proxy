@@ -266,8 +266,8 @@ It calls each endpoint and shows what it answered:
 | `/threaddump` | Every thread in the coffee shop's JVM, the app's as well as the agent's |
 | `/debug` | Only with `DEBUG_ENABLED`: the agent's name, the ID the proxy gave it when it connected, which is empty while it isn't connected, the proxy it's connected to or trying, and each path with the URL it scrapes, or `in-process` for the app's registry |
 
-When a path doesn't scrape, its URL on `/debug` is the first thing to check. Keep the page open for the next part,
-where the proxy goes away: <http://localhost:8394/screens#debug>
+When a path doesn't scrape, its URL on `/debug` is the first thing to check: <http://localhost:8394/screens#debug>. The
+next part comes back to it, with the proxy down, at its own address.
 
 Turn them off once the agent works, since the admin port has no authentication and `/threaddump` shows the app's
 threads: take `ADMIN_ENABLED` and `DEBUG_ENABLED` out of the app's environment and restart it, with no new build, and
@@ -288,13 +288,15 @@ keeps serving and stays healthy while its metrics stop.
 ```
 
 The agent retries in the background, and the app's requests never wait on it. Grafana's **Scrape** turns Down,
-**Agent** reads Disconnected, its graphs stop, and `CoffeeShopDown` fires. The agent's `/debug` page shows an empty
-AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its `/healthcheck` still reads
-healthy. Once the proxy is back, the agent reconnects within a few seconds and registers its paths again, `/debug`
-shows the AgentId the proxy gave it, and the graphs resume, with a gap for the time the proxy was down.
+**Agent** reads Disconnected, its graphs stop, and `CoffeeShopDown` fires. The screens page is the proxy's, so until
+the proxy is back, a link into it can't load, and this part gives each screen's own address. The agent's `/debug` page
+shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its
+`/healthcheck` still reads healthy: <http://localhost:8393/debug>
 
-The agent's dashboard shows the outage more directly. The screens page is the proxy's, so while the proxy is gone, a
-link into it can't load, and these give each screen's own address. The dashboard's **Connection** view reads `failing`,
+Once the proxy is back, the agent reconnects within a few seconds and registers its paths again, `/debug` shows the
+AgentId the proxy gave it, and the graphs resume, with a gap for the time the proxy was down.
+
+The agent's dashboard shows the outage more directly. Its **Connection** view reads `failing`,
 with the error the agent's last try to reach `proxy:50051` got, and its paths read `pending`. A proxy that's down, a
 wrong port, a refused token, and a TLS mismatch each show there, which makes it the first place to look when an agent
 won't connect: <http://localhost:8395/dashboard/connection>

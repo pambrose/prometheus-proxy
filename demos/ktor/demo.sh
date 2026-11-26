@@ -149,7 +149,7 @@ Lifecycle:
                      or later)
   down               Stop the demo and remove its containers and network
   status             Show the containers, the coffee shop's state, and the URLs
-  open               Open the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in
+  open               Open the proxy's screens page: the coffee shop, every dashboard, Prometheus, and Grafana in
                      the browser
   logs [service]     Follow the logs (coffee-shop, load-balancer, proxy, prometheus, grafana)
   tour [part]        Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
@@ -743,8 +743,8 @@ cmd_tour() {
     "DEBUG_ENABLED, with nothing in its code."; then
     step "Call each of the agent's admin endpoints, and read its /debug page." -- debug
     instruct "Open the agent's /debug page: ${SCREENS_URL}#debug" \
-      "It's there because the coffee shop's environment sets DEBUG_ENABLED=true, beside ADMIN_ENABLED=true. Keep" \
-      "it open: in the next part, the proxy goes away, and the page shows it. As with the dashboard, the environment" \
+      "It's there because the coffee shop's environment sets DEBUG_ENABLED=true, beside ADMIN_ENABLED=true. The next" \
+      "part comes back to it, with the proxy down, at its own address. As with the dashboard, the environment" \
       "turns them off once the agent works, or on again later, with a restart and no new build; ADMIN_PORT moves" \
       "them from 8093. In code, setting(\"admin.enabled\", true) and setting(\"admin.debugEnabled\", true) do the" \
       "same, though the environment overrides them."
@@ -758,11 +758,12 @@ cmd_tour() {
     step "Stop the proxy." -- proxy-stop
     instruct "Open the Connection view of the agent's dashboard on its own: $AGENT_DASHBOARD_URL/connection" \
       "The screens page is the proxy's, so while the proxy is down, a link into it can't load; the page you have" \
-      "open keeps working, and these steps give each screen's own address. Once the agent's first try to reconnect" \
-      "has failed, it reads failing, and under Proxy endpoints, proxy:50051 shows the error the last try got. A" \
-      "proxy that's down, a wrong port, a refused token, and a TLS mismatch each show there, which makes it the" \
-      "first place to look when an agent won't connect. On the Paths view, both paths read pending. The tab's title" \
-      "counts the failing connection as a problem, so a dashboard in a background tab still says so."
+      "open keeps working, and until the proxy is back, these steps give each screen's own address. Once the" \
+      "agent's first try to reconnect has failed, it reads failing, and under Proxy endpoints, proxy:50051 shows" \
+      "the error the last try got. A proxy that's down, a wrong port, a refused token, and a TLS mismatch each" \
+      "show there, which makes it the first place to look when an agent won't connect. On the Paths view, both" \
+      "paths read pending. The tab's title counts the failing connection as a problem, so a dashboard in a" \
+      "background tab still says so."
     instruct "Open the agent's /debug page on its own: $AGENT_ADMIN_URL/debug" \
       "Its AgentId is empty: the agent has lost its connection, and has no ID until the proxy gives it one" \
       "again. ProxyHost is the proxy it keeps trying. Its /healthcheck still reads healthy, since it reports the" \
