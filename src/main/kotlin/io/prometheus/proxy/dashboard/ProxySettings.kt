@@ -247,6 +247,7 @@ internal object ProxySettings {
             maxSessions = maxSessions,
             allowedOrigins = allowedOrigins,
             allowedHosts = allowedHosts,
+            framingEnabled = framingEnabled,
           ),
         extra = listOf(Setting("Departed paths kept", secs(departedPathRetentionSecs))) +
           links.ifEmpty { listOf(Setting("Links", "none")) },

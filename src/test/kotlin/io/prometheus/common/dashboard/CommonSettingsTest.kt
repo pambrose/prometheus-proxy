@@ -145,6 +145,7 @@ class CommonSettingsTest : StringSpec() {
               maxSessions = 50,
               allowedOrigins = emptyList(),
               allowedHosts = ["proxy.example", "proxy"],
+              framingEnabled = false,
             ),
           extra = [Setting("Departed paths kept", "3600s")],
         ).apply {
@@ -154,9 +155,29 @@ class CommonSettingsTest : StringSpec() {
           value("Scrape now") shouldBe "off"
           value("Allowed origins") shouldBe "the dashboard's own host"
           value("Allowed hosts") shouldBe "proxy.example, proxy"
+          value("Framing") shouldBe "refused"
           value("Departed paths kept") shouldBe "3600s"
           rows.none { "dash-pw-4" in it.value || "dash-pw-4" in it.name } shouldBe true
         }
+    }
+
+    // Allowed by default, so the page that shows the settings says so, beside the guards it loosens.
+    "the Dashboard group should say when any site can frame the dashboard" {
+      CommonSettings
+        .dashboard(
+          options = proxyOptionsFromConfig("""proxy.dashboard { enabled = true }"""),
+          values =
+            DashboardValues(
+              refreshIntervalSecs = 2,
+              pathHistorySize = 20,
+              activityLogSize = 500,
+              scrapeNowEnabled = true,
+              maxSessions = 50,
+              allowedOrigins = emptyList(),
+              allowedHosts = emptyList(),
+              framingEnabled = true,
+            ),
+        ).value("Framing") shouldBe "allowed, by any site"
     }
 
     "the Tracing and Logging groups should show Zipkin and the log level" {

@@ -35,7 +35,10 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
   set a login, with TLS in front of it, where more people can reach the port than should read it. If
   browsers that also load untrusted pages can reach it, set
   `proxy.dashboard.allowedHosts` to the names you use, and behind a reverse proxy list its public
-  origin in `proxy.dashboard.allowedOrigins`. See [Exposure](web-dashboard.md#exposure).
+  origin in `proxy.dashboard.allowedOrigins`. Unless a page of yours embeds the dashboard, set
+  `proxy.dashboard.framingEnabled = false`, so no other site's page can frame it, and a security scan doesn't report
+  the dashboard as missing an anti-clickjacking header. See
+  [Exposure](web-dashboard.md#exposure).
 - When forwarding auth headers to targets, **require TLS** so credentials aren't sent in
   plaintext between proxy and agent. See
   [Auth Header Forwarding](security/index.md#auth-header-forwarding).

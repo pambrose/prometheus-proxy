@@ -272,9 +272,26 @@ class ProxyDashboardOptionsTest : StringSpec() {
       proxyOptionsFromConfig("""proxy.dashboard.username = "ops:team" """, extraArgs = ["--dashboard"])
         .dashboardPassword shouldBe ""
     }
+
+    // ==================== Framing ====================
+
+    // Framing is allowed by default, which loosens what #563 refused, so the log says so, and names the setting.
+    "framing should be logged while it's on, the default, and only with the dashboard on" {
+      fun framingLines(args: List<String>) =
+        captureLogs<ProxyOptions>(Level.INFO) { proxyOptions(args) }
+          .map { it.formattedMessage }
+          .filter { it.startsWith("dashboard framing") }
+
+      framingLines(["--dashboard"]) shouldBe listOf(PROXY_FRAMING_LINE)
+      framingLines(["--dashboard", "-Dproxy.dashboard.framingEnabled=false"]).shouldBeEmpty()
+      framingLines([]).shouldBeEmpty()
+    }
   }
 
   private companion object {
     const val LOGIN_PASSWORD = "s3cret-Passw0rd"
+    const val PROXY_FRAMING_LINE =
+      "dashboard framing: on; any web page can show the dashboard in a frame; " +
+        "set proxy.dashboard.framingEnabled = false to refuse it"
   }
 }

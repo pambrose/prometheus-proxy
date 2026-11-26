@@ -129,6 +129,7 @@ internal class AgentDashboardService(
         maxSessions = dashboardConfig.maxSessions,
         allowedOrigins = dashboardConfig.allowedOrigins,
         allowedHosts = dashboardConfig.allowedHosts,
+        framingEnabled = dashboardConfig.framingEnabled,
         login = login,
         loginHeading = LOGIN_HEADING,
       ),

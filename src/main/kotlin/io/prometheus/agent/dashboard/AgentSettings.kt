@@ -168,6 +168,7 @@ internal object AgentSettings {
             maxSessions = maxSessions,
             allowedOrigins = allowedOrigins,
             allowedHosts = allowedHosts,
+            framingEnabled = framingEnabled,
           ),
       )
     }

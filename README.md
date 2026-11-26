@@ -819,8 +819,9 @@ Keeping the port internal does not stop a web page from reaching the dashboard t
 someone who can. The dashboard refuses a WebSocket from a foreign site; behind a reverse proxy that
 rewrites the Host header, list the public origin in `proxy.dashboard.allowedOrigins`. It answers to any
 host name by default, which leaves it open to DNS rebinding (a page pointing its own DNS name at the
-dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. Every response
-it sends forbids framing, so no page, on any site, can show it in a frame and steer a viewer's clicks. See
+dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. Any page can
+show it in a frame by default, so a portal can embed it, and so can another site's page, to steer a viewer's clicks;
+set `proxy.dashboard.framingEnabled = false` and every response forbids framing. See
 [Dashboard exposure](https://prometheus-proxy.com/web-dashboard/#exposure).
 
 Accessibility: text clears the WCAG AA contrast threshold of 4.5:1 with a measured floor of 4.59:1,
