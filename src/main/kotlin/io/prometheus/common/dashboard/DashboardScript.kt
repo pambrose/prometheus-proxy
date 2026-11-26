@@ -37,9 +37,8 @@ import io.prometheus.common.dashboard.DashboardPage.SCRAPE_URL_ATTR
 import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
 import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
 import io.prometheus.common.dashboard.DashboardPage.VIEW_ATTR
+import io.prometheus.common.dashboard.DashboardPage.THEME_BUTTON_ID
 import io.prometheus.common.dashboard.DashboardPage.THEME_KEY
-import io.prometheus.common.dashboard.DashboardPage.THEME_CHOICE_ATTR
-import io.prometheus.common.dashboard.DashboardPage.THEME_PICKER_ID
 
 /**
  * A dashboard page's one script, which each dashboard's renderer inlines. Apart from the renderers so each stays a size
@@ -65,7 +64,7 @@ internal class DashboardScript(
   /**
    * The page's script. It reads the selection back out of the URL that hx-push-url already set, and tells the server,
    * so the push loop knows whether this session wants a detail pane. It also runs the connection indicator and the
-   * session check, the table search, the copy and scrape-now buttons, the column guide, the theme picker, the tabs'
+   * session check, the table search, the copy and scrape-now buttons, the column guide, the theme button, the tabs'
    * arrow keys, the tab's title, and the scrape times' conversion to the viewer's zone, the only things on the page
    * that htmx does not model; everything else is htmx.
    */
@@ -75,8 +74,8 @@ internal class DashboardScript(
       // htmx 4 runs the inline scripts of content it swaps in, and every back or forward navigation
       // refetches the page and swaps it into <body>, so this script runs again on each one. The body, its
       // listeners, and the socket all survive that swap, so a second run would only stack another set of
-      // listeners, and one announce per navigation would become two, then three. A second run only marks the theme
-      // picker the swap brought, served with nothing pressed (showTheme, below), which no push redraws.
+      // listeners, and one announce per navigation would become two, then three. A second run only names the theme
+      // button the swap brought, served with a bare name (showTheme, below), which no push redraws.
       if (window.__${subject}UiInit) { window.__${subject}UiInit(); return; }
       window.__${subject}UiInit = showTheme;
       // The dashboard's base, from the socket's URL. The page's route is what follows it: matched there, rather than by
@@ -139,7 +138,7 @@ internal class DashboardScript(
       // The same transition is spoken into the live region. The beacon reports this visually with colour
       // and a change of rhythm, neither of which reaches a screen reader; without this the page goes
       // silently stale, which is the one failure this dashboard exists to make impossible to miss.
-      // Scoped to the connection and the user's own acts (a copy, a scrape-now, a theme choice, a filter change) --
+      // Scoped to the connection and the user's own acts (a copy, a scrape-now, a theme change, a filter change) --
       // announcing every pushed counter would make the region unusable.
       var wasDown = false;
       function announceConn(up) {
@@ -354,28 +353,28 @@ internal class DashboardScript(
         var toggle = document.getElementById('$COLUMN_GUIDE_TOGGLE_ID');
         if (toggle) toggle.focus();
       }
-      // The theme: light, dark, or auto, which follows the system's, from the bar's picker, and kept in this browser.
+      // The theme: light, dark, or auto, which follows the system's, from the bar's button, and kept in this browser.
       // The head applies a stored one before the page draws (DashboardPage.THEME_SCRIPT), so the theme in force is the
-      // page's own, which the stylesheet marks on its button. This keeps each button's pressed state and tooltip in
-      // step with it, auto's naming the system's theme as that changes, and on a press applies the theme, stores it,
-      // and says it. Auto is stored as nothing.
+      // page's own, whose icon the stylesheet draws on the button. This keeps the button's name and tooltip in step
+      // with it, naming the theme in force, auto's with the system's theme as that changes, and the next; and on a
+      // press moves to the next, in the order light, dark, auto, wrapping, applies it, stores it, and says it. Auto is
+      // stored as nothing.
+      var THEMES = ['light', 'dark', 'auto'];
       var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
       function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'auto'; }
-      function themeTitle(t, current) {
-        var title = 'Theme: ' + t;
-        if (t === 'auto') title += ', following your system, now ' + (systemDark.matches ? 'dark' : 'light');
-        return t === current ? title + ' (current)' : title;
-      }
+      function nextTheme(t) { return THEMES[(THEMES.indexOf(t) + 1) % THEMES.length]; }
       function showTheme() {
+        var btn = document.getElementById('$THEME_BUTTON_ID');
+        if (!btn) return;
         var current = currentTheme();
-        document.querySelectorAll('#$THEME_PICKER_ID [$THEME_CHOICE_ATTR]').forEach(function (btn) {
-          var t = btn.getAttribute('$THEME_CHOICE_ATTR');
-          btn.setAttribute('aria-pressed', String(t === current));
-          btn.title = themeTitle(t, current);
-        });
+        var label = 'Theme: ' + current;
+        if (current === 'auto') label += ', following your system, now ' + (systemDark.matches ? 'dark' : 'light');
+        label += '. Press for ' + nextTheme(current) + '.';
+        btn.setAttribute('aria-label', label);
+        btn.title = label;
       }
-      function chooseTheme(t) {
-        if (t === currentTheme()) return;
+      function cycleTheme() {
+        var t = nextTheme(currentTheme());
         if (t === 'auto') document.documentElement.removeAttribute('data-theme');
         else document.documentElement.setAttribute('data-theme', t);
         try {
@@ -386,20 +385,19 @@ internal class DashboardScript(
       }
       showTheme();
       systemDark.addEventListener('change', showTheme);
-      // One listener on <body> for every button in the table, the result panel, the column guide, and the theme picker:
-      // the push loop replaces the table every frame, and a back or forward the picker, so a button's own listener
-      // would last one frame.
+      // One listener on <body> for every button in the table, the result panel, the column guide, and the theme button:
+      // the push loop replaces the table every frame, and a back or forward the theme button, so a button's own
+      // listener would last one frame.
       document.body.addEventListener('click', function (evt) {
         if (!evt.target.closest) return;
         var copy = evt.target.closest('button.copy');
         var scrape = evt.target.closest('button.scrape-now');
         var panel = evt.target.closest('#$SCRAPE_RESULT_ID');
         var guide = evt.target.closest('#$COLUMN_GUIDE_ID');
-        var theme = evt.target.closest('#$THEME_PICKER_ID [$THEME_CHOICE_ATTR]');
         if (copy) copyFrom(copy);
         else if (scrape) scrapeNow(scrape);
         else if (evt.target.closest('#$COLUMN_GUIDE_TOGGLE_ID')) showGuide(!guideOpen());
-        else if (theme) chooseTheme(theme.getAttribute('$THEME_CHOICE_ATTR'));
+        else if (evt.target.closest('#$THEME_BUTTON_ID')) cycleTheme();
         else if (panel && evt.target.closest('button.close')) closeScrapeResult(panel);
         else if (guide && evt.target.closest('button.close')) closeGuide();
       });

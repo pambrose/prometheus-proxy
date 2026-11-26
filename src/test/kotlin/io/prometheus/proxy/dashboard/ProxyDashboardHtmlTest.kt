@@ -35,6 +35,7 @@ import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.Setting
 import io.prometheus.common.dashboard.SettingsGroup
 import io.prometheus.common.dashboard.SettingsHtml
+import io.prometheus.common.dashboard.TabIcon
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
@@ -510,7 +511,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldContain """hx-get="/agents/1""""
       page shouldNotContain "\"//"
       // The Agents link is the root itself, which must stay "/" rather than collapse to an empty href.
-      page shouldContain """href="/" class="on""""
+      page shouldContain """href="/" class="tab-agents on""""
     }
 
     // Which proxy this is, its host and the port Prometheus scrapes, so two proxies' dashboards are told apart at a
@@ -591,14 +592,38 @@ class ProxyDashboardHtmlTest : StringSpec() {
       val agentPage = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.AGENT)
       // The nav lives on the page shell rather than in a pushed region, so assert it where it renders.
       val page = renderFullPage(snapshot(), DashboardLayout.PATH)
-      page shouldContain """href="/dashboard/paths" class="on" aria-current="page">Paths</a>"""
-      page shouldContain """<a href="/dashboard/activity">Activity</a>"""
+      page shouldContain """href="/dashboard/paths" class="tab-paths on" aria-current="page">Paths</a>"""
+      page shouldContain """<a href="/dashboard/activity" class="tab-activity">Activity</a>"""
       renderFullPage(snapshot(), DashboardLayout.ACTIVITY) shouldContain
-        """href="/dashboard/activity" class="on" aria-current="page">Activity</a>"""
-      page shouldContain """<a href="/dashboard/settings">Settings</a>"""
+        """href="/dashboard/activity" class="tab-activity on" aria-current="page">Activity</a>"""
+      page shouldContain """<a href="/dashboard/settings" class="tab-settings">Settings</a>"""
       renderFullPage(snapshot(), DashboardLayout.SETTINGS) shouldContain
-        """href="/dashboard/settings" class="on" aria-current="page">Settings</a>"""
+        """href="/dashboard/settings" class="tab-settings on" aria-current="page">Settings</a>"""
       agentPage shouldNotContain "aria-current=\"page\""
+    }
+
+    // Each tab's icon comes from its class, so its name is its title alone, and each layout's is its own.
+    "every tab should carry its layout's icon, a different one for each layout" {
+      val page = renderFullPage(snapshot(), DashboardLayout.AGENT)
+      DashboardLayout.entries.map { it.icon }.toSet().size shouldBe DashboardLayout.entries.size
+      DashboardLayout.entries.forEach { layout ->
+        page shouldContain Regex("""<a href="[^"]*" class="${layout.icon.cssClass}( on)?"[^>]*>${layout.title}</a>""")
+      }
+    }
+
+    // As a code host's tabs are: no outline, an icon before each name, a rounded ground on hover, and the current tab
+    // marked by the accent line along the bar's rule, as before. Every icon has its rule, so none is drawn blank.
+    "the tabs should be borderless links, each with its icon, the current one over the accent line" {
+      DashboardCss.CSS.apply {
+        this shouldNotContain "border-radius:6px 6px 0 0"
+        this shouldContain Regex("""\.nav a \{[^}]*border-radius:6px;""")
+        Regex("""\.nav a \{[^}]*}""").find(this)!!.value shouldNotContain "border:"
+        this shouldContain ".nav a:hover { background-color:var(--surface-3); color:var(--ink); }"
+        this shouldContain Regex("""\.nav a\.on::after \{[^}]*height:2px;\s*background:var\(--accent\); }""")
+        TabIcon.entries.forEach { icon ->
+          this shouldContain """.nav a.${icon.cssClass} { --icon:url("data:image/svg+xml,<svg """
+        }
+      }
     }
 
     "the Settings page should show each group's settings, and no other layout's regions" {

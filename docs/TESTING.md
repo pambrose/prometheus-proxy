@@ -440,8 +440,9 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   filtered with a count, a path matched with its slash, its empty state, and its push carrying the table out of band,
   or not when told; its column guide explaining each header in the header's order, after the search and ahead of the
   table, and in no view's push; the Settings view's groups, escaped, none of them on the Connection view, and its push
-  carrying them out of band, or not when told; the polite live region on every view's page and in no push; and the
-  stored theme applied in the page's head, with the theme picker in the bar and in no push
+  carrying them out of band, or not when told; the polite live region on every view's page and in no push; each tab
+  carrying its view's icon, a different one for each view; and the stored theme applied in the page's head, with the
+  theme button in the bar and in no push
 - **AgentSettingsTest** (`dashboard/`) — the agent's Settings view (`AgentSettings`), from an agent built but never
   started: its groups in order; what it resolved, its endpoints, the client timeout the deprecated `cioTimeoutSecs` set,
   its trust store and TLS files, and its login's username; the defaults with nothing configured; discovery's file and
@@ -661,7 +662,9 @@ Three support helpers also live here (not test classes themselves):
   stand in for), tolerant selection, layout, and view count parsing, the status bar's departed count, an agent's
   identity in its row and detail, the data `demos/basics/bin/screenshots.sh` reads (an agent row's id, name, and
   path count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape
-  time it orders as text, links at a root mount, the nav, the Settings view (its groups, escaped, on no other layout,
+  time it orders as text, links at a root mount, the nav (every layout linked, the current one marked, each tab with
+  its layout's icon, a different one for each, and the tabs borderless, a rounded ground on hover, and the current
+  one over the accent line), the Settings view (its groups, escaped, on no other layout,
   and its push carrying them out of band, or the status bar alone when told), accessibility (the connection live
   region, outside every push, and the page's language and main region), and the link icons' stylesheet (in the head
   only while a link shows an icon, with each mark's URL under the route base, at a root mount too, and each colour per
@@ -675,10 +678,10 @@ Three support helpers also live here (not test classes themselves):
   per outage, the capped reconnect backoff, and the stylesheet's disconnected treatment), no htmx 2 WebSocket names,
   history pushes heard on the document, copy clicks from one listener on the body (the clipboard fallback outside a
   secure context, a proxy URL from the page's own host and the scrape port, and the result announced and put back after
-  each push), scrape times in the viewer's zone before each swap, one run per document, a second marking the theme
-  picker swapped in, error responses kept from being swapped in, and the htmx config ahead of the versioned htmx script;
-  and the stored theme applied in the head and the picker's buttons setting it, pressed and titled by the theme in
-  force, outside every push
+  each push), scrape times in the viewer's zone before each swap, one run per document, a second naming the theme
+  button swapped in, error responses kept from being swapped in, and the htmx config ahead of the versioned htmx script;
+  and the stored theme applied in the head and each press of the theme button setting the next (light, dark, auto),
+  its name and tooltip naming the theme in force and the next, outside every push
 - **PathColumnsHtmlTest** (`dashboard/`) — the Paths view's long-standing columns: a row per path with its target,
   source, and last scrape, and dashes for what a path lacks (no time for one never scraped); its agent named as the
   agent list names it, never by internal id, with the same placeholder before it registers and a consolidated path's
@@ -830,8 +833,8 @@ Two support helpers also live here (not test classes themselves):
   under both, and the browser's own widgets following the choice; every text colour (`--ink`, `--ink-2`, `--ink-3`,
   `--ok`, `--warn`, `--crit`) clearing 4.5:1 on `--surface-2` in each token block, and a hovered row's address line
   on `--surface-3`; the head's script applying only a stored light or
-  dark; and the theme picker offering light, dark, and auto, each named for its theme, marking the theme in force from
-  the page's `data-theme` with the icon buttons' glyphs, and sharing the bar's end with Log out in one box
+  dark; and the theme button, one button named Theme until the script names it, showing the theme in force's icon from
+  the page's `data-theme` with the icon buttons' glyph, and sharing the bar's end with Log out in one box
 - **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,
   and again on a later call if building it failed, which lets the Zipkin tracing interceptors be installed before the
   reporter they need exists

@@ -30,6 +30,10 @@ holds up its shutdown, to fit the window its platform gives it, such as Cloud Ru
 
 - **A failure handler that throws no longer escapes `startIfConfigured()`.** The `onFailure` it's given is guarded as
   the builder's handlers are: one that throws is logged, and the call still returns `null`.
+- **The dashboards' theme is one button.** The three light, dark, and auto buttons in the top bar are now one, which
+  shows the theme in force; each click moves to the next, so the bar gives the theme one button's room.
+- **The dashboards' tabs have icons.** Each tab is a plain link with an icon before its name, in place of an outlined
+  folder tab; hovering one lays a rounded ground under it, and the current one is underlined in orange.
 
 ### Documentation
 

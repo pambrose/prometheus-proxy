@@ -44,8 +44,8 @@ import kotlinx.html.unsafe
  * (see [DashboardServer]). Styled after Grafana's: the logo and the product's name, the dashboard's name under them as
  * the page's heading, then one centered form, labels above full-width fields, one full-width button, and a red alert
  * above the form after a wrong login. Its colors are the dashboard's own tokens, light or dark as the theme the
- * dashboard's picker stored is, or else as the system is, and it loads nothing: its one image, the logo, and its one
- * script are inline, and it uses no font of its own.
+ * dashboard's theme button stored is, or else as the system is, and it loads nothing: its one image, the logo, and its
+ * one script are inline, and it uses no font of its own.
  */
 internal object LoginHtml {
   const val FAILED = "Invalid username or password"

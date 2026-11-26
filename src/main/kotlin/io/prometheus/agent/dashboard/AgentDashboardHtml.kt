@@ -39,6 +39,7 @@ import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardView
+import io.prometheus.common.dashboard.TabIcon
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
@@ -65,17 +66,19 @@ import io.prometheus.common.dashboard.SettingsHtml.settingsInner
  *
  * @param segment the view's route below the dashboard's base, which the Paths view is served at itself
  * @param title the view's name in the tabs
+ * @param icon the view's icon in the tabs, before its name
  * @param searchFields what the view's search matches, for the Activity view's filtered table
  */
 internal enum class AgentLayout(
   override val segment: String,
   override val title: String,
+  override val icon: TabIcon,
   override val searchFields: String = "",
 ) : DashboardView {
-  PATHS("", "Paths"),
-  CONNECTION("connection", "Connection"),
-  ACTIVITY("activity", "Activity", "event, path, or detail"),
-  SETTINGS("settings", "Settings"),
+  PATHS("", "Paths", TabIcon.PATHS),
+  CONNECTION("connection", "Connection", TabIcon.CONNECTION),
+  ACTIVITY("activity", "Activity", TabIcon.ACTIVITY, "event, path, or detail"),
+  SETTINGS("settings", "Settings", TabIcon.SETTINGS),
 }
 
 /**
