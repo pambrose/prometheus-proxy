@@ -21,15 +21,19 @@ import io.prometheus.common.dashboard.DashboardPage.announcer
 import io.prometheus.common.dashboard.DashboardPage.barEnd
 import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.LoginHtml
+import kotlinx.html.A
 import kotlinx.html.ButtonType
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
+import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlinx.html.head
 import kotlinx.html.iframe
+import kotlinx.html.input
+import kotlinx.html.li
 import kotlinx.html.main
 import kotlinx.html.nav
 import kotlinx.html.option
@@ -39,6 +43,7 @@ import kotlinx.html.select
 import kotlinx.html.span
 import kotlinx.html.strong
 import kotlinx.html.style
+import kotlinx.html.ul
 import kotlinx.html.unsafe
 
 /**
@@ -56,6 +61,15 @@ internal object ScreensHtml {
 
   /** The notice a copy shows when its link went to the copy already open and it couldn't close itself. */
   const val HANDOFF_ID = "handoff"
+
+  /** The More button at the tabs' end, shown while a tab doesn't fit the row, which opens [MENU_ID]. */
+  const val MORE_ID = "screens-more"
+
+  /** The More menu, a popover listing every screen, with a search. */
+  const val MENU_ID = "screens-menu"
+
+  /** The More menu's search field. */
+  const val SEARCH_ID = "screens-search"
 
   /** The page's title, before the proxy's name; its bar names the product, as the login pages do. */
   private const val TITLE = "Screens"
@@ -93,6 +107,7 @@ internal object ScreensHtml {
         layoutButtons()
         barEnd(page.loginEnabled, page.routeBase)
       }
+      moreMenu(all)
       announcer()
       handoffNotice()
       main("stage one") {
@@ -105,7 +120,7 @@ internal object ScreensHtml {
 
   // A tab per screen, the dashboards' own (DashboardPage.tabs), each a link to its screen's id in the page, with its
   // status dot where a view's icon would be, which a visually hidden word says too. The proxy's is current until the
-  // script reads the link the page was opened with.
+  // script reads the link the page was opened with. A long name is cut, and the tooltip gives it whole.
   private fun FlowContent.tabs(screens: List<Screen>) {
     nav("nav") {
       attributes["id"] = NAV_ID
@@ -115,8 +130,61 @@ internal object ScreensHtml {
         a(href = "#${screen.id}", classes = if (on) "screen on" else "screen") {
           attributes["data-screen"] = screen.id
           if (on) attributes["aria-current"] = "page"
-          +"${screen.name} "
-          span("sr-only state") { +"checking" }
+          attributes["title"] = screen.name
+          screenLabel(screen)
+        }
+      }
+      moreButton()
+    }
+  }
+
+  // A tab's or a menu entry's text: the screen's name, then its state in a visually hidden word, which the script
+  // keeps in step with the dot.
+  private fun A.screenLabel(screen: Screen) {
+    span("name") { +screen.name }
+    +" "
+    span("sr-only state") { +"checking" }
+  }
+
+  // The tabs' last item, hidden until the script finds a tab that doesn't fit the row: how many screens the row
+  // leaves out, and how many of those aren't answering, which the script fills in.
+  private fun FlowContent.moreButton() {
+    button(type = ButtonType.button, classes = "more") {
+      attributes["id"] = MORE_ID
+      attributes["popovertarget"] = MENU_ID
+      attributes["aria-label"] = "More screens"
+      attributes["hidden"] = "hidden"
+      +"More "
+      span("count") {}
+      span("down-count") {}
+    }
+  }
+
+  // The More menu: a search, then an entry per screen, in the tabs' order, the proxy's current until the script reads
+  // the link the page was opened with. A popover, which draws in the top layer, so it sits outside the nav, whose
+  // tab rules would otherwise style its entries.
+  private fun FlowContent.moreMenu(screens: List<Screen>) {
+    div("menu") {
+      attributes["id"] = MENU_ID
+      attributes["popover"] = "auto"
+      input(type = InputType.search) {
+        attributes["id"] = SEARCH_ID
+        attributes["aria-label"] = "Find a screen"
+        attributes["placeholder"] = "Find a screen…"
+        attributes["autocomplete"] = "off"
+        // Focused as the menu shows, so a key pressed at once goes to the search, not the More button.
+        attributes["autofocus"] = "autofocus"
+      }
+      ul("entries") {
+        screens.forEach { screen ->
+          val on = screen.id == Screen.PROXY_ID
+          li {
+            a(href = "#${screen.id}", classes = if (on) "entry on" else "entry") {
+              attributes["data-screen"] = screen.id
+              if (on) attributes["aria-current"] = "true"
+              screenLabel(screen)
+            }
+          }
         }
       }
     }

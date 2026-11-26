@@ -21,7 +21,10 @@ import io.prometheus.common.dashboard.ThemeScript
 import io.prometheus.proxy.dashboard.Screen.Companion.ALL_ID
 import io.prometheus.proxy.dashboard.Screen.Companion.PROXY_ID
 import io.prometheus.proxy.dashboard.ScreensHtml.HANDOFF_ID
+import io.prometheus.proxy.dashboard.ScreensHtml.MENU_ID
+import io.prometheus.proxy.dashboard.ScreensHtml.MORE_ID
 import io.prometheus.proxy.dashboard.ScreensHtml.NAV_ID
+import io.prometheus.proxy.dashboard.ScreensHtml.SEARCH_ID
 import io.prometheus.proxy.dashboard.ScreensHtml.STAGE_ID
 
 /**
@@ -29,12 +32,16 @@ import io.prometheus.proxy.dashboard.ScreensHtml.STAGE_ID
  * screen, and runs what the page does in the browser:
  *
  * - **Layouts.** One, Split, and All show, hide, and size panes, and never move one in the page, which would reload
- *   its frame. A frame loads the first time its pane shows and keeps its place from then on.
+ *   its frame. A frame loads the first time its pane shows, in All once its tile nears the grid's view, and keeps its
+ *   place from then on.
  * - **Links.** The hash says what to show: `all`, `<id>`, `<id>/<path>`, or two of those joined by `+`. A link with a
  *   path loads it, reloading a screen already loaded; a bare id only brings a screen up, keeping the reader's place in
  *   it. The hash is kept in step with what the page shows, with no history entry.
  * - **The handoff.** A page opened with a link asks over a `BroadcastChannel` whether a copy is open; if one answers,
  *   it follows the link, and this copy closes itself, or says it couldn't.
+ * - **The row.** The tabs fit one row: those that don't fit are hidden, never moved, keeping the selected screen's,
+ *   and the More button says how many the row leaves out and how many of those aren't answering. Its menu lists every
+ *   screen, with a search, and its entries work as tabs do.
  * - **Dots.** Each screen is probed every few seconds, while the page is visible, with a request that can't read the
  *   answer and succeeds whenever the screen answers. A screen that comes back reloads its frame.
  * - **The theme button**, as on the dashboards ([ThemeScript]), and Left and Right through the tabs.
@@ -53,6 +60,12 @@ internal object ScreensScript {
   const val FRAME_WIDTH = 1280
   const val FRAME_HEIGHT = 800
 
+  /** The More menu's widest, in pixels; a narrower window gives it its width less 32px. */
+  const val MENU_WIDTH = 320
+
+  /** How near the All grid's view a tile comes before its frame loads: half the grid's height, above and below. */
+  const val ALL_LOAD_MARGIN = "50% 0px"
+
   /** The script. */
   val JS =
     """
@@ -63,6 +76,9 @@ internal object ScreensScript {
       var stage = document.getElementById('$STAGE_ID');
       var nav = document.getElementById('$NAV_ID');
       var handoff = document.getElementById('$HANDOFF_ID');
+      var more = document.getElementById('$MORE_ID');
+      var menu = document.getElementById('$MENU_ID');
+      var search = document.getElementById('$SEARCH_ID');
       // Each screen's pane and tab by its id, and the ids in the page's order, the proxy's first. Objects without a
       // prototype, so an id such as "constructor" names only a screen.
       var ids = [];
@@ -76,6 +92,11 @@ internal object ScreensScript {
       Array.prototype.forEach.call(nav.querySelectorAll('a.screen'), function (tab) {
         tabs[tab.getAttribute('data-screen')] = tab;
       });
+      // Each screen's entry in the More menu, as tabs holds its tab.
+      var menuItems = Object.create(null);
+      Array.prototype.forEach.call(menu.querySelectorAll('a.entry'), function (entry) {
+        menuItems[entry.getAttribute('data-screen')] = entry;
+      });
       // What the page shows: the layout, the screen alone or on the left, and the one on the right in Split; and the
       // path each screen last loaded from a link, or null once it loaded its start, which the hash shows.
       var layout = 'one';
@@ -85,6 +106,11 @@ internal object ScreensScript {
       // Whether this copy is the page, which follows links other copies hand it; false while it waits to hand its own.
       var isThePage = false;
       var handedOver = false;
+      // The row's fit (fitTabs): each tab's width, measured once; the More button's, at its widest label; and the gap
+      // between them, the nav's (DashboardCss).
+      var TAB_GAP = 6;
+      var tabWidth = Object.create(null);
+      var moreWidth = 0;
 
       // The theme button and the live region's say, which every page with the bar shares (see ThemeScript).
       ${ThemeScript.indented("      ")}
@@ -150,13 +176,74 @@ internal object ScreensScript {
           tab.classList.toggle('on', current);
           tab.classList.toggle('second', layout === 'split' && id === second);
           if (current) tab.setAttribute('aria-current', 'page'); else tab.removeAttribute('aria-current');
-          if (at >= 0) show(id);
+          var entry = menuItems[id];
+          entry.classList.toggle('on', current);
+          if (current) entry.setAttribute('aria-current', 'true'); else entry.removeAttribute('aria-current');
+          entry.classList.toggle('second', layout === 'split' && id === second);
+          if (at >= 0 && layout !== 'all') show(id);
         });
         Array.prototype.forEach.call(document.querySelectorAll('.layouts button'), function (b) {
           b.setAttribute('aria-pressed', String(b.getAttribute('data-layout') === layout));
         });
+        fitTabs();
         var hash = layout === 'all' ? '$ALL_ID' : shown.map(linkOf).join('+');
         history.replaceState(null, '', '#' + hash);
+      }
+      // Measures each tab once, shown and in bold, as the current one is, so selecting a tab never pushes its neighbour
+      // out; and the More button at its widest label, every screen out and every one down, so a dot changing colour
+      // never moves a tab.
+      function measureTabs() {
+        nav.classList.remove('tight');
+        ids.forEach(function (id) {
+          var tab = tabs[id];
+          var wasOn = tab.classList.contains('on');
+          tab.classList.remove('out');
+          tab.classList.add('on');
+          tabWidth[id] = tab.getBoundingClientRect().width;
+          tab.classList.toggle('on', wasOn);
+        });
+        more.hidden = false;
+        more.querySelector('.count').textContent = String(ids.length);
+        more.querySelector('.down-count').textContent = ' · ' + ids.length + ' down';
+        moreWidth = more.getBoundingClientRect().width;
+        more.hidden = true;
+      }
+      // Fits the tabs to one row, in the list's order, hiding (out) those from the first that doesn't fit beside the
+      // More button on. The selected screen's tab, and in Split the right pane's, stays, its room kept first; a hidden
+      // tab takes none, so a kept one follows the others with nothing moved. In All no tab is current, and none is
+      // kept. Where even the kept tabs and More are wider than the row, the row is tight: the tabs shrink, their names
+      // cut, rather than spill over the layout buttons.
+      function fitTabs() {
+        var room = nav.clientWidth;
+        var kept = layout === 'split' ? [first, second] : layout === 'one' ? [first] : [];
+        var widthOf = function (sum, id) { return sum + tabWidth[id] + TAB_GAP; };
+        var row = ids;
+        var tight = false;
+        if (ids.reduce(widthOf, 0) > room) {
+          var used = kept.reduce(widthOf, moreWidth);
+          tight = used > room;
+          var full = false;
+          row = ids.filter(function (id) {
+            if (kept.indexOf(id) >= 0) return true;
+            full = full || used + tabWidth[id] + TAB_GAP > room;
+            if (!full) used += tabWidth[id] + TAB_GAP;
+            return !full;
+          });
+        }
+        ids.forEach(function (id) { tabs[id].classList.toggle('out', row.indexOf(id) < 0); });
+        nav.classList.toggle('tight', tight);
+        updateMore();
+      }
+      // The More button: how many screens the row leaves out, and how many of those aren't answering, in words too;
+      // hidden while every tab fits. It never refits the row, which keeps room for its widest label.
+      function updateMore() {
+        var out = ids.filter(function (id) { return tabs[id].classList.contains('out'); });
+        var down = out.filter(function (id) { return tabs[id].classList.contains('down'); }).length;
+        var label = 'More screens: ' + out.length + ' hidden';
+        more.querySelector('.count').textContent = String(out.length);
+        more.querySelector('.down-count').textContent = down ? ' · ' + down + ' down' : '';
+        more.setAttribute('aria-label', down ? label + ', ' + down + ' not answering' : label);
+        more.hidden = out.length === 0;
       }
       // A link's pane, or the proxy's tab, with no path, for an id the page doesn't have.
       function paneOf(pane) {
@@ -221,14 +308,81 @@ internal object ScreensScript {
         var tag = el.tagName;
         return el.isContentEditable || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'INPUT';
       }
-
-      nav.addEventListener('click', function (evt) {
-        var tab = evt.target.closest && evt.target.closest('a.screen');
-        // A modified click opens the tab's link elsewhere, as a link does, where the page there hands it back here.
-        if (!tab || evt.metaKey || evt.ctrlKey || evt.altKey || evt.button !== 0) return;
+      // Closes the More menu if it's open; nothing where the browser has no popovers, whose selector would throw.
+      function closeMenu() {
+        if (!menu.hidePopover) return;
+        if (menu.matches(':popover-open')) menu.hidePopover();
+      }
+      // Places the menu under the More button, their right edges aligned, at least 8px in from the window's on both
+      // sides: at a phone's width More can sit nearer the left edge than the menu is wide. Its width is the CSS's,
+      // which a viewport's units measure, as innerWidth does.
+      function placeMenu() {
+        var rect = more.getBoundingClientRect();
+        var width = document.documentElement.clientWidth;
+        var menuWidth = Math.min($MENU_WIDTH, window.innerWidth - 32);
+        menu.style.top = Math.round(rect.bottom + 4) + 'px';
+        menu.style.right = Math.round(Math.max(8, Math.min(width - rect.right, width - menuWidth - 8))) + 'px';
+      }
+      // Narrows the menu to the screens whose name holds the search's text, in any case; empty, it shows them all.
+      function filterMenu(text) {
+        var query = text.trim().toLowerCase();
+        ids.forEach(function (id) {
+          var entry = menuItems[id];
+          entry.parentNode.hidden = entry.querySelector('.name').textContent.toLowerCase().indexOf(query) < 0;
+        });
+      }
+      // The entries the search leaves, in the menu's order.
+      function visibleEntries() {
+        return ids.map(function (id) { return menuItems[id]; }).filter(function (entry) {
+          return !entry.parentNode.hidden;
+        });
+      }
+      // A tab's or a menu entry's click: its screen alone, or on the right in Split with shift, closing the menu. A
+      // modified click opens the link elsewhere, as a link does, where the page there hands it back here.
+      function onScreenClick(evt) {
+        var link = evt.target.closest && evt.target.closest('a.screen, a.entry');
+        if (!link || evt.metaKey || evt.ctrlKey || evt.altKey || evt.button !== 0) return;
         evt.preventDefault();
-        var id = tab.getAttribute('data-screen');
+        var id = link.getAttribute('data-screen');
         if (evt.shiftKey) fillRight(id); else select(id);
+        closeMenu();
+      }
+
+      nav.addEventListener('click', onScreenClick);
+      menu.addEventListener('click', onScreenClick);
+      // A click into a screen goes to its frame's document, which the menu's light dismiss never sees, and takes focus
+      // out of this window, so the menu closes then.
+      window.addEventListener('blur', closeMenu);
+      search.addEventListener('input', function () { filterMenu(search.value); });
+      // Opening the menu places it and starts a fresh search, before it shows, so it never draws a frame out of place;
+      // its search takes focus as it shows (autofocus), and again here, where a browser didn't.
+      menu.addEventListener('beforetoggle', function (evt) {
+        if (evt.newState !== 'open') return;
+        placeMenu();
+        search.value = '';
+        filterMenu('');
+      });
+      // Closing the menu from inside it returns focus to the button.
+      menu.addEventListener('toggle', function (evt) {
+        if (evt.newState === 'open') search.focus();
+        else if (menu.contains(document.activeElement) || document.activeElement === document.body) more.focus();
+      });
+      // In the menu, Down and Up move between the search and the entries it leaves, and Enter in the search opens the
+      // first of them; with none left, neither does anything. Enter's default is prevented, or its keypress would reach
+      // the More button, which the closing menu hands focus to, and open the menu again.
+      menu.addEventListener('keydown', function (evt) {
+        if (!isThePage) return;
+        var list = visibleEntries();
+        if (evt.key === 'Enter' && evt.target === search) {
+          evt.preventDefault();
+          if (list.length) list[0].click();
+          return;
+        }
+        if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
+        evt.preventDefault();
+        var at = list.indexOf(evt.target);
+        var next = evt.key === 'ArrowDown' ? list[at + 1] : at <= 0 ? search : list[at - 1];
+        if (next) next.focus();
       });
       document.body.addEventListener('click', function (evt) {
         if (!evt.target.closest) return;
@@ -258,12 +412,13 @@ internal object ScreensScript {
         }
       });
       // Left and Right step through the tabs, from a focused tab or the current one, wrapping, as the dashboards' do.
-      // Not while typing, nor with a modifier, nor a held key, which would load every screen on the way, and not from
-      // inside a frame, whose keys are its own.
+      // Not while typing, nor with a modifier, nor a held key, which would load every screen on the way, not from
+      // inside a frame, whose keys are its own, nor from the More menu, which would change the screen behind it.
       document.body.addEventListener('keydown', function (evt) {
         if (!isThePage) return;
         if (evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight') return;
         if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat || !evt.target.closest) return;
+        if (evt.target.closest('#$MENU_ID')) return;
         if (typingIn(evt.target)) return;
         var focusedTab = evt.target.closest('#$NAV_ID a');
         var from = focusedTab ? focusedTab.getAttribute('data-screen') : first;
@@ -290,7 +445,29 @@ internal object ScreensScript {
         ids.forEach(function (id) {
           sizer.observe(panes[id].querySelector('.view'));
         });
+        // The row refits when the tabs' width changes, as the window's does, not on a change in their height.
+        var navWidth = -1;
+        var tabSizer = new ResizeObserver(function (entries) {
+          var width = entries[0].contentRect.width;
+          if (width === navWidth) return;
+          navWidth = width;
+          closeMenu();
+          fitTabs();
+        });
+        tabSizer.observe(nav);
       }
+
+      // All: a tile's frame loads once the tile comes near the grid's view, by the load rule (show), so the grid
+      // starts the screens a reader can see, not every one at once. A frame never unloads.
+      var loader = new IntersectionObserver(function (entries) {
+        if (!isThePage || layout !== 'all') return;
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) show(entry.target.getAttribute('data-screen'));
+        });
+      }, { root: stage, rootMargin: '$ALL_LOAD_MARGIN' });
+      ids.forEach(function (id) {
+        loader.observe(panes[id]);
+      });
 
       // Marks a screen up or down from its probe, on its tab, in words for a screen reader, and on its pane, when that
       // changes. A screen that answers again reloads its frame, at once if it's shown, else when it next shows (show).
@@ -304,7 +481,11 @@ internal object ScreensScript {
         tab.classList.toggle('up', up);
         tab.classList.toggle('down', !up);
         state.textContent = up ? 'up' : 'not answering';
+        menuItems[id].classList.toggle('up', up);
+        menuItems[id].classList.toggle('down', !up);
+        menuItems[id].querySelector('.state').textContent = state.textContent;
         pane.classList.toggle('is-down', !up);
+        updateMore();
         if (up && wasDown && frame.getAttribute('src')) {
           pane.setAttribute('data-reload', '');
           if (pane.classList.contains('shown')) show(id);
@@ -340,6 +521,10 @@ internal object ScreensScript {
         setInterval(probeAll, PROBE_INTERVAL_MILLIS);
         probeAll();
       }
+
+      // The tabs' widths, before the first render fits them, and again once the fonts are in, which can change them.
+      measureTabs();
+      if (document.fonts) document.fonts.ready.then(function () { measureTabs(); fitTabs(); });
 
       // The handoff. A page opened with a link asks whether a copy is open on this origin; one that is follows the link
       // and answers, and this one closes, or, where the browser won't let it, says where the link went and offers to

@@ -77,18 +77,29 @@ class ScreensHtmlTest : StringSpec() {
     "the proxy's tab should be named for the proxy, and be the current one" {
       page().apply {
         this shouldContain """<nav class="nav" id="${ScreensHtml.NAV_ID}" aria-label="Screens">"""
-        Regex("""<a href="#proxy" class="screen on" data-screen="proxy" aria-current="page">""")
-          .containsMatchIn(this) shouldBe true
-        this shouldContain """>$PROXY_NAME <span class="sr-only state">checking</span></a>"""
+        this shouldContain
+          """<a href="#proxy" class="screen on" data-screen="proxy" aria-current="page" title="$PROXY_NAME">"""
+        this shouldContain """><span class="name">$PROXY_NAME</span> <span class="sr-only state">checking</span></a>"""
         Regex("""aria-current="page"""").findAll(this).count() shouldBe 1
       }
     }
 
-    // The dot is the state's colour, which a screen reader can't see, so each tab says it in words too.
+    // A long name is cut with an ellipsis, so a tab can't take the row; its tooltip gives it whole.
+    "each tab should carry its full name in a tooltip, and its name in a span the bar can cut" {
+      page().apply {
+        attributeValues("a", "screen", "title") shouldBe [PROXY_NAME, "agent-east", "Grafana"]
+        this shouldContain """<span class="name">agent-east</span> <span class="sr-only state">checking</span></a>"""
+      }
+      ScreensCss.CSS shouldContain
+        ".nav a.screen .name { min-width:0; max-width:24ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }"
+    }
+
+    // The dot is the state's colour, which a screen reader can't see, so each tab, and each entry of the More menu,
+    // says it in words too.
     "each tab's dot should have a text equivalent" {
       page().apply {
-        Regex("""<span class="sr-only state">checking</span>""").findAll(this).count() shouldBe 3
-        this shouldContain """<a href="#agent-east" class="screen" data-screen="agent-east">"""
+        Regex("""<span class="sr-only state">checking</span>""").findAll(this).count() shouldBe 6
+        this shouldContain """<a href="#agent-east" class="screen" data-screen="agent-east" title="agent-east">"""
       }
     }
 
@@ -136,6 +147,63 @@ class ScreensHtmlTest : StringSpec() {
       }
     }
 
+    // ==================== The More menu ====================
+
+    // The button travels with the tabs, inside the nav; the menu, a popover, draws in the top layer wherever it sits,
+    // so it's outside the nav, whose `.nav a` rules would style its entries as tabs.
+    "the tabs should end in a More button, hidden until a tab doesn't fit, that opens the menu" {
+      page().apply {
+        this shouldContain
+          """<button type="button" class="more" id="${ScreensHtml.MORE_ID}" """ +
+          """popovertarget="${ScreensHtml.MENU_ID}" aria-label="More screens" hidden="hidden">""" +
+          """More <span class="count"></span><span class="down-count"></span></button>"""
+        indexOf("</nav>") shouldBeGreaterThan indexOf("id=\"${ScreensHtml.MORE_ID}\"")
+        indexOf("id=\"${ScreensHtml.MENU_ID}\"") shouldBeGreaterThan indexOf("</nav>")
+      }
+    }
+
+    "the menu should be a popover with a labelled search and an entry per screen, in order" {
+      page().apply {
+        this shouldContain """<div class="menu" id="${ScreensHtml.MENU_ID}" popover="auto">"""
+        this shouldContain
+          """<input type="search" id="${ScreensHtml.SEARCH_ID}" aria-label="Find a screen" """ +
+          """placeholder="Find a screen…" autocomplete="off" autofocus="autofocus">"""
+        attributeValues("a", "entry", "data-screen") shouldBe ["proxy", "agent-east", "grafana"]
+        attributeValues("a", "entry", "href") shouldBe ["#proxy", "#agent-east", "#grafana"]
+        this shouldContain
+          """<a href="#proxy" class="entry on" data-screen="proxy" aria-current="true">""" +
+          """<span class="name">$PROXY_NAME</span> <span class="sr-only state">checking</span></a>"""
+        Regex("""aria-current="page"""").findAll(this).count() shouldBe 1
+      }
+    }
+
+    "the More button and the menu should use the dashboards' tokens, dots, and touch sizes" {
+      ScreensCss.CSS.apply {
+        this shouldContain ".more[hidden] { display:none; }"
+        this shouldContain ".more .down-count { color:var(--crit); }"
+        this shouldContain "width:min(320px, calc(100vw - 32px)); max-height:min(60vh, 480px);"
+        this shouldContain ".menu a.entry.up::before { background:var(--ok); }"
+        this shouldContain ".menu a.entry.down::before { background:var(--crit); }"
+        this shouldContain ".menu a.entry.up::before { background:LinkText; }"
+        this shouldContain ".more, .menu input, .menu a.entry { min-height:46px; }"
+      }
+    }
+
+    // Without popovers (Safari before 17, Firefox before 125), the menu would draw open over the screens and More
+    // couldn't open it, so those browsers get the wrapping row, every tab shown.
+    "a browser without popovers should get the wrapping row, with no More button or menu" {
+      ScreensCss.CSS.substringAfter("@supports not selector(:popover-open) {").substringBefore("\n}").apply {
+        this shouldContain ".menu, .more { display:none; }"
+        this shouldContain "body.screens .nav { flex-wrap:wrap; }"
+        this shouldContain ".nav a.screen.out { display:inline-flex; }"
+      }
+    }
+
+    // The count's crit colour holds 4.5:1 on --surface-2, the bar's end's hover ground, and not on --surface-3.
+    "the More button's hover should keep its count readable" {
+      ScreensCss.CSS shouldContain ".more:hover { color:var(--ink); background-color:var(--surface-2); }"
+    }
+
     // Shown by the script only when a link went to the copy already open and the browser won't let it close this one.
     "the page should carry the handoff's notice, hidden, with a way to stay" {
       page() shouldContain
@@ -149,8 +217,12 @@ class ScreensHtmlTest : StringSpec() {
     "a name with HTML or quote characters should be escaped everywhere it appears" {
       val text = page(Screen.parseAll([Screen.Entry(name = "<b>Ops \"A\"</b>", url = "http://ops:9000")]))
       text shouldNotContain "<b>Ops"
-      text shouldContain """&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt; <span class="sr-only state">"""
-      text shouldContain """title="&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;""""
+      // The tab and its entry in the More menu.
+      Regex("""<span class="name">&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;</span> <span class="sr-only state">""")
+        .findAll(text)
+        .count() shouldBe 2
+      // The tab's tooltip and the frame's title.
+      Regex("""title="&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;"""").findAll(text).count() shouldBe 2
       text shouldContain """<span class="name">&lt;b&gt;Ops &quot;A&quot;&lt;/b&gt;</span>"""
       text shouldContain """data-screen="b-ops-a-b""""
     }
@@ -202,10 +274,11 @@ class ScreensHtmlTest : StringSpec() {
     // give the tab the notice's ground.
     "the pane's down notice should be styled only inside its view, apart from a tab's state class" {
       val css = ScreensCss.CSS
-      Regex("""\.down\b""")
+      // The class .down alone, not .down-count, the More button's count, which a hyphen ends no word of.
+      Regex("""\.down(?![\w-])""")
         .findAll(css)
         .map { css.substring(0, it.range.first) }
-        .filterNot { it.endsWith(".view ") || it.endsWith("a.screen") }
+        .filterNot { it.endsWith(".view ") || it.endsWith("a.screen") || it.endsWith("a.entry") }
         .count() shouldBe 0
       css shouldContain ".view .down {"
     }
