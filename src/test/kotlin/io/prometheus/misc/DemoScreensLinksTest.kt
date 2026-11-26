@@ -96,14 +96,39 @@ class DemoScreensLinksTest : StringSpec() {
     return listOf(link)
   }
 
-  // Each of a demo's files' links, the text after /screens#: demo.sh names the page $SCREENS_URL, and the docs its
-  // address at the default port.
-  private fun ScreensDemo.links(): Map<String, List<String>> =
+  // Each of a demo's files that link into the page, by name: its text, and the pattern its links match. demo.sh names
+  // the page $SCREENS_URL, and the docs give its address at the default port.
+  private fun ScreensDemo.linkFiles(): Map<String, Pair<String, Regex>> =
     mapOf(
-      "$dir/demo.sh" to SCRIPT_LINK.findAll(File(dir, "demo.sh").readText()),
-      "$dir/README.md" to docsLink.findAll(File(dir, "README.md").readText()),
-      page to docsLink.findAll(File(page).readText()),
-    ).mapValues { (_, matches) -> matches.map { it.groupValues[1] }.toList() }
+      "$dir/demo.sh" to (File(dir, "demo.sh").readText() to SCRIPT_LINK),
+      "$dir/README.md" to (File(dir, "README.md").readText() to docsLink),
+      page to (File(page).readText() to docsLink),
+    )
+
+  // Each of a demo's files' links, the text after /screens#.
+  private fun ScreensDemo.links(): Map<String, List<String>> =
+    linkFiles().mapValues { (_, file) ->
+      val (text, pattern) = file
+      pattern.findAll(text).map { it.groupValues[1] }.toList()
+    }
+
+  // The links [pattern] finds in [text] with a ) or ] right after them, each with its bracket: a link stops before a
+  // bracket, so the punctuation check can't see one, though a terminal takes it as part of the address. A Markdown
+  // link's own ), after its ](, ends the link's target, not its sentence.
+  private fun bracketsAfter(
+    text: String,
+    pattern: Regex,
+  ): List<String> =
+    pattern
+      .findAll(text)
+      .mapNotNull { link ->
+        val next = text.getOrNull(link.range.last + 1)
+        val markdownTarget = text.regionMatches(link.range.first - 2, "](", 0, 2)
+        if (next == ']' || (next == ')' && !markdownTarget)) "#${link.groupValues[1]}$next" else null
+      }.toList()
+
+  // Whether a compose service's block sets GF_SECURITY_ALLOW_EMBEDDING to "true", on a line that isn't a comment.
+  private fun allowsEmbedding(service: String) = ALLOW_EMBEDDING.containsMatchIn(service)
 
   // Why the page can't follow [link], or null when it can: all, <id>, <id>/<path>, or two of those joined by +.
   private fun ScreensDemo.problem(link: String): String? {
@@ -174,6 +199,38 @@ class DemoScreensLinksTest : StringSpec() {
         .flatMap { demo ->
           demo.links().flatMap { (file, found) -> found.filter { it.last() in ",.;:" }.map { "$file: #$it" } }
         }.shouldBeEmpty()
+    }
+
+    "a link followed by a bracket should be found, but not a Markdown link's own )" {
+      bracketsAfter("(see \${SCREENS_URL}#grafana) and \$SCREENS_URL#proxy]", SCRIPT_LINK) shouldBe
+        ["#grafana)", "#proxy]"]
+      bracketsAfter("(<http://localhost:8094/screens#grafana>)", BASICS.docsLink).shouldBeEmpty()
+      bracketsAfter("[Grafana](http://localhost:8094/screens#grafana)", BASICS.docsLink).shouldBeEmpty()
+    }
+
+    "no link into the screens page should be followed by a bracket" {
+      DEMOS
+        .flatMap { demo ->
+          demo.linkFiles().flatMap { (file, contents) ->
+            val (text, pattern) = contents
+            bracketsAfter(text, pattern).map { "$file: $it" }
+          }
+        }.shouldBeEmpty()
+    }
+
+    // make up prints the screens page's address, which holds the demo's other URLs, so its README and docs page say
+    // so, as the repository's README does for the demo it starts.
+    "each demo's README and docs page should say make up prints the screens page's URL" {
+      DEMOS.forEach { demo ->
+        val makeUp = Regex("""cd prometheus-proxy/${Regex.escape(demo.dir)}\nmake up +#([^\n]*)""")
+        mapOf("${demo.dir}/README.md" to true, demo.page to true, "README.md" to false).forEach { (file, required) ->
+          withClue(file) {
+            val comments = makeUp.findAll(File(file).readText()).map { it.groupValues[1] }.toList()
+            if (required) comments.shouldNotBeEmpty()
+            comments.filterNot { "screens page's URL" in it }.shouldBeEmpty()
+          }
+        }
+      }
     }
 
     // The page is the proxy's, so a link into it while the proxy is down opens only the browser's connection error,
@@ -251,10 +308,17 @@ class DemoScreensLinksTest : StringSpec() {
       }
     }
 
+    "the Grafana framing check should take a line that sets it, not one commented out" {
+      allowsEmbedding("""      GF_SECURITY_ALLOW_EMBEDDING: "true"""") shouldBe true
+      allowsEmbedding("""      GF_SECURITY_ALLOW_EMBEDDING: "true"  # for the screens page""") shouldBe true
+      allowsEmbedding("""      # GF_SECURITY_ALLOW_EMBEDDING: "true"""") shouldBe false
+      allowsEmbedding("""      #GF_SECURITY_ALLOW_EMBEDDING: "true"""") shouldBe false
+    }
+
     // Grafana refuses framing unless told, and the page can't tell a frame it refused from an empty one.
     "a demo whose page lists Grafana should let Grafana be framed" {
       DEMOS.filter { "grafana" in screenIds.getValue(it) }.forEach { demo ->
-        withClue(demo.dir) { demo.composeService("grafana") shouldContain """GF_SECURITY_ALLOW_EMBEDDING: "true"""" }
+        withClue(demo.dir) { allowsEmbedding(demo.composeService("grafana")) shouldBe true }
       }
     }
   }
@@ -268,6 +332,9 @@ class DemoScreensLinksTest : StringSpec() {
     // A link runs to the next space, quote, or bracket, as the demo's URLs end unpunctuated.
     const val LINK_TAIL = """#([^\s"'`)\]<>\\]+)"""
     val SCRIPT_LINK = Regex("""\$\{?SCREENS_URL}?$LINK_TAIL""")
+
+    // GF_SECURITY_ALLOW_EMBEDDING: "true" as a line of its own, which may end in a comment, but not start with one.
+    val ALLOW_EMBEDDING = Regex("""(?m)^\s+GF_SECURITY_ALLOW_EMBEDDING: "true"(\s+#.*)?$""")
     val OPTIONAL = Regex("""\$\{\?([A-Za-z0-9_]+)}""")
 
     // A compose variable with its default, ${NAME:-default}.

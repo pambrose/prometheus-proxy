@@ -45,7 +45,8 @@ its own that holds them all, with Prometheus and Grafana.
   search, and All scrolls, loading each screen as it comes into view. A link can open a screen, a view in it, or two
   side by side, such as `/screens#proxy/paths+grafana`, and a link opened while the page is open goes to that page.
   With screens listed, `framingEnabled = false` still lets the page show the proxy's dashboard, from its own origin.
-  Behind a reverse proxy, pass `/screens` on as well as `/dashboard`. The basics demo's tour now runs in it.
+  Behind a reverse proxy, pass `/screens` on as well as `/dashboard`. The basics, network, and Ktor demos' tours now
+  run in it.
 
 ### Bug Fixes
 

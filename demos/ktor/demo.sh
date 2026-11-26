@@ -77,9 +77,9 @@ GRAFANA_URL="http://localhost:${KTOR_DEMO_GRAFANA_PORT:-3300}"
 PROMETHEUS_URL="http://localhost:${KTOR_DEMO_PROMETHEUS_PORT:-9390}"
 PROXY_URL="http://localhost:${KTOR_DEMO_PROXY_PORT:-8380}"
 AGENT_ADMIN_URL="http://localhost:${KTOR_DEMO_AGENT_ADMIN_PORT:-8393}"
-# The dashboards of the coffee shop's agents: 1.0's, and 1.1's, which runs only after a deploy.
+# The dashboard of version 1.0's agent. 1.1's, which runs only after a deploy, needs no URL here: the tour and
+# the deploy scenario open it only in the screens page.
 AGENT_DASHBOARD_URL="http://localhost:${KTOR_DEMO_AGENT_DASHBOARD_PORT:-8395}/dashboard"
-NEXT_AGENT_DASHBOARD_URL="http://localhost:${KTOR_DEMO_NEXT_AGENT_DASHBOARD_PORT:-8396}/dashboard"
 # The proxy's screens page, which holds every screen above in one browser tab (proxy.conf's screens). The tour links
 # into it: ${SCREENS_URL}#<screen>, #<screen>/<view>, or #<screen>+<screen> for two side by side. It's the proxy's, so
 # while part 8 has the proxy stopped, the tour gives each screen's own address instead.
@@ -991,6 +991,8 @@ main() {
     ;;
   proxy-start)
     "${COMPOSE[@]}" start proxy
+    # The links below open the proxy's screens page, so they wait until it answers.
+    wait_for "$SCREENS_URL" "The proxy's screens page"
     bold "The proxy has started"
     how_it_works "This runs docker compose start proxy. The coffee shop's agent, still retrying, connects within a" \
       "few seconds, and registers its paths again. Nothing in the app was restarted or told."
