@@ -236,8 +236,8 @@ connect_traces() {
 # Whether Zipkin has at least this many of them: one for each reconnect.
 has_connect_traces() { (($(connect_traces | wc -l) >= $1)); }
 
-# Captures a page at WIDTH x the given CSS height, at SCALE, in a theme: the dashboard follows the browser's preferred
-# color scheme. Grafana and Zipkin render after loading their data, so their captures get a longer virtual-time budget.
+# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at SCALE, in a theme: the
+# dashboard follows the browser's preferred color scheme. Grafana and Zipkin render after loading their data, so their captures get a longer virtual-time budget.
 capture() {
   local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1

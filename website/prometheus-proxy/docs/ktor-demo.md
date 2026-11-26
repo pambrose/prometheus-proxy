@@ -62,7 +62,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/ktor
-make up      # builds the coffee shop, starts everything, prints the URLs
+make up      # builds the coffee shop, starts everything, prints the screens page's URL
 make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
@@ -215,8 +215,8 @@ the coffee shop's status page beside it to watch the queue on both:
 <http://localhost:8394/screens#coffee-shop+grafana>
 
 <figure markdown="span">
-  ![The coffee shop's status page beside Grafana, during a rush with the espresso machine broken](images/ktor-demo/screens.webp#only-dark){ loading=lazy }
-  ![The coffee shop's status page beside Grafana, during a rush with the espresso machine broken](images/ktor-demo/screens-light.webp#only-light){ loading=lazy }
+  ![The coffee shop's status page beside Grafana, during a rush, with its queue growing](images/ktor-demo/screens.webp#only-dark){ loading=lazy }
+  ![The coffee shop's status page beside Grafana, during a rush, with its queue growing](images/ktor-demo/screens-light.webp#only-light){ loading=lazy }
   <figcaption>The proxy's screens page: the coffee shop's status page beside Grafana</figcaption>
 </figure>
 

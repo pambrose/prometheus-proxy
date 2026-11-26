@@ -68,7 +68,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/network
-make up      # pulls the images, starts everything, prints the URLs
+make up      # pulls the images, starts everything, prints the screens page's URL
 make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers and network
 ```

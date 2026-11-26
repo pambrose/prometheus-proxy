@@ -162,9 +162,9 @@ history_of() {
     --data-urlencode "query=count_over_time(up{job=\"coffee-shop\"}[10m]) * 5 >= $1" | grep -q '"value"'
 }
 
-# Captures a page at WIDTH x the given CSS height, at SCALE, in a theme: the coffee shop and the proxy dashboard follow
-# the browser's preferred color scheme. Grafana renders after loading its data, so its captures get a longer
-# virtual-time budget.
+# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at SCALE, in a theme: the coffee
+# shop, the proxy dashboard, and its screens page follow the browser's preferred color scheme. Grafana renders after
+# loading its data, so its captures get a longer virtual-time budget.
 capture() {
   local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
@@ -218,19 +218,19 @@ step "The coffee shop, and its agent on the proxy dashboard"
 shoot coffee-shop "$APP_URL/?refresh=false"
 shoot agents "$DASHBOARD_URL/agents/$shop"
 
-step "A rush, and a broken espresso machine, in Grafana"
-# The rush fills the queue first: with the machine broken, every espresso drink fails at the counter, and the few orders
-# left to queue are fewer than three baristas brew.
+step "A rush in the screens page, and a broken espresso machine in Grafana"
 "$DEMO" rush >/dev/null
 wait_until "the queue to pass 30" queue_at_least 30
+# The screens page as part 4 of the tour opens it, mid-rush, with the queue growing: the coffee shop's status page
+# beside Grafana, the shop's without its refresh, as above.
+shoot_screens screens \
+  "coffee-shop/?refresh=false+grafana/d/coffee-shop?orgId=1&kiosk&from=now-10m&to=now&theme={theme}"
+# The machine breaks only once the rush has filled the queue: with it broken, every espresso drink fails at the
+# counter, and the few orders left to queue are fewer than three baristas brew.
 "$DEMO" break-machine >/dev/null
 wait_until "CoffeeShopErrors to fire" firing CoffeeShopErrors
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
 shoot grafana "$GRAFANA_URL/d/coffee-shop?orgId=1&kiosk&from=now-10m&to=now&theme={theme}" "$((HEIGHT + 100))" 15000
-# The screens page as part 4 of the tour opens it: the coffee shop's status page beside Grafana, the shop's without its
-# refresh, as above.
-shoot_screens screens \
-  "coffee-shop/?refresh=false+grafana/d/coffee-shop?orgId=1&kiosk&from=now-10m&to=now&theme={theme}"
 "$DEMO" fix-machine >/dev/null
 "$DEMO" calm >/dev/null
 

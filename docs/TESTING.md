@@ -1047,10 +1047,12 @@ These support helpers also live here (not test classes themselves):
   `http://localhost:8094/screens#…`) parses as the page parses it and names only the proxy's tab, the grid, or a screen
   its proxy config lists (read without the environment, and checked as the proxy checks it at startup), split into
   panes as the page splits them, each file has one, and the links include a screen, a screen's view, and two screens
-  side by side, and none ends in punctuation; every screen's `url` reads a `${?…}` variable that compose gives the
-  page's proxy, set from the port compose publishes the screen on, so a moved port moves its tab; a demo whose page
-  lists Grafana lets Grafana be framed (`GF_SECURITY_ALLOW_EMBEDDING`); its `./demo.sh help` says `open` opens the
-  page; and while the page's proxy is stopped, a demo that stops it points at a screen's own URL, not the page
+  side by side, and none ends in punctuation or is followed by a `)` or `]` (a Markdown link's own `)` aside); every
+  screen's `url` reads a `${?…}` variable that compose gives the page's proxy, set from the port compose publishes the
+  screen on, so a moved port moves its tab; a demo whose page lists Grafana lets Grafana be framed, on a line of its
+  compose file that isn't a comment (`GF_SECURITY_ALLOW_EMBEDDING`); its `./demo.sh help` says `open` opens the page,
+  and its README and docs page, and the repository's README, say `make up` prints the screens page's URL; and while
+  the page's proxy is stopped, a demo that stops it points at a screen's own URL, not the page
 - **DemoTourTablesTest** — each demo's README and its page on the docs site have a What This Demo Shows table that
   names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
   of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the

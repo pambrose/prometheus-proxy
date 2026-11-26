@@ -74,7 +74,7 @@ of memory and CPU.
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
-make up      # pulls the images, starts everything, and prints the URLs
+make up      # pulls the images, starts everything, and prints the screens page's URL
 make tour    # the guided tour
 make down    # stops the demo and removes its containers
 ```
