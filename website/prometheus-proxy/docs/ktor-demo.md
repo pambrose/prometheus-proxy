@@ -214,6 +214,12 @@ the queue, and with the espresso machine broken, about three orders in four fail
 the coffee shop's status page beside it to watch the queue on both:
 <http://localhost:8394/screens#coffee-shop+grafana>
 
+<figure markdown="span">
+  ![The coffee shop's status page beside Grafana, during a rush with the espresso machine broken](images/ktor-demo/screens.webp#only-dark){ loading=lazy }
+  ![The coffee shop's status page beside Grafana, during a rush with the espresso machine broken](images/ktor-demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The proxy's screens page: the coffee shop's status page beside Grafana</figcaption>
+</figure>
+
 ```bash
 ./demo.sh rush            # customers order three times as often
 ./demo.sh baristas 8      # more baristas drain the queue
