@@ -93,6 +93,13 @@ GRAFANA_URL="http://localhost:${NETWORK_DEMO_GRAFANA_PORT:-3100}"
 PROMETHEUS_URL="http://localhost:${NETWORK_DEMO_PROMETHEUS_PORT:-9190}"
 ZIPKIN_URL="http://localhost:${NETWORK_DEMO_ZIPKIN_PORT:-9511}"
 PROXY_URL="http://localhost:${NETWORK_DEMO_PROXY_PORT:-8180}"
+# The standby's screens page, which holds every screen above in one browser tab (proxy-standby.conf's screens): the
+# standby's rather than the primary's, since part 4 stops the primary and no part stops the standby. The tour links
+# into it: ${SCREENS_URL}#<screen>, #<screen>/<view>, or #<screen>+<screen> for two side by side; the standby's own
+# dashboard is #proxy, and the primary's #primary.
+SCREENS_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/screens"
+# The standby's dashboard port's root, which leads to the screens page: the short address make up prints.
+SCREENS_HOME_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -173,13 +180,7 @@ EOF
 print_urls() {
   echo
   bold "Prometheus Proxy network demo"
-  echo "  Proxy dashboard:  $DASHBOARD_URL"
-  echo "  Standby proxy:    $STANDBY_DASHBOARD_URL"
-  echo "  agent-hq:         $HQ_DASHBOARD_URL"
-  echo "  agent-branch:     $BRANCH_DASHBOARD_URL"
-  echo "  Grafana:          $GRAFANA_URL"
-  echo "  Prometheus:       $PROMETHEUS_URL"
-  echo "  Zipkin:           $ZIPKIN_URL/zipkin/"
+  echo "  All screens:      $SCREENS_HOME_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
   wrap "" "" "Demo overview: ${PAGE_URL}#what-this-demo-shows"
@@ -299,8 +300,9 @@ standby_link() { echo "${1#agent-}-to-standby"; }
 # The agent a scenario on this one leaves alone.
 other_agent() { if [[ "$1" == agent-hq ]]; then echo agent-branch; else echo agent-hq; fi; }
 
-# An agent's own dashboard, at its base URL.
-agent_dashboard() { if [[ "$1" == agent-hq ]]; then echo "$HQ_DASHBOARD_URL"; else echo "$BRANCH_DASHBOARD_URL"; fi; }
+# An agent's own dashboard, as a link into the screens page, whose screen ids are the agents' names. Joined with printf,
+# so the spec that checks the page's links reads the links that call it, not this line.
+agent_dashboard() { printf '%s#%s' "$SCREENS_URL" "$1"; }
 
 # The jobs of an agent's paths (the job label in config/agent-*.conf), as a sentence lists them.
 agent_jobs() {
@@ -480,6 +482,7 @@ start_demo() {
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   wait_for "$GRAFANA_URL/api/health" "Grafana"
   wait_for "$ZIPKIN_URL/health" "Zipkin"
+  wait_for "$SCREENS_URL" "The standby's screens page"
   print_urls
 }
 
@@ -503,19 +506,13 @@ cmd_status() {
 }
 
 cmd_open() {
-  local opener url
   if command -v open >/dev/null 2>&1; then
-    opener=open
+    open "$SCREENS_HOME_URL"
   elif command -v xdg-open >/dev/null 2>&1; then
-    opener=xdg-open
+    xdg-open "$SCREENS_HOME_URL"
   else
     print_urls
-    return
   fi
-  for url in "$DASHBOARD_URL" "$STANDBY_DASHBOARD_URL" "$BRANCH_DASHBOARD_URL" "$GRAFANA_URL" \
-    "$PROMETHEUS_URL/alerts"; do
-    "$opener" "$url"
-  done
 }
 
 # Prints which proxy an agent is connected to, primary or standby, waiting up to 20s for it to connect to one: after
@@ -809,18 +806,23 @@ cmd_tour() {
       "a branch office, with a large inventory payload and a small shipping service. Each agent has two links" \
       "through the WAN, one to the primary proxy and one to its standby, and dials the primary first. The" \
       "scenarios change agent-branch's links and leave agent-hq's alone, so agent-hq is the steady reference."
-    instruct "Open the primary proxy's dashboard: $DASHBOARD_URL" \
+    instruct "Open the demo's screens: $SCREENS_URL" \
+      "This is the standby proxy's screens page, one browser tab that holds every screen in the demo: the standby's" \
+      "own dashboard, the primary's, each agent's, Prometheus, Grafana, and Zipkin. The standby serves it because" \
+      "part 4 stops the primary, and nothing stops the standby, so the page stays up through the tour. The steps" \
+      "from here link into this page, so keep it open, and each link opens in it."
+    instruct "Open the primary proxy's dashboard: ${SCREENS_URL}#primary" \
       "Two agents are connected. Click agent-hq: it's connected 'via hq-to-proxy:50051 (1 of 2)', its link to the" \
       "primary, the first of its two endpoints. agent-branch is connected 'via branch-to-proxy:50053 (1 of 2)'."
-    instruct "Open the standby proxy's dashboard: $STANDBY_DASHBOARD_URL" \
+    instruct "Open the standby proxy's dashboard, the page's first tab: ${SCREENS_URL}#proxy" \
       "It has no agents. The standby serves nothing until an agent can't reach the primary."
-    instruct "Open agent-branch's own dashboard: $BRANCH_DASHBOARD_URL" \
+    instruct "Open agent-branch's own dashboard: ${SCREENS_URL}#agent-branch" \
       "Each agent serves a dashboard of its own, from behind the firewall, showing what only the agent can see. The" \
       "Paths view lists agent-branch's three paths, each registered with the proxy, with a green light and its last" \
       "scrapes under its URL. Click the Connection tab: agent-branch is connected through branch-to-proxy:50053, and" \
       "under Proxy endpoints its two links are listed in failover order, the one in use tagged 'in use'. The later" \
-      "parts come back to this view and its Activity tab. agent-hq's dashboard is at $HQ_DASHBOARD_URL"
-    instruct "Open Grafana: $GRAFANA_URL" \
+      "parts come back to this view and its Activity tab. agent-hq's dashboard is at ${SCREENS_URL}#agent-hq"
+    instruct "Open Grafana: ${SCREENS_URL}#grafana" \
       "Every target is up on 'Target health', and 'Scrape time through the WAN, by agent' shows the two agents side" \
       "by side, each well under a tenth of a second."
   fi
@@ -842,10 +844,11 @@ cmd_tour() {
 
   if part 4 "Here you stop the primary proxy. Its connections close, so both agents know at once, and move to" \
     "the standby with nobody touching them."; then
-    step "Open agent-branch's Connection view beside the standby's dashboard, $BRANCH_DASHBOARD_URL/connection, then" \
-      "stop the primary proxy. The proxies can show an agent only once it has connected to them; the Connection" \
-      "view shows the agent's side of the failover as it happens: the endpoint it's on or trying, and the last" \
-      "error it got connecting to each." -- proxy-down
+    step "Open agent-branch's Connection view beside the standby's dashboard," \
+      "${SCREENS_URL}#agent-branch/connection+proxy, then stop the primary proxy. The page stays up, since the" \
+      "standby serves it, and the primary's tab turns red. The proxies can show an agent only once it has" \
+      "connected to them; the Connection view shows the agent's side of the failover as it happens: the endpoint" \
+      "it's on or trying, and the last error it got connecting to each." -- proxy-down
     step "Start the primary proxy again." -- proxy-up
     step "Send the agents back to the primary: heal closes each agent's connection through its link to the standby" \
       "once, so the agent reconnects through its link to the primary." -- heal
@@ -855,9 +858,10 @@ cmd_tour() {
     "agent's goodbye included, which is what a stateful firewall or NAT does when it drops a connection. Neither" \
     "end is told. It takes about 50 seconds to play out; the basics demo's frozen agent showed the proxy's" \
     "side of an eviction, and this shows the agent's."; then
-    step "Open agent-branch's Connection view beside the primary's dashboard, $BRANCH_DASHBOARD_URL/connection, then" \
-      "silence agent-branch's link to the primary, without closing it. The primary's dashboard shows what the" \
-      "proxy hears from agent-branch, and the Connection view what the agent tries." -- cut
+    step "Open agent-branch's Connection view beside the primary's dashboard," \
+      "${SCREENS_URL}#agent-branch/connection+primary, then silence agent-branch's link to the primary, without" \
+      "closing it. The primary's dashboard shows what the proxy hears from agent-branch, and the Connection view" \
+      "what the agent tries." -- cut
     put_back "restore the link, once agent-branch is on the standby's dashboard, after about 50 seconds" heal
   fi
 
@@ -937,7 +941,7 @@ main() {
         "and nothing is evicted: a saturated link is slow, not dead."
       point "agent-branch's own dashboard shows the other side. On its Paths view every path's last scrape is a" \
         "success, fetched from its target in a fraction of a second: the targets are fine, and the time goes on the" \
-        "link. Open it at $BRANCH_DASHBOARD_URL"
+        "link. Open it at ${SCREENS_URL}#agent-branch"
       point "agent-hq, on its own links, is untouched."
       follow_up "Next, run" "$0 filter"
     else
@@ -962,7 +966,7 @@ main() {
       "no paths, for about 20 seconds more, until what it had queued drains through the thin link."
     point "agent-branch's own dashboard reconnects to the restarted agent by itself. On the inventory path's page it" \
       "shows the filter's rules and how many lines and bytes it has dropped so far, and its Recent scrapes give each" \
-      "body's size before and after the filter: $BRANCH_DASHBOARD_URL/paths/inventory_metrics"
+      "body's size before and after the filter: ${SCREENS_URL}#agent-branch/paths/inventory_metrics"
     follow_up "To remove the filter, run" "$0 unfilter"
     ;;
   unfilter)
@@ -992,15 +996,15 @@ main() {
       point "The primary's connections close, so both agents know at once, and fail over within about 4 seconds" \
         "with nobody touching them."
       point "The standby's dashboard shows each agent 'via' its link to the standby, '(2 of 2)', marked" \
-        "'failed over': $STANDBY_DASHBOARD_URL"
+        "'failed over': ${SCREENS_URL}#proxy"
       point "agent-branch's own dashboard shows the agent's side, which no proxy can. On its Connection view it reads" \
         "connecting, then failing, as its connect through branch-to-proxy fails, and then connected through" \
         "branch-to-standby, marked 'failed over'. Under Proxy endpoints, branch-to-proxy keeps the error its connect" \
         "got: a proxy that's down shows there, not only in the agent's log. The view is at" \
-        "$BRANCH_DASHBOARD_URL/connection"
+        "${SCREENS_URL}#agent-branch/connection"
       point "Its Activity view lists what the agent went through, newest first: disconnected, connect failed on" \
         "branch-to-proxy, failed over from branch-to-proxy to branch-to-standby, connected, and registered, one line" \
-        "for its three paths. agent-hq's dashboard shows the same for its own links: $HQ_DASHBOARD_URL/activity"
+        "for its three paths. agent-hq's dashboard shows the same for its own links: ${SCREENS_URL}#agent-hq/activity"
       point "In Grafana, every service is up again on 'Target health' within about 15 seconds, scraped through the" \
         "standby, and 'Connected agents, by proxy' moves to the standby. Only prometheus-proxy, the primary's own" \
         "metrics, stays down, and NetworkTargetDown fires for it alone."
@@ -1028,11 +1032,11 @@ main() {
         if ((${#back[@]} == 1)); then
           point "${back[0]} was on the standby, so its connection closes, and it reconnects from the head of its" \
             "list, as a connection that registered and then dropped does. Within a few seconds the primary's" \
-            "dashboard shows it 'via' its link to the primary, '(1 of 2)': $DASHBOARD_URL"
+            "dashboard shows it 'via' its link to the primary, '(1 of 2)': ${SCREENS_URL}#primary"
         else
           point "Both agents were on the standby, so their connections close, and each reconnects from the head of" \
             "its list, as a connection that registered and then dropped does. Within a few seconds the primary's" \
-            "dashboard shows each 'via' its link to the primary, '(1 of 2)': $DASHBOARD_URL"
+            "dashboard shows each 'via' its link to the primary, '(1 of 2)': ${SCREENS_URL}#primary"
         fi
         point "In Grafana's 'Agents off their primary', each agent back on the primary returns to 0, and" \
           "NetworkAgentNotOnPrimary resolves for it."
@@ -1054,7 +1058,7 @@ main() {
       point "The primary is back, but the agents stay on the standby: an agent goes back to the head of its list" \
         "only when its connection drops. So NetworkAgentNotOnPrimary keeps firing, until heal sends them back."
       point "agent-branch's Connection view doesn't change. The agent stays on branch-to-standby, and branch-to-proxy" \
-        "keeps its error, since only a connect through it clears that: $BRANCH_DASHBOARD_URL/connection"
+        "keeps its error, since only a connect through it clears that: ${SCREENS_URL}#agent-branch/connection"
       follow_up "To send them back to the primary, run" "$0 heal"
     else
       point "The standby is ready again, and has no agents until one can't connect to the primary."
@@ -1122,7 +1126,7 @@ main() {
     point "Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats and the" \
       "stream of path notices, under its own service name. To see $agent's reconnects, open Zipkin's search for" \
       "serviceName = $agent and spanName = proxyservice/connectagent, which this link fills in, and click Run Query:" \
-      "$ZIPKIN_URL/zipkin/?serviceName=$agent&spanName=proxyservice%2Fconnectagent"
+      "${SCREENS_URL}#zipkin/zipkin/?serviceName=$agent&spanName=proxyservice%2Fconnectagent"
     point "Each reconnect is a connectagent trace, followed by registeragent and a registerpath for each path." \
       "Zipkin joins the agent's side and the proxy's side of each call into one span, so the trace names both."
     follow_up "To undo it, run" "$0 heal"
@@ -1144,10 +1148,10 @@ main() {
       "stat reads 0, and at about 20 seconds NetworkNoAgentsConnected fires."
     point "The proxies can't show an agent that can't reach them, but its own dashboard can. On agent-branch's" \
       "Connection view the state reads failing, and the endpoint it's trying alternates between its two links, each" \
-      "with the error from its last connect: $BRANCH_DASHBOARD_URL/connection"
+      "with the error from its last connect: ${SCREENS_URL}#agent-branch/connection"
     point "Its Activity view records disconnected, then connect failed once for each link, since a repeat of the" \
       "same failure isn't listed again, and failed over, which repeats on each pass back through its link to the" \
-      "primary, counted on one line rather than listed each time: $BRANCH_DASHBOARD_URL/activity"
+      "primary, counted on one line rather than listed each time: ${SCREENS_URL}#agent-branch/activity"
     follow_up "To bring the links back, run" "$0 wan-up"
     ;;
   wan-up)
@@ -1161,7 +1165,7 @@ main() {
       "than the primary's."
     point "agent-branch's Connection view reads connected again, marked 'failed over' if it reached its link to the" \
       "standby. Only the endpoint it connected through loses its error; the other keeps its error until a connect" \
-      "through it succeeds: $BRANCH_DASHBOARD_URL/connection"
+      "through it succeeds: ${SCREENS_URL}#agent-branch/connection"
     point "Their targets return, NetworkNoAgentsConnected resolves, and the graphs keep a gap where nothing could" \
       "be scraped."
     point "An agent that lands on the standby shows at 1 on Grafana's 'Agents off their primary', and about 20" \
