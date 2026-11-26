@@ -24,13 +24,12 @@ services:
 
   agent:
     image: pambrose/prometheus-agent:4.7.1
+    # The agent serves its own metrics through the proxy, at /agent_metrics, so its metrics port stays off.
     ports:
-      - "127.0.0.1:8083:8083"  # Agent metrics
       - "127.0.0.1:8093:8093"  # Admin endpoints
     environment:
       AGENT_CONFIG: /app/agent.conf
       PROXY_HOSTNAME: proxy
-      METRICS_ENABLED: "true"
       ADMIN_ENABLED: "true"
     volumes:
       - ./agent.conf:/app/agent.conf:ro

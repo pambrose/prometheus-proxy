@@ -39,9 +39,11 @@ port: the agent connects to the proxy there, and fetches the proxy's metrics fro
 ## Debugging a Local Run — `prom-agent.conf`
 
 The same self-monitoring setup as `simple.conf`, turned up for troubleshooting: the proxy's debug
-servlet is enabled on the admin port and the `labels` are dropped so the output stays readable. Two
-toggles are left commented out for when you need them — `transportFilterDisabled` for running behind
-an nginx reverse proxy, and `scrapeTimeoutSecs` for endpoints slower than the 15-second default.
+servlet is enabled on the admin port, the `labels` are dropped so the output stays readable, and the
+agent's metrics port stays on beside its `/agent_metrics` path, so you can `curl localhost:8083/metrics`
+directly. Two toggles are left commented out for when you need them — `transportFilterDisabled` for
+running behind an nginx reverse proxy, and `scrapeTimeoutSecs` for endpoints slower than the 15-second
+default.
 
 ```hocon
 --8<-- "examples/prom-agent.conf"
@@ -104,7 +106,8 @@ agent {
 ## Prometheus Federation — `federate.conf`
 
 Pulls metrics from an existing Prometheus server through its `/federate` endpoint, exposing
-them on a proxy path. See [Prometheus Federation](advanced.md#prometheus-federation).
+them on a proxy path, and serves the agent's own metrics at `/agent_metrics`, in-process, with no port.
+See [Prometheus Federation](advanced.md#prometheus-federation).
 
 ```hocon
 --8<-- "examples/federate.conf"

@@ -148,6 +148,12 @@ The proxy runs outside the firewall alongside your Prometheus server.
     docker rm prometheus-proxy              # remove the stopped container
     ```
 
+    Docker publishes both ports on every interface, past a host firewall such as ufw: the scrape port
+    for Prometheus, and the agents' port, 50051, for the agent on its own host, which this Quick Start
+    connects without TLS or a token. Before either is open to a network you don't trust, add TLS and a
+    token, and keep the scrape port to Prometheus, as the Docker page's
+    [Production Setup](docker.md#production-setup) does.
+
 === "Helm"
 
     Install the proxy in the cluster where Prometheus runs; Kubernetes keeps it running:
