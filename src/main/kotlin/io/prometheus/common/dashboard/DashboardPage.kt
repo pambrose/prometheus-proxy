@@ -207,12 +207,14 @@ internal object DashboardPage {
     """{"noSwap":[204,304,"4xx","5xx"],"ws":{"reconnectDelay":500,"reconnectMaxDelay":2000,"reconnectJitter":0.125}}"""
 
   /**
-   * The page's head: its [title], its icon, the stylesheet, any [extra] style after it, and htmx with its WebSocket
-   * extension, from the versioned asset route under [routeBase].
+   * The page's head: its [title], its icon, the stylesheet, any [extra] style after it, and, when [htmx], htmx with its
+   * WebSocket extension, from the versioned asset route under [routeBase]. The proxy's screens page, which nothing
+   * pushes to and no htmx attribute drives, leaves htmx out.
    */
   fun HEAD.dashboardHead(
     title: String,
     routeBase: String,
+    htmx: Boolean = true,
     extra: HEAD.() -> Unit = {},
   ) {
     title(title)
@@ -221,10 +223,12 @@ internal object DashboardPage {
     script { unsafe { raw(THEME_SCRIPT) } }
     style { unsafe { raw(DashboardCss.CSS) } }
     extra()
-    // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
-    meta(name = "htmx-config", content = HTMX_CONFIG)
-    script(src = "$routeBase/${DashboardServer.ASSET_DIR}/htmx.min.js") {}
-    script(src = "$routeBase/${DashboardServer.ASSET_DIR}/hx-ws.min.js") {}
+    if (htmx) {
+      // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
+      meta(name = "htmx-config", content = HTMX_CONFIG)
+      script(src = "$routeBase/${DashboardServer.ASSET_DIR}/htmx.min.js") {}
+      script(src = "$routeBase/${DashboardServer.ASSET_DIR}/hx-ws.min.js") {}
+    }
   }
 
   /**

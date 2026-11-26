@@ -19,6 +19,7 @@
 package io.prometheus.proxy.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -120,6 +121,25 @@ class ProxyDashboardHtmlTest : StringSpec() {
       listOf(DashboardLayout.AGENT, DashboardLayout.PATH, DashboardLayout.ACTIVITY, null).forEach { layout ->
         ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", layout) shouldNotContain "logout"
       }
+    }
+
+    // The screens page is outside the dashboard's base, so its link is the path alone, and opens in the top window: in
+    // the page's own proxy tab, it would otherwise load the page inside itself. No push carries it.
+    "the bar should link to the screens page only while screens are listed, and no push should carry it" {
+      val withScreens = renderFullPage(snapshot().copy(screensPage = true))
+      withScreens shouldContain
+        """<a href="${ProxyDashboardService.SCREENS_PATH}" class="screens-link" target="_top">Screens</a>"""
+      // Before the bar's end, quiet as Log out is.
+      withScreens.indexOf("class=\"screens-link\"") shouldBeLessThan withScreens.indexOf("class=\"bar-end\"")
+      renderFullPage(snapshot()) shouldNotContain "screens-link"
+      ProxyDashboardHtml.pushFragment(
+        snapshot().copy(screensPage = true),
+        null,
+        "/dashboard",
+        DashboardLayout.AGENT,
+      ) shouldNotContain
+        "screens-link"
+      ProxyDashboardCss.SCREENS_LINK_CSS shouldContain ".screens-link"
     }
 
     "an agent row should carry the htmx attributes that drive selection" {

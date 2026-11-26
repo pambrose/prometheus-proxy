@@ -207,9 +207,11 @@ internal data class ProxySnapshot(
   val settings: List<SettingsGroup> = emptyList(),
   // The name of the proxy's host, as the machine gives it, which agents report theirs by too.
   val hostName: String = "",
+  // Whether the proxy serves its screens page, proxy.dashboard.screens listing any, which the bar then links to.
+  val screensPage: Boolean = false,
 ) {
   /** Which proxy this is, in the bar and the tab's title: its host and the port Prometheus scrapes. */
-  val dashboardName: String get() = "Proxy: $hostName:$scrapePort"
+  val dashboardName: String get() = dashboardName(hostName, scrapePort)
 
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -268,6 +270,12 @@ internal data class ProxySnapshot(
   fun goneAgentName(agentId: String): String? = goneAgentNames[agentId]
 
   companion object {
+    /** A proxy's name, in the bar and the tab's title, and the screens page's proxy tab: its host and scrape port. */
+    fun dashboardName(
+      hostName: String,
+      scrapePort: Int,
+    ) = "Proxy: $hostName:$scrapePort"
+
     /** The most scrapes an agent's detail lists, its latest. */
     const val MAX_DETAIL_SCRAPES = 25
 
@@ -417,6 +425,7 @@ internal data class ProxySnapshot(
         pathHistorySize = proxy.proxyConfigVals.dashboard.pathHistorySize,
         settings = settings,
         hostName = hostInfo.hostName,
+        screensPage = proxy.options.dashboardScreens.isNotEmpty(),
       )
     }
 

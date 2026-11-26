@@ -50,6 +50,7 @@ import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.head
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -102,8 +103,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param role the process the dashboard belongs to, `proxy` or `agent`: it names the session cookie and the config keys
  *   a log line points to (`<role>.dashboard.allowedOrigins`)
  * @param path the base path, normalized here once (see [DashboardServer.routeBase])
- * @param framingEnabled `<role>.dashboard.framingEnabled`: lets any page show the dashboard in a frame; false refuses
- *   framing on every response
+ * @param framing which pages may show the dashboard in a frame, from `<role>.dashboard.framingEnabled` ([Framing.of]):
+ *   [Framing.ANY] adds no header, [Framing.SAME_ORIGIN] lets only the dashboard's own origin frame it, as the proxy's
+ *   `/screens` page does, and [Framing.NONE] refuses framing on every response
  * @param login the login every request must carry once a password is set; null leaves the dashboard open
  * @param loginHeading the login page's heading, the dashboard's name
  * @param icons the brand marks served under [DashboardServer.ICON_DIR], by file name, with their classpath resources
@@ -117,7 +119,7 @@ internal class DashboardSettings(
   val maxSessions: Int,
   val allowedOrigins: List<String>,
   val allowedHosts: List<String>,
-  val framingEnabled: Boolean,
+  val framing: Framing,
   val login: DashboardLogin?,
   val loginHeading: String,
   val icons: Map<String, String> = emptyMap(),
@@ -163,7 +165,16 @@ internal interface DashboardSite<V : Any, S : Any> {
   /** Collects a snapshot. The server calls it off the CIO event loop, and caches what it returns ([SnapshotCache]). */
   suspend fun collect(): S
 
-  /** The site's pages and actions, under [DashboardServer.routeBase]. Each action installs its `pageGuard`. */
+  /**
+   * The paths of the site's pages outside [DashboardServer.routeBase], such as the proxy's `/screens`, to which a login
+   * may return as to the dashboard's own (see [DashboardServer.safeNext]). Empty for a site with none.
+   */
+  val outsidePages: Set<String>
+
+  /**
+   * The site's pages and actions, under [DashboardServer.routeBase] but for [outsidePages]. Each action installs its
+   * `pageGuard`.
+   */
   fun Route.pages(server: DashboardServer<V, S>)
 
   /** What a browser's message on the page's WebSocket says the page shows. Never throws: the message is untrusted. */
@@ -378,13 +389,24 @@ internal class DashboardServer<V : Any, S : Any>(
       refuseWithoutLogin(call)
   }
 
-  // Whether [request] may proceed without a login: one for the login or logout route, or with a valid session.
+  // Whether [request] may proceed without a login: one for the login or logout route, a liveness check, or with a
+  // valid session.
   private fun needsNoLogin(request: ApplicationRequest): Boolean {
     val path = request.path()
     if (path == loginPath || path == logoutPath)
       return true
+    if (isLivenessCheck(request))
+      return true
     return logins.isValid(request.cookies[sessionCookie])
   }
+
+  // A HEAD of the base path or of /session, which the proxy's screens page sends every few seconds to see whether a
+  // dashboard answers. It says only that the dashboard is up, as the login page does to anyone, so it needs no login,
+  // and the routes answer it with a 204, where it was a 405, or a 401 with a login set, in every log that counts them.
+  private fun isLivenessCheck(request: ApplicationRequest) =
+    request.httpMethod == HttpMethod.Head && request.path() in livenessPaths
+
+  private val livenessPaths = setOf(basePath, "$routeBase/session")
 
   // A script's Basic login, [header]: true when it is let in, or refused for the limit on wrong logins, which answers
   // it here; false when it is wrong, which counts against the limit and is answered as no login is.
@@ -432,7 +454,7 @@ internal class DashboardServer<V : Any, S : Any>(
       return respondText("Login form too large", ContentType.Text.Plain, HttpStatusCode.PayloadTooLarge)
     val form = runCatching { receiveParameters() }.getOrDefault(Parameters.Empty)
     val username = form[LoginHtml.USERNAME_FIELD].orEmpty().take(LoginHtml.MAX_FIELD_LENGTH)
-    val next = safeNext(form[LoginHtml.NEXT_FIELD], routeBase)
+    val next = safeNext(form[LoginHtml.NEXT_FIELD], routeBase, site.outsidePages)
     val address = request.origin.remoteAddress
     if (limiter.isBlocked(address)) {
       onLogin(DashboardLoginOutcome.BLOCKED)
@@ -441,7 +463,7 @@ internal class DashboardServer<V : Any, S : Any>(
     } else if (login.accepts(username, form[LoginHtml.PASSWORD_FIELD].orEmpty())) {
       // Secure when the browser reached the dashboard over https, as through a TLS-terminating reverse proxy.
       val secure = request.headers[HttpHeaders.Origin]?.startsWith("https://", ignoreCase = true) == true
-      response.header(HttpHeaders.SetCookie, sessionCookieHeader(logins.create(), secure))
+      setSessionCookie(logins.create(), secure)
       onLogin(DashboardLoginOutcome.SUCCESS)
       seeOther(next)
     } else {
@@ -450,14 +472,32 @@ internal class DashboardServer<V : Any, S : Any>(
     }
   }
 
-  // The Set-Cookie value for [token], kept for a session's longest life; a null token expires the cookie.
-  private fun sessionCookieHeader(
+  // Sets the session cookie to [token], kept for a session's longest life; a null token expires it. At the base path,
+  // and at each of the site's pages outside it, as the proxy's /screens, so a browser sends it to them too, with the
+  // same token; at a root mount the root covers them. Not at the root otherwise: a browser would send the token to
+  // every other app on the host, and after a rollback to a dashboard that reads only the base path's, a root cookie
+  // left from this one, dead after the restart, would be the one it read, sending every sign-in back to the login page.
+  private fun ApplicationCall.setSessionCookie(
     token: String?,
     secure: Boolean = false,
+  ) {
+    for (path in cookiePaths) {
+      response.header(HttpHeaders.SetCookie, sessionCookieHeader(token, path, secure))
+    }
+  }
+
+  // Where the session cookie is set: the base path, and each page outside it but at a root mount.
+  private val cookiePaths = if (basePath == "/") listOf("/") else listOf(basePath) + site.outsidePages
+
+  // The Set-Cookie value for [token] at [path]; a null token expires the cookie there.
+  private fun sessionCookieHeader(
+    token: String?,
+    path: String,
+    secure: Boolean,
   ): String {
     val maxAge = if (token == null) 0 else DashboardSessions.MAX_AGE_SECS
     val flags = if (secure) "; Secure" else ""
-    return "$sessionCookie=${token.orEmpty()}; Max-Age=$maxAge; Path=$basePath; HttpOnly; SameSite=Lax$flags"
+    return "$sessionCookie=${token.orEmpty()}; Max-Age=$maxAge; Path=$path; HttpOnly; SameSite=Lax$flags"
   }
 
   // A wrong login, from the form or Basic Auth: counted against the limit, and logged at WARN at most once a minute
@@ -493,22 +533,24 @@ internal class DashboardServer<V : Any, S : Any>(
     }
   }
 
-  // Installed only while framingEnabled is false: on, the default, any page can frame the dashboard. Then
+  // Installed unless settings.framing is ANY, the default, where any page can frame the dashboard. Then
   // application-wide, on every response: a page, a fragment, an action's result, an asset, a refusal, a redirect, an
-  // error page, and the WebSocket's handshake. No page may frame the dashboard, so another site's page can't lay itself
-  // over the dashboard's and steer a viewer's clicks, the WebSocket and the actions passing the Origin check as the
-  // dashboard's own. X-Frame-Options is the same rule for a browser that predates frame-ancestors. A response with a
-  // policy of its own, as a brand mark's, gets this one beside it, since a browser enforces every policy a response
-  // carries. Each header is added once, however many times the response is answered: StatusPages answers a bare 404
-  // again.
+  // error page, and the WebSocket's handshake. With NONE no page may frame the dashboard (frame-ancestors 'none',
+  // X-Frame-Options DENY), and with SAME_ORIGIN, for the proxy's /screens, only a page of its own origin may
+  // (frame-ancestors 'self', SAMEORIGIN), so another site's page can't lay itself over the dashboard's and steer a
+  // viewer's clicks, the WebSocket and the actions passing the Origin check as the dashboard's own. X-Frame-Options is
+  // the same rule for a browser that predates frame-ancestors. A response with a policy of its own, as a brand mark's,
+  // gets this one beside it, since a browser enforces every policy a response carries. Each header is added once,
+  // however many times the response is answered: StatusPages answers a bare 404 again.
   private val noFraming =
     createApplicationPlugin("DashboardNoFraming") {
+      val framing = settings.framing
       onCallRespond { call ->
         val headers = call.response.headers
         if (headers.values(CONTENT_SECURITY_POLICY).none { it.contains(FRAME_ANCESTORS) })
-          call.response.header(CONTENT_SECURITY_POLICY, "$FRAME_ANCESTORS 'none'")
+          framing.frameAncestors?.also { call.response.header(CONTENT_SECURITY_POLICY, it) }
         if (X_FRAME_OPTIONS !in headers)
-          call.response.header(X_FRAME_OPTIONS, "DENY")
+          framing.xFrameOptions?.also { call.response.header(X_FRAME_OPTIONS, it) }
       }
     }
 
@@ -528,7 +570,7 @@ internal class DashboardServer<V : Any, S : Any>(
       // returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is off -- a dashboard polling
       // its own socket would drown the process's logs.
       configureKtorServer(isLoggingEnabled = false)
-      if (!settings.framingEnabled)
+      if (settings.framing != Framing.ANY)
         install(noFraming)
       install(hostCheck)
       settings.login?.also { install(authCheck(it)) }
@@ -557,6 +599,8 @@ internal class DashboardServer<V : Any, S : Any>(
         // Whether this request may use the dashboard: the auth check answers first, so this is a 204 only when it may.
         // The page's script asks when its WebSocket closes, so an expired session lands on the login page.
         get("$routeBase/session") { call.respond(HttpStatusCode.NoContent) }
+        // Whether the dashboard is up, for the screens page's checks, before any login (see isLivenessCheck).
+        livenessPaths.forEach { path -> head(path) { call.respond(HttpStatusCode.NoContent) } }
         assetRoutes()
         with(site) { pages(this@DashboardServer) }
         events()
@@ -590,7 +634,7 @@ internal class DashboardServer<V : Any, S : Any>(
         if (logins.isValid(call.request.cookies[sessionCookie]))
           call.seeOther(basePath)
         else
-          call.respondLogin(safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase))
+          call.respondLogin(safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase, site.outsidePages))
       }
       post { call.logIn(credentials) }
     }
@@ -598,7 +642,7 @@ internal class DashboardServer<V : Any, S : Any>(
       install(originGuard)
       post {
         endLogin(call.request.cookies[sessionCookie])
-        call.response.header(HttpHeaders.SetCookie, sessionCookieHeader(null))
+        call.setSessionCookie(null)
         call.seeOther(loginPath)
       }
     }
@@ -938,20 +982,30 @@ internal class DashboardServer<V : Any, S : Any>(
     ) = "prometheus_${role}_dashboard_$port"
 
     /**
-     * Where a login sends the browser: [next] when it is a page of the dashboard at [routeBase], else the dashboard's
-     * base. A path only, not a URL, not a protocol-relative `//host`, nor one a browser reads as one (`/\host`), with
-     * no `.` or `..` segment, and not the login page itself, so a link to the login page can't send a browser off-site.
+     * Where a login sends the browser: [next] when it is a page of the dashboard at [routeBase], or one of the site's
+     * [outsidePages] (with any query), else the dashboard's base. A path only, not a URL, not a protocol-relative
+     * `//host`, nor one a browser reads as one (`/\host`), with no `.` or `..` segment, and not the login page itself,
+     * so a link to the login page can't send a browser off-site.
      */
     internal fun safeNext(
       next: String?,
       routeBase: String,
+      outsidePages: Set<String> = emptySet(),
     ): String {
       val path = next.orEmpty()
-      return if (isPlainPath(path) && isDashboardPage(path.substringBefore('?'), routeBase))
+      return if (isPlainPath(path) && isReturnable(path.substringBefore('?'), routeBase, outsidePages))
         path
       else
         routeBase.ifEmpty { "/" }
     }
+
+    // Whether a login may return to [pagePath], the part of a path before its query: one of the site's pages outside
+    // its base, or a page of the dashboard at [routeBase].
+    private fun isReturnable(
+      pagePath: String,
+      routeBase: String,
+      outsidePages: Set<String>,
+    ) = pagePath in outsidePages || isDashboardPage(pagePath, routeBase)
 
     // A path, and only a path: not too long, absolute, not protocol-relative, and with no character a browser could
     // read as starting a host (a backslash), nor a control character or whitespace.

@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import com.pambrose.common.util.hostInfo
 import io.prometheus.common.MetricBuilders.metricLabel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -117,10 +118,16 @@ internal class ProxyDashboardService(
   // Read at the first collect, once the proxy's services are built, and kept: no setting changes while it runs.
   private val settings by lazy { ProxySettings.of(proxy) }
 
+  // The screens /screens shows beside the dashboard, proxy.dashboard.screens, checked at startup. With none, there's no
+  // page: /screens answers 404 and the bar has no link to it.
+  private val screens = proxy.options.dashboardScreens
+
   private val site =
     object : DashboardSite<ProxyView, ProxySnapshot> {
       // Topology changes wake the loop; scrape completions do not -- see the class KDoc.
       override val changes: Flow<Any?> = proxy.eventBus.flow.filter { it !is ProxyEvent.ScrapeCompleted }
+
+      override val outsidePages = if (screens.isEmpty()) emptySet() else setOf(SCREENS_PATH)
 
       override suspend fun collect(): ProxySnapshot = ProxySnapshot.collect(proxy, settings)
 
@@ -171,7 +178,7 @@ internal class ProxyDashboardService(
         maxSessions = dashboardConfig.maxSessions,
         allowedOrigins = dashboardConfig.allowedOrigins,
         allowedHosts = dashboardConfig.allowedHosts,
-        framingEnabled = dashboardConfig.framingEnabled,
+        framing = proxy.options.dashboardFraming,
         login = login,
         loginHeading = LOGIN_HEADING,
         icons = LinkIcon.entries.associate { it.fileName to it.resource },
@@ -179,10 +186,19 @@ internal class ProxyDashboardService(
       site,
     ) { outcome -> proxy.metrics { dashboardLoginCount.labelValues(outcome.metricLabel).inc() } }
 
-  // The proxy's pages: the four layouts, an agent's detail, and scrape-now.
+  // The proxy's pages: the four layouts, an agent's detail, scrape-now, and the screens page.
   private fun Route.pageRoutes(server: DashboardServer<ProxyView, ProxySnapshot>) {
     val routeBase = server.routeBase
     val loginEnabled = server.loginEnabled
+    // Outside the base, while screens are listed; with none it's left unrouted, so it answers 404. A page of its own,
+    // which nothing pushes to, rendered from what startup settled: the screens, and the proxy's name, as its bar gives
+    // it, without collecting a snapshot.
+    val screensPage by lazy {
+      val proxyName = ProxySnapshot.dashboardName(hostInfo.hostName, proxy.scrapePort)
+      ScreensHtml.Page(proxyName, routeBase, screens, loginEnabled)
+    }
+    if (screens.isNotEmpty())
+      get(SCREENS_PATH) { call.respondHtml { with(ScreensHtml) { renderScreens(screensPage) } } }
     get(server.basePath) {
       val snapshot = server.snapshots.recent()
       call.respondHtml {
@@ -249,6 +265,9 @@ internal class ProxyDashboardService(
   companion object {
     /** The login page's heading, under the logo and the product's name. */
     internal const val LOGIN_HEADING = "Proxy Dashboard"
+
+    /** The path of the screens page, outside the dashboard's base, served while `proxy.dashboard.screens` lists any. */
+    internal const val SCREENS_PATH = "/screens"
 
     /**
      * Reads `{"layout": "PATH"}` from a session message, defaulting to [DashboardLayout.AGENT], what the page served

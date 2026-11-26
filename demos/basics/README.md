@@ -61,7 +61,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
-make up      # pulls the images, starts everything, and prints the URLs
+make up      # pulls the images, starts everything, and prints the screens page's URL
 make tour    # walks through the guided tour below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
 ```
@@ -69,8 +69,15 @@ make down    # stops it and removes its containers, network, and volume
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, and Python images, which takes a few minutes. After
 that it starts in under a minute, even without a network connection.
 
+Then open the proxy's screens page, one browser tab that holds every screen in the demo, each in a tab of its own: the
+proxy's dashboard, each agent's, Prometheus, and Grafana. `make open` opens it, and the guided tour's links open in it:
+<http://localhost:8094/screens>
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8094/screens> | `DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8094/dashboard> | `DEMO_DASHBOARD_PORT` |
 | agent-east's dashboard | <http://localhost:8095/dashboard> | `DEMO_AGENT_EAST_DASHBOARD_PORT` |
 | agent-west-1's dashboard | <http://localhost:8096/dashboard> | `DEMO_AGENT_WEST_1_DASHBOARD_PORT` |
@@ -81,12 +88,12 @@ that it starts in under a minute, even without a network connection.
 | Prometheus | <http://localhost:9090> (alerts at `/alerts`) | `DEMO_PROMETHEUS_PORT` |
 | The proxy's service discovery | <http://localhost:8080/discovery> | `DEMO_PROXY_PORT` |
 
-`make open` opens the proxy's dashboard, agent-east's, Grafana, and Prometheus's alerts in your browser.
+`make open` opens the screens page in your browser.
 
 If a port is already taken, set its variable from the table for `make up`, for example `DEMO_GRAFANA_PORT=3001 make up`.
 `make up` saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its
-line there to go back to the default. The proxy dashboard's links into Prometheus and Grafana keep the default ports
-(`config/proxy.conf`).
+line there to go back to the default. The screens page follows a moved port, while the proxy dashboard's links into
+Prometheus and Grafana keep the default ports (`config/proxy.conf`).
 
 Every port binds to `127.0.0.1` only. The dashboards run without a login, but for the proxy's in part 11 of the tour,
 and Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
@@ -135,9 +142,13 @@ inbound connections. The agents sit inside the firewall and connect *out* to the
 the proxy as if it were each service. The demo simulates the firewall: its containers share one network, but
 Prometheus has no targets of its own, so it reaches each service only through the proxy.
 
+Each tab along the top of the screens page is one of the boxes in the diagram: the proxy's dashboard, each agent's own,
+Prometheus, and Grafana. A tab's dot is green while its screen answers; agent-rogue's and agent-east-copy's stay red
+until the parts that start them. The links below open in it, so keep it open: <http://localhost:8094/screens>
+
 ### 2. Agents, Paths, and Live Scrapes on the Proxy Dashboard
 
-Open the dashboard on the **Agents** view.
+Open the proxy's dashboard on the **Agents** view: <http://localhost:8094/screens#proxy>
 
 - Three agents are connected, each with its address and number of paths.
 - Click **agent-east**. It shows its host, uptime, and idle time, the paths it registered with their labels, and the
@@ -152,7 +163,7 @@ Open the dashboard on the **Agents** view.
 
 ### 3. Target Health and Business Metrics in Grafana
 
-Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
+Open Grafana, which lands on the **Prometheus Proxy Demo** dashboard: <http://localhost:8094/screens#grafana>
 
 - **Through the firewall** shows the health of every target, scrape outcomes, latency, and payload size per path.
 - **Business metrics from behind the firewall** shows orders, payments, inventory, and shipping. These are ordinary
@@ -164,11 +175,16 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 
 ### 4. An Outage and a Timeout
 
+Watch the proxy's failing paths beside Grafana. The screens page's Split layout shows two screens side by side, each at
+its own narrow layout, too narrow for the **Paths** table's status column, so the link filters the table to problems:
+it lists only failing paths, none yet. <http://localhost:8094/screens#proxy/paths?problems=1+grafana>
+
 ```bash
 ./demo.sh outage          # payments now answers 500
 ```
 
-- The dashboard: `/payments_metrics` turns red with a 500 in the Paths view, and in agent-east's recent scrapes.
+- The dashboard: `/payments_metrics` appears in the filtered Paths view, and the status bar counts it as failing.
+  Unfiltered, its row shows the 500, as do agent-east's recent scrapes.
 - Grafana: payments turns red on **Target health**. After 15 seconds, **DemoTargetDown** fires (the **Alerts** stat and
   the **Firing alerts** table; also Prometheus's `/alerts` page).
 - The other services keep working: one failing target never affects the rest.
@@ -178,11 +194,14 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 ```
 
 - The agent gives up after its 3-second scrape timeout and reports 408 (`upstream_timed_out`), so Prometheus gets a
-  clear answer instead of waiting. **Scrape latency** spikes for inventory only.
+  clear answer instead of waiting. `/inventory_metrics` joins `/payments_metrics` in the filtered Paths view, and
+  **Scrape latency** spikes for inventory only.
 
 ```bash
 ./demo.sh recover         # everything back to normal
 ```
+
+Within a scrape or two the filtered Paths view is empty again, and Grafana's rows turn green.
 
 ### 5. Two Agents, One Path
 
@@ -245,7 +264,7 @@ register only the paths its patterns allow.
   newer agent would have taken the path over.
 - The Agents and Paths views can't show a refusal, since the proxy added nothing. The **Activity** view lists it as
   `rejected`, with the proxy's reason, searched here for the contractor's agent:
-  <http://localhost:8094/dashboard/activity?q=agent-rogue>
+  <http://localhost:8094/screens#proxy/activity?q=agent-rogue>
 - Grafana's **Path rejections at the proxy, by cause** counts it as `not_authorized`, the cause the proxy gave the
   agent. The proxy counts every refusal in `proxy_path_rejections_total`, so an alert can catch a path that keeps
   being refused.
@@ -258,7 +277,7 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 
 - agent-rogue's **Paths** view gives each path a light, green while the proxy routes the path's scrapes to this agent.
   `/contractor_metrics` is green, and `/payments_metrics` is red, tagged `refused`:
-  <http://localhost:8098/dashboard>
+  <http://localhost:8094/screens#agent-rogue>
 - Click `/payments_metrics`. Under **Refused by the proxy** is the proxy's reason, *Agent identity 'contractor' is not
   authorized to register path /payments_metrics*. Asking again wouldn't change the answer, so the agent doesn't try
   the path again until it reconnects.
@@ -271,8 +290,8 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 ```
 
 - agent-east's **Connection** view shows it connected to `proxy:50051`, its one proxy endpoint, with its discovery file
-  below: <http://localhost:8095/dashboard/connection>
-- Its **Settings** view shows the settings it resolved: <http://localhost:8095/dashboard/settings>
+  below: <http://localhost:8094/screens#agent-east/connection>
+- Its **Settings** view shows the settings it resolved: <http://localhost:8094/screens#agent-east/settings>
 
 ```bash
 ./demo.sh proxy-down      # stops the proxy
@@ -281,6 +300,8 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 - The proxy's dashboard goes with it, but agent-east's keeps answering, since it runs on the agent. Its Connection
   view turns `failing`, and `proxy:50051` shows the error from the agent's last try. The agent tries again every 3
   seconds.
+- The screens page stays open, since your browser already has it: its proxy tab turns red, and agent-east's keeps
+  working. Don't reload it until the proxy is back.
 - Its **Activity** view lists `disconnected`, then `connect failed`, once rather than for each retry. On its **Paths**
   view every path turns red, tagged `pending`.
 - Select `/orders_metrics` there and click its **Scrape now** button, the circular arrow after its name. The agent
@@ -308,9 +329,9 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
   other every few seconds. The command prints the proxy's log line, which names both agents by agentId and says the
   fix: `agent.consolidated = true` on each, if both should serve the paths.
 - The proxy told agent-east. Its own dashboard lists its six paths as `retrying`, each taken over by agent-east-copy,
-  and its **Activity** view has the takeover: <http://localhost:8095/dashboard>
+  and its **Activity** view has the takeover: <http://localhost:8094/screens#agent-east>
 - The copy's own dashboard lists the six paths, each green, since the proxy accepted every one:
-  <http://localhost:8099/dashboard>
+  <http://localhost:8094/screens#agent-east-copy>
 
 ```bash
 ./demo.sh duplicate-agent-stop   # removes the copy; agent-east takes its paths back
@@ -325,9 +346,10 @@ seconds, on the connection it kept, with no restart.
 ./demo.sh login       # restarts the proxy with a dashboard password in its environment
 ```
 
-- Reload the dashboard: it shows its login page. Sign in as `admin`, with the password `admin`, and it opens the page
-  you asked for; **Log out**, the exit icon at the right end of the top bar, signs you out. A wrong password shows
-  "Invalid username or password", and the proxy logs it at WARN.
+- The screens page's proxy tab shows the login page in its frame, since the restarted proxy asks for one. Sign in
+  there as `admin`, with the password `admin`, and the dashboard comes back: a login inside a frame works when the
+  screen is on the same site as the page. **Log out**, the exit icon at the right end of the dashboard's top bar,
+  signs you out. A wrong password shows "Invalid username or password", and the proxy logs it at WARN.
 - The password comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from
   `config/proxy.conf`, so it never sits in a file. A script sends the login as HTTP Basic Auth instead:
   `curl -u admin:admin http://localhost:8094/dashboard/paths`

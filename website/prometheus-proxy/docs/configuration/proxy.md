@@ -163,24 +163,25 @@ proxy {
 }
 ```
 
-| Setting / CLI Option / Env Var                                                                                   | Default     | Description                                                                               |
-|:-----------------------------------------------------------------------------------------------------------------|:------------|:------------------------------------------------------------------------------------------|
-| [`proxy.dashboard.enabled`](../cli-reference.md#proxy.dashboard.enabled)<br>`--dashboard`<br>`DASHBOARD_ENABLED` | false       | Serve the dashboard                                                                       |
-| [`proxy.dashboard.port`](../cli-reference.md#proxy.dashboard.port)<br>`--dashboard_port`<br>`DASHBOARD_PORT`     | 8094        | Its port, not the admin port                                                              |
-| [`proxy.dashboard.path`](../cli-reference.md#proxy.dashboard.path)<br>`--dashboard_path`<br>`DASHBOARD_PATH`     | "dashboard" | Its base path, as in `http://<proxy>:8094/dashboard`                                      |
-| [`proxy.dashboard.host`](../cli-reference.md#proxy.dashboard.host)<br>`--dashboard_host`<br>`DASHBOARD_HOST`     | "0.0.0.0"   | The address it listens on; `"127.0.0.1"` keeps it on the proxy's host                     |
-| [`proxy.dashboard.username`](../cli-reference.md#proxy.dashboard.username)<br>`DASHBOARD_USERNAME`               | "admin"     | The login's username, once a password is set                                              |
-| [`proxy.dashboard.password`](../cli-reference.md#proxy.dashboard.password)<br>`DASHBOARD_PASSWORD`               |             | Requires a login, from the login page or as Basic Auth; empty leaves it open              |
-| `proxy.dashboard.refreshIntervalSecs`                                                                            | 2           | Seconds between pushes of values that drift rather than change, such as backlogs          |
-| `proxy.dashboard.pathHistorySize`                                                                                | 20          | Scrapes kept per path, for the History column and each agent's Recent scrapes             |
-| `proxy.dashboard.departedPathRetentionSecs`                                                                      | 3600        | Seconds a path whose agent has gone stays in the path table                               |
-| `proxy.dashboard.activityLogSize`                                                                                | 500         | Lines kept in the Activity view: agents and paths coming, going, and refused              |
-| `proxy.dashboard.scrapeNowEnabled`                                                                               | true        | A Scrape button on each path, which scrapes it at once and shows the result               |
-| `proxy.dashboard.maxSessions`                                                                                    | 50          | Open WebSocket sessions; more are closed                                                  |
-| `proxy.dashboard.allowedOrigins`                                                                                 | []          | Browser origins allowed besides the dashboard's own host                                  |
-| `proxy.dashboard.allowedHosts`                                                                                   | []          | Host names the dashboard answers to; empty turns the check off                            |
-| `proxy.dashboard.framingEnabled`                                                                                 | true        | Lets any web page show the dashboard in a frame; false refuses framing                    |
-| `proxy.dashboard.links`                                                                                          | []          | Links from each path into other tools, each `{ name = "...", url = "...", icon = "..." }` |
+| Setting / CLI Option / Env Var                                                                                   | Default     | Description                                                                                        |
+|:-----------------------------------------------------------------------------------------------------------------|:------------|:---------------------------------------------------------------------------------------------------|
+| [`proxy.dashboard.enabled`](../cli-reference.md#proxy.dashboard.enabled)<br>`--dashboard`<br>`DASHBOARD_ENABLED` | false       | Serve the dashboard                                                                                |
+| [`proxy.dashboard.port`](../cli-reference.md#proxy.dashboard.port)<br>`--dashboard_port`<br>`DASHBOARD_PORT`     | 8094        | Its port, not the admin port                                                                       |
+| [`proxy.dashboard.path`](../cli-reference.md#proxy.dashboard.path)<br>`--dashboard_path`<br>`DASHBOARD_PATH`     | "dashboard" | Its base path, as in `http://<proxy>:8094/dashboard`                                               |
+| [`proxy.dashboard.host`](../cli-reference.md#proxy.dashboard.host)<br>`--dashboard_host`<br>`DASHBOARD_HOST`     | "0.0.0.0"   | The address it listens on; `"127.0.0.1"` keeps it on the proxy's host                              |
+| [`proxy.dashboard.username`](../cli-reference.md#proxy.dashboard.username)<br>`DASHBOARD_USERNAME`               | "admin"     | The login's username, once a password is set                                                       |
+| [`proxy.dashboard.password`](../cli-reference.md#proxy.dashboard.password)<br>`DASHBOARD_PASSWORD`               |             | Requires a login, from the login page or as Basic Auth; empty leaves it open                       |
+| `proxy.dashboard.refreshIntervalSecs`                                                                            | 2           | Seconds between pushes of values that drift rather than change, such as backlogs                   |
+| `proxy.dashboard.pathHistorySize`                                                                                | 20          | Scrapes kept per path, for the History column and each agent's Recent scrapes                      |
+| `proxy.dashboard.departedPathRetentionSecs`                                                                      | 3600        | Seconds a path whose agent has gone stays in the path table                                        |
+| `proxy.dashboard.activityLogSize`                                                                                | 500         | Lines kept in the Activity view: agents and paths coming, going, and refused                       |
+| `proxy.dashboard.scrapeNowEnabled`                                                                               | true        | A Scrape button on each path, which scrapes it at once and shows the result                        |
+| `proxy.dashboard.maxSessions`                                                                                    | 50          | Open WebSocket sessions; more are closed                                                           |
+| `proxy.dashboard.allowedOrigins`                                                                                 | []          | Browser origins allowed besides the dashboard's own host                                           |
+| `proxy.dashboard.allowedHosts`                                                                                   | []          | Host names the dashboard answers to; empty turns the check off                                     |
+| `proxy.dashboard.framingEnabled`                                                                                 | true        | Lets any web page show the dashboard in a frame; false refuses framing                             |
+| `proxy.dashboard.links`                                                                                          | []          | Links from each path into other tools, each `{ name = "...", url = "...", icon = "..." }`          |
+| `proxy.dashboard.screens`                                                                                        | []          | Screens `/screens` shows beside the dashboard, each `{ name = "...", url = "...", start = "..." }` |
 
 `password` turns on a login, from the dashboard's login page or, for a script, as HTTP Basic Auth, with `username`
 (`admin` unless set). Both are settable as `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`, but have no command-line flags,
@@ -198,12 +199,20 @@ It is off while empty, the default, and like `allowedOrigins` must be set in a c
 [Exposure](../web-dashboard.md#exposure) for what both lists guard against.
 
 `framingEnabled` lets any web page show the dashboard in a frame, the default; `false` refuses framing on every
-response. See [Exposure](../web-dashboard.md#exposure) for what framing lets another site's page do.
+response, but for the proxy's own `/screens` while `screens` lists any, which may then frame it from its own origin.
+See [Exposure](../web-dashboard.md#exposure) for what framing lets another site's page do.
 
 `links` gives each row of the Paths table links into other tools, each a `name` and a `url` template whose
 placeholders (`{path}`, `{agent}`, `{identity}`, and `{label.<name>}`) every row fills from its path, for example
 `{ name = "Grafana", url = "http://grafana:3000/d/proxy-targets?var-job={label.job}" }`. It too must be set in a config
 file, and a link the dashboard can't use stops the proxy at startup. See [Links](../web-dashboard.md#links).
+
+`screens` lists the screens the proxy's screens page, `/screens` on the dashboard's port, shows beside its own dashboard,
+each in a tab: agents' dashboards, Prometheus, Grafana, or any page that allows framing. Each has a `name`, the tab's
+title, whose lowercase form is its id in links into the page; a `url`, an absolute `http` or `https` URL, which a value
+from the environment can set with `${?NAME}`; and optionally a `start`, the path it opens on, appended to `url`, such as
+`/alerts`. With none, `/screens` answers 404. It too must be set in a config file, and a list the page can't use stops
+the proxy at startup, naming the screen. See [The Screens Page](../web-dashboard.md#screens).
 
 It runs on its own port rather than the admin port, partly because the admin port is a servlet container
 that cannot host WebSockets, and partly so the dashboard can be firewalled without also cutting off the

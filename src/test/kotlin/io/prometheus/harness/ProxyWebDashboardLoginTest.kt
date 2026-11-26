@@ -251,7 +251,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           setSessionCookie().shouldNotBeNull().apply {
             this shouldContain "HttpOnly"
             this shouldContain "SameSite=Lax"
-            this shouldContain "Path=/dashboard"
+            this shouldContain "Path=/dashboard;"
             this shouldContain "Max-Age=604800"
             this shouldNotContain "Secure"
           }

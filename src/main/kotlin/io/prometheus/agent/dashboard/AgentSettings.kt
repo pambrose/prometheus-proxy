@@ -25,6 +25,7 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.dashboard.CommonSettings
 import io.prometheus.common.dashboard.DashboardValues
+import io.prometheus.common.dashboard.Framing
 import io.prometheus.common.dashboard.DashboardPage.DASH
 import io.prometheus.common.dashboard.Setting
 import io.prometheus.common.dashboard.SettingText.names
@@ -168,7 +169,7 @@ internal object AgentSettings {
             maxSessions = maxSessions,
             allowedOrigins = allowedOrigins,
             allowedHosts = allowedHosts,
-            framingEnabled = framingEnabled,
+            framing = Framing.of(framingEnabled),
           ),
       )
     }

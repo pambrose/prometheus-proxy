@@ -42,7 +42,7 @@ down:  ## Stop the demo and remove its containers, network, and volume
 status:  ## Show the containers, the simulated services' state, and the URLs
 	@$(DEMO) status
 
-open:  ## Open the proxy's and agent-east's dashboards, Grafana, and Prometheus's alerts in the browser
+open:  ## Open the proxy's screens page, which holds every dashboard, Prometheus, and Grafana, in the browser
 	@$(DEMO) open
 
 tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)

@@ -226,7 +226,8 @@ internal object ProxySettings {
       ),
     )
 
-  // The dashboard's settings both sides have, then the proxy's own: how long a gone path stays, and the Links column.
+  // The dashboard's settings both sides have, then the proxy's own: how long a gone path stays, the Links column, and
+  // the screens /screens shows.
   private fun dashboard(
     options: ProxyOptions,
     dashboard: ConfigVals.Proxy2.Dashboard2,
@@ -235,6 +236,8 @@ internal object ProxySettings {
       dashboard.links.map { link ->
         Setting("Link ${link.name}", link.url + if (link.icon.isEmpty()) "" else " (${link.icon} icon)")
       }
+    // The screens as the page shows them, parsed and checked at startup.
+    val screens = options.dashboardScreens.map { Setting("Screen ${it.name}", it.shown) }
     return with(dashboard) {
       CommonSettings.dashboard(
         options = options,
@@ -247,10 +250,11 @@ internal object ProxySettings {
             maxSessions = maxSessions,
             allowedOrigins = allowedOrigins,
             allowedHosts = allowedHosts,
-            framingEnabled = framingEnabled,
+            framing = options.dashboardFraming,
           ),
         extra = listOf(Setting("Departed paths kept", secs(departedPathRetentionSecs))) +
-          links.ifEmpty { listOf(Setting("Links", "none")) },
+          links.ifEmpty { listOf(Setting("Links", "none")) } +
+          screens.ifEmpty { listOf(Setting("Screens", "none")) },
       )
     }
   }

@@ -9,7 +9,8 @@ _Not yet released_
 4.7.1 is for apps that embed the agent, by hand, with the Ktor plugin, or with the Spring Boot starter: an app can now
 be told why its agent couldn't start, to report it wherever someone will see it, and can cap how long the agent's stop
 holds up its shutdown, to fit the window its platform gives it, such as Cloud Run's 10 seconds. It also lets a page of
-your own, such as a portal, show the proxy's and the agents' dashboards in frames again.
+your own, such as a portal, show the proxy's and the agents' dashboards in frames again, and gives the proxy a page of
+its own that holds them all, with Prometheus and Grafana.
 
 ### Before you upgrade
 
@@ -37,6 +38,13 @@ your own, such as a portal, show the proxy's and the agents' dashboards in frame
 - **A dashboard can be framed again.** `proxy.dashboard.framingEnabled` and `agent.dashboard.framingEnabled`, on by
   default, let any web page show the dashboard in a frame, such as a portal's; `false` refuses framing, as every
   dashboard did in 4.7.0. A login in a frame works only when the framing page is on the dashboard's own site.
+- **One page for every screen.** List your screens, the agents' dashboards, Prometheus, Grafana, or any page that
+  allows framing, in `proxy.dashboard.screens`, and the proxy serves `/screens` on its dashboard's port: a tab per
+  screen after its own dashboard, each with a dot that's green while the screen answers, in One, Split, or All
+  layouts. A link can open a screen, a view in it, or two side by side, such as `/screens#proxy/paths+grafana`, and a
+  link opened while the page is open goes to that page. With screens listed, `framingEnabled = false` still lets the
+  page show the proxy's dashboard, from its own origin. Behind a reverse proxy, pass `/screens` on as well as
+  `/dashboard`. The basics demo's tour now runs in it.
 
 ### Bug Fixes
 

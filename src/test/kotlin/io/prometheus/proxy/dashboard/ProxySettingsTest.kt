@@ -71,6 +71,11 @@ class ProxySettingsTest : StringSpec() {
         username = "operator"
         password = "dash-pw-4"
         links = [{ name = "Grafana", url = "https://grafana.example/d/x?var-job={label.job}", icon = "grafana" }]
+        screens = [
+          { name = "Grafana", url = "http://g:3000", start = "/d/x?kiosk" }
+          { name = "agent-east", url = "http://a:8095/dashboard" }
+          { name = "Runbooks", url = "https://runbooks.example/?token=rb-tok-5" }
+        ]
       }
     }
     """
@@ -104,6 +109,10 @@ class ProxySettingsTest : StringSpec() {
       settings.value("Dashboard", "Login") shouldBe "on, username operator"
       settings.value("Dashboard", "Link Grafana") shouldBe
         "https://grafana.example/d/x?var-job={label.job} (grafana icon)"
+      settings.value("Dashboard", "Screen Grafana") shouldBe "http://g:3000 (opens /d/x?kiosk)"
+      settings.value("Dashboard", "Screen agent-east") shouldBe "http://a:8095/dashboard"
+      // Shown as every logged URL is, so a query's values stay out of the view.
+      settings.value("Dashboard", "Screen Runbooks") shouldBe "https://runbooks.example/?token=***"
       settings.value("About", "Overrides (-D)") shouldBe "proxy.internal.maxPathLength"
     }
 
@@ -129,6 +138,7 @@ class ProxySettingsTest : StringSpec() {
       settings.value("Service discovery", "Service discovery") shouldBe "off"
       settings.value("Dashboard", "Login") shouldBe "off"
       settings.value("Dashboard", "Links") shouldBe "none"
+      settings.value("Dashboard", "Screens") shouldBe "none"
       settings.value("About", "Overrides (-D)") shouldBe "none"
     }
 
@@ -136,7 +146,7 @@ class ProxySettingsTest : StringSpec() {
     "no token, password, PEM, or -D value should appear anywhere in the settings" {
       val text = ProxySettings.of(proxy(configured, extraArgs = ["-Dproxy.agentToken=tok-d-5"])).text()
 
-      listOf("tok-shared-1", "tok-team-a-2", "tok-ops-3", "dash-pw-4", "tok-d-5", keyBase64)
+      listOf("tok-shared-1", "tok-team-a-2", "tok-ops-3", "dash-pw-4", "tok-d-5", "rb-tok-5", keyBase64)
         .filter { it in text } shouldBe emptyList()
       TestCerts.read(TestCerts.SERVER_KEY).lines().filter { it.length > 20 && it in text } shouldBe emptyList()
       text.lines() shouldContainAll ["Overrides (-D): proxy.agentToken", "Private key: PEM, set"]

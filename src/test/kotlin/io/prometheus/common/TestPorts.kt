@@ -250,6 +250,11 @@ object TestPorts {
   const val DASHBOARD_UI_LOGIN_DASHBOARD_PORT = 9745
   const val DASHBOARD_UI_LOGIN_METRICS_PORT = 9752
 
+  // ProxyScreensTest: the proxy's /screens page, with screens listed and without, with a login and without.
+  const val SCREENS_HTTP_PORT = 9766
+  const val SCREENS_GRPC_PORT = 9767
+  const val SCREENS_DASHBOARD_PORT = 9768
+
   // AgentWebDashboardTest: the agent's dashboard, with its proxy up and with it down (nothing listens on the down
   // case's gRPC port), and with a login.
   const val AGENT_DASHBOARD_UI_HTTP_PORT = 9746
@@ -307,7 +312,13 @@ object TestPorts {
   const val DASHBOARD_RESPONSES_CACHING_PORT = 11431
   const val DASHBOARD_RESPONSES_ORIGIN_LOG_PORT = 11432
   const val DASHBOARD_RESPONSES_HOST_LOG_PORT = 11433
+  const val DASHBOARD_RESPONSES_FRAMING_SELF_PORT = 11434
   const val DASHBOARD_RESPONSES_FRAMING_ENABLED_PORT = 11435
+  const val DASHBOARD_RESPONSES_COOKIE_PORT = 11436
+  const val DASHBOARD_RESPONSES_COOKIE_ROOT_PORT = 11437
+  const val DASHBOARD_RESPONSES_OUTSIDE_LOGIN_PORT = 11438
+  const val DASHBOARD_RESPONSES_HEAD_PORT = 11439
+  const val DASHBOARD_RESPONSES_HEAD_LOGIN_PORT = 11440
 
   // InProcessZipkinTest: the HTTP port of each case's proxy, and a Zipkin port nothing listens on, which the reporter
   // fails to send to without holding up startup, a scrape, or shutdown.

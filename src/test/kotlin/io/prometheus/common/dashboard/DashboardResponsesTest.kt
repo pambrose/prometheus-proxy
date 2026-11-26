@@ -26,19 +26,24 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.basicAuth
+import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.request.get
+import io.ktor.client.request.head
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.parameters
 import io.ktor.server.application.install
 import io.ktor.server.html.respondHtml
 import io.ktor.server.response.respondText
@@ -74,14 +79,18 @@ import kotlin.time.Duration.Companion.seconds
  * `AgentWebDashboardTest`'s.
  */
 class DashboardResponsesTest : StringSpec() {
-  // A site of a page, a fragment, an action behind pageGuard, and a page that throws, with nothing to push.
+  // A site of a page, a fragment, an action behind pageGuard, a page that throws, and a page outside the base path a
+  // login may return to, with nothing to push.
   private class PlainSite : DashboardSite<String, Int> {
     override val changes: Flow<Any?> = emptyFlow()
+
+    override val outsidePages = setOf(OUTSIDE)
 
     override suspend fun collect() = 0
 
     override fun Route.pages(server: DashboardServer<String, Int>) {
       get(server.basePath) { call.respondHtml { body { +"The page" } } }
+      get(OUTSIDE) { call.respondHtml { body { +"The outside page" } } }
       get("${server.routeBase}/$FRAGMENT") { call.respondText("<div id=\"detail\"></div>", ContentType.Text.Html) }
       get("${server.routeBase}/$BROKEN") { error("A page that throws") }
       route("${server.routeBase}/$ACTION") {
@@ -100,10 +109,11 @@ class DashboardResponsesTest : StringSpec() {
     ) = DashboardFrame("snapshot $snapshot")
   }
 
-  // One case's server, and a client that follows no redirect.
+  // One case's server, at [routeBase], and a client that follows no redirect.
   private class Fixture(
     val port: Int,
     val client: HttpClient,
+    val routeBase: String,
   ) {
     val base = "http://$LOOPBACK_HOST:$port"
 
@@ -117,12 +127,28 @@ class DashboardResponsesTest : StringSpec() {
       block: HttpRequestBuilder.() -> Unit = {},
     ): HttpResponse = client.post("$base$path", block)
 
+    suspend fun head(path: String): HttpResponse = client.head("$base$path")
+
     // Waits until the server answers through its routes: an engine still installing them answers everything with 404.
     suspend fun awaitServing() =
       withTimeout(STARTUP_PATIENCE) {
-        while (runCatching { get("/dashboard/session").status }.getOrNull() !in SERVING) {
+        while (runCatching { get("$routeBase/session").status }.getOrNull() !in SERVING) {
           delay(20.milliseconds)
         }
+      }
+
+    // A sign-in on the login page with the right login, returning to [next].
+    suspend fun signIn(next: String): HttpResponse =
+      post("$routeBase/login") {
+        setBody(
+          FormDataContent(
+            parameters {
+              append(LoginHtml.USERNAME_FIELD, USERNAME)
+              append(LoginHtml.PASSWORD_FIELD, PASSWORD)
+              append(LoginHtml.NEXT_FIELD, next)
+            },
+          ),
+        )
       }
 
     // The status line the server answers [request] with, sent as it is, on a socket of its own: the HTTP client refuses
@@ -138,13 +164,14 @@ class DashboardResponsesTest : StringSpec() {
       }
   }
 
-  // A server with a login when [login], refusing a Host not in [allowedHosts] when it has any, and refusing framing
-  // unless [framingEnabled], for [block]; stopped after it.
+  // A server at [path], with a login when [login], refusing a Host not in [allowedHosts] when it has any, and framed as
+  // [framing] allows, for [block]; stopped after it.
   private suspend fun withServer(
     port: Int,
     login: Boolean = false,
     allowedHosts: List<String> = emptyList(),
-    framingEnabled: Boolean = false,
+    framing: Framing = Framing.NONE,
+    path: String = "dashboard",
     block: suspend Fixture.() -> Unit,
   ) {
     val settings =
@@ -152,12 +179,12 @@ class DashboardResponsesTest : StringSpec() {
         role = ROLE,
         host = LOOPBACK_HOST,
         port = port,
-        path = "dashboard",
+        path = path,
         refreshInterval = 1.hours,
         maxSessions = 10,
         allowedOrigins = emptyList(),
         allowedHosts = allowedHosts,
-        framingEnabled = framingEnabled,
+        framing = framing,
         login = if (login) DashboardLogin(USERNAME, PASSWORD) else null,
         loginHeading = "Responses test",
         icons = mapOf(ICON.fileName to ICON.resource),
@@ -166,7 +193,7 @@ class DashboardResponsesTest : StringSpec() {
     val client = HttpClient(CIO) { followRedirects = false }
     server.start()
     try {
-      Fixture(port, client).apply {
+      Fixture(port, client, server.routeBase).apply {
         awaitServing()
         block()
       }
@@ -267,7 +294,7 @@ class DashboardResponsesTest : StringSpec() {
     // Framing enabled, the default, lifts both framing headers, so a page can embed the dashboard; it leaves the
     // login's caching rule and a brand mark's own policy as they are.
     "with framing enabled, no response should refuse framing, and a login should still keep them out of the cache" {
-      withServer(TestPorts.DASHBOARD_RESPONSES_FRAMING_ENABLED_PORT, login = true, framingEnabled = true) {
+      withServer(TestPorts.DASHBOARD_RESPONSES_FRAMING_ENABLED_PORT, login = true, framing = Framing.ANY) {
         val signedIn: HttpRequestBuilder.() -> Unit = { basicAuth(USERNAME, PASSWORD) }
         val responses =
           mapOf(
@@ -303,6 +330,119 @@ class DashboardResponsesTest : StringSpec() {
         (responses + mapOf("asset" to asset, "icon" to icon)).filterValues { !it.allowsFraming() }.keys.shouldBeEmpty()
         responses.filterValues { it.headers.getAll(HttpHeaders.CacheControl) != NO_STORE }.keys.shouldBeEmpty()
         icon.headers.getAll(CSP).orEmpty() shouldContain "sandbox"
+      }
+    }
+
+    // framingEnabled false with screens listed: the proxy's own /screens page may frame its dashboard, and no other
+    // site may, so clickjacking stays refused while the page works.
+    "framed only by its own origin, every response should say so once, the refusals and error pages included" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_FRAMING_SELF_PORT, framing = Framing.SAME_ORIGIN) {
+        val responses =
+          mapOf(
+            "page" to get("/dashboard"),
+            "outside page" to get(OUTSIDE),
+            "fragment" to get("/dashboard/$FRAGMENT") { header(HX_REQUEST_HEADER, "true") },
+            "action" to post("/dashboard/$ACTION") { header(HX_REQUEST_HEADER, "true") },
+            "foreign origin" to
+              post("/dashboard/$ACTION") {
+                header(HX_REQUEST_HEADER, "true")
+                header(HttpHeaders.Origin, "https://evil.example.com")
+              },
+            "asset" to get("/dashboard/$ASSET_DIR/htmx.min.js"),
+            "icon" to get("/dashboard/$ICON_DIR/${ICON.fileName}"),
+            "session" to get("/dashboard/session"),
+            "root" to get("/"),
+            "unknown" to get("/dashboard/nothing-here"),
+            "broken" to get("/dashboard/$BROKEN"),
+          )
+
+        responses.mapValues { it.value.status.value } shouldBe
+          mapOf(
+            "page" to 200,
+            "outside page" to 200,
+            "fragment" to 200,
+            "action" to 200,
+            "foreign origin" to 403,
+            "asset" to 200,
+            "icon" to 200,
+            "session" to 204,
+            "root" to 302,
+            "unknown" to 404,
+            "broken" to 500,
+          )
+        responses.filterValues { !it.framedBySelfOnly() }.keys.shouldBeEmpty()
+        responses.getValue("icon").headers.getAll(CSP).orEmpty() shouldContain "sandbox"
+      }
+    }
+
+    // ==================== The session cookie ====================
+
+    // At the base path alone a browser wouldn't send the cookie to /screens, outside it, so it goes at each of the
+    // site's pages outside the base too, with the same token. Not at the root: there a browser would send the token
+    // to every other app on the host, and a proxy rolled back to 4.7.0, which reads the last of two cookies of one
+    // name, would read the root one, dead after the restart, and send every sign-in back to the login page.
+    "signing in and out should set the session cookie at the base path and at each page outside it" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_COOKIE_PORT, login = true) {
+        val signIn = signIn(next = "/dashboard")
+        signIn.status shouldBe HttpStatusCode.SeeOther
+        signIn.sessionCookies().map { it.attributes() } shouldBe
+          listOf(
+            listOf("Max-Age=${DashboardSessions.MAX_AGE_SECS}", "Path=/dashboard", "HttpOnly", "SameSite=Lax"),
+            listOf("Max-Age=${DashboardSessions.MAX_AGE_SECS}", "Path=$OUTSIDE", "HttpOnly", "SameSite=Lax"),
+          )
+        signIn.sessionCookies().map { it.value() }.distinct().single().shouldNotBeEmpty()
+
+        val signOut = post("/dashboard/logout")
+        signOut.status shouldBe HttpStatusCode.SeeOther
+        signOut.sessionCookies().map { it.value() to it.attributes() } shouldBe
+          listOf(
+            "" to listOf("Max-Age=0", "Path=/dashboard", "HttpOnly", "SameSite=Lax"),
+            "" to listOf("Max-Age=0", "Path=$OUTSIDE", "HttpOnly", "SameSite=Lax"),
+          )
+      }
+    }
+
+    // The root covers every page outside the base, so one cookie is enough.
+    "at a root mount, signing in and out should set the session cookie once, at the root" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_COOKIE_ROOT_PORT, login = true, path = "/") {
+        signIn(next = "/").sessionCookies().map { it.attributes()[1] } shouldBe listOf("Path=/")
+        post("/logout").sessionCookies().map { it.attributes()[1] } shouldBe listOf("Path=/")
+      }
+    }
+
+    // ==================== A HEAD that asks whether the dashboard is up ====================
+
+    // The proxy's screens page checks each dashboard every few seconds with a HEAD of its base path or /session, which
+    // answered 405, or 401 with a login set, putting an error in every log that counts them. A HEAD says only that the
+    // dashboard is up, as the login page does, so it needs no login; any other HEAD, and a GET of /session, still do.
+    "a HEAD of the base path or /session should answer 204, before any login" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_HEAD_PORT) {
+        listOf(head("/dashboard"), head("/dashboard/session")).map { it.status } shouldBe
+          listOf(HttpStatusCode.NoContent, HttpStatusCode.NoContent)
+      }
+      withServer(TestPorts.DASHBOARD_RESPONSES_HEAD_LOGIN_PORT, login = true) {
+        listOf(head("/dashboard"), head("/dashboard/session")).map { it.status } shouldBe
+          listOf(HttpStatusCode.NoContent, HttpStatusCode.NoContent)
+        head("/dashboard/$FRAGMENT").status shouldBe HttpStatusCode.Unauthorized
+        get("/dashboard/session").status shouldBe HttpStatusCode.Unauthorized
+      }
+    }
+
+    // ==================== A page outside the base path ====================
+
+    // The hash a link into /screens carries never reaches the server, so the login page adds it back (LoginHtmlTest);
+    // the server's part is to send the browser back to the page outside the base, and nowhere else outside it.
+    "a page outside the base path should send a browser to the login page, and a login return to it" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_OUTSIDE_LOGIN_PORT, login = true) {
+        val page = get(OUTSIDE) { header(HttpHeaders.Accept, "text/html") }
+        page.status shouldBe HttpStatusCode.SeeOther
+        page.headers[HttpHeaders.Location] shouldBe "/dashboard/login?next=%2Foutside"
+
+        val signIn = signIn(next = OUTSIDE)
+        signIn.status shouldBe HttpStatusCode.SeeOther
+        signIn.headers[HttpHeaders.Location] shouldBe OUTSIDE
+
+        signIn(next = "/elsewhere").headers[HttpHeaders.Location] shouldBe "/dashboard"
       }
     }
 
@@ -344,6 +484,7 @@ class DashboardResponsesTest : StringSpec() {
     private const val FRAGMENT = "fragment"
     private const val BROKEN = "broken"
     private const val ACTION = "action"
+    private const val OUTSIDE = "/outside"
     private const val SOCKET_TIMEOUT_MILLIS = 10_000
     private const val CSP = "Content-Security-Policy"
     private const val X_FRAME_OPTIONS = "X-Frame-Options"
@@ -369,8 +510,20 @@ class DashboardResponsesTest : StringSpec() {
       headers.getAll(CSP).orEmpty().filter { it.contains("frame-ancestors") } == listOf("frame-ancestors 'none'") &&
         headers.getAll(X_FRAME_OPTIONS) == listOf("DENY")
 
+    private fun HttpResponse.framedBySelfOnly() =
+      headers.getAll(CSP).orEmpty().filter { it.contains("frame-ancestors") } == listOf("frame-ancestors 'self'") &&
+        headers.getAll(X_FRAME_OPTIONS) == listOf("SAMEORIGIN")
+
     private fun HttpResponse.allowsFraming() =
       headers.getAll(CSP).orEmpty().none { it.contains("frame-ancestors") } && headers[X_FRAME_OPTIONS] == null
+
+    // The session cookies a response sets, each whole, in the order it sets them.
+    private fun HttpResponse.sessionCookies() =
+      headers.getAll(HttpHeaders.SetCookie).orEmpty().filter { it.startsWith("prometheus_${ROLE}_dashboard_") }
+
+    private fun String.value() = substringAfter('=').substringBefore(';')
+
+    private fun String.attributes() = split("; ").drop(1)
 
     private fun List<ILoggingEvent>.refusals(prefix: String) = filter { it.formattedMessage.startsWith(prefix) }
 

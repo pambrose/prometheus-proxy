@@ -55,6 +55,7 @@ import kotlinx.html.script
 import kotlinx.html.section
 import kotlinx.html.span
 import kotlinx.html.stream.createHTML
+import kotlinx.html.style
 import kotlinx.html.title
 import kotlinx.html.unsafe
 import kotlin.time.Clock
@@ -138,7 +139,12 @@ internal object ProxyDashboardHtml {
     // Declared so assistive tech pronounces agent names, paths, and status text as English rather than
     // falling back to the listener's system locale.
     attributes["lang"] = "en"
-    head { dashboardHead(pageTitle(snapshot), routeBase) { linkIconStyle(snapshot.links, routeBase) } }
+    head {
+      dashboardHead(pageTitle(snapshot), routeBase) {
+        linkIconStyle(snapshot.links, routeBase)
+        if (snapshot.screensPage) style { unsafe { raw(ProxyDashboardCss.SCREENS_LINK_CSS) } }
+      }
+    }
     body {
       // Loading hx-ws.min.js is what enables the extension; htmx 4 has no hx-ext.
       attributes["hx-ws:connect"] = "$routeBase/events"
@@ -150,6 +156,7 @@ internal object ProxyDashboardHtml {
         brand(snapshot.dashboardName)
         renderNav(routeBase, layout)
         renderStatus(snapshot)
+        if (snapshot.screensPage) screensLink()
         barEnd(loginEnabled, routeBase)
       }
       announcer()
@@ -184,6 +191,14 @@ internal object ProxyDashboardHtml {
       script { unsafe { raw(SCRIPT) } }
     }
   }
+
+  // The link to the screens page, outside the base, so the path alone. In the top window: in the page's own proxy tab,
+  // it would otherwise open the page inside itself.
+  private fun FlowContent.screensLink() =
+    a(href = ProxyDashboardService.SCREENS_PATH, classes = "screens-link") {
+      target = "_top"
+      +"Screens"
+    }
 
   /** The layout switcher: a tab per [DashboardLayout] (see [DashboardPage.tabs]). */
   fun FlowContent.renderNav(

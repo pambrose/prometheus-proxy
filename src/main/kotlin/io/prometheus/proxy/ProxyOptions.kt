@@ -49,7 +49,10 @@ import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.requireDefaultOrPositive
 import io.prometheus.common.requirePositive
 import io.prometheus.common.requireSampleRate
+import io.prometheus.common.dashboard.Framing
 import io.prometheus.proxy.dashboard.PathLink
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.SCREENS_PATH
+import io.prometheus.proxy.dashboard.Screen
 
 // The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
 // the (args) signature that code compiled against earlier releases calls.
@@ -145,6 +148,17 @@ class ProxyOptions internal constructor(
   // its initializer would run after and empty it again.
   internal var dashboardLinks: List<PathLink> = emptyList()
     private set
+
+  // The screens /screens shows beside the dashboard, proxy.dashboard.screens, parsed here so a list the page can't use
+  // fails startup, naming the entry. A list, so config-file only, and declared above the init block, as dashboardLinks
+  // is.
+  internal var dashboardScreens: List<Screen> = emptyList()
+    private set
+
+  // Which pages may frame the dashboard: proxy.dashboard.framingEnabled, and with it false, whether /screens, which
+  // frames the proxy's own dashboard, is served. The dashboard's headers and its Settings row both read it.
+  internal val dashboardFraming: Framing
+    get() = Framing.of(configVals.proxy.dashboard.framingEnabled, hasScreens = dashboardScreens.isNotEmpty())
 
   /**
    * Disables the gRPC server reflection service on the Proxy.
@@ -324,6 +338,20 @@ class ProxyOptions internal constructor(
     logger.requirePositive("dashboard.activityLogSize", dashboard.activityLogSize)
     dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url, it.icon) })
     logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
+    dashboardScreens = Screen.parseAll(dashboard.screens.map { Screen.Entry(it.name, it.url, it.start) })
+    logger.info { "dashboard.screens: ${dashboardScreens.joinToString { it.logged }.ifEmpty { "(none)" }}" }
+    // The screens page is at /screens, outside the dashboard's path, so a dashboard based there too would answer for
+    // both on one route, and the page's proxy tab would frame the page itself.
+    require(dashboardScreens.isEmpty() || "/" + dashboardPath.trim('/') != SCREENS_PATH) {
+      "proxy.dashboard.path $SCREENS_PATH is where the screens page is served; give the dashboard another path, or " +
+        "list no screens"
+    }
+    // Off, the dashboard still lets its own /screens frame it (Framing.SAME_ORIGIN), so false means less than it says.
+    if (dashboardFraming == Framing.SAME_ORIGIN)
+      logger.info {
+        "dashboard framing: refused, but for /screens, which shows the dashboard from its own origin " +
+          "(proxy.dashboard.framingEnabled = false)"
+      }
   }
 
   private fun assignGrpcConfigVals(proxyConfigVals: ConfigVals.Proxy2) {

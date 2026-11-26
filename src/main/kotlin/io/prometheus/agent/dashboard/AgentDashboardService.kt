@@ -36,6 +36,7 @@ import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardService
 import io.prometheus.common.dashboard.DashboardSettings
 import io.prometheus.common.dashboard.DashboardSite
+import io.prometheus.common.dashboard.Framing
 import io.prometheus.common.dashboard.ScrapeNowHtml
 import io.prometheus.common.dashboard.href
 import kotlinx.coroutines.flow.Flow
@@ -86,6 +87,9 @@ internal class AgentDashboardService(
       // A write to the activity feed, a fold included; the first value is the count at the start, which is no change.
       override val changes: Flow<Any?> = agent.activityLog?.changes?.drop(1) ?: emptyFlow()
 
+      // The agent has no screens page, nor any other page outside its base.
+      override val outsidePages = emptySet<String>()
+
       override suspend fun collect(): AgentSnapshot = AgentSnapshot.collect(agent, settings)
 
       // The script sends the selected path as the page's URL has it, percent-encoded.
@@ -129,7 +133,7 @@ internal class AgentDashboardService(
         maxSessions = dashboardConfig.maxSessions,
         allowedOrigins = dashboardConfig.allowedOrigins,
         allowedHosts = dashboardConfig.allowedHosts,
-        framingEnabled = dashboardConfig.framingEnabled,
+        framing = Framing.of(dashboardConfig.framingEnabled),
         login = login,
         loginHeading = LOGIN_HEADING,
       ),

@@ -80,6 +80,8 @@ class DashboardPushTest : StringSpec() {
     val changeFlow = MutableSharedFlow<Unit>()
     override val changes: Flow<Any?> = changeFlow
 
+    override val outsidePages = emptySet<String>()
+
     private val collects = AtomicInt(0)
     private val attempts = Channel<Int>(Channel.UNLIMITED)
 
@@ -231,7 +233,7 @@ class DashboardPushTest : StringSpec() {
         maxSessions = maxSessions,
         allowedOrigins = emptyList(),
         allowedHosts = emptyList(),
-        framingEnabled = false,
+        framing = Framing.NONE,
         login = if (login) DashboardLogin("admin", "not used: the spec makes its sessions itself") else null,
         loginHeading = "Push test",
       )

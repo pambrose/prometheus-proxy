@@ -19,6 +19,7 @@
 package io.prometheus.common.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -110,6 +111,22 @@ class LoginHtmlTest : StringSpec() {
       }
     }
 
+    // A link into /screens carries its screen and view in its hash, which never reaches the server. The redirect to
+    // this page keeps it, as a browser keeps a fragment across a redirect that has none, and the script puts it on the
+    // form's action, so the 303 back from the sign-in keeps it too. The next field, which the route checks, is as it
+    // was.
+    "the page should carry a link's hash through the sign-in, on the form's action" {
+      page(next = "/screens").apply {
+        this shouldContain """<script>${LoginHtml.KEEP_HASH_SCRIPT}</script>"""
+        LoginHtml.KEEP_HASH_SCRIPT shouldContain "location.hash"
+        LoginHtml.KEEP_HASH_SCRIPT shouldContain
+          """form.setAttribute("action", form.getAttribute("action") + location.hash)"""
+        // After the form, so the form is there when it runs.
+        indexOf(LoginHtml.KEEP_HASH_SCRIPT) shouldBeGreaterThan indexOf("</form>")
+        this shouldContain """name="${LoginHtml.NEXT_FIELD}" value="/screens""""
+      }
+    }
+
     "at a root mount the form posts to /login" {
       page(routeBase = "", next = "/").also { it shouldContain """action="/login"""" }
     }
@@ -117,8 +134,10 @@ class LoginHtmlTest : StringSpec() {
     // Its one script is the theme's and its one image the logo, both inline, which load nothing.
     "the page loads nothing from anywhere" {
       page().apply {
-        Regex("<script").findAll(this).count() shouldBe 1
+        // Both inline: the theme, and the hash a link carries (see the case above).
+        Regex("<script").findAll(this).count() shouldBe 2
         this shouldContain "<script>${DashboardPage.THEME_SCRIPT}</script>"
+        this shouldContain "<script>${LoginHtml.KEEP_HASH_SCRIPT}</script>"
         Regex("""src="(?!data:)""").containsMatchIn(this) shouldBe false
         this shouldNotContain "http://"
         this shouldNotContain "https://"

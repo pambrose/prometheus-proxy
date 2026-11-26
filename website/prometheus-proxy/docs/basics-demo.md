@@ -62,7 +62,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
-make up      # pulls the images, starts everything, prints the URLs
+make up      # pulls the images, starts everything, prints the screens page's URL
 make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
 ```
@@ -70,8 +70,17 @@ make down    # stops it and removes its containers, network, and volume
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, and Python images, which takes a few minutes. After
 that it starts in under a minute, and runs without a network connection.
 
+Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8094/screens>, one browser tab that
+holds every screen in the demo, each in a tab of its own: the proxy's dashboard, each agent's, Prometheus, and Grafana.
+`make open` opens it. A link can name what the page shows, as the tour's links do:
+<http://localhost:8094/screens#proxy/paths?problems=1+grafana> puts the proxy's Paths view, filtered to problems,
+beside Grafana.
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8094/screens> | `DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8094/dashboard> | `DEMO_DASHBOARD_PORT` |
 | agent-east's dashboard | <http://localhost:8095/dashboard> | `DEMO_AGENT_EAST_DASHBOARD_PORT` |
 | agent-west-1's dashboard | <http://localhost:8096/dashboard> | `DEMO_AGENT_WEST_1_DASHBOARD_PORT` |
@@ -84,8 +93,8 @@ that it starts in under a minute, and runs without a network connection.
 
 If a port is already taken, set its variable from the table for `make up`, for example `DEMO_GRAFANA_PORT=3001 make up`.
 `make up` saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its
-line there to go back to the default. The proxy dashboard's links into Prometheus and Grafana keep the default ports
-(`config/proxy.conf`).
+line there to go back to the default. The screens page follows a moved port, while the proxy dashboard's links into
+Prometheus and Grafana keep the default ports (`config/proxy.conf`).
 
 Every port binds to `127.0.0.1` only. The dashboards run without a login, but for the proxy's in [its own
 scenario](#a-login-for-the-dashboard), and Grafana uses its default admin password, so this setup is for a laptop, not
@@ -278,7 +287,8 @@ over. The next scenario reads the same refusal on the contractor's agent's own d
 
 The proxy's dashboard shows only what reaches the proxy. A path the proxy refused, or a proxy an agent can't reach,
 shows on the agent's side, on its [own dashboard](agent-dashboard.md). With the contractor's agent from the previous
-scenario still running, open its dashboard, on port 8098, and select `/payments_metrics`:
+scenario still running, open its dashboard, <http://localhost:8094/screens#agent-rogue>, and select
+`/payments_metrics`:
 
 <figure markdown="span">
   ![agent-rogue's dashboard, with /payments_metrics refused](images/demo/agent.webp#only-dark){ loading=lazy }
@@ -298,13 +308,14 @@ An agent's dashboard runs on the agent, so it keeps answering when the proxy is 
 ./demo.sh proxy-up        # starts it again
 ```
 
-With the proxy stopped, agent-east's **Connection** view, on port 8095, turns `failing`, and its one endpoint,
-`proxy:50051`, shows the error from the agent's last try; the agent tries again every 3 seconds. Its **Activity** view
-lists `disconnected`, then `connect failed`, once rather than for each retry, and its paths turn red, tagged
-`pending`. **Scrape now** on `/orders_metrics` still fetches the orders service and shows a 200: the target is fine,
-and what's lost is the way to the proxy. Prometheus can't reach the proxy either, so every target turns DOWN in
-Grafana. Once the proxy is back, agent-east connects and registers its paths again within a few seconds. A new proxy
-holds nothing from the old one, so the proxy's dashboard starts its histories over.
+With the proxy stopped, agent-east's **Connection** view, <http://localhost:8095/dashboard/connection>, turns
+`failing`, and its one endpoint, `proxy:50051`, shows the error from the agent's last try; the agent tries again every 3
+seconds. Its **Activity** view lists `disconnected`, then `connect failed`, once rather than for each retry, and its
+paths turn red, tagged `pending`. **Scrape now** on `/orders_metrics` still fetches the orders service and shows a 200:
+the target is fine, and what's lost is the way to the proxy. Prometheus can't reach the proxy either, so every target
+turns DOWN in Grafana. Once the proxy is back, agent-east connects and registers its paths again within a few seconds. A
+new proxy holds nothing from the old one, so the proxy's dashboard starts its histories over. The screens page stays
+open through it, since the browser already has it: its proxy tab turns red, and agent-east's keeps working.
 
 ### A Duplicate Agent { #a-duplicate-agent-takes-over-the-paths-and-the-proxy-logs-the-fix }
 
@@ -338,13 +349,14 @@ serves its paths any more, takes them back within seconds, with no restart.
   <figcaption>The dashboard's login page</figcaption>
 </figure>
 
-Reload the dashboard and it shows its [login page](web-dashboard.md#login). Sign in as `admin`, with the password
-`admin`, and it opens the page you asked for; **Log out**, the exit icon at the right end of the top bar, signs you
-out. The password comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from
-`config/proxy.conf`, so it never sits in a file, and a script sends the login as HTTP Basic Auth instead:
-`curl -u admin:admin http://localhost:8094/dashboard/paths`. A restart clears what the proxy holds in memory, so the
-tour does this last: the agents reconnect within a few seconds, and the dashboard's histories start over.
-`./demo.sh login-off` restarts the proxy without the password.
+The screens page's proxy tab shows the dashboard's [login page](web-dashboard.md#login) in its frame, since the
+restarted proxy asks for one. Sign in there as `admin`, with the password `admin`, and the dashboard comes back: a login
+inside a frame works when the screen is on the same site as the page. **Log out**, the exit icon at the right end of the
+dashboard's top bar, signs you out. The password comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in
+`docker/compose.yml`, not from `config/proxy.conf`, so it never sits in a file, and a script sends the login as HTTP
+Basic Auth instead: `curl -u admin:admin http://localhost:8094/dashboard/paths`. A restart clears what the proxy holds
+in memory, so the tour does this last: the agents reconnect within a few seconds, and the dashboard's histories start
+over. `./demo.sh login-off` restarts the proxy without the password.
 
 ## Scenario Reference
 
@@ -363,7 +375,7 @@ tour does this last: the agents reconnect within a few seconds, and the dashboar
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the services' modes, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the proxy's dashboard, agent-east's, Grafana, and Prometheus's alerts in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds every screen, in the browser |  |
 
 `recover`, `undiscover`, `agent-thaw`, `agent-start`, `rogue-agent-stop`, `proxy-up`, `duplicate-agent-stop`, and
 `login-off` undo every scenario. For a clean slate, `make down && make up`.
