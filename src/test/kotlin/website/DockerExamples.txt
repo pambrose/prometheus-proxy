@@ -2,9 +2,10 @@
 # Create a network for the proxy and agent containers:
 docker network create prometheus-proxy-net
 
-# Start a proxy container on it, with its metrics enabled:
+# Start a proxy container on it, with its metrics enabled. The agent reaches the proxy over the network, so only the
+# scrape port is published, on this host's loopback:
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
-  -p 8080:8080 -p 50051:50051 \
+  -p 127.0.0.1:8080:8080 \
   --env METRICS_ENABLED=true \
   pambrose/prometheus-proxy:4.7.1
 ; --8<-- [end:docker-proxy-basic]
@@ -23,15 +24,15 @@ curl http://localhost:8080/agent_metrics
 
 ; --8<-- [start:docker-background]
 # Run the proxy in the background:
-docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 \
+docker run --detach --name prometheus-proxy --restart unless-stopped --network prometheus-proxy-net \
+  -p 127.0.0.1:8080:8080 \
   pambrose/prometheus-proxy:4.7.1
 
 # Run an agent in the background with a local config file:
-docker run --detach --name prometheus-agent --restart unless-stopped \
+docker run --detach --name prometheus-agent --restart unless-stopped --network prometheus-proxy-net \
   --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
   --env AGENT_CONFIG=agent.conf \
-  --env PROXY_HOSTNAME=proxy-host.example.com \
+  --env PROXY_HOSTNAME=prometheus-proxy \
   pambrose/prometheus-agent:4.7.1
 ; --8<-- [end:docker-background]
 
@@ -44,12 +45,16 @@ docker rm prometheus-agent                   # remove the stopped container
 ; --8<-- [end:docker-manage]
 
 ; --8<-- [start:docker-proxy-production]
-# Production proxy with admin and metrics enabled, in the background:
+# Production proxy with admin and metrics enabled, in the background. Agents on other hosts connect to 50051, published
+# on every interface, over TLS and with the token; the other ports are published on this host's loopback only:
 docker run --detach --name prometheus-proxy \
-  -p 8080:8080 \
   -p 50051:50051 \
-  -p 8082:8082 \
-  -p 8092:8092 \
+  -p 127.0.0.1:8080:8080 \
+  -p 127.0.0.1:8082:8082 \
+  -p 127.0.0.1:8092:8092 \
+  --env CERT_CHAIN_PEM="$(base64 < server.crt | tr -d '\n')" \
+  --env PRIVATE_KEY_PEM="$(base64 < server.key | tr -d '\n')" \
+  --env AGENT_TOKEN="$(cat agent-token)" \
   --env ADMIN_ENABLED=true \
   --env METRICS_ENABLED=true \
   --restart unless-stopped \
@@ -57,13 +62,17 @@ docker run --detach --name prometheus-proxy \
 ; --8<-- [end:docker-proxy-production]
 
 ; --8<-- [start:docker-agent-local-config]
-# Agent with a local config file (bind mount), in the background:
+# Agent with a local config file (bind mount), in the background, on another host. It trusts the proxy's
+# certificate, checks it against the name it was issued to, and presents the token:
 docker run --detach --name prometheus-agent \
-  -p 8083:8083 \
-  -p 8093:8093 \
+  -p 127.0.0.1:8083:8083 \
+  -p 127.0.0.1:8093:8093 \
   --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
   --env AGENT_CONFIG=prom-agent.conf \
   --env PROXY_HOSTNAME=proxy-host.example.com \
+  --env TRUST_CERT_COLLECTION_PEM="$(cat server.crt)" \
+  --env OVERRIDE_AUTHORITY=prometheus-proxy \
+  --env AGENT_TOKEN="$(cat agent-token)" \
   --env ADMIN_ENABLED=true \
   --env METRICS_ENABLED=true \
   --restart unless-stopped \
@@ -107,10 +116,10 @@ services:
 ; --8<-- [start:docker-tls]
 # Proxy with TLS (no mutual auth):
 docker run --rm \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   -p 50440:50440 \
-  -p 8082:8082 \
-  -p 8092:8092 \
+  -p 127.0.0.1:8082:8082 \
+  -p 127.0.0.1:8092:8092 \
   --mount type=bind,source="$(pwd)"/certs,target=/app/certs \
   --mount type=bind,source="$(pwd)"/tls.conf,target=/app/tls.conf \
   --env PROXY_CONFIG=tls.conf \
@@ -120,8 +129,8 @@ docker run --rm \
 
 # Agent with TLS (no mutual auth):
 docker run --rm \
-  -p 8083:8083 \
-  -p 8093:8093 \
+  -p 127.0.0.1:8083:8083 \
+  -p 127.0.0.1:8093:8093 \
   --mount type=bind,source="$(pwd)"/certs,target=/app/certs \
   --mount type=bind,source="$(pwd)"/tls.conf,target=/app/tls.conf \
   --env AGENT_CONFIG=tls.conf \
@@ -132,7 +141,7 @@ docker run --rm \
 ; --8<-- [start:docker-tls-pem]
 # Proxy with TLS, its certificate and key given as environment variables, no file mounted:
 docker run --rm \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   -p 50051:50051 \
   --env CERT_CHAIN_PEM="$(base64 < server.crt | tr -d '\n')" \
   --env PRIVATE_KEY_PEM="$(base64 < server.key | tr -d '\n')" \

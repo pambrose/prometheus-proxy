@@ -132,7 +132,8 @@ Scrape an existing Prometheus instance via the `/federate` endpoint:
 This leverages Prometheus's built-in federation support, allowing you to pull metrics from
 another Prometheus server through the proxy.
 
-A complete federation config is available at:
+A complete federation config, which also serves the agent's own metrics at `/agent_metrics`, in-process, is
+available at:
 [`examples/federate.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf)
 
 ## Consolidated Mode

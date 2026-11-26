@@ -71,6 +71,16 @@ All notable changes to this project are documented in this file.
 - `examples/simple.conf` and the basics, network, and Kubernetes demos' agents serve their own metrics through the
   proxy with `agent.metrics.proxyPath`, in-process, where each scraped its own port, `localhost:8083`, as a path; all
   but the Kubernetes demo's, whose chart opens the port for its Service, leave the metrics port off
+- `etc/compose/agent.conf`, `examples/federate.conf`, and `examples/prom-agent.conf` serve the agent's own metrics at
+  `/agent_metrics` with `agent.metrics.proxyPath`, where each scraped `localhost:8083` as a path; the compose stack's
+  agent no longer turns on or publishes its metrics port, `federate.conf` leaves it off, and `prom-agent.conf`, a
+  debugging config, keeps it on
+- The README's, `llms.txt`'s, and the Docker page's `docker run` examples publish the scrape, admin, and metrics ports
+  on `127.0.0.1` only, and those whose agent shares the proxy's Docker network no longer publish the agents' port,
+  50051. The Docker page's Production Setup, whose agent is on another host, publishes 50051 with TLS and a token, and
+  its Running in the Background examples run on the Basic Usage network. The Quick Start's Docker tab says that Docker
+  publishes its ports past the host's firewall, and to add TLS and a token before agents connect over a network you
+  don't trust
 
 ## [4.7.0] - 2026-11-24
 

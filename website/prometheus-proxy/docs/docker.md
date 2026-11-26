@@ -14,8 +14,11 @@ docker pull pambrose/prometheus-agent:4.7.1
 ## Basic Usage
 
 In a container, `localhost` is the container itself, so these put the proxy and the agent on a network they share,
-and the agent reaches the proxy by its container name, given in `PROXY_HOSTNAME`. In a real deployment the agent runs
-on another host, inside the firewall, with `PROXY_HOSTNAME` set to the proxy's address and no shared network.
+and the agent reaches the proxy by its container name, given in `PROXY_HOSTNAME`. The agent connects over that
+network, so the proxy doesn't publish the agents' port, 50051, and publishes its scrape port on the host's `127.0.0.1`
+only, for `curl` on the same host. In a real deployment the agent runs on another host, inside the firewall, with
+`PROXY_HOSTNAME` set to the proxy's address and no shared network, and the proxy publishes 50051 and requires TLS and
+a token, as in [Production Setup](#production-setup).
 
 ### Proxy
 
@@ -40,7 +43,7 @@ The examples above run in the foreground: the container stays attached to your t
 until you stop it with Ctrl+C, and `--rm` then removes it. To keep a container running in the background,
 start it with `--detach` and give it a `--name` to manage it by. `--restart unless-stopped` also starts it
 again if it exits or Docker restarts, until you stop it. Docker doesn't allow `--rm` with `--restart`, so
-leave `--rm` out:
+leave `--rm` out. These run on the network from [Basic Usage](#basic-usage):
 
 ```bash
 --8<-- "DockerExamples.txt:docker-background"
@@ -57,7 +60,16 @@ To move a container to a new release, stop and remove it, then run it again with
 ## Production Setup
 
 These run in the background under a restart policy, as described in
-[Running in the Background](#running-in-the-background).
+[Running in the Background](#running-in-the-background), with the agent on another host. The proxy publishes the
+agents' port, 50051, on every interface, so the agent connects over TLS and presents a token. Make the proxy's
+certificate and key (`server.crt`, `server.key`) and the token (`agent-token`) as
+[Securing the Link](cloud-platforms.md#securing-the-link) does, and copy `server.crt` and `agent-token`, never the
+key, to the agent's host. The certificate is issued to the name `prometheus-proxy`, which the agent checks it against
+(`OVERRIDE_AUTHORITY`).
+
+The proxy publishes its scrape, metrics, and admin ports on its host's `127.0.0.1` only, as they have no
+authentication. For a Prometheus on another host, publish the scrape port on a private address it can reach instead
+(`-p 10.0.0.5:8080:8080`), and firewall it; see [Scrape Port Access](security/index.md#scrape-port-access).
 
 ### Proxy with Admin and Metrics
 
@@ -94,7 +106,8 @@ the proxy publishes 50051 and requires a token and TLS, as the compose file in
 
 For a stack you can start as-is, [`etc/compose/proxy.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/etc/compose/proxy.yml)
 runs a proxy, an agent, and a Prometheus server that scrapes the proxy's and agent's own metrics through the proxy,
-with its ports published the same way. From a checkout of the repository:
+with its ports published the same way. The agent serves its own at `/agent_metrics`, in-process
+(`agent.metrics.proxyPath`), so its metrics port stays off. From a checkout of the repository:
 
 ```bash
 docker compose -f etc/compose/proxy.yml up

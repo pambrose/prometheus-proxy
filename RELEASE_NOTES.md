@@ -51,7 +51,14 @@ your own, such as a portal, show the proxy's and the agents' dashboards in frame
 
 - **The examples serve the agent's metrics without a port.** `examples/simple.conf`, which the Quick Start runs, has
   the agent serve its own metrics at `/agent_metrics` with `agent.metrics.proxyPath`, so its metrics port stays off,
-  as do the basics and network demos' agents.
+  as do the basics and network demos' agents, `examples/federate.conf`'s, and the Compose stack's
+  (`etc/compose/proxy.yml`), which no longer publishes port 8083. `examples/prom-agent.conf`, for debugging, serves
+  them at `/agent_metrics` too, and keeps the port on.
+- **The `docker run` examples keep their ports off the network.** The quick-start commands no longer publish the
+  agents' port, 50051, which their agent reaches over the shared Docker network, and publish the scrape, admin, and
+  metrics ports on `127.0.0.1` only. The Docker page's production example, for agents on other hosts, publishes 50051
+  with TLS and a token. For a Prometheus on another host, publish the scrape port on a private address instead, such
+  as `-p 10.0.0.5:8080:8080`.
 
 ## 4.7.0
 
