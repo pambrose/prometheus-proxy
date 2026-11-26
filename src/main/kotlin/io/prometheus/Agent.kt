@@ -407,9 +407,7 @@ class Agent(
     }
   }
 
-  // One connection attempt: connect and register, then run the connection's tasks until it ends. Catches Throwable only
-  // to name what ended a connection in the activity feed, and rethrows it.
-  @Suppress("TooGenericExceptionCaught")
+  // One connection attempt: connect and register, then run the connection's tasks until it ends.
   private suspend fun connectToProxy(endpointFailover: EndpointFailover) {
     // A non-empty agentId means the previous attempt connected. EndpointFailover combines that with whether
     // the attempt also registered to choose between failing back to the primary and failing forward.
@@ -428,58 +426,81 @@ class Agent(
     scrapeRequestBacklogSize.store(0)
     lastMsgSentMark = clock.markNow()
 
-    if (!grpcService.connectAgent()) {
-      metrics { connectCount.labelValues(launchId, AgentMetrics.FAILURE).inc() }
-      return
-    }
-
-    // Connected, so however the connection ends, the activity feed hears of it, and why, when an exception ended it.
-    var cause: Throwable? = null
+    // The attempt's own lines in the activity feed, its connect and its static paths', wait for how it ends: they're
+    // shown once it registers, or fails for a new reason, and dropped when it fails as the last attempt to its endpoint
+    // did (see AgentGrpcService.registrationFailed). A proxy that kept refusing the agent added them on every attempt.
+    val attempt = activityLog?.holdAttempt()
     try {
-      cause = registerAndServe(endpointFailover)
-    } catch (e: Throwable) {
-      cause = e
-      throw e
+      if (!grpcService.connectAgent()) {
+        metrics { connectCount.labelValues(launchId, AgentMetrics.FAILURE).inc() }
+        return
+      }
+      registerAndServe(endpointFailover, attempt)
     } finally {
-      // Not as the agent stops: its dashboard is stopping too.
-      if (isRunning)
-        activityLog?.record(
-          AgentActivityKind.DISCONNECTED,
-          detail = listOfNotNull(proxyHost, cause?.let { ShownFailure.of(it).message }).joinToString(": "),
-          group = proxyHost,
-        )
+      // Ended by then, unless the agent's stop cut the attempt short, which shows what it held.
+      attempt?.release()
     }
     logger.info { "connectToProxy() completed" }
   }
 
-  // Registers the agent and its paths on the connection connectAgent made, then serves it until it ends, and returns
-  // the failure that ended it, the first of its tasks to fail, or null for one that ended without a failure.
-  private suspend fun registerAndServe(endpointFailover: EndpointFailover): Throwable? {
+  // Registers the agent and its paths on the connection connectAgent made, then serves it until it ends. One that
+  // registered both ends as a disconnect in the activity feed, with the failure that ended it, the first of its tasks
+  // to fail, or an exception, which is caught only to name it there, and rethrown. One that failed before is a failed
+  // connect, logged as one, when it's news and then as a repeat, rather than at WARN on every attempt, unless the agent
+  // is stopping (see AgentGrpcService.registrationFailed); a JVM Error propagates, to stop the agent.
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun registerAndServe(
+    endpointFailover: EndpointFailover,
+    attempt: AgentActivityLog.Hold?,
+  ) {
     // The connect attempt counts once the proxy has answered the registration: a proxy that took the connection and
     // then refused the agent counted as a success.
-    runCatchingCancellable { grpcService.registerAgent(initialConnectionLatch) }
+    runCatchingNonFatal { grpcService.registerAgent(initialConnectionLatch) }
       .also { result ->
         val outcome = connectOutcome(result.exceptionOrNull())
         metrics { connectCount.labelValues(launchId, outcome).inc() }
-      }.getOrThrow()
+      }.onFailure { e ->
+        grpcService.registrationFailed("registerAgent", e, attempt)
+        return
+      }
     // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
     val connectionContext = newConnectionContext()
+    var pathsRegistered = false
+    var cause: Throwable? = null
     try {
-      pathManager.registerPaths()
+      runCatchingNonFatal { pathManager.registerPaths() }
+        .onFailure { e ->
+          grpcService.registrationFailed("registerPaths", e, attempt)
+          return
+        }
       endpointFailover.registrationSucceeded()
+      grpcService.registrationSucceeded()
+      attempt?.release()
+      pathsRegistered = true
       // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
       // subsequent countDowns, so only the first successful connect cycle matters.
       initialPathsRegisteredLatch.countDown()
 
       liveConnection.store(connectionContext)
       coroutineScope { launchConnectionTasks(connectionContext) }
+      cause = connectionContext.endedBy
+    } catch (e: Throwable) {
+      cause = e
+      throw e
     } finally {
       liveConnection.store(null)
-      // Only a connection that registered ends as a disconnect, as only one that did counted as a connect.
+      // Only a connection that registered the agent ends as a disconnect, as only one that did counted as a connect.
       if (isRunning)
         metrics { disconnectCount.labelValues(launchId).inc() }
+      // Only one that registered its paths too ends as a disconnect in the activity feed, and not as the agent stops:
+      // its dashboard is stopping too.
+      if (pathsRegistered && isRunning)
+        activityLog?.record(
+          AgentActivityKind.DISCONNECTED,
+          detail = listOfNotNull(proxyHost, cause?.let { ShownFailure.of(it).message }).joinToString(": "),
+          group = proxyHost,
+        )
     }
-    return connectionContext.endedBy
   }
 
   // Each task runs for the connection's lifetime; on completion launchConnectionTask closes the shared

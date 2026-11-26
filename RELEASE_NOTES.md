@@ -46,6 +46,18 @@ its own that holds them all, with Prometheus and Grafana.
   page show the proxy's dashboard, from its own origin. Behind a reverse proxy, pass `/screens` on as well as
   `/dashboard`. The basics demo's tour now runs in it.
 
+### Bug Fixes
+
+- **A proxy that keeps refusing an agent no longer floods its Activity view.** An agent whose proxy took its connects
+  and refused it, or every one of its paths, added about three lines to its dashboard's Activity view every few
+  seconds. The view now shows the refusal once, as `connect failed`, again only when the reason changes, and the
+  connect once the proxy takes the agent. The agent's log warns once instead of on every retry, and its Connection
+  view shows it failing, with the proxy's reason.
+- **The Activity view counts a burst's paths right.** A line for more than three paths could count one of them again
+  each time it came back, so the line said it concerned more paths than it did.
+- **The Activity view says when discovery works again.** After a `discovery failed` line, the agent now adds a
+  `discovery recovered` line once it reads the discovery file again, so the failure no longer looks current.
+
 ### Behavior Changes
 
 - **A failure handler that throws no longer escapes `startIfConfigured()`.** The `onFailure` it's given is guarded as
@@ -59,7 +71,14 @@ its own that holds them all, with Prometheus and Grafana.
 
 - **The examples serve the agent's metrics without a port.** `examples/simple.conf`, which the Quick Start runs, has
   the agent serve its own metrics at `/agent_metrics` with `agent.metrics.proxyPath`, so its metrics port stays off,
-  as do the basics and network demos' agents.
+  as do the basics and network demos' agents, `examples/federate.conf`'s, and the Compose stack's
+  (`etc/compose/proxy.yml`), which no longer publishes port 8083. `examples/prom-agent.conf`, for debugging, serves
+  them at `/agent_metrics` too, and keeps the port on.
+- **The `docker run` examples keep their ports off the network.** The quick-start commands no longer publish the
+  agents' port, 50051, which their agent reaches over the shared Docker network, and publish the scrape, admin, and
+  metrics ports on `127.0.0.1` only. The Docker page's production example, for agents on other hosts, publishes 50051
+  with TLS and a token. For a Prometheus on another host, publish the scrape port on a private address instead, such
+  as `-p 10.0.0.5:8080:8080`.
 
 ## 4.7.0
 

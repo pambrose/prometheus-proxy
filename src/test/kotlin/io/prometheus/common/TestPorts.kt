@@ -295,6 +295,10 @@ object TestPorts {
   const val AGENT_START_TIMEOUT_ADMIN_PORT = 9709
   const val AGENT_START_TIMEOUT_DASHBOARD_PORT = 9762
 
+  // AgentRefusedConnectTest: the dashboard of an agent whose proxy, a stand-in served in-process, takes its connects
+  // and refuses it, so the agent keeps an activity feed.
+  const val AGENT_REFUSED_CONNECT_DASHBOARD_PORT = 9763
+
   // DashboardPushTest: a DashboardServer per case, serving a site the spec stands in for, with no proxy or agent.
   const val DASHBOARD_PUSH_CHANGE_PORT = 11410
   const val DASHBOARD_PUSH_COLLECT_FAILURE_PORT = 11411
