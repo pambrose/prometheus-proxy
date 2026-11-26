@@ -180,8 +180,11 @@ class ScreensHtmlTest : StringSpec() {
         this shouldContain ScreensCss.CSS
         indexOf(ScreensCss.CSS) shouldBeGreaterThan indexOf(DashboardCss.CSS)
         this shouldContain "<script>${ScreensScript.JS}</script>"
-        // A page of its own: no socket, which the dashboard's pages open.
+        // A page of its own: no socket, which the dashboard's pages open, and no htmx, which nothing on it uses.
         this shouldNotContain "hx-ws:connect"
+        this shouldNotContain "htmx.min.js"
+        this shouldNotContain "hx-ws.min.js"
+        this shouldNotContain "htmx-config"
       }
     }
 
@@ -200,6 +203,11 @@ class ScreensHtmlTest : StringSpec() {
         .filterNot { it.endsWith(".view ") || it.endsWith("a.screen") }
         .count() shouldBe 0
       css shouldContain ".view .down {"
+    }
+
+    // As tall as the theme button beside them on a touch screen.
+    "the layout buttons should be as tall as the bar's other buttons under a coarse pointer" {
+      ScreensCss.CSS shouldContain ".layouts button, .handoff button { height:46px; }"
     }
 
     // The dot takes the icon's place in the dashboards' own tabs, which are reused, not restyled.

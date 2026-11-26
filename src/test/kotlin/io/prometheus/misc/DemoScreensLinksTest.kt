@@ -35,13 +35,36 @@ import java.io.File
 // as the page parses it (the spec's Links section) and name only the proxy's tab, the grid, or a screen proxy.conf
 // lists.
 class DemoScreensLinksTest : StringSpec() {
-  // The screens' ids, from proxy.conf, read without the environment, as each url is a default overridden by ${?…}.
+  // The screens' ids, from proxy.conf, read without the environment, as each url is a default overridden by ${?…},
+  // and checked as the proxy checks them at startup, so a url, start, or id the page can't use fails here too.
   private val screenIds: Set<String> by lazy {
     val config =
       ConfigFactory
         .parseFile(File(DEMO_DIR, "config/proxy.conf"))
         .resolve(ConfigResolveOptions.defaults().setUseSystemEnvironment(false))
-    config.getConfigList("proxy.dashboard.screens").map { Screen.idOf(it.getString("name")) }.toSet()
+    val entries =
+      config.getConfigList("proxy.dashboard.screens").map {
+        Screen.Entry(
+          name = it.getString("name"),
+          url = if (it.hasPath("url")) it.getString("url") else "",
+          start = if (it.hasPath("start")) it.getString("start") else "",
+        )
+      }
+    Screen.parseAll(entries).map { it.id }.toSet()
+  }
+
+  private fun isScreen(id: String) = id == Screen.PROXY_ID || id in screenIds
+
+  // A link's panes, split as the page splits them (ScreensScript's splitPanes): at the first + that a screen's id
+  // follows, alone or before its path, since a + elsewhere is part of a pane's query.
+  private fun panes(link: String): List<String> {
+    var at = link.indexOf('+')
+    while (at >= 0) {
+      val rest = link.substring(at + 1)
+      if (isScreen(rest.substringBefore('/'))) return listOf(link.substring(0, at), rest)
+      at = link.indexOf('+', at + 1)
+    }
+    return listOf(link)
   }
 
   // Each file's links, the text after /screens#: demo.sh names the page $SCREENS_URL, and the docs its default URL.
@@ -56,15 +79,21 @@ class DemoScreensLinksTest : StringSpec() {
   // Why the page can't follow [link], or null when it can: all, <id>, <id>/<path>, or two of those joined by +.
   private fun problem(link: String): String? {
     if (link == Screen.ALL_ID) return null
-    val panes = link.split('+')
-    if (panes.size > 2) return "more than two panes"
-    val unknown = panes.map { it.substringBefore('/') }.filterNot { it == Screen.PROXY_ID || it in screenIds }
+    val unknown = panes(link).map { it.substringBefore('/') }.filterNot(::isScreen)
     return if (unknown.isEmpty()) null else "no screen ${unknown.joinToString()} in proxy.conf"
   }
 
   init {
     "proxy.conf should list the demo's screens" {
       screenIds.shouldNotBeEmpty()
+    }
+
+    // As the page splits a link, so a + in a pane's query, as a search for "agent rogue" writes it, isn't a second
+    // pane.
+    "a link should split into panes only at a + that a screen's id follows" {
+      panes("proxy/paths?problems=1+grafana") shouldBe ["proxy/paths?problems=1", "grafana"]
+      panes("proxy/activity?q=agent+rogue") shouldBe ["proxy/activity?q=agent+rogue"]
+      panes("agent-east+grafana/d/x?var=a+b") shouldBe ["agent-east", "grafana/d/x?var=a+b"]
     }
 
     "each of the demo's files should link into the screens page" {

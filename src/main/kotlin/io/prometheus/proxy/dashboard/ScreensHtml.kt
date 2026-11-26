@@ -79,7 +79,11 @@ internal object ScreensHtml {
     val proxy = Screen(id = Screen.PROXY_ID, name = page.proxyName, url = page.routeBase.ifEmpty { "/" }, start = "")
     val all = listOf(proxy) + page.screens
     attributes["lang"] = "en"
-    head { dashboardHead("$BRAND · ${page.proxyName}", page.routeBase) { style { unsafe { raw(ScreensCss.CSS) } } } }
+    head {
+      dashboardHead("$BRAND · ${page.proxyName}", page.routeBase, htmx = false) {
+        style { unsafe { raw(ScreensCss.CSS) } }
+      }
+    }
     body("screens") {
       div("bar") {
         brand(BRAND)
@@ -158,7 +162,7 @@ internal object ScreensHtml {
     all: List<Screen>,
     probe: String,
   ) {
-    val start = startUrl(screen)
+    val start = screen.startUrl
     section("pane") {
       attributes["data-screen"] = screen.id
       div("pane-bar") {
@@ -194,9 +198,4 @@ internal object ScreensHtml {
       }
     }
   }
-
-  // Where a screen opens, its url and its start with one slash between, which its frame's data-start gives the script
-  // and Open in a tab starts at.
-  private fun startUrl(screen: Screen): String =
-    if (screen.start.startsWith("/")) screen.url.trimEnd('/') + screen.start else screen.url + screen.start
 }

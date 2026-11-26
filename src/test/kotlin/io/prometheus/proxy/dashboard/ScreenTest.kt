@@ -47,6 +47,17 @@ class ScreenTest : StringSpec() {
         .map { it.id to it.start } shouldBe ["grafana" to "/d/x?kiosk", "agent-east" to ""]
     }
 
+    // One join for the page, the Open in a tab link, and the startup log, so none doubles a slash.
+    "a screen should start at its url and start joined with one slash, and be logged so" {
+      Screen.parseAll([grafana.copy(url = "http://g:3000/", start = "/alerts")]).single().apply {
+        startUrl shouldBe "http://g:3000/alerts"
+        logged shouldBe "Grafana (http://g:3000/alerts)"
+      }
+      Screen.parseAll([grafana.copy(url = "http://g:3000/", start = "?kiosk")]).single().startUrl shouldBe
+        "http://g:3000/?kiosk"
+      Screen.parseAll([grafana.copy(start = "")]).single().startUrl shouldBe "http://g:3000"
+    }
+
     "a parsed screen should keep its name and url as listed" {
       Screen.parseAll([grafana]).single() shouldBe
         Screen(id = "grafana", name = "Grafana", url = "http://g:3000", start = "/d/x?kiosk")
@@ -96,11 +107,16 @@ class ScreenTest : StringSpec() {
     }
 
     "a url that isn't an absolute http or https URL should be refused" {
-      ["ftp://x", "localhost:3000", "javascript:alert(1)", "/grafana", "http://", "http://g g:3000"].forEach { url ->
+      ["ftp://x", "localhost:3000", "javascript:alert(1)", "/grafana", "http://", "http://g g:3000", "http://:8080"]
+        .forEach { url ->
         refusal(grafana.copy(url = url)) shouldBe
           "proxy.dashboard.screens screen 'Grafana' has a url that isn't an absolute http or https URL: $url"
-      }
-      Screen.parseAll([grafana.copy(url = "HTTPS://g.example.com")]) shouldHaveSize 1
+        }
+      // A host the URI class can't parse as a server, such as one with an underscore, is still a host.
+      Screen.parseAll(
+        [grafana.copy(url = "HTTPS://g.example.com"), grafana.copy(name = "e", url = "http://agent_east:8095")],
+      )
+        .shouldHaveSize(2)
     }
 
     // The page's HTML carries each url, for anyone who can read the dashboard.

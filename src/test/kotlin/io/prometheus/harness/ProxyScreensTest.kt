@@ -45,9 +45,9 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * The proxy's screens page on a real proxy, over the Netty transport: `/screens` with screens listed and without,
- * behind the dashboard's login, which now sets its cookie at the root and returns to the page, and the framing the
- * dashboard sends with `framingEnabled = false` once the page has to frame it. The page's markup is
- * `ScreensHtmlTest`'s.
+ * behind the dashboard's login, which sets its cookie at `/screens` as well as the dashboard's path and returns to the
+ * page, and the framing the dashboard sends with `framingEnabled = false` once the page has to frame it. The page's
+ * markup is `ScreensHtmlTest`'s.
  */
 class ProxyScreensTest : StringSpec() {
   private val base = "http://$LOOPBACK_HOST:$DASHBOARD_PORT"
@@ -84,7 +84,7 @@ class ProxyScreensTest : StringSpec() {
   private suspend fun HttpClient.page(path: String): HttpResponse =
     get("$base$path") { header(HttpHeaders.Accept, "text/html,application/xhtml+xml,*/*;q=0.8") }
 
-  // The values of the response's headers named [name] that hold frame-ancestors.
+  // The response's Content-Security-Policy values that hold frame-ancestors.
   private fun HttpResponse.frameAncestors() =
     headers.getAll("Content-Security-Policy").orEmpty().filter { "frame-ancestors" in it }
 

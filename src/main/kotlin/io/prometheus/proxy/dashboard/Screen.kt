@@ -37,8 +37,14 @@ internal data class Screen(
   /** The path the screen opens on, appended to [url], or empty to open on the url itself. */
   val start: String,
 ) {
+  /**
+   * Where the screen opens: its [url] and its [start] with one slash between, which the page loads first and its Open
+   * in a tab link starts at.
+   */
+  val startUrl: String get() = if (start.startsWith("/")) url.trimEnd('/') + start else url + start
+
   /** How the startup log names the screen: by its name, with where it opens, its url masked as every logged URL is. */
-  val logged: String get() = "$name (${sanitizeUrl(url + start)})"
+  val logged: String get() = "$name (${sanitizeUrl(startUrl)})"
 
   /** How the Settings view shows where the screen is: its url, masked, and the path it opens on, if any. */
   val shown: String get() = sanitizeUrl(url) + if (start.isEmpty()) "" else " (opens ${sanitizeUrl(start)})"
@@ -120,13 +126,17 @@ internal data class Screen(
         } catch (e: URISyntaxException) {
           throw IllegalArgumentException(entry.notWebUrl, e)
         }
-      val authority = uri.rawAuthority
-      require(uri.scheme?.lowercase() in SCHEMES && !authority.isNullOrEmpty()) { entry.notWebUrl }
+      val authority = uri.rawAuthority.orEmpty()
+      require(uri.scheme?.lowercase() in SCHEMES && hasHost(authority)) { entry.notWebUrl }
       require(uri.rawUserInfo == null && '@' !in authority) {
         "${entry.described} has a username or password in its url, which the page would show to anyone who can " +
           "read the dashboard"
       }
     }
+
+    // Whether a URL's authority names a host: not empty, and not a port alone, as in http://:8080, whose host the URI
+    // class leaves null, as it does a host it can't parse as a server, such as one with an underscore, which is a host.
+    private fun hasHost(authority: String) = authority.isNotEmpty() && !authority.startsWith(':')
 
     // How a refusal names the screen.
     private val Entry.described: String get() = "$SETTING screen '$name'"

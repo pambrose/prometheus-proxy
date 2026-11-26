@@ -718,14 +718,15 @@ Three support helpers also live here (not test classes themselves):
   the name in lowercase with each run of other characters a dash; `start` empty by default and the config's order kept;
   and each refusal at startup, naming the entry: a blank name (by position), one with no letter or digit, one over 64
   characters, two names with one id, the ids `proxy` and `all`, an empty url (an unset variable), one that isn't an
-  absolute http or https URL, one with a username or password, a host the URI class can't parse as a server included, a
+  absolute http or https URL or names a port with no host, one with a username or password, a host the URI class can't parse as a server included, a
   start that doesn't begin with `/` or `?`, and more than 32 screens
 - **ScreensHtmlTest** (`dashboard/`) — the screens page's markup (`ScreensHtml`): a tab and a pane per screen in the
   config's order after the proxy's, which is named for the proxy and current; each tab's state in words; the layout
   buttons and the stage; each frame with no `src`, its url and start in data attributes, and its down notice; each
   pane's picker and Open in a tab; the handoff's notice, hidden; a name with HTML or quotes escaped in its tab, pane,
   frame title, and id; the proxy's pane at `/` at a root mount; the theme button, and Log out only with a login; the
-  dashboards' head, with the page's styles after it and no socket; no bare dark rule; the tab's 7px dot coloured by its
+  dashboards' head, with the page's styles after it and no socket or htmx; its touch-size buttons as tall as the
+  theme button; no bare dark rule; the tab's 7px dot coloured by its
   state; and the down notice styled only inside its view, apart from a tab's `down` class
 - **ScreensScriptTest** (`dashboard/`) — the screens page's script (`ScreensScript`), checked as DashboardScriptTest
   checks the dashboards': links parsed as `all`, `<id>`, `<id>/<path>`, and `<a>+<b>`, an unknown id falling back to the
@@ -1029,8 +1030,9 @@ These support helpers also live here (not test classes themselves):
   `NEEDS_RELEASE_AFTER` is a release no later than the docs'
 - **DemoScreensLinksTest** — every link into the proxy's screens page in the basics demo's `demo.sh` (`$SCREENS_URL#…`),
   README, and docs page (`http://localhost:8094/screens#…`) parses as the page parses it and names only the proxy's tab,
-  the grid, or a screen `demos/basics/config/proxy.conf` lists (read without the environment), each file has one, and
-  the links include a screen, a screen's view, and two screens side by side
+  the grid, or a screen `demos/basics/config/proxy.conf` lists (read without the environment, and checked as the proxy
+  checks it at startup), split into panes as the page splits them, each file has one, and the links include a
+  screen, a screen's view, and two screens side by side
 - **DemoTourTablesTest** — each demo's README and its page on the docs site have a What This Demo Shows table that
   names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
   of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the

@@ -114,7 +114,7 @@ internal object ScreensCss {
       body.screens .nav { flex-basis:100%; }
     }
     @media (pointer: coarse) {
-      .layouts button, .handoff button { height:44px; }
+      .layouts button, .handoff button { height:46px; }
     }
     """.trimIndent()
 }
