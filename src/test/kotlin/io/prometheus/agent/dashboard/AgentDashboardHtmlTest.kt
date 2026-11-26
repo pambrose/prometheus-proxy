@@ -497,6 +497,17 @@ class AgentDashboardHtmlTest : StringSpec() {
       }
     }
 
+    // In one box after the tabs, so a bar too narrow for them beside the tabs moves them above the tabs together
+    // (DashboardThemeTest pins the rule).
+    "the agent's bar tail should hold the status, then the bar's end, after the tabs" {
+      page(snapshot()).replace(Regex(">\\s+<"), "><").apply {
+        val tail = substringAfter("""<div class="bar-tail">""", missingDelimiterValue = "")
+        tail shouldStartWith """<span class="bar-right" id="${DashboardPage.STATUS_ID}""""
+        tail shouldContain """<div class="bar-end">"""
+        indexOf("""<nav class="nav"""") shouldBeLessThan indexOf("""<div class="bar-tail">""")
+      }
+    }
+
     // An agent's name is its config's, any length: past the limit the bar cuts it, and its tooltip gives it whole.
     "a name too long for the bar should be cut there, and given whole in its tooltip" {
       val long = "a".repeat(DashboardLogo.BRAND_MAX_CHARS)

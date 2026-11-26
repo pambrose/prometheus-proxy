@@ -61,6 +61,7 @@ import kotlinx.html.unsafe
 import kotlin.time.Clock
 import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.common.dashboard.DashboardPage.barEnd
+import io.prometheus.common.dashboard.DashboardPage.barTail
 import io.prometheus.common.dashboard.SettingsHtml.settingsInner
 
 /**
@@ -155,9 +156,11 @@ internal object ProxyDashboardHtml {
       div("bar") {
         brand(snapshot.dashboardName)
         renderNav(routeBase, layout)
-        renderStatus(snapshot)
-        if (snapshot.screensPage) screensLink()
-        barEnd(loginEnabled, routeBase)
+        barTail {
+          renderStatus(snapshot)
+          if (snapshot.screensPage) screensLink()
+          barEnd(loginEnabled, routeBase)
+        }
       }
       announcer()
 

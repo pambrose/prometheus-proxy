@@ -25,9 +25,11 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.dashboard.DashboardPage.barEnd
+import io.prometheus.common.dashboard.DashboardPage.barTail
 import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.themeButton
 import kotlinx.html.div
+import kotlinx.html.span
 import kotlinx.html.stream.createHTML
 import kotlin.math.pow
 
@@ -111,6 +113,30 @@ class DashboardThemeTest : StringSpec() {
         this shouldNotContain "aria-pressed"
         this shouldNotContain "title="
         this shouldNotContain "role=\"group\""
+      }
+    }
+
+    // The status and what follows it keep together: flex wraps a row item by item, so without the box a bar too
+    // narrow for them beside the tabs left the theme button alone on a row, or drew the status's last stat over the
+    // tabs. wrap-reverse stacks the bar's rows from its floor up, so the tail goes above and the tabs keep the rule;
+    // its floor, its widest stat and buttons, is where it leaves the tabs' row, and below 720px the narrow layout
+    // takes over, with no floor, so a long agent endpoint can't widen a phone's page.
+    "the bar's tail should hold what it's given in one box, which moves above the tabs, whole, when the bar is narrow" {
+      createHTML(prettyPrint = false).div {
+        barTail {
+          span("bar-right") { +"status" }
+          barEnd(loginEnabled = false, routeBase = "/dashboard")
+        }
+      } shouldBe
+        """<div><div class="bar-tail"><span class="bar-right">status</span><div class="bar-end">""" +
+        """<button type="button" class="theme" id="${DashboardPage.THEME_BUTTON_ID}" """ +
+        """aria-label="${DashboardPage.THEME_LABEL}"></button></div></div></div>"""
+      DashboardCss.CSS.apply {
+        this shouldContain ".bar:has(> .bar-tail) { flex-wrap:wrap-reverse; align-items:flex-start; row-gap:4px; }"
+        this shouldContain ".bar-tail { display:flex; align-items:flex-end; justify-content:flex-end; gap:10px;"
+        this shouldContain "flex:1 1 380px; min-width:min-content; }"
+        this shouldContain ".bar, .bar:has(> .bar-tail) { flex-wrap:wrap; align-items:flex-end; row-gap:4px; }"
+        this shouldContain ".bar-tail { min-width:0; }"
       }
     }
 

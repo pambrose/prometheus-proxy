@@ -142,6 +142,17 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardCss.SCREENS_LINK_CSS shouldContain ".screens-link"
     }
 
+    // In one box after the tabs, so a bar too narrow for them beside the tabs moves them above the tabs together
+    // (DashboardThemeTest pins the rule): at about 760 to 900px, the status's last stat was drawn over the tabs.
+    "the bar's tail should hold the status, the Screens link, then the bar's end, after the tabs" {
+      renderFullPage(snapshot().copy(screensPage = true)).replace(Regex(">\\s+<"), "><").apply {
+        val tail = substringAfter("""<div class="bar-tail">""", missingDelimiterValue = "")
+        tail shouldStartWith """<span class="bar-right" id="${DashboardPage.STATUS_ID}""""
+        tail.indexOf("class=\"screens-link\"") shouldBeLessThan tail.indexOf("class=\"bar-end\"")
+        indexOf("""<nav class="nav"""") shouldBeLessThan indexOf("""<div class="bar-tail">""")
+      }
+    }
+
     "an agent row should carry the htmx attributes that drive selection" {
       val html = ProxyDashboardHtml.pushFragment(snapshot(), selectedId = null, routeBase = "/dashboard")
 

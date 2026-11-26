@@ -58,6 +58,7 @@ import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.agent.dashboard.AgentActivityHtml.renderActivity
 import io.prometheus.agent.dashboard.AgentActivityHtml.activityTable
 import io.prometheus.common.dashboard.DashboardPage.barEnd
+import io.prometheus.common.dashboard.DashboardPage.barTail
 import io.prometheus.common.dashboard.SettingsHtml.settingsInner
 
 /**
@@ -148,8 +149,10 @@ internal object AgentDashboardHtml {
       div("bar") {
         brand(snapshot.dashboardName)
         tabs(AgentLayout.entries, layout, routeBase)
-        span("bar-right") { statusInner(snapshot, oob = false) }
-        barEnd(loginEnabled, routeBase)
+        barTail {
+          span("bar-right") { statusInner(snapshot, oob = false) }
+          barEnd(loginEnabled, routeBase)
+        }
       }
       announcer()
       when (layout) {
