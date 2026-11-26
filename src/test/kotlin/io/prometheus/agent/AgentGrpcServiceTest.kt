@@ -501,6 +501,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
     // The agent's dashboard: the latest failure per endpoint, its URLs redacted, until that endpoint connects, and
     // whether the latest attempt failed, which a success on any endpoint clears, so a failover isn't shown as failing.
+    // A connect succeeds once the proxy has registered the agent and its paths, as Agent.registerAndServe says.
     "a failed connect should be kept for the dashboard, redacted, and a success should clear the failing flag" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
@@ -515,6 +516,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
         service.connectAgent().shouldBeTrue()
+        service.registrationSucceeded()
         service.lastConnectFailed.shouldBeFalse()
         service.connectFailuresByEndpoint.keys.shouldBeEmpty()
         service.connects shouldBe 1
@@ -545,7 +547,10 @@ class AgentGrpcServiceTest : StringSpec() {
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
           unavailable andThenThrows unavailable andThenThrows deadline andThen EMPTY_INSTANCE andThenThrows deadline
 
-        val events = captureLogs<AgentGrpcService>(Level.DEBUG) { repeat(5) { service.connectAgent() } }
+        val events =
+          captureLogs<AgentGrpcService>(Level.DEBUG) {
+            repeat(5) { if (service.connectAgent()) service.registrationSucceeded() }
+          }
 
         events.filter { it.level == Level.WARN }.map { it.formattedMessage }.let { warnings ->
           warnings.size shouldBe 3
@@ -641,6 +646,7 @@ class AgentGrpcServiceTest : StringSpec() {
             every { service.agent.proxyHost } returns "second:$PROXY_HTTP_PORT"
             coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
             service.connectAgent().shouldBeTrue()
+            service.registrationSucceeded()
             every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
             coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws refused
             repeat(3) { service.connectAgent().shouldBeFalse() }
@@ -2187,6 +2193,7 @@ class AgentGrpcServiceTest : StringSpec() {
         every { service.agent.proxyHost } returns "second:$PROXY_HTTP_PORT"
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
         service.connectAgent().shouldBeTrue()
+        service.registrationSucceeded()
         every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws down
         repeat(2) { service.connectAgent().shouldBeFalse() }
@@ -2194,6 +2201,95 @@ class AgentGrpcServiceTest : StringSpec() {
 
       log.snapshot().entries.map { it.kind } shouldBe
         [AgentActivityKind.CONNECT_FAILED, AgentActivityKind.CONNECTED, AgentActivityKind.CONNECT_FAILED]
+    }
+
+    // A proxy that takes the connect call and then refuses the agent, as Agent.registerAndServe reports it: the
+    // agent is failing, with the proxy's reason, on its dashboard, until a registration succeeds, which counts as the
+    // connect.
+    "a refused registration should be kept as the endpoint's failure until a registration succeeds" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, _ ->
+        service.connectAgent().shouldBeTrue()
+        service.registrationFailed(
+          "registerAgent",
+          RequestFailureException.fromProxy("registerAgent", "Invalid agentId: agent-1 (registerAgent)"),
+          null,
+        )
+
+        service.lastConnectFailed.shouldBeTrue()
+        service.connects shouldBe 0
+        service.connectFailuresByEndpoint.values.single().message shouldContain "Invalid agentId"
+
+        service.connectAgent().shouldBeTrue()
+        service.registrationSucceeded()
+
+        service.lastConnectFailed.shouldBeFalse()
+        service.connects shouldBe 1
+        service.connectFailuresByEndpoint.keys.shouldBeEmpty()
+      }
+    }
+
+    // Each attempt the proxy refuses again connects, and its refusal names the agent ID that connect gave it: the feed
+    // keeps the first attempt's lines and those of one that fails for another reason, and drops the rest, held until
+    // then, so a proxy that keeps refusing the agent is not three lines every reconnectPauseSecs.
+    "a refused registration should be in the feed with its attempt's lines when it's news, and drop them when not" {
+      val log = AgentActivityLog(capacity = 20)
+      withStubbedService("localhost:$PROXY_AGENT_PORT", activityLog = log) { service, _ ->
+        suspend fun refusedAttempt(
+          step: String,
+          e: Throwable,
+        ) {
+          val attempt = log.holdAttempt()
+          service.connectAgent().shouldBeTrue()
+          service.registrationFailed(step, e, attempt)
+        }
+        (1..3).forEach { i ->
+          refusedAttempt(
+            "registerAgent",
+            RequestFailureException.fromProxy("registerAgent", "Invalid agentId: agent-$i (registerAgent)"),
+          )
+        }
+        repeat(2) { refusedAttempt("registerPaths", RequestFailureException("Proxy rejected all 1 static paths")) }
+        val attempt = log.holdAttempt()
+        service.connectAgent().shouldBeTrue()
+        service.registrationSucceeded()
+        attempt.release()
+      }
+
+      log.snapshot().entries.map { it.kind to it.detail } shouldBe
+        [
+          AgentActivityKind.CONNECTED to "localhost:$PROXY_AGENT_PORT",
+          AgentActivityKind.CONNECT_FAILED to
+            "localhost:$PROXY_AGENT_PORT: RequestFailureException: Proxy rejected all 1 static paths",
+          AgentActivityKind.CONNECTED to "localhost:$PROXY_AGENT_PORT",
+          AgentActivityKind.CONNECT_FAILED to
+            "localhost:$PROXY_AGENT_PORT: RequestFailureException: registerAgent() - Invalid agentId: agent-1 " +
+            "(registerAgent)",
+          AgentActivityKind.CONNECTED to "localhost:$PROXY_AGENT_PORT",
+        ]
+    }
+
+    // The proxy's refusal is its answer, not a fault: one WARN, without a stack trace, and the repeats at DEBUG, as a
+    // connect call's failure is logged. Each attempt logged a WARN.
+    "a refused registration that repeats should log one WARN, without its stack trace, and the rest at DEBUG" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, _ ->
+        val events =
+          captureLogs<AgentGrpcService>(Level.DEBUG) {
+            (1..3).forEach { i ->
+              service.connectAgent().shouldBeTrue()
+              service.registrationFailed(
+                "registerAgent",
+                RequestFailureException.fromProxy("registerAgent", "Invalid agentId: agent-$i (registerAgent)"),
+                null,
+              )
+            }
+          }
+
+        events.filter { it.level == Level.WARN }.single().apply {
+          formattedMessage shouldContain "Invalid agentId: agent-1"
+          throwableProxy.shouldBeNull()
+        }
+        events.count { it.level == Level.DEBUG && "Cannot connect to proxy" in it.formattedMessage } shouldBe 2
+      }
     }
 
     // Leaving the primary is the news; cycling on through the backups during the same outage is not.

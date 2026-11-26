@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.ints.shouldBeLessThan
@@ -112,6 +113,23 @@ class AgentActivityLogTest : StringSpec() {
         [FAILED_OVER to 1, CONNECTED to 1, FAILED_OVER to 3]
     }
 
+    // Discovery retrying the paths the proxy refused, within one burst: a path past the three the line names is one of
+    // the paths it counts, however often it comes back, as the line's own three are.
+    "a burst should count each of its paths once, those past the sample too" {
+      val clock = TestClock()
+      val log = AgentActivityLog(capacity = 10, clock = clock)
+      listOf("p1", "p2", "p3", "p4", "p5", "p4", "p5", "p1").forEach { path ->
+        log.record(PATH_REFUSED, path = path, detail = "not authorized", group = "NOT_AUTHORIZED")
+        clock += 0.5.seconds
+      }
+
+      log.snapshot().entries.single().apply {
+        count shouldBe 8
+        paths shouldContainExactly ["p1", "p2", "p3"]
+        pathCount shouldBe 5
+      }
+    }
+
     // A path refused again and again is one path, however many times.
     "a repeat should count the event again, and not its path" {
       val clock = TestClock()
@@ -142,6 +160,79 @@ class AgentActivityLogTest : StringSpec() {
 
       log.snapshot().entries.map { it.kind } shouldContainExactly
         [PATH_REGISTERED, CONNECTED, DISCONNECTED, PATH_REGISTERED, CONNECTED]
+    }
+
+    // A connect attempt's own lines wait for its outcome: shown, in order, once it registers or fails for a new reason,
+    // and moving the change count then, once, so a page is sent the feed when they appear.
+    "an attempt's held lines should reach the feed only when released, in order, moving the change count once" {
+      val clock = TestClock()
+      val log = AgentActivityLog(capacity = 10, clock = clock)
+      val attempt = log.holdAttempt()
+      log.record(CONNECTED, detail = "proxy:50051", group = "proxy:50051")
+      (1..4).forEach { i -> log.record(PATH_REGISTERED, path = "p$i", detail = "static", group = "STATIC") }
+      log.record(PATH_REFUSED, path = "denied", detail = "not authorized", group = "NOT_AUTHORIZED")
+
+      log.snapshot().apply {
+        entries.shouldBeEmpty()
+        changeCount shouldBe 0
+      }
+
+      attempt.release()
+      log.snapshot().apply {
+        entries.map { it.kind } shouldContainExactly [PATH_REFUSED, PATH_REGISTERED, CONNECTED]
+        entries[1].apply {
+          count shouldBe 4
+          pathCount shouldBe 4
+        }
+        changeCount shouldBe 1
+      }
+      log.changes.value shouldBe 1
+    }
+
+    // An attempt that failed as the last one did: its lines say nothing the feed doesn't, and a page isn't sent again.
+    "a discarded attempt's lines should never reach the feed, nor move the change count" {
+      val log = AgentActivityLog(capacity = 10)
+      val attempt = log.holdAttempt()
+      log.record(CONNECTED, detail = "proxy:50051", group = "proxy:50051")
+      log.record(PATH_REFUSED, path = "denied", detail = "not authorized", group = "NOT_AUTHORIZED")
+      attempt.discard()
+      attempt.release()
+
+      log.snapshot().apply {
+        entries.shouldBeEmpty()
+        changeCount shouldBe 0
+      }
+    }
+
+    // Only the attempt's own kinds wait: a failure, a failover, or a filter letting a scrape through is news at once.
+    "lines of other kinds should reach the feed while an attempt holds its own, and lines after the hold at once" {
+      val log = AgentActivityLog(capacity = 10)
+      val attempt = log.holdAttempt()
+      log.record(CONNECTED, detail = "proxy:50051", group = "proxy:50051")
+      log.record(CONNECT_FAILED, detail = "proxy:50051: refused", group = "proxy:50051 refused")
+      log.record(FAILED_OVER, detail = "from proxy:50051 to backup:50051", group = "proxy:50051")
+
+      log.snapshot().entries.map { it.kind } shouldContainExactly [FAILED_OVER, CONNECT_FAILED]
+
+      attempt.discard()
+      log.record(CONNECTED, detail = "backup:50051", group = "backup:50051")
+      log.snapshot().entries.map { it.kind } shouldContainExactly [CONNECTED, FAILED_OVER, CONNECT_FAILED]
+    }
+
+    // One attempt runs at a time; a hold left open, which the agent never does, is released rather than lost, and its
+    // token no longer ends the new one.
+    "a new hold should release one left open, whose release or discard then does nothing" {
+      val log = AgentActivityLog(capacity = 10)
+      val first = log.holdAttempt()
+      log.record(CONNECTED, detail = "proxy:50051", group = "proxy:50051")
+      val second = log.holdAttempt()
+      log.record(PATH_REGISTERED, path = "a", detail = "static", group = "STATIC")
+      first.discard()
+
+      log.snapshot().entries.map { it.kind } shouldContainExactly [CONNECTED]
+
+      second.release()
+      log.snapshot().entries.map { it.kind } shouldContainExactly [PATH_REGISTERED, CONNECTED]
     }
 
     "a failure's reason, from outside the agent, should be cut and its control characters escaped" {

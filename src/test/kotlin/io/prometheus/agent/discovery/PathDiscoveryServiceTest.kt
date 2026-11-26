@@ -66,6 +66,52 @@ class PathDiscoveryServiceTest : StringSpec() {
         ]
     }
 
+    // The feed shows a failure as news, so a read that works again says so, once, as the log's INFO does: otherwise the
+    // failure, the newest discovery line, looks current.
+    "discovery reading the file again after a failure should be one line in the feed, and a success after it none" {
+      val log = AgentActivityLog(capacity = 20)
+      val reads = ArrayDeque([false, true, true])
+      val service =
+        PathDiscoveryService(
+          mockk(relaxed = true),
+          {
+            if (reads.removeFirst())
+              [DiscoveredPath(name = "app", path = "app_metrics", url = "http://app/metrics", labels = "{}")]
+            else
+              throw IOException("missing")
+          },
+          30,
+          log,
+        )
+      repeat(3) { service.reconcileOnce() }
+
+      log.snapshot().entries.map { it.kind.label to it.detail } shouldBe
+        [
+          "discovery recovered" to "1 entry read",
+          "discovery failed" to "IOException: missing",
+        ]
+    }
+
+    // A failure on the last connection's discovery is still the feed's newest word on it, so the new connection's first
+    // good read says it recovered, though each connection starts its discovery afresh.
+    "a read that works on a new connection after the last one's failed should be in the feed as a recovery" {
+      val log = AgentActivityLog(capacity = 20)
+      val reads = ArrayDeque([false, true])
+      val service =
+        PathDiscoveryService(
+          mockk(relaxed = true),
+          { if (reads.removeFirst()) emptyList() else throw IOException("missing") },
+          30,
+          log,
+        )
+      repeat(2) {
+        var ticks = 0
+        service.run { ticks++ < 1 }
+      }
+
+      log.snapshot().entries.map { it.kind.label } shouldBe ["discovery recovered", "discovery failed"]
+    }
+
     // The agent counts each reconcile by outcome, the repeats of a lasting failure included, which the log and the
     // activity feed leave out.
     "every reconcile should be reported by whether it succeeded" {

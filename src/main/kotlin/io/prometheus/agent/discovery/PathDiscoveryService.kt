@@ -50,7 +50,8 @@ internal class PathDiscoveryService(
   private val pathManager: AgentPathManager,
   private val source: PathDiscoverySource,
   private val intervalSecs: Int,
-  // The agent dashboard's activity feed, when the dashboard is on, told of a failure when it is new or changes.
+  // The agent dashboard's activity feed, when the dashboard is on, told of a failure when it is new or changes, and of
+  // the read that works after it.
   private val activityLog: AgentActivityLog? = null,
   // Told how each reconcile went, for the agent's metrics: true for a success.
   private val onReconcile: (succeeded: Boolean) -> Unit = {},
@@ -64,6 +65,12 @@ internal class PathDiscoveryService(
 
   @Volatile
   private var lastFailure: LastFailure? = null
+
+  // Whether the last reconcile failed, which the next that works says it recovered from. Kept across connections, as
+  // lastFailure isn't: the last connection's failure is still the log's and the activity feed's newest word on
+  // discovery. Volatile, as each connection's loop may run on another thread.
+  @Volatile
+  private var failedLast = false
 
   // The paths the source last read successfully, or null before the first good read. The live path map can't be the
   // last-known-good set: every connect clears it, so a reconnect while the file was unreadable registered nothing.
@@ -106,21 +113,27 @@ internal class PathDiscoveryService(
   // a bad tick logs rather than killing discovery. A failed read reconciles the last list read successfully instead: a
   // no-op while those paths are still registered, and it registers them again after a reconnect cleared them.
   // A missing or malformed file fails every tick, so a failure is logged in full at WARN only when it differs from
-  // the last one, and at DEBUG while it repeats; the next success is logged at INFO. A failure with a gRPC status is
-  // compared by its code, since a deadline's description carries its elapsed time, and comparing whole messages logged
-  // a WARN on every poll (November #39). One without a status is compared by class and message: a file's parse error
-  // names its line, so an edit that trades one error for another is news.
+  // the last one, and at DEBUG while it repeats; the next success is logged at INFO, the new connection's first
+  // included, and is in the activity feed, as the failure is, so the failure doesn't look current. A failure with a
+  // gRPC status is compared by its code, since a deadline's description carries its elapsed time, and comparing whole
+  // messages logged a WARN on every poll (November #39). One without a status is compared by class and message: a
+  // file's parse error names its line, so an edit that trades one error for another is news.
   internal suspend fun reconcileOnce() {
     val read = runCatchingNonFatal { source.read() }.onSuccess { lastGoodPaths = it }
     runCatchingNonFatal {
       (read.getOrNull() ?: lastGoodPaths)?.let { pathManager.reconcileDiscoveredPaths(it) }
       read.getOrThrow()
-    }.onSuccess {
-      if (lastFailure != null)
+    }.onSuccess { entries ->
+      if (failedLast) {
         logger.info { "Path discovery reconcile succeeded again" }
+        val entriesRead = if (entries.size == 1) "1 entry read" else "${entries.size} entries read"
+        activityLog?.record(AgentActivityKind.DISCOVERY_RECOVERED, detail = entriesRead)
+      }
       lastFailure = null
+      failedLast = false
       onReconcile(true)
     }.onFailure { e ->
+      failedLast = true
       onReconcile(false)
       val failure = failureKey(e, withMessage = true)
       val shown = ShownFailure.of(e)

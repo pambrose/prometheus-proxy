@@ -269,7 +269,13 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   primary still down; and a failure whose status runs on, as nginx's 504 page does, shown as its first line; a connect
   the proxy refuses with `UNAUTHENTICATED` logged at ERROR, without a stack trace, saying the proxy refused the agent's
   token, or that it sends none, and naming where the token is set, its repeats at DEBUG, again at ERROR every 10
-  minutes and after a connect since, when the activity feed records it once more
+  minutes and after a connect since, when the activity feed records it once more; and a connect whose registration
+  the proxy refuses kept as the endpoint's failure until a registration succeeds, which counts as the connect, in the
+  activity feed with its attempt's held lines when it's news and without them when it repeats, by step, though each
+  refusal names a new agent ID, and logged at WARN once, without a stack trace, its repeats at DEBUG
+- **AgentRefusedConnectTest** — an agent whose proxy, a stand-in served in-process, takes its connects and refuses
+  its registration, then every static path, then neither: its activity feed shows the connect and the failure once per
+  reason, not on every retry, and the connect and the registered path once it recovers
 - **AgentGrpcStreamRetentionTest** — a chunk the proxy has read is no longer reachable while the agent's chunked
   stream stays open, checked with weak references after 2 MiB of 1 KiB chunks. Over Netty, gRPC's retry buffer
   commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
@@ -291,7 +297,9 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   line, counted and naming its first paths, like events further apart lines of their own, the same event repeated one
   line however long since but never past another, a path repeated counted once, a connect or a disconnect starting a run
   no later event folds back past, a reason from outside cut and escaped, and a change count that every line and fold
-  moves, which its changes flow carries
+  moves, which its changes flow carries; a burst's paths each counted once, those past the sample's too; and a connect
+  attempt's held lines reaching the feed only when released, in order, moving the change count once, never when
+  discarded, other kinds reaching it meanwhile, and a hold left open released by the next
 - **ShownFailureTest** — a failure as the agent's dashboard shows it: an exception as its class and the first line of
   its message with text, cut at 200 characters and marked `...`, redacted and escaped, and a message-less one as before;
   and a reason in the proxy's words kept to the longer limit, every line escaped
@@ -461,7 +469,8 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   its paths again, and reconciles nothing before the first; a successful read, including an empty one, reconciles the
   desired set; a repeating failure logs one WARN, compared by gRPC status code, or by class and message without one, so
   timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news; a
-  read's failure told to the activity feed when it is new or changes, not while it repeats; every reconcile reported
+  read's failure told to the activity feed when it is new or changes, not while it repeats, and the read that works
+  after it once, the next connection's first included; every reconcile reported
   for the agent's metrics by whether it succeeded; and a JVM `Error` from the read or the reconcile propagated, not
   logged as a failed tick
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
