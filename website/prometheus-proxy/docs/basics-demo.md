@@ -76,6 +76,12 @@ holds every screen in the demo, each in a tab of its own: the proxy's dashboard,
 <http://localhost:8094/screens#proxy/paths?problems=1+grafana> puts the proxy's Paths view, filtered to problems,
 beside Grafana.
 
+<figure markdown="span">
+  ![The screens page in Split, the proxy's failing paths beside Grafana](images/demo/screens.webp#only-dark){ loading=lazy }
+  ![The screens page in Split, the proxy's failing paths beside Grafana](images/demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The screens page in Split, the proxy's failing paths beside Grafana during an outage</figcaption>
+</figure>
+
 Each screen also has an address of its own, which the table gives with the variable that moves its port:
 
 | What | URL | Port variable |

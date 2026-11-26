@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/basics-demo.md), and the
-# login page's on its Dashboard page (web-dashboard.md), from the running demo: it plays the page's scenarios, captures
-# the proxy's dashboard, agent-rogue's, and Grafana in headless Chrome at three times the pixel density in both themes,
-# each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/: <name>.webp in the dark
-# theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It puts the demo back to
-# normal when it finishes, or when it fails.
+# login page's and the screens page's on its Dashboard page (web-dashboard.md), from the running demo: it plays the
+# page's scenarios, captures the proxy's dashboard, its screens page, agent-rogue's dashboard, and Grafana in headless
+# Chrome at three times the pixel density in both themes, each a whole window, and writes lossless WebP to
+# website/prometheus-proxy/docs/images/demo/: <name>.webp in the dark theme and <name>-light.webp in the light one,
+# which the page shows by the reader's theme. It puts the demo back to normal when it finishes, or when it fails.
 #
 # `make screenshots`, in demos/basics, builds the demo from this checkout and starts it first, so the screenshots
 # show the dashboard as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7
@@ -41,6 +41,7 @@ load_saved_ports() {
 load_saved_ports
 
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
+SCREENS_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/screens"
 EAST_DASHBOARD_URL="http://localhost:${DEMO_AGENT_EAST_DASHBOARD_PORT:-8095}/dashboard"
 ROGUE_DASHBOARD_URL="http://localhost:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
@@ -283,6 +284,18 @@ shoot_fixed() {
   done
 }
 
+# The screens page in each theme, opened on a link (its part after the #), a whole PATHS_WIDTH x PATHS_HEIGHT window:
+# in Split each pane gets half the window, and at WIDTH the proxy's Paths table would show little more than its paths.
+# A {theme} in the link becomes the theme's name, for a Grafana pane, which doesn't follow the browser's scheme. Its
+# budget is Grafana's, which renders after loading its data. shoot_screens <name> <link>
+shoot_screens() {
+  local name="$1" link="$2" theme
+  for theme in "${THEMES[@]}"; do
+    capture "$SCREENS_URL#${link//\{theme\}/$theme}" "$WORK/$(named "$name" "$theme").png" "$PATHS_HEIGHT" "$theme" \
+      15000 "$PATHS_WIDTH"
+  done
+}
+
 step "Waiting for every path to answer 200"
 # Every agent running and unfrozen, whatever the scenarios run before left, so each registers its paths again: a
 # stopped agent's paths stay departed until it does. Thawing or starting an agent that runs changes nothing.
@@ -330,6 +343,9 @@ shoot_paths outage
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
 shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" \
   "$((HEIGHT + 100))" 15000
+# The screens page as part 4 of the tour opens it: the proxy's failing paths beside Grafana.
+shoot_screens screens \
+  "proxy/paths?problems=1+grafana/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}"
 "$DEMO" recover >/dev/null
 wait_healthy "the services to recover" 9
 
@@ -383,7 +399,7 @@ shoot_fixed login "$DASHBOARD_URL/login"
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana duplicate discovered evicting evicted activity agent login; do
+for name in agents paths outage grafana screens duplicate discovered evicting evicted activity agent login; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
