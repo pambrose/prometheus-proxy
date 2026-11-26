@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Network Demo page (website/prometheus-proxy/docs/network-demo.md) from the
-# running demo: it plays the page's scenarios, parts 2 to 7, captures the dashboards, Grafana, and Zipkin in headless
-# Chrome at three times the pixel density, each a whole window, and writes lossless WebP to
-# website/prometheus-proxy/docs/images/network-demo/: <name>.webp in the dark theme and <name>-light.webp in the light
-# one, which the page shows by the reader's theme. Zipkin's UI has one theme, so its shot is taken once. It puts the
-# demo back to normal when it finishes, or when it fails.
+# running demo: it plays the page's scenarios, parts 2 to 7, captures the dashboards, the standby's screens page,
+# Grafana, and Zipkin in headless Chrome at three times the pixel density, each a whole window, and writes lossless WebP
+# to website/prometheus-proxy/docs/images/network-demo/: <name>.webp in the dark theme and <name>-light.webp in the
+# light one, which the page shows by the reader's theme. Zipkin's UI has one theme, so its shot is taken once. It puts
+# the demo back to normal when it finishes, or when it fails.
 #
 # `make screenshots`, in demos/network, builds the demo from this checkout and starts it first, so the screenshots
 # show the dashboard as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7
@@ -41,6 +41,7 @@ load_saved_ports
 
 DASHBOARD_URL="http://localhost:${NETWORK_DEMO_DASHBOARD_PORT:-8194}/dashboard"
 STANDBY_DASHBOARD_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/dashboard"
+SCREENS_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/screens"
 GRAFANA_URL="http://localhost:${NETWORK_DEMO_GRAFANA_PORT:-3100}"
 PROMETHEUS_URL="http://localhost:${NETWORK_DEMO_PROMETHEUS_PORT:-9190}"
 ZIPKIN_URL="http://localhost:${NETWORK_DEMO_ZIPKIN_PORT:-9511}"
@@ -54,6 +55,10 @@ SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 # the themes each is taken in.
 WIDTH=1280
 HEIGHT=800
+# The screens page is taken in a wider window of the same shape, so each of Split's two panes is about as wide as a
+# dashboard needs.
+SCREENS_WIDTH=1680
+SCREENS_HEIGHT=1050
 THEMES=(dark light)
 # SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
 # opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
@@ -234,12 +239,12 @@ has_connect_traces() { (($(connect_traces | wc -l) >= $1)); }
 # Captures a page at WIDTH x the given CSS height, at SCALE, in a theme: the dashboard follows the browser's preferred
 # color scheme. Grafana and Zipkin render after loading their data, so their captures get a longer virtual-time budget.
 capture() {
-  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" scheme=0 profile
+  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
     --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$WIDTH,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
+    --window-size="$width,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
@@ -253,6 +258,15 @@ shoot_fixed() {
     png="$WORK/$(named "$name" "$theme").png"
     capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
     magick "$png" -crop "$((WIDTH * SCALE))x$((HEIGHT * SCALE))+0+0" +repage "$png"
+  done
+}
+
+# The standby's screens page in each theme, opened on a link (its part after the #), a whole SCREENS_WIDTH x
+# SCREENS_HEIGHT window. Its budget is Grafana's, in case a pane shows Grafana. shoot_screens <name> <link>
+shoot_screens() {
+  local name="$1" link="$2" theme
+  for theme in "${THEMES[@]}"; do
+    capture "$SCREENS_URL#$link" "$WORK/$(named "$name" "$theme").png" "$SCREENS_HEIGHT" "$theme" 15000 "$SCREENS_WIDTH"
   done
 }
 
@@ -312,6 +326,9 @@ branch="$(agent_id agent-branch "$STANDBY_DASHBOARD_URL")"
 wait_until "agent-branch's scrapes through the standby" has_scrapes "$STANDBY_DASHBOARD_URL/agents/$branch" \
   "$DETAIL_ROWS"
 shoot_fixed failover "$STANDBY_DASHBOARD_URL/agents/$branch"
+# The screens page as part 4 of the tour opens it: agent-branch's Connection view beside the standby, which serves the
+# page, while the primary is stopped and its tab is red.
+shoot_screens screens "agent-branch/connection+proxy"
 "$DEMO" proxy-up >/dev/null 2>&1
 back_to_normal
 
@@ -347,7 +364,7 @@ back_to_normal
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in far thin filtered failover cut wan-down; do
+for name in far thin filtered failover screens cut wan-down; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
