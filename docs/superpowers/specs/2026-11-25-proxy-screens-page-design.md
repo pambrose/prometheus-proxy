@@ -94,8 +94,15 @@ page makes unnecessary.
 - **Same site.** A login inside a frame needs the screen on the same site as the proxy, its session cookie being
   `SameSite=Lax` (the dashboards') or Grafana's default. "Open in a tab" covers the rest.
 - **The session cookie's path** is `Path=/dashboard` (the base path) today, which a browser wouldn't send to
-  `/screens`. It becomes `Path=/`. The cookie's name already carries the dashboard's port, so it can't collide with
-  another dashboard's.
+  `/screens`.
+  - It's set at `/screens` too, with the same token, and sign-out expires both. At a root mount, `Path=/` covers both.
+  - The agent's dashboard has no page outside its path, so its cookie stays at its path alone.
+  - Not `Path=/`, as this spec first said (changed in review):
+    - A browser would send the token with every request to the host, to Grafana, Prometheus, and any other app on it.
+    - After a rollback to 4.7.0, a root cookie left from 4.7.1, dead after the restart, would sit beside 4.7.0's at
+      `/dashboard`. Ktor reads the last of two cookies with one name, the root one, so every sign-in would loop back
+      to the login page.
+  - The cookie's name already carries the dashboard's port, so it can't collide with another dashboard's.
 - **Reverse proxies** pass `/dashboard` through today. They now pass `/screens` too, and the "Behind a Reverse Proxy"
   section's nginx example shows it.
 - **The page is down when the proxy is.** An open page keeps its frames, but can't be reloaded. In the demo, part 9
@@ -255,7 +262,7 @@ another origin):
 - **A Settings spec** for the Screens group.
 - **A harness spec** on a real proxy:
   - `/screens` behind the login;
-  - the session cookie's `Path=/`;
+  - the session cookie at the dashboard's path and at `/screens`;
   - signing in from `/screens` returning to it;
   - with `framingEnabled = false` and screens listed, `frame-ancestors 'self'`.
 - **The page's script**, checked as `DashboardScriptTest` checks the dashboard's, for:
