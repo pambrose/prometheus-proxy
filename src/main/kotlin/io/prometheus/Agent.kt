@@ -446,8 +446,8 @@ class Agent(
   // Registers the agent and its paths on the connection connectAgent made, then serves it until it ends. One that
   // registered both ends as a disconnect in the activity feed, with the failure that ended it, the first of its tasks
   // to fail, or an exception, which is caught only to name it there, and rethrown. One that failed before is a failed
-  // connect, logged as one, when it's news and then as a repeat, rather than at WARN on every attempt (see
-  // AgentGrpcService.registrationFailed), unless the agent is stopping; a JVM Error propagates, to stop the agent.
+  // connect, logged as one, when it's news and then as a repeat, rather than at WARN on every attempt, unless the agent
+  // is stopping (see AgentGrpcService.registrationFailed); a JVM Error propagates, to stop the agent.
   @Suppress("TooGenericExceptionCaught")
   private suspend fun registerAndServe(
     endpointFailover: EndpointFailover,
@@ -455,15 +455,12 @@ class Agent(
   ) {
     // The connect attempt counts once the proxy has answered the registration: a proxy that took the connection and
     // then refused the agent counted as a success.
-    runCatchingCancellable { grpcService.registerAgent(initialConnectionLatch) }
+    runCatchingNonFatal { grpcService.registerAgent(initialConnectionLatch) }
       .also { result ->
         val outcome = connectOutcome(result.exceptionOrNull())
         metrics { connectCount.labelValues(launchId, outcome).inc() }
       }.onFailure { e ->
-        if (e is Error)
-          throw e
-        if (isRunning)
-          grpcService.registrationFailed("registerAgent", e, attempt)
+        grpcService.registrationFailed("registerAgent", e, attempt)
         return
       }
     // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
@@ -473,8 +470,7 @@ class Agent(
     try {
       runCatchingNonFatal { pathManager.registerPaths() }
         .onFailure { e ->
-          if (isRunning)
-            grpcService.registrationFailed("registerPaths", e, attempt)
+          grpcService.registrationFailed("registerPaths", e, attempt)
           return
         }
       endpointFailover.registrationSucceeded()

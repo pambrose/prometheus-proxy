@@ -479,13 +479,17 @@ internal class AgentGrpcService(
    * the activity feed, when it starts, when the reason changes, and not on every retry. [attempt] holds the attempt's
    * own lines in the feed, its connect and its paths', which are released with the failure when it's news and dropped
    * when it isn't. Compared by [step] and gRPC status code, or class without one, since the proxy's refusal of the
-   * agent names the agent ID the connect gave it, which changes every attempt.
+   * agent names the agent ID the connect gave it, which changes every attempt. Nothing, as the agent stops: its
+   * attempt was cut short, and its dashboard is stopping too.
    */
   fun registrationFailed(
     step: String,
     e: Throwable,
     attempt: AgentActivityLog.Hold?,
-  ) = connectFailed(agent.proxyHost, e, "$step ${failureKey(e)}", attempt)
+  ) {
+    if (agent.isRunning)
+      connectFailed(agent.proxyHost, e, "$step ${failureKey(e)}", attempt)
+  }
 
   // A failed connect to [proxyHost]: kept for the agent's dashboard, told to the activity feed when it's news, with the
   // [attempt]'s held lines, which are dropped when it isn't, and logged. Compared by [failure]: by default, gRPC status
