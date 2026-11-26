@@ -682,12 +682,14 @@ cmd_tour() {
 
   if part 4 "Here you break two of the services, one at a time, and see that the proxy reports each failure" \
     "clearly while the other services keep answering."; then
-    instruct "Put the proxy dashboard's Paths view beside Grafana: ${SCREENS_URL}#proxy/paths+grafana" \
-      "The page's Split layout shows two screens side by side, each at its own narrow layout. Its two pane pickers" \
-      "change either one, and shift-clicking a tab puts its screen on the right."
+    instruct "Watch the proxy's failing paths beside Grafana: ${SCREENS_URL}#proxy/paths?problems=1+grafana" \
+      "The page's Split layout shows two screens side by side, each at its own narrow layout, too narrow for the" \
+      "Paths table's status column, so the link filters the table to problems: it lists only failing paths, none" \
+      "yet. Its two pane pickers change either screen, and shift-clicking a tab puts its screen on the right."
     step "Make the payments service answer every scrape with an error." \
-      "agent-east scrapes the payments service, at /payments_metrics, so the failure shows on that path in the" \
-      "dashboard's Paths view and in agent-east's recent scrapes in its Agents view." -- outage
+      "agent-east scrapes the payments service, at /payments_metrics, so that path appears in the filtered Paths" \
+      "view, and the proxy's status bar counts it as failing. Unfiltered, its row shows the 500, as do" \
+      "agent-east's recent scrapes in the Agents view." -- outage
     step "Once DemoTargetDown has fired, make the inventory service hang, so it never answers." -- slow
     step "Put every service back to normal." -- recover
   fi
@@ -803,7 +805,8 @@ main() {
       "they pass on what the service answered."
     watch_for
     point "On the proxy dashboard's Paths view, /${service}_metrics turns red with status 500 (upstream_error), and" \
-      "so does each of its scrapes in its agent's list of recent scrapes."
+      "so does each of its scrapes in its agent's list of recent scrapes. Filtered to problems, as the tour opens" \
+      "it, the view lists the path, and the status bar counts it as failing."
     point "In Grafana, the $service row on 'Target health' turns DOWN. After 15 seconds the DemoTargetDown alert" \
       "fires: it shows in the 'Alerts' stat, in the 'Firing alerts' table, and on Prometheus's alerts page."
     point "Every other service keeps answering: one failing target doesn't affect the rest."
@@ -819,7 +822,8 @@ main() {
       "scrape and says why."
     watch_for
     point "The agent gives up on each scrape of $service after 3 seconds and reports status 408" \
-      "(upstream_timed_out), so Prometheus gets a clear answer instead of waiting. The dashboard shows each one."
+      "(upstream_timed_out), so Prometheus gets a clear answer instead of waiting. The dashboard shows each one," \
+      "and its Paths view filtered to problems lists the path."
     point "The other paths on the same agent keep answering, and in Grafana, 'Scrape latency' spikes for $service" \
       "alone."
     follow_up "To undo it, run" "$0 recover"
@@ -829,7 +833,8 @@ main() {
     bold "Every service is back to normal"
     how_it_works "This asks demo-app, through POST /control/all/ok, to answer every service's metrics normally again."
     watch_for
-    point "The red rows turn green again within a scrape or two (5 seconds), on the dashboard and in Grafana."
+    point "The red rows turn green again within a scrape or two (5 seconds), on the dashboard and in Grafana, and" \
+      "the Paths view filtered to problems is empty again."
     ;;
   discover)
     control POST /discovery/on >/dev/null

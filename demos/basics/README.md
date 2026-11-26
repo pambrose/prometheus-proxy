@@ -175,14 +175,16 @@ Open Grafana, which lands on the **Prometheus Proxy Demo** dashboard: <http://lo
 
 ### 4. An Outage and a Timeout
 
-Put the proxy dashboard's **Paths** view beside Grafana, in the screens page's Split layout, which shows two screens
-side by side, each at its own narrow layout: <http://localhost:8094/screens#proxy/paths+grafana>
+Watch the proxy's failing paths beside Grafana. The screens page's Split layout shows two screens side by side, each at
+its own narrow layout, too narrow for the **Paths** table's status column, so the link filters the table to problems:
+it lists only failing paths, none yet. <http://localhost:8094/screens#proxy/paths?problems=1+grafana>
 
 ```bash
 ./demo.sh outage          # payments now answers 500
 ```
 
-- The dashboard: `/payments_metrics` turns red with a 500 in the Paths view, and in agent-east's recent scrapes.
+- The dashboard: `/payments_metrics` appears in the filtered Paths view, and the status bar counts it as failing.
+  Unfiltered, its row shows the 500, as do agent-east's recent scrapes.
 - Grafana: payments turns red on **Target health**. After 15 seconds, **DemoTargetDown** fires (the **Alerts** stat and
   the **Firing alerts** table; also Prometheus's `/alerts` page).
 - The other services keep working: one failing target never affects the rest.
@@ -192,11 +194,14 @@ side by side, each at its own narrow layout: <http://localhost:8094/screens#prox
 ```
 
 - The agent gives up after its 3-second scrape timeout and reports 408 (`upstream_timed_out`), so Prometheus gets a
-  clear answer instead of waiting. **Scrape latency** spikes for inventory only.
+  clear answer instead of waiting. `/inventory_metrics` joins `/payments_metrics` in the filtered Paths view, and
+  **Scrape latency** spikes for inventory only.
 
 ```bash
 ./demo.sh recover         # everything back to normal
 ```
+
+Within a scrape or two the filtered Paths view is empty again, and Grafana's rows turn green.
 
 ### 5. Two Agents, One Path
 
