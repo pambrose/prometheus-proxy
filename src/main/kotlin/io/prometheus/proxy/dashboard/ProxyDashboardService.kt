@@ -129,6 +129,9 @@ internal class ProxyDashboardService(
 
       override val outsidePages = if (screens.isEmpty()) emptySet() else setOf(SCREENS_PATH)
 
+      // The screens page holds the dashboard as well as the other screens, so the root leads there while it's served.
+      override val home = if (screens.isEmpty()) null else SCREENS_PATH
+
       override suspend fun collect(): ProxySnapshot = ProxySnapshot.collect(proxy, settings)
 
       override fun parseView(message: String): ProxyView =

@@ -90,6 +90,9 @@ internal class AgentDashboardService(
       // The agent has no screens page, nor any other page outside its base.
       override val outsidePages = emptySet<String>()
 
+      // So the root leads to the dashboard.
+      override val home: String? = null
+
       override suspend fun collect(): AgentSnapshot = AgentSnapshot.collect(agent, settings)
 
       // The script sends the selected path as the page's URL has it, percent-encoded.

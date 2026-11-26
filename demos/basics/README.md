@@ -71,13 +71,13 @@ that it starts in under a minute, even without a network connection.
 
 Then open the proxy's screens page, one browser tab that holds every screen in the demo, each in a tab of its own: the
 proxy's dashboard, each agent's, Prometheus, and Grafana. `make open` opens it, and the guided tour's links open in it:
-<http://localhost:8094/screens>
+<http://localhost:8094/>
 
 Each screen also has an address of its own, which the table gives with the variable that moves its port:
 
 | What | URL | Port variable |
 |---|---|---|
-| The screens page, every screen in one tab | <http://localhost:8094/screens> | `DEMO_DASHBOARD_PORT` |
+| The screens page, every screen in one tab | <http://localhost:8094/> | `DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8094/dashboard> | `DEMO_DASHBOARD_PORT` |
 | agent-east's dashboard | <http://localhost:8095/dashboard> | `DEMO_AGENT_EAST_DASHBOARD_PORT` |
 | agent-west-1's dashboard | <http://localhost:8096/dashboard> | `DEMO_AGENT_WEST_1_DASHBOARD_PORT` |

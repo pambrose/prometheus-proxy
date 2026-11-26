@@ -44,7 +44,8 @@ import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.SCREENS_PAT
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The proxy's screens page on a real proxy, over the Netty transport: `/screens` with screens listed and without,
+ * The proxy's screens page on a real proxy, over the Netty transport: `/screens` with screens listed and without, the
+ * port's root, which leads to it while screens are listed, before any login, and to the dashboard without them,
  * behind the dashboard's login, which sets its cookie at `/screens` as well as the dashboard's path and returns to the
  * page, and the framing the dashboard sends with `framingEnabled = false` once the page has to frame it. The page's
  * markup is `ScreensHtmlTest`'s.
@@ -89,9 +90,10 @@ class ProxyScreensTest : StringSpec() {
     headers.getAll("Content-Security-Policy").orEmpty().filter { "frame-ancestors" in it }
 
   init {
-    "with no screens listed, /screens should answer 404, and the dashboard have no link to it" {
+    "with no screens listed, /screens should answer 404, the root lead to the dashboard, and the bar have no link" {
       withProxy(screens = false) {
         page(SCREENS_PATH).status shouldBe HttpStatusCode.NotFound
+        page("/").headers[HttpHeaders.Location] shouldBe "/dashboard"
         page("/dashboard").bodyAsText() shouldNotContain "screens-link"
       }
     }
@@ -110,6 +112,17 @@ class ProxyScreensTest : StringSpec() {
           this shouldNotContain "hx-swap-oob"
         }
         page("/dashboard").bodyAsText() shouldContain """<a href="$SCREENS_PATH" class="screens-link""""
+      }
+    }
+
+    // Someone who types the host and port lands on the page that holds every screen, the dashboard among them. The
+    // redirect needs no login, or signing in would return to the dashboard, never to the page.
+    "with screens listed, the root should send a browser to /screens, behind the login too" {
+      withProxy(password = PASSWORD) {
+        page("/").apply {
+          status shouldBe HttpStatusCode.Found
+          headers[HttpHeaders.Location] shouldBe SCREENS_PATH
+        }
       }
     }
 

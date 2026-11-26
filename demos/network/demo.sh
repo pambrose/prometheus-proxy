@@ -182,10 +182,9 @@ print_urls() {
   echo "  Zipkin:           $ZIPKIN_URL/zipkin/"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
-  wrap "" "" "What each part of this demo shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "" "" "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   echo
-  echo "Scenarios: $0 far | thin | filter | proxy-down | cut | flaky | wan-down | heal ...  (no arguments for help)"
-  echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
+  echo "Start the demo with: $MAKE_NAME tour, or $0 tour"
 }
 
 # Runs toxiproxy-cli inside the wan container, so its API needs no published port.
@@ -632,7 +631,7 @@ tour_contents() {
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
     "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  wrap "  " "  " "What each part shows, and why: ${PAGE_URL}#what-this-demo-shows"
+  wrap "  " "  " "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   pause "Press Enter to start"
 }
 

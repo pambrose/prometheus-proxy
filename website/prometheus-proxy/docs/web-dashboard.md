@@ -455,7 +455,9 @@ stays selected. If the proxy restarts, the page reconnects and shows the new pro
 
 An operator works across several screens: the proxy's dashboard, each agent's, Prometheus, Grafana, and tools of their
 own. List them in `proxy.dashboard.screens`, and the proxy serves one page that holds them all, at `/screens` on the
-dashboard's port, for example `http://proxy-host:8094/screens`. The dashboard's top bar links to it.
+dashboard's port, for example `http://proxy-host:8094/screens`. The dashboard's top bar links to it, and the port's
+root, `http://proxy-host:8094/`, leads to it, where it leads to the dashboard while no screens are listed. The root
+needs no login: it only redirects, and the page asks for one.
 
 ```hocon
 proxy.dashboard.screens = [

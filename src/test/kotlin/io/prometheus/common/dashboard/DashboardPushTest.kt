@@ -82,6 +82,8 @@ class DashboardPushTest : StringSpec() {
 
     override val outsidePages = emptySet<String>()
 
+    override val home: String? = null
+
     private val collects = AtomicInt(0)
     private val attempts = Channel<Int>(Channel.UNLIMITED)
 
