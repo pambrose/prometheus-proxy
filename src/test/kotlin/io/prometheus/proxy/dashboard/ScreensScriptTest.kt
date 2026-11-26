@@ -19,6 +19,7 @@
 package io.prometheus.proxy.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -152,7 +153,12 @@ class ScreensScriptTest : StringSpec() {
       body("probe") shouldContain "if (probing[id]) return;"
       // A screen whose host drops the request counts as not answering once the interval is up, not when the browser
       // gives up on the connection.
-      body("probe") shouldContain "AbortSignal.timeout(PROBE_INTERVAL_MILLIS)"
+      // Given up before the next round, so that round finds the screen free to check again; and free before it's
+      // marked, so a mark that throws can't leave it checked forever.
+      body("probe") shouldContain "AbortSignal.timeout(PROBE_TIMEOUT_MILLIS)"
+      ScreensScript.PROBE_TIMEOUT_MILLIS shouldBeLessThan ScreensScript.PROBE_INTERVAL_MILLIS
+      body("probe") shouldContain "function () { probing[id] = false; mark(id, true); }"
+      body("probe") shouldContain "function () { probing[id] = false; mark(id, false); }"
       js shouldContain "PROBE_INTERVAL_MILLIS = ${ScreensScript.PROBE_INTERVAL_MILLIS}"
       js shouldContain "document.addEventListener('visibilitychange'"
       js shouldContain "if (document.hidden) return;"
@@ -177,6 +183,12 @@ class ScreensScriptTest : StringSpec() {
     // Stay here makes it the page, so it loads no screens while it isn't.
     "a copy that isn't the page should show no screens until it becomes the page" {
       body("render") shouldContain "if (!isThePage) return;"
+      // Nor change what it would show, or move focus, so Stay here finds it as the link left it.
+      listOf("select", "fillRight", "setLayout").filterNot { "if (!isThePage) return;" in body(it) } shouldBe
+        emptyList()
+      listOf("addEventListener('keydown'", "addEventListener('change'").filterNot {
+        js.substringAfter(it).substringBefore("});").contains("if (!isThePage) return;")
+      } shouldBe emptyList()
     }
 
     "each dot should say its state in words, for a screen reader" {

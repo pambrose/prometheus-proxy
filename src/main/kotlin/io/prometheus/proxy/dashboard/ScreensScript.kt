@@ -46,6 +46,9 @@ internal object ScreensScript {
   /** How often each screen's dot is checked, while the page is visible. */
   const val PROBE_INTERVAL_MILLIS = 5_000
 
+  /** How long a check waits for a screen to answer: less than the interval, so the next check finds it free. */
+  const val PROBE_TIMEOUT_MILLIS = 4_000
+
   /** The width and height a screen lays out at in the All grid, a desktop's, before it is scaled to its tile. */
   const val FRAME_WIDTH = 1280
   const val FRAME_HEIGHT = 800
@@ -56,6 +59,7 @@ internal object ScreensScript {
     (function () {
       var HANDOFF_WAIT_MILLIS = $HANDOFF_WAIT_MILLIS;
       var PROBE_INTERVAL_MILLIS = $PROBE_INTERVAL_MILLIS;
+      var PROBE_TIMEOUT_MILLIS = $PROBE_TIMEOUT_MILLIS;
       var stage = document.getElementById('$STAGE_ID');
       var nav = document.getElementById('$NAV_ID');
       var handoff = document.getElementById('$HANDOFF_ID');
@@ -193,6 +197,7 @@ internal object ScreensScript {
       }
       // A tab's click: its screen alone, or on the left in Split, trading places with the right pane's if it was there.
       function select(id) {
+        if (!isThePage) return;
         if (layout === 'all') layout = 'one';
         if (layout === 'split' && id === second) second = first;
         first = id;
@@ -200,12 +205,14 @@ internal object ScreensScript {
       }
       // A tab's shift-click: its screen in the right pane, in Split.
       function fillRight(id) {
+        if (!isThePage) return;
         if (id === first) return;
         second = id;
         layout = 'split';
         render();
       }
       function setLayout(next) {
+        if (!isThePage) return;
         layout = next;
         if (layout === 'split' && (!second || second === first)) second = otherThan(first);
         render();
@@ -236,6 +243,7 @@ internal object ScreensScript {
       // A pane's screen picker, in Split: the pane's slot takes the screen picked, which trades places with the other
       // pane's if it was there. The picker goes back to naming its own pane's screen, which is now hidden.
       stage.addEventListener('change', function (evt) {
+        if (!isThePage) return;
         var picker = evt.target.closest && evt.target.closest('.pane-bar select');
         if (!picker) return;
         var own = picker.closest('.pane').getAttribute('data-screen');
@@ -253,6 +261,7 @@ internal object ScreensScript {
       // Not while typing, nor with a modifier, nor a held key, which would load every screen on the way, and not from
       // inside a frame, whose keys are its own.
       document.body.addEventListener('keydown', function (evt) {
+        if (!isThePage) return;
         if (evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight') return;
         if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat || !evt.target.closest) return;
         if (typingIn(evt.target)) return;
@@ -304,19 +313,19 @@ internal object ScreensScript {
       // A request the page can't read, which succeeds whenever the screen answers and fails when its port doesn't. A
       // HEAD, so no screen renders a page for it, and with no cookie, so a page left open doesn't keep its login from
       // going idle, as the dashboards' pages don't. One at a time for each screen, so a slow one doesn't pile them up,
-      // and given up after the interval, so a host that drops the request is marked as not answering then, not when
-      // the browser gives up on the connection.
+      // and given up before the next round, so a host that drops the request is marked as not answering then, not when
+      // the browser gives up on the connection, and the next round finds it free. Freed before it's marked, so a mark
+      // that throws can't leave it checked forever.
       var probing = Object.create(null);
       function probe(id) {
         if (probing[id]) return;
         probing[id] = true;
         var frame = frameOf(id);
-        var signal = window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(PROBE_INTERVAL_MILLIS) : undefined;
+        var signal = window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(PROBE_TIMEOUT_MILLIS) : undefined;
         fetch(frame.getAttribute('data-probe'), {
           method: 'HEAD', mode: 'no-cors', cache: 'no-store', credentials: 'omit', signal: signal
         })
-          .then(function () { mark(id, true); }, function () { mark(id, false); })
-          .then(function () { probing[id] = false; });
+          .then(function () { probing[id] = false; mark(id, true); }, function () { probing[id] = false; mark(id, false); });
       }
       function probeAll() {
         if (document.hidden) return;

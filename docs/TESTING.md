@@ -847,7 +847,9 @@ Two support helpers also live here (not test classes themselves):
   screens listed), every response saying so once (`frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`), a page
   outside the base path included; the session cookie set at the base path and at the page outside it on sign-in, and
   expired at both on sign-out, and only at the root at a root mount; a page outside the base path
-  sending a browser to the login page and a login returning to it, and to nothing else outside the base; and with
+  sending a browser to the login page and a login returning to it, and to nothing else outside the base; a HEAD of
+  the base path or `/session` answering 204 before any login, while any other HEAD, and a GET of `/session`, still
+  need one; and with
   framing enabled, the default, no response with either header,
   a login's `no-store` and a brand mark's `sandbox` policy kept
 - **DashboardServiceTest** (`dashboard/`) — a dashboard's service lifecycle over a mocked `DashboardServer`: a

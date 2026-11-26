@@ -313,6 +313,8 @@ object TestPorts {
   const val DASHBOARD_RESPONSES_COOKIE_PORT = 11436
   const val DASHBOARD_RESPONSES_COOKIE_ROOT_PORT = 11437
   const val DASHBOARD_RESPONSES_OUTSIDE_LOGIN_PORT = 11438
+  const val DASHBOARD_RESPONSES_HEAD_PORT = 11439
+  const val DASHBOARD_RESPONSES_HEAD_LOGIN_PORT = 11440
 
   // InProcessZipkinTest: the HTTP port of each case's proxy, and a Zipkin port nothing listens on, which the reporter
   // fails to send to without holding up startup, a scrape, or shutdown.

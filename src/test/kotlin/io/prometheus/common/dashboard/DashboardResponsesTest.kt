@@ -35,6 +35,7 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.basicAuth
 import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.request.get
+import io.ktor.client.request.head
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -125,6 +126,8 @@ class DashboardResponsesTest : StringSpec() {
       path: String,
       block: HttpRequestBuilder.() -> Unit = {},
     ): HttpResponse = client.post("$base$path", block)
+
+    suspend fun head(path: String): HttpResponse = client.head("$base$path")
 
     // Waits until the server answers through its routes: an engine still installing them answers everything with 404.
     suspend fun awaitServing() =
@@ -404,6 +407,24 @@ class DashboardResponsesTest : StringSpec() {
       withServer(TestPorts.DASHBOARD_RESPONSES_COOKIE_ROOT_PORT, login = true, path = "/") {
         signIn(next = "/").sessionCookies().map { it.attributes()[1] } shouldBe listOf("Path=/")
         post("/logout").sessionCookies().map { it.attributes()[1] } shouldBe listOf("Path=/")
+      }
+    }
+
+    // ==================== A HEAD that asks whether the dashboard is up ====================
+
+    // The proxy's screens page checks each dashboard every few seconds with a HEAD of its base path or /session, which
+    // answered 405, or 401 with a login set, putting an error in every log that counts them. A HEAD says only that the
+    // dashboard is up, as the login page does, so it needs no login; any other HEAD, and a GET of /session, still do.
+    "a HEAD of the base path or /session should answer 204, before any login" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_HEAD_PORT) {
+        listOf(head("/dashboard"), head("/dashboard/session")).map { it.status } shouldBe
+          listOf(HttpStatusCode.NoContent, HttpStatusCode.NoContent)
+      }
+      withServer(TestPorts.DASHBOARD_RESPONSES_HEAD_LOGIN_PORT, login = true) {
+        listOf(head("/dashboard"), head("/dashboard/session")).map { it.status } shouldBe
+          listOf(HttpStatusCode.NoContent, HttpStatusCode.NoContent)
+        head("/dashboard/$FRAGMENT").status shouldBe HttpStatusCode.Unauthorized
+        get("/dashboard/session").status shouldBe HttpStatusCode.Unauthorized
       }
     }
 

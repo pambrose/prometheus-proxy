@@ -466,12 +466,13 @@ proxy.dashboard.screens = [
 ```
 
 Each screen has a tab, after the proxy's own dashboard, which is always first. A tab's dot is green while its screen
-answers and red while it doesn't, checked every 5 seconds while the page is open, and a pane whose screen isn't
-answering says so, then reloads by itself once it answers again. **One** shows the selected screen at full size,
-**Split** two side by side, each at its own narrow layout (shift-click a tab to put its screen on the right), and
-**All** every screen in a grid, each laid out at 1280×800 and scaled to its tile; click a tile's title to open it.
-Switching tabs or layouts never reloads a screen, so a dashboard keeps the agent or path you selected. Each pane's
-**Open in a tab** opens its screen on its own.
+answers and red while it doesn't, checked every 5 seconds while the page is visible with a `HEAD` of the screen's `url`
+(the proxy's own `/session`), which the proxy's and the agents' dashboards answer with a 204 before any login, since it
+says only that they're up. A pane whose screen isn't answering says so, then reloads by itself once it answers again.
+**One** shows the selected screen at full size, **Split** two side by side, each at its own narrow layout (shift-click a
+tab to put its screen on the right), and **All** every screen in a grid, each laid out at 1280×800 and scaled to its
+tile; click a tile's title to open it. Switching tabs or layouts never reloads a screen, so a dashboard keeps the agent
+or path you selected. Each pane's **Open in a tab** opens its screen on its own.
 
 A link can say what the page shows, after its `#`:
 

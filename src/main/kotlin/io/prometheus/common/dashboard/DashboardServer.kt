@@ -50,6 +50,7 @@ import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.head
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -388,13 +389,24 @@ internal class DashboardServer<V : Any, S : Any>(
       refuseWithoutLogin(call)
   }
 
-  // Whether [request] may proceed without a login: one for the login or logout route, or with a valid session.
+  // Whether [request] may proceed without a login: one for the login or logout route, a liveness check, or with a
+  // valid session.
   private fun needsNoLogin(request: ApplicationRequest): Boolean {
     val path = request.path()
     if (path == loginPath || path == logoutPath)
       return true
+    if (isLivenessCheck(request))
+      return true
     return logins.isValid(request.cookies[sessionCookie])
   }
+
+  // A HEAD of the base path or of /session, which the proxy's screens page sends every few seconds to see whether a
+  // dashboard answers. It says only that the dashboard is up, as the login page does to anyone, so it needs no login,
+  // and the routes answer it with a 204, where it was a 405, or a 401 with a login set, in every log that counts them.
+  private fun isLivenessCheck(request: ApplicationRequest) =
+    request.httpMethod == HttpMethod.Head && request.path() in livenessPaths
+
+  private val livenessPaths = setOf(basePath, "$routeBase/session")
 
   // A script's Basic login, [header]: true when it is let in, or refused for the limit on wrong logins, which answers
   // it here; false when it is wrong, which counts against the limit and is answered as no login is.
@@ -587,6 +599,8 @@ internal class DashboardServer<V : Any, S : Any>(
         // Whether this request may use the dashboard: the auth check answers first, so this is a 204 only when it may.
         // The page's script asks when its WebSocket closes, so an expired session lands on the login page.
         get("$routeBase/session") { call.respond(HttpStatusCode.NoContent) }
+        // Whether the dashboard is up, for the screens page's checks, before any login (see isLivenessCheck).
+        livenessPaths.forEach { path -> head(path) { call.respond(HttpStatusCode.NoContent) } }
         assetRoutes()
         with(site) { pages(this@DashboardServer) }
         events()
