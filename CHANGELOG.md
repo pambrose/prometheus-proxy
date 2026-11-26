@@ -31,9 +31,15 @@ All notable changes to this project are documented in this file.
   seconds, which sets the agent's `stopTimeout`; one of zero or less fails the settings, naming the property. Through
   4.7.0 the starter's stop waited the agent's own 30 seconds, then threw out of `stop()`: Spring's phase timeout
   doesn't cut short a `stop()` that waits
+- `proxy.dashboard.framingEnabled` and `agent.dashboard.framingEnabled`, `true` by default: while on, a dashboard's
+  responses carry neither `Content-Security-Policy: frame-ancestors 'none'` nor `X-Frame-Options: DENY`, so any page can
+  frame it; `false` sends both on every response, as 4.7.0 did. A dashboard logs a line at startup while it's on, and
+  its Settings view shows it
 
 ### Behavior Changes
 
+- A dashboard allows framing by default, where 4.7.0 refused it on every response with no setting to allow it;
+  `framingEnabled = false` restores the refusal
 - `startIfConfigured(onFailure)` guards its `onFailure` as it does the builder's handlers: one that throws is logged,
   and the start still returns null, where it threw out of the call
 

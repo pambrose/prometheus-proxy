@@ -65,9 +65,10 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * What [DashboardServer] answers, against a site the spec stands in for, with no proxy or agent: the headers every
- * response carries, the refusals and error pages included, so no other site's page can frame the dashboard, and, with a
- * login set, none but the versioned assets kept by a browser's cache; and the line a refused Origin or Host is logged
- * with, which needs no login, so it shows the client's header cut and escaped, at INFO once a minute for each address.
+ * response carries, the refusals and error pages included, so no other site's page can frame the dashboard unless
+ * framing is enabled, and, with a login set, none but the versioned assets kept by a browser's cache; and the line a
+ * refused Origin or Host is logged with, which needs no login, so it shows the client's header cut and escaped, at INFO
+ * once a minute for each address.
  *
  * The pages served by a real proxy and agent are `ProxyWebDashboardTest`'s, `ProxyWebDashboardLoginTest`'s, and
  * `AgentWebDashboardTest`'s.
@@ -137,12 +138,13 @@ class DashboardResponsesTest : StringSpec() {
       }
   }
 
-  // A server with a login when [login], refusing a Host not in [allowedHosts] when it has any, for [block]; stopped
-  // after it.
+  // A server with a login when [login], refusing a Host not in [allowedHosts] when it has any, and refusing framing
+  // unless [framingEnabled], for [block]; stopped after it.
   private suspend fun withServer(
     port: Int,
     login: Boolean = false,
     allowedHosts: List<String> = emptyList(),
+    framingEnabled: Boolean = false,
     block: suspend Fixture.() -> Unit,
   ) {
     val settings =
@@ -155,6 +157,7 @@ class DashboardResponsesTest : StringSpec() {
         maxSessions = 10,
         allowedOrigins = emptyList(),
         allowedHosts = allowedHosts,
+        framingEnabled = framingEnabled,
         login = if (login) DashboardLogin(USERNAME, PASSWORD) else null,
         loginHeading = "Responses test",
         icons = mapOf(ICON.fileName to ICON.resource),
@@ -261,6 +264,48 @@ class DashboardResponsesTest : StringSpec() {
       }
     }
 
+    // Framing enabled, the default, lifts both framing headers, so a page can embed the dashboard; it leaves the
+    // login's caching rule and a brand mark's own policy as they are.
+    "with framing enabled, no response should refuse framing, and a login should still keep them out of the cache" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_FRAMING_ENABLED_PORT, login = true, framingEnabled = true) {
+        val signedIn: HttpRequestBuilder.() -> Unit = { basicAuth(USERNAME, PASSWORD) }
+        val responses =
+          mapOf(
+            "login page" to get("/dashboard/login"),
+            "page" to get("/dashboard", signedIn),
+            "fragment" to
+              get("/dashboard/$FRAGMENT") {
+                signedIn()
+                header(HX_REQUEST_HEADER, "true")
+              },
+            "action" to
+              post("/dashboard/$ACTION") {
+                signedIn()
+                header(HX_REQUEST_HEADER, "true")
+              },
+            "page without a login" to get("/dashboard") { header(HttpHeaders.Accept, "text/html") },
+            "unknown" to get("/dashboard/nothing-here", signedIn),
+            "broken" to get("/dashboard/$BROKEN", signedIn),
+          )
+        val asset = get("/dashboard/$ASSET_DIR/htmx.min.js", signedIn)
+        val icon = get("/dashboard/$ICON_DIR/${ICON.fileName}", signedIn)
+
+        responses.mapValues { it.value.status.value } shouldBe
+          mapOf(
+            "login page" to 200,
+            "page" to 200,
+            "fragment" to 200,
+            "action" to 200,
+            "page without a login" to 303,
+            "unknown" to 404,
+            "broken" to 500,
+          )
+        (responses + mapOf("asset" to asset, "icon" to icon)).filterValues { !it.allowsFraming() }.keys.shouldBeEmpty()
+        responses.filterValues { it.headers.getAll(HttpHeaders.CacheControl) != NO_STORE }.keys.shouldBeEmpty()
+        icon.headers.getAll(CSP).orEmpty() shouldContain "sandbox"
+      }
+    }
+
     // The line went out whole, at INFO, for every refused request, before any login: a client could write terminal
     // escape sequences into the log, a request line's worth at a time, at its own request rate.
     "a refused Origin should be logged cut and escaped, and at INFO once a minute for each address" {
@@ -323,6 +368,9 @@ class DashboardResponsesTest : StringSpec() {
     private fun HttpResponse.refusesFraming() =
       headers.getAll(CSP).orEmpty().filter { it.contains("frame-ancestors") } == listOf("frame-ancestors 'none'") &&
         headers.getAll(X_FRAME_OPTIONS) == listOf("DENY")
+
+    private fun HttpResponse.allowsFraming() =
+      headers.getAll(CSP).orEmpty().none { it.contains("frame-ancestors") } && headers[X_FRAME_OPTIONS] == null
 
     private fun List<ILoggingEvent>.refusals(prefix: String) = filter { it.formattedMessage.startsWith(prefix) }
 

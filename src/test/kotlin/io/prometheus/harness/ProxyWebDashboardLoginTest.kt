@@ -97,6 +97,9 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           addAll(["--agent_port", "$GRPC_PORT", "--dashboard", "--dashboard_port", "$DASHBOARD_PORT"])
           addAll(["--dashboard_path", path])
           password?.also { add("-Dproxy.dashboard.password=$it") }
+          // Refused here, so these specs check that the setting reaches the dashboard; ProxyWebDashboardTest checks
+          // the default, which allows framing.
+          add("-Dproxy.dashboard.framingEnabled=false")
           if (metrics) addAll(["--metrics", "--metrics_port", "$METRICS_PORT"])
         },
         proxyPort = HTTP_PORT,

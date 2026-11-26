@@ -8,7 +8,16 @@ _Not yet released_
 
 4.7.1 is for apps that embed the agent, by hand, with the Ktor plugin, or with the Spring Boot starter: an app can now
 be told why its agent couldn't start, to report it wherever someone will see it, and can cap how long the agent's stop
-holds up its shutdown, to fit the window its platform gives it, such as Cloud Run's 10 seconds.
+holds up its shutdown, to fit the window its platform gives it, such as Cloud Run's 10 seconds. It also lets a page of
+your own, such as a portal, show the proxy's and the agents' dashboards in frames again.
+
+### Before you upgrade
+
+- **Dashboards can be framed again, by any site, unless you refuse it.** 4.7.0 refused framing on every dashboard
+  response; 4.7.1 allows it by default. To keep 4.7.0's refusal, set `proxy.dashboard.framingEnabled = false`, and
+  `agent.dashboard.framingEnabled = false` on an agent whose dashboard is on: an embedded agent's is
+  `setting("dashboard.framingEnabled", false)`, or the Spring Boot starter's or the Ktor plugin's
+  `settings.dashboard.framingEnabled`.
 
 ### New Features
 
@@ -25,6 +34,9 @@ holds up its shutdown, to fit the window its platform gives it, such as Cloud Ru
   `stop-timeout` key, and the Spring Boot starter from its new `prometheus-proxy.agent.stop-timeout` property, each as
   a number of seconds or a duration such as `10s`; both default to 30 seconds, which the plugin waited already, and
   after which the starter's stop now returns with a warning, where it threw.
+- **A dashboard can be framed again.** `proxy.dashboard.framingEnabled` and `agent.dashboard.framingEnabled`, on by
+  default, let any web page show the dashboard in a frame, such as a portal's; `false` refuses framing, as every
+  dashboard did in 4.7.0. A login in a frame works only when the framing page is on the dashboard's own site.
 
 ### Behavior Changes
 

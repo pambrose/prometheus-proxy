@@ -309,6 +309,7 @@ class ProxyOptions internal constructor(
           maxSessions = maxSessions,
           refreshIntervalSecs = refreshIntervalSecs,
           allowedHosts = allowedHosts,
+          framingEnabled = framingEnabled,
         ),
         logger,
       )

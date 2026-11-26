@@ -317,10 +317,10 @@ class ProxyWebDashboardTest : StringSpec() {
           }.bodyAsText()
         restore shouldContain "<body"
 
-        // Neither may be framed by a page on another site, which could steer a viewer's clicks.
+        // Framing is allowed by default (proxy.dashboard.framingEnabled), so a page can embed either.
         listOf(fullResponse, fragmentResponse).forEach {
-          it.headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
-          it.headers["X-Frame-Options"] shouldBe "DENY"
+          it.headers["Content-Security-Policy"].orEmpty() shouldNotContain "frame-ancestors"
+          it.headers["X-Frame-Options"] shouldBe null
         }
       }
     }
@@ -734,7 +734,8 @@ class ProxyWebDashboardTest : StringSpec() {
 
           scrapeNow().apply {
             status shouldBe HttpStatusCode.OK
-            headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
+            // Framing is allowed by default, on an action's result as on a page.
+            headers["Content-Security-Policy"].orEmpty() shouldNotContain "frame-ancestors"
             bodyAsText().apply {
               this shouldContain """<span class="pill ok">200</span>"""
               this shouldContain "2 families · 2 samples"

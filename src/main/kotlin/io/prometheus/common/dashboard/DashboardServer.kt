@@ -102,6 +102,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param role the process the dashboard belongs to, `proxy` or `agent`: it names the session cookie and the config keys
  *   a log line points to (`<role>.dashboard.allowedOrigins`)
  * @param path the base path, normalized here once (see [DashboardServer.routeBase])
+ * @param framingEnabled `<role>.dashboard.framingEnabled`: lets any page show the dashboard in a frame; false refuses
+ *   framing on every response
  * @param login the login every request must carry once a password is set; null leaves the dashboard open
  * @param loginHeading the login page's heading, the dashboard's name
  * @param icons the brand marks served under [DashboardServer.ICON_DIR], by file name, with their classpath resources
@@ -115,6 +117,7 @@ internal class DashboardSettings(
   val maxSessions: Int,
   val allowedOrigins: List<String>,
   val allowedHosts: List<String>,
+  val framingEnabled: Boolean,
   val login: DashboardLogin?,
   val loginHeading: String,
   val icons: Map<String, String> = emptyMap(),
@@ -189,9 +192,9 @@ internal interface DashboardSite<V : Any, S : Any> {
  *   WebSocket and every action ([pageGuard]), sessions are capped, a session that stops reading is closed rather than
  *   buffered for, and a page request or a browser message renders the recent snapshot rather than collecting one (see
  *   [SnapshotCache]). Setting `allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
- *   No response may be framed by another page, and with a password set, none but the versioned assets may be kept in a
- *   browser's cache. A refused Origin or Host, which needs no login, is logged cut and escaped, at INFO at most once a
- *   minute for each address.
+ *   With `framingEnabled` false, no response may be framed by another page, and with a password set, none but the
+ *   versioned assets may be kept in a browser's cache. A refused Origin or Host, which needs no login, is logged cut
+ *   and escaped, at INFO at most once a minute for each address.
  * - **Assets.** htmx and its WebSocket extension, and the site's brand marks, from the classpath, under URLs that carry
  *   their WebJar's version, so a year-long cache can never run an old script against new markup.
  * - **Updates.** One shared push loop, not one per session. It wakes on one of the site's [DashboardSite.changes] or a
@@ -412,7 +415,7 @@ internal class DashboardServer<V : Any, S : Any>(
   }
 
   // The login page, for a page asked for without a session or after a wrong login. Like every response with a login
-  // set, never framed or cached (see noFraming and caching).
+  // set, never cached, and like every response, never framed while framingEnabled is false (see noFraming and caching).
   private suspend fun ApplicationCall.respondLogin(
     next: String,
     username: String = "",
@@ -490,7 +493,8 @@ internal class DashboardServer<V : Any, S : Any>(
     }
   }
 
-  // Application-wide, on every response: a page, a fragment, an action's result, an asset, a refusal, a redirect, an
+  // Installed only while framingEnabled is false: on, the default, any page can frame the dashboard. Then
+  // application-wide, on every response: a page, a fragment, an action's result, an asset, a refusal, a redirect, an
   // error page, and the WebSocket's handshake. No page may frame the dashboard, so another site's page can't lay itself
   // over the dashboard's and steer a viewer's clicks, the WebSocket and the actions passing the Origin check as the
   // dashboard's own. X-Frame-Options is the same rule for a browser that predates frame-ancestors. A response with a
@@ -524,7 +528,8 @@ internal class DashboardServer<V : Any, S : Any>(
       // returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is off -- a dashboard polling
       // its own socket would drown the process's logs.
       configureKtorServer(isLoggingEnabled = false)
-      install(noFraming)
+      if (!settings.framingEnabled)
+        install(noFraming)
       install(hostCheck)
       settings.login?.also { install(authCheck(it)) }
       install(WebSockets) {

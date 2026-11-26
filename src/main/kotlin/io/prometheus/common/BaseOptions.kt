@@ -590,6 +590,7 @@ abstract class BaseOptions protected constructor(
     val maxSessions: Int,
     val refreshIntervalSecs: Int,
     val allowedHosts: List<String>,
+    val framingEnabled: Boolean,
   )
 
   /**
@@ -623,6 +624,11 @@ abstract class BaseOptions protected constructor(
     log.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
     validateDashboardLogin(role)
     logDashboardExposure(role, dashboard.allowedHosts, log)
+    if (dashboard.framingEnabled)
+      log.info {
+        "dashboard framing: on; any web page can show the dashboard in a frame; " +
+          "set $role.dashboard.framingEnabled = false to refuse it"
+      }
   }
 
   // The login, masked, or, without one on a wildcard address, the warning that the dashboard is open to the network.

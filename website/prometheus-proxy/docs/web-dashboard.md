@@ -518,8 +518,8 @@ Without a [login](#login), anyone who can reach the dashboard's port can read it
 network, or bind it to a private address with `proxy.dashboard.host`; without a login, the proxy warns at startup
 when the dashboard listens on all interfaces.
 
-A browser inside that network can still be used to reach it. The dashboard guards against the three ways a
-web page can do that:
+A browser inside that network can still be used to reach it. A web page can do that in three ways; the dashboard
+guards against the first on its own, and against the other two with a setting each:
 
 - **A WebSocket from another site.** Browsers let any page open a WebSocket to any address, so the
   dashboard refuses a handshake whose `Origin` is not its own host. Behind a reverse proxy that rewrites
@@ -531,10 +531,16 @@ web page can do that:
   dashboard by in `proxy.dashboard.allowedHosts` and it refuses any other host name with a 403, on every
   route; IP addresses, `localhost`, and the hosts in `allowedOrigins` are always allowed. This check is off
   until you set it.
-- **Framing.** A page can show the dashboard in a frame, hidden under content of its own, and steer a viewer's
-  clicks onto Scrape now or Log out; the frame's requests come from the dashboard's own page, so the Origin check
-  passes them. Every response the dashboard sends forbids framing (`Content-Security-Policy: frame-ancestors 'none'`,
-  and `X-Frame-Options: DENY` for older browsers), so no page, on any site, can frame it.
+- **Framing.** A page can show the dashboard in a frame. That's allowed by default (`proxy.dashboard.framingEnabled`),
+  so a portal or a page of your own can embed the dashboard, and so can a page on another site that a viewer opens: it
+  can hide the dashboard under content of its own and steer the viewer's clicks onto Scrape now or Log out, since the
+  frame's requests come from the dashboard's own page and pass the Origin check, though it can't read what the frame
+  shows. With a login set, a page on another site gets only the login page, since the session cookie (`SameSite=Lax`)
+  isn't sent to a frame on another site, so a login in a frame works only on the same site. A site is a scheme and a
+  registered domain, so a page on another port of the dashboard's host, or on a sibling subdomain, is on the same site,
+  and frames the signed-in dashboard. Set `proxy.dashboard.framingEnabled = false` and every response forbids framing
+  (`Content-Security-Policy: frame-ancestors 'none'`, and `X-Frame-Options: DENY` for older browsers), so no page, on
+  any site, can frame it.
 
 The dashboard logs a request it refuses for its `Origin` or `Host` at INFO, naming the setting that would allow it, at
 most once a minute for each address the requests come from, and the rest at DEBUG. It cuts the header to 270

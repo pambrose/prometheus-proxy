@@ -809,14 +809,15 @@ Two support helpers also live here (not test classes themselves):
   larger than every buffer, holding up no other page's pushes when Log out or the push loop (its login past its age)
   closes it; and, on a 50 ms tick, such a page closed once its buffer is full, giving up its `maxSessions` slot
 - **DashboardResponsesTest** (`dashboard/`) — what `DashboardServer` answers over real sockets, serving a site the spec
-  stands in for, with no proxy or agent: every response refusing framing once (`frame-ancestors 'none'` and
-  `X-Frame-Options: DENY`), a page, a fragment, an action, an asset, a brand mark beside its own `sandbox` policy, the
-  root's redirect, `/session`, a foreign Origin's and a foreign Host's 403, a 404, and a 500 included; without a login,
-  no `Cache-Control` on a page, and the assets' year-long one; with a login, `no-store` once on every response but the
-  assets, the login page, a 303 to it, a 401, a 404, and a 500 included; and an `Origin`, then a `Host`, of `ESC[2J`
-  and 5,000 characters more, sent twice from one address over a raw socket, since the HTTP client refuses a control
-  character, refused with 403 and logged at INFO and then DEBUG, the escape written out and the line under 400
-  characters
+  stands in for, with no proxy or agent: with framing refused (`framingEnabled = false`), every response refusing it
+  once (`frame-ancestors 'none'` and `X-Frame-Options: DENY`), a page, a fragment, an action, an asset, a brand mark
+  beside its own `sandbox` policy, the root's redirect, `/session`, a foreign Origin's and a foreign Host's 403, a 404,
+  and a 500 included; without a login, no `Cache-Control` on a page, and the assets' year-long one; with a login,
+  `no-store` once on every response but the assets, the login page, a 303 to it, a 401, a 404, and a 500 included; and
+  an `Origin`, then a `Host`, of `ESC[2J` and 5,000 characters more, sent twice from one address over a raw socket,
+  since the HTTP client refuses a control character, refused with 403 and logged at INFO and then DEBUG, the escape
+  written out and the line under 400 characters; and with framing enabled, the default, no response with either header,
+  a login's `no-store` and a brand mark's `sandbox` policy kept
 - **DashboardServiceTest** (`dashboard/`) — a dashboard's service lifecycle over a mocked `DashboardServer`: a
   server that fails to start stopped, so Ktor's shutdown hook and application don't outlive it, with a stop that
   fails attached to the start's failure; and a server that starts stopped only when the service stops
@@ -1103,12 +1104,13 @@ mechanism that the standard suite cannot reach:
   the regions each view asks for; connected, one path registered and one refused, with the proxy's reason, the detail
   pane as a page and as htmx's fragment, the connection's endpoint, connects, and token, and the root's redirect; a
   scrape through the proxy in the path's strip and Recent scrapes, and Scrape now fetching the target from the agent
-  through the path's filter, recorded nowhere, not framed, refused without the page's header or for a path the agent
-  doesn't know, saying why, and working with the proxy down; with Scrape now off, no button and no route; with a
-  password, the login page under the agent's name, not cached or framed, and a cookie named for the agent; and no
-  dashboard without `--dashboard`; and its Activity view showing the agent connecting and a refused path, filtered, and
-  pushing the disconnect, with the failure that ended it, and failing connects to an open page when the proxy stops;
-  and, with the agent's metrics on, its connect, its refused path, its disconnect, and its dashboard sign-in counted
+  through the path's filter, recorded nowhere, framing allowed (the default), refused without the page's header or for a
+  path the agent doesn't know, saying why, and working with the proxy down; with Scrape now off, no button and no route;
+  with a password and `framingEnabled = false`, the login page under the agent's name, not cached or framed, and a
+  cookie named for the agent; and no dashboard without `--dashboard`; and its Activity view showing the agent connecting
+  and a refused path, filtered, and pushing the disconnect, with the failure that ended it, and failing connects to an
+  open page when the proxy stops; and, with the agent's metrics on, its connect, its refused path, its disconnect, and
+  its dashboard sign-in counted
 - **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
   replacing and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy
@@ -1179,29 +1181,31 @@ mechanism that the standard suite cannot reach:
   `image/svg+xml` with `nosniff` and a `sandbox` CSP, and a 404 off the allowlist or without the version), a registered
   path's target, source, and the config's links built from its job label, one of them an icon the page's head gives its
   mark, a root-mounted base path, with `allowedHosts` set a 403 on every route for a request naming an unknown host, an
-  agent's page and detail fragment not framed, page GETs and WebSocket messages rendering the cached snapshot while a
-  topology change still shows on the next page, a gone path staying in the path layout after more scrapes than the
-  retired recent-scrapes queue held, an agent's identity in both layouts with the path search filtering from the URL and
-  over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and a
-  session kept open through a push that fails to render, and a scrape-now against a stub target returning what it had,
-  not framed, while the proxy's and the agent's scrape metrics, the History, and the agent's Recent scrapes stay as
-  Prometheus's scrape left them and the agent counts it in `agent_dashboard_scrapes_total`, refused within its cooldown,
-  for an unknown path, saying why, without htmx's header, or from another origin, and absent when off; and an Activity
-  page sent its table over a real socket in the first frame rendered from its message, left out of the ticks after it
-  while nothing is recorded, and sent again for a new message and once an agent's connection is recorded
-- **ProxyWebDashboardLoginTest** — the dashboard with a password set, split from ProxyWebDashboardTest, a proxy per
-  spec: a page navigation without a session sent to the login page with its path as `next`, and anything else (the
-  WebSocket handshake, the scrape action, an asset, `/session`) a 401 with no `WWW-Authenticate`; the login page, not
-  cached or framed; a wrong login answered with the alert, and one WARN for two, never naming the username; a right one
-  setting the session cookie (`HttpOnly`, `SameSite=Lax`, the base's `Path`, 7 days, `Secure` from an https origin) and
-  returning to `next`, never off-site; the dashboard, not cached or framed, its WebSocket, and `/session` working with
-  the cookie; Log out ending the session; a foreign origin refused on the login and Log out forms; an oversized or
-  chunked login body refused; Basic Auth for scripts; past 10 wrong logins from one address, every login from it refused
-  with a 429 and `Retry-After`, the right one included, from the form or as Basic Auth; an open page's WebSocket closed
-  once its session ends (`VIOLATED_POLICY`), without waiting for a reconnect; a browser's saved Basic login (a request
-  with `Sec-Fetch-Mode`) ignored, the page, `/session`, and the WebSocket included, and not logged as wrong; a root
-  mount's login at `/login`; with no password, no login page and no Log out; and each login counted in
-  `proxy_dashboard_logins_total` by outcome, a script's right Basic Auth not counted as a sign-in
+  agent's page and detail fragment with framing allowed (the default), page GETs and WebSocket messages rendering the
+  cached snapshot while a topology change still shows on the next page, a gone path staying in the path layout after
+  more scrapes than the retired recent-scrapes queue held, an agent's identity in both layouts with the path search
+  filtering from the URL and over the socket, a path the agent's identity may not register in the Activity view, from a
+  GET and a push, and a session kept open through a push that fails to render, and a scrape-now against a stub target
+  returning what it had, framing allowed, while the proxy's and the agent's scrape metrics, the History, and the agent's
+  Recent scrapes stay as Prometheus's scrape left them and the agent counts it in `agent_dashboard_scrapes_total`,
+  refused within its cooldown, for an unknown path, saying why, without htmx's header, or from another origin, and
+  absent when off; and an Activity page sent its table over a real socket in the first frame rendered from its message,
+  left out of the ticks after it while nothing is recorded, and sent again for a new message and once an agent's
+  connection is recorded
+- **ProxyWebDashboardLoginTest** — the dashboard with a password set and framing refused (`framingEnabled = false`),
+  split from ProxyWebDashboardTest, a proxy per spec: a page navigation without a session sent to the login page with
+  its path as `next`, and anything else (the WebSocket handshake, the scrape action, an asset, `/session`) a 401 with no
+  `WWW-Authenticate`; the login page, not cached or framed; a wrong login answered with the alert, and one WARN for two,
+  never naming the username; a right one setting the session cookie (`HttpOnly`, `SameSite=Lax`, the base's `Path`, 7
+  days, `Secure` from an https origin) and returning to `next`, never off-site; the dashboard, not cached or framed, its
+  WebSocket, and `/session` working with the cookie; Log out ending the session; a foreign origin refused on the login
+  and Log out forms; an oversized or chunked login body refused; Basic Auth for scripts; past 10 wrong logins from one
+  address, every login from it refused with a 429 and `Retry-After`, the right one included, from the form or as Basic
+  Auth; an open page's WebSocket closed once its session ends (`VIOLATED_POLICY`), without waiting for a reconnect; a
+  browser's saved Basic login (a request with `Sec-Fetch-Mode`) ignored, the page, `/session`, and the WebSocket
+  included, and not logged as wrong; a root mount's login at `/login`; with no password, no login page and no Log out;
+  and each login counted in `proxy_dashboard_logins_total` by outcome, a script's right Basic Auth not counted as a
+  sign-in
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 - **TlsPemTest** — TLS over Netty with every certificate and key given as PEM, none as a file: the proxy's as base64

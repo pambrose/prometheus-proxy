@@ -43,6 +43,7 @@ internal data class DashboardValues(
   val maxSessions: Int,
   val allowedOrigins: List<String>,
   val allowedHosts: List<String>,
+  val framingEnabled: Boolean,
 )
 
 /**
@@ -175,6 +176,7 @@ internal object CommonSettings {
           Setting("Max sessions", "$maxSessions"),
           Setting("Allowed origins", names(allowedOrigins, empty = "the dashboard's own host")),
           Setting("Allowed hosts", names(allowedHosts, empty = "any")),
+          Setting("Framing", if (framingEnabled) "allowed, by any site" else "refused"),
         ) + extra,
       )
     }
