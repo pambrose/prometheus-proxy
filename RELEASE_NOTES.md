@@ -57,6 +57,9 @@ its own that holds them all, with Prometheus and Grafana.
   each time it came back, so the line said it concerned more paths than it did.
 - **The Activity view says when discovery works again.** After a `discovery failed` line, the agent now adds a
   `discovery recovered` line once it reads the discovery file again, so the failure no longer looks current.
+- **The dashboards' top bar no longer draws over its tabs.** In a window about 720 to 900 pixels wide, as a screens
+  page's Split pane often is, the status's last line was drawn over the tabs. The status and the buttons after it now
+  move to a row of their own above the tabs when they don't fit beside them.
 
 ### Behavior Changes
 

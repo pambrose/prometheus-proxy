@@ -84,10 +84,17 @@ internal object DashboardCss {
            display:flex; flex-direction:column; min-height:100vh; }
     body > main { flex:1; }
     /* The current tab's line lies on the bar's bottom rule, so the bar has no bottom padding and sets its items on its
-       floor; the brand and the status carry their own, which puts their text on the tabs' line. One row above 720px:
-       the status wraps inside itself, so it never pushes the tabs off the rule. */
+       floor; the brand and the status carry their own, which puts their text on the tabs' line. */
     .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
            background:var(--surface); }
+    /* A dashboard's bar, above 720px: the brand and the tabs, then the tail (DashboardPage.barTail), the status and the
+       buttons after it, beside the tabs while it has 380px, the status wrapping inside itself, or its widest stat and
+       buttons if those are wider; with less, a row of its own above the tabs, whole. wrap-reverse stacks the bar's
+       rows from its floor up, so the tabs keep the rule, and turns the cross axis up, so flex-start is the floor.
+       Without the tail's floor, the status's last stat was drawn over the tabs at about 760 to 900px. */
+    .bar:has(> .bar-tail) { flex-wrap:wrap-reverse; align-items:flex-start; row-gap:4px; }
+    .bar-tail { display:flex; align-items:flex-end; justify-content:flex-end; gap:10px;
+      flex:1 1 380px; min-width:min-content; }
     /* The logo's small-size cut beside the name, centered on its line, which the mark is shorter than, so the bar's
        height and the name's place on the tabs' line are as they were without it. */
     .brand { display:flex; align-items:center; gap:7px; font-weight:600; flex:none; padding-bottom:10px; }
@@ -119,7 +126,7 @@ internal object DashboardCss {
     :root[data-theme="dark"] .theme {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><path d='M13.5 9.75A5.75 5.75 0 1 1 6.25 2.5a4.75 4.75 0 0 0 7.25 7.25z'/></svg>"); }
     .bar-right { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:2px 14px;
-      margin-left:auto; min-width:0; padding-bottom:10px; color:var(--ink-3); font-size:11.5px; }
+      min-width:0; padding-bottom:10px; color:var(--ink-3); font-size:11.5px; }
     /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
        splitting "0 agents" across two lines. */
     .bar-right > span { white-space:nowrap; }
@@ -331,10 +338,12 @@ internal object DashboardCss {
     /* Forced colours drop backgrounds, the dots included. */
     @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
     /* Narrow, the tabs take a row of their own, the bar's last, so they still stand on its rule; the brand and the
-       status share the rows above, off the tabs' line, so they keep only the room their own rows need. */
+       tail share the rows above, off the tabs' line, so they keep only the room their own rows need. The tail has no
+       floor here, so a long agent endpoint can't widen a phone's page. */
     @media (max-width:720px) {
       .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); }
-      .bar { flex-wrap:wrap; row-gap:4px; }
+      .bar, .bar:has(> .bar-tail) { flex-wrap:wrap; align-items:flex-end; row-gap:4px; }
+      .bar-tail { min-width:0; }
       .brand, .bar-right { padding-bottom:6px; }
       .nav { order:1; flex-basis:100%; margin-left:0; }
     }

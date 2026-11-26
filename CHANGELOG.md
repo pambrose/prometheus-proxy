@@ -57,6 +57,9 @@ All notable changes to this project are documented in this file.
 - The agent's Activity view showed a discovery file that couldn't be read or parsed, but not that it could again, so
   the failure looked current: a `discovery recovered` line, with the entries read, now follows, as the log's INFO
   does, on the next connection too
+- The dashboards' top bar drew the status's last line over the tabs in a window about 720 to 900 pixels wide, as a
+  screens page's Split pane often is, since the status shrank without a floor. The status and the buttons after it
+  (`DashboardPage.barTail`) now keep together, beside the tabs while they fit, else on a row of their own above them
 
 ### Behavior Changes
 

@@ -476,6 +476,12 @@ tab to put its screen on the right), and **All** every screen in a grid, each la
 tile; click a tile's title to open it. Switching tabs or layouts never reloads a screen, so a dashboard keeps the agent
 or path you selected. Each pane's **Open in a tab** opens its screen on its own.
 
+<figure markdown="span">
+  ![The screens page in Split, the proxy's failing paths beside Grafana](images/demo/screens.webp#only-dark){ loading=lazy }
+  ![The screens page in Split, the proxy's failing paths beside Grafana](images/demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The screens page in Split, the proxy's failing paths beside Grafana, in the Basics Demo</figcaption>
+</figure>
+
 A link can say what the page shows, after its `#`:
 
 | Link | Shows |

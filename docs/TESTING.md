@@ -876,7 +876,9 @@ Two support helpers also live here (not test classes themselves):
   `--ok`, `--warn`, `--crit`) clearing 4.5:1 on `--surface-2` in each token block, and a hovered row's address line
   on `--surface-3`; the head's script applying only a stored light or
   dark; and the theme button, one button named Theme until the script names it, showing the theme in force's icon from
-  the page's `data-theme` with the icon buttons' glyph, and sharing the bar's end with Log out in one box
+  the page's `data-theme` with the icon buttons' glyph, and sharing the bar's end with Log out in one box; and the
+  bar's tail, the status and the buttons after it in one box, with the rules that keep it beside the tabs or move it,
+  whole, to a row above them, and drop its floor below 720px
 - **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,
   and again on a later call if building it failed, which lets the Zipkin tracing interceptors be installed before the
   reporter they need exists

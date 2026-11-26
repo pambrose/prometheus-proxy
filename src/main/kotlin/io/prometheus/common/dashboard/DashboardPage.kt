@@ -24,6 +24,7 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
 import kotlinx.html.ButtonType
+import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.FormMethod
@@ -304,6 +305,14 @@ internal object DashboardPage {
       attributes["aria-label"] = THEME_LABEL
     }
   }
+
+  /**
+   * The bar's tail, after the tabs: the status, which a push replaces, then what follows it, such as the proxy's
+   * Screens link and the bar's end, in one box, so they keep together. A bar too narrow to hold the tail beside the
+   * tabs moves it, whole, to a row of its own above them (see [DashboardCss]), rather than one item at a time, which
+   * left a button alone on a row, or drew the status's last stat over the tabs.
+   */
+  fun FlowContent.barTail(block: DIV.() -> Unit) = div("bar-tail") { block() }
 
   /**
    * The bar's end, after the status and outside it, which a push replaces: the theme button, then Log out when

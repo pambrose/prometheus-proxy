@@ -426,11 +426,13 @@ label rows, 10px for list rows, 8px for table cells, 7px for kv rows, and 8px ab
 **The kv row.** Inside the detail pane, key/value pairs use a fixed `220px` minimum label column so
 values align down the pane without a table.
 
-**Responsive.** One width breakpoint: **720px**. Below it the master–detail grid collapses to a single
-column and the list's right border becomes a bottom border, and the tabs take a row of their own, the
-top bar's last, so the current tab's line still lies on its rule. Nothing else changes —
-no hamburger, no drawer, no reflowed table. The table keeps its horizontal scroller, which is the correct mobile
-behavior for tabular data.
+**Responsive.** One width breakpoint: **720px**. Below it the master–detail grid collapses to a single column and
+the list's right border becomes a bottom border, and the tabs take a row of their own, the top bar's last, so the
+current tab's line still lies on its rule. Above it, the bar's tail, the counters and the buttons after them, keeps
+beside the tabs while it has `380px` or its widest stat and buttons, and otherwise takes a row of its own above the
+brand and tabs, whole, set by the content rather than a second breakpoint. Nothing else changes — no hamburger, no
+drawer, no reflowed table. The table keeps its horizontal scroller, which is the correct mobile behavior for tabular
+data.
 
 **One input-mode breakpoint: `pointer: coarse`.** Tabs grow to 44px tall on touch
 devices only. Target size is a property of the *input*, not the viewport — a tablet is wide and
