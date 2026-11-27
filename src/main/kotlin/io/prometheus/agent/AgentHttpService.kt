@@ -152,8 +152,10 @@ internal class AgentHttpService(
   // thread (see callSource); cancelled by close().
   private val sourceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-  // The sources whose last call outlasted its scrape and hasn't returned, which aren't called again until it does.
-  private val stuckSources: MutableSet<MetricsSource> = ConcurrentHashMap.newKeySet()
+  // The sources with calls that outlasted their scrapes and haven't returned, and how many, which aren't called again
+  // until all have. A source called by overlapping scrapes can have more than one: kept as a set, the mark went with
+  // the first to return, though another was still stuck (November 26 #14).
+  private val stuckSources = ConcurrentHashMap<MetricsSource, Int>()
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
@@ -315,16 +317,16 @@ internal class AgentHttpService(
 
   // Calls [source] for [req], writing to [out], apart from the scrape: its timeout interrupts the call and stops
   // waiting for it, so a source stuck in a call that ignores interrupts, such as a socket read, holds a thread of its
-  // own, but not the scrape, the agent's other scrapes, or its shutdown. Until that call returns, the source isn't
-  // called again, so stuck calls don't pile up. What the source throws, short of a VirtualMachineError, fails only the
-  // scrape (see sourceFailure).
+  // own, but not the scrape, the agent's other scrapes, or its shutdown. Until every call so abandoned returns, the
+  // source isn't called again, so stuck calls don't pile up. What the source throws, short of a VirtualMachineError,
+  // fails only the scrape (see sourceFailure).
   private suspend fun callSource(
     source: MetricsSource,
     req: ScrapeRequest,
     out: CappedBytes,
   ): String {
-    if (source in stuckSources)
-      throw IOException("The source's last call, which outlasted its scrape's timeout, hasn't returned")
+    if (stuckSources.containsKey(source))
+      throw IOException("A call to the source that outlasted its scrape's timeout hasn't returned")
     val call =
       sourceScope.async {
         try {
@@ -337,9 +339,10 @@ internal class AgentHttpService(
       return call.await()
     } finally {
       // Abandoned, the scrape having timed out or been cancelled: interrupt the call, and wait no longer for it.
+      // Counted before the handler is added, which runs at once for a call that has just completed.
       if (!call.isCompleted) {
-        stuckSources += source
-        call.invokeOnCompletion { stuckSources -= source }
+        stuckSources.merge(source, 1) { stuck, added -> stuck + added }
+        call.invokeOnCompletion { stuckSources.computeIfPresent(source) { _, calls -> (calls - 1).takeIf { it > 0 } } }
         call.cancel()
       }
     }

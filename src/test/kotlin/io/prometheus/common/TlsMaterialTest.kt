@@ -38,7 +38,19 @@ import io.prometheus.common.TestCerts.SERVER_KEY
 import io.prometheus.common.TestCerts.base64
 import io.prometheus.common.TestCerts.read
 import io.prometheus.common.Utils.causeChain
+import com.typesafe.config.ConfigFactory
+import io.grpc.netty.GrpcSslContexts
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.netty.handler.ssl.SslContextBuilder
+import io.prometheus.Agent
+import java.io.FileNotFoundException
+import java.io.InputStream
 import java.util.Base64
+import javax.net.ssl.SSLException
+import kotlin.io.path.createTempFile
 
 // TLS material given as PEM text, the form a platform that passes secrets as environment variables needs, in place of
 // the files the Proxy and Agent otherwise read: how a value is read, how a file and a PEM for the same material
@@ -115,6 +127,29 @@ class TlsMaterialTest : StringSpec() {
     "a source whose file doesn't exist is refused" {
       val e = shouldThrow<IllegalArgumentException> { TlsSource("x", MISSING_FILE, "").withStream { it.read() } }
       e.message shouldBe "File \"$MISSING_FILE\" does not exist"
+    }
+
+    // A file that exists but can't be opened, as one a container's user may not read, threw FileNotFoundException,
+    // which isn't a setting the agent or proxy rejects: an embedded host got it in place of a ConfigLoadException, and
+    // a standalone one a stack trace in place of "Invalid configuration".
+    "a source whose file can't be read is refused, naming its setting" {
+      val file = createTempFile("unreadable", ".pem").toFile()
+      try {
+        file.writeText(read(CA_CERT))
+        file.setReadable(false, false)
+        // Root reads any file, so the case can't arise for it.
+        if (!file.canRead()) {
+          val e =
+            shouldThrow<IllegalArgumentException> {
+              TlsSource("trustCertCollection", file.path, "").withStream { it.read() }
+            }
+          e.message.orEmpty() shouldStartWith "Unable to read trustCertCollectionFilePath \"${file.path}\": "
+          e.cause.shouldBeInstanceOf<FileNotFoundException>()
+        }
+      } finally {
+        file.setReadable(true, false)
+        file.delete()
+      }
     }
 
     // ==================== TLS contexts ====================
@@ -195,6 +230,40 @@ class TlsMaterialTest : StringSpec() {
       e.message.orEmpty() shouldNotContain "bm90IGEgY2VydGlmaWNhdGU="
     }
 
+    // A context's build throws an SSLException for material it parsed but can't use, which isn't a setting the agent or
+    // proxy rejects, as an unreadable file isn't (above). Neither Netty provider checks at the build that a certificate
+    // and key match, so a stand-in builder throws it here.
+    "a context the TLS builder can't build is refused, naming the settings its material came from" {
+      mockkStatic(GrpcSslContexts::class)
+      try {
+        val builder = mockk<SslContextBuilder>(relaxed = true)
+        every { builder.build() } throws SSLException("failed to set certificate and key")
+        every { GrpcSslContexts.forServer(any<InputStream>(), any<InputStream>()) } returns builder
+        every { GrpcSslContexts.forClient() } returns builder
+
+        val server =
+          shouldThrow<IllegalArgumentException> {
+            TlsMaterial.serverContext(
+              pemSource("certChain", SERVER_CERT),
+              TlsSource("privateKey", SERVER_KEY, ""),
+              none("trustCertCollection"),
+            )
+          }
+        server.message shouldBe
+          "Unable to build the TLS context from certChainPem, privateKeyFilePath: failed to set certificate and key"
+        server.cause.shouldBeInstanceOf<SSLException>()
+
+        val client =
+          shouldThrow<IllegalArgumentException> {
+            TlsMaterial.clientContext(none("certChain"), none("privateKey"), none("trustCertCollection"))
+          }
+        client.message shouldBe
+          "Unable to build the TLS context from the JVM default trust store: failed to set certificate and key"
+      } finally {
+        unmockkStatic(GrpcSslContexts::class)
+      }
+    }
+
     // ==================== Options ====================
 
     // -D, the config, and the env vars all reach the same resolution; -D is the one a test can set.
@@ -269,6 +338,34 @@ class TlsMaterialTest : StringSpec() {
         }
       e.message shouldContain "trustCertCollectionPem is neither PEM text nor the base64 of PEM text"
       e.causeChain().forEach { it.message.orEmpty() shouldNotContain GARBAGE }
+    }
+
+    // The agent builds its TLS context as it's built, so an embedded host catches a file it can't read as it catches
+    // any setting the agent rejects, where it got the FileNotFoundException.
+    "an embedded agent with a trust collection file it can't read throws ConfigLoadException" {
+      val file = createTempFile("unreadable", ".pem").toFile()
+      try {
+        file.writeText(read(CA_CERT))
+        file.setReadable(false, false)
+        // Root reads any file, so the case can't arise for it.
+        if (!file.canRead()) {
+          val config =
+            ConfigFactory.parseString(
+              """
+              agent {
+                proxy.hostname = "localhost"
+                tls.trustCertCollectionFilePath = "${file.path}"
+              }
+              """,
+            )
+          val e = shouldThrow<ConfigLoadException> { Agent.startAsyncAgent(config, logBanner = false) }
+          e.message.orEmpty() shouldContain "Unable to read trustCertCollectionFilePath \"${file.path}\""
+          e.cause.shouldBeInstanceOf<IllegalArgumentException>()
+        }
+      } finally {
+        file.setReadable(true, false)
+        file.delete()
+      }
     }
 
     "an embedded agent with a file and a PEM for the same material throws ConfigLoadException" {

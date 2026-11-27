@@ -178,6 +178,34 @@ All notable changes to this project are documented in this file.
   it gave no result, so the alert never fired and the panel showed No data. Both now take no successes as zero
   (`or vector(0)`), as do the success-rate queries on the Monitoring page and in `docs/metrics-and-grafana.md`; a proxy
   with no scrapes still doesn't fire
+- A `MetricsSource` whose scrapes overlapped, two of Prometheus's or one and a Scrape now, was called again while a
+  call that ignored its scrape's timeout was still stuck, once another call a scrape gave up on returned, so stuck
+  calls could pile up, each holding a thread. The source is now called again only once every such call has returned
+- Results queued for a response stream that failed before reading them counted neither as sent nor as `dropped` in
+  `agent_scrape_result_count_total`; they now count as `dropped`. A response stream's failure also left the agent
+  dashboard's `disconnected` Activity line without its reason, which it now gives
+- A response stream the proxy ended without a failure, as it ends one it can't read, left the agent connected, its
+  other stream and its scrapes running, until the next result for the ended stream, which was lost, so its scrape
+  waited out the proxy's timeout. The connection now ends with the stream, and the agent reconnects
+- An agent stopping on a JVM `Error`, such as an `OutOfMemoryError`, first waited out
+  `agent.internal.reconnectPauseSecs` and logged `Waited ... to reconnect`, a reconnect it would never make. It now
+  stops at once
+- A TLS certificate, key, or trust collection file that exists but can't be read, such as one the process's user may
+  not open, ended a standalone proxy or agent with a `FileNotFoundException`'s stack trace, and reached an embedded
+  agent's host as that exception, not the `ConfigLoadException` it's documented to throw. It now fails startup as an
+  invalid setting does, naming the setting and the file, as does an `SSLException` from building the TLS context
+- A Scrape now, from either dashboard, of a path whose filter let the answer through unfiltered, a body not text or
+  not UTF-8, logged the filter's warning, added `not filtered` to the agent's Activity view, and showed the filter
+  failed open for good, so a scrape of Prometheus's that did the same later logged nothing. It now leaves no trace
+  there, as it leaves none in the agent's metrics
+- An agent proxy endpoint with no host, such as `:50051`, `[]`, or `http://:50051`, passed the agent's check of its
+  endpoints: as the first endpoint it failed startup with a message about a Netty channel, and as a later failover
+  entry it failed each connect attempt that reached it. One with text after a bracketed IPv6 address other than
+  `:port`, such as `[::1]50051`, had it dropped, and the default port dialed. Both now fail startup, naming the
+  endpoint (see Behavior Changes)
+- A metric filter judged a sample whose quoted name comes after a blank in its braces, such as
+  `{ "a.b", job="x" } 1`, by the name `""`, so an allow list dropped it and a deny list kept it. It's now judged by
+  `a.b`, as it is without the blank
 
 ### Behavior Changes
 
@@ -211,6 +239,12 @@ All notable changes to this project are documented in this file.
   `team_a/*` or `//team_a_*`, which no path the proxy accepts can match, naming the identity and the pattern
 - With service discovery on, the proxy refuses to start with an `sdPath` of whitespace, `/` alone, or more than one
   leading slash, such as `//discovery`, naming it; a path of several segments, a route of its own, is still accepted
+- An agent refuses to start with a proxy endpoint that has no host, such as `:50051` or `[]`, or anything but `:port`
+  after a bracketed IPv6 address, such as `[::1]50051`, naming it, whether it comes from `--proxy`, `PROXY_HOSTNAME`,
+  `agent.proxy.endpoints`, `agent.proxy.hostname`, or `fromEnvironment()`'s `PROMETHEUS_PROXY`: a failover entry with
+  no host started and failed each connect that reached it, and `[::1]50051` dialed the default port
+- An agent whose response stream the proxy ends without a failure reconnects at once, where it stayed connected
+  until it had a result for that stream
 
 ### Build & Tooling
 

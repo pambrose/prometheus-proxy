@@ -128,7 +128,7 @@ internal class MetricFilter private constructor(
    * Fails open on a non-text [contentType] or a body that is not valid UTF-8, warning once per
    * condition. A `null` return means "use the raw bytes" and is distinct from a filter that ran and
    * happened to drop nothing, so a fail-open scrape never records filter metrics. What it drops is added to
-   * [linesDropped] and [bytesSaved]; [previewBytes] filters alike and adds nothing. [onFailOpen] is told why each
+   * [linesDropped] and [bytesSaved]; [previewBytes] filters alike and leaves no trace. [onFailOpen] is told why each
    * fail-open happened, every time, for agent_filter_fail_open_total; the warning is logged only the first.
    */
   fun filterBytes(
@@ -136,26 +136,56 @@ internal class MetricFilter private constructor(
     contentType: String,
     onFailOpen: (FailOpenReason) -> Unit = {},
   ): FilterOutcome? =
-    previewBytes(bytes, contentType, onFailOpen)?.also {
+    outcome(bytes, contentType) { reason ->
+      onFailOpen(reason)
+      noteFailOpen(reason, contentType)
+    }?.also {
       droppedLines += it.linesDropped.toLong()
       savedBytes += it.bytesSaved.toLong()
     }
 
   /**
-   * Filters [bytes] as [filterBytes] does, without adding what it drops to [linesDropped] and [bytesSaved]: for a
-   * scrape a dashboard asked for, which isn't one of Prometheus's.
+   * Filters [bytes] as [filterBytes] does, leaving no trace: what it drops isn't added to [linesDropped] and
+   * [bytesSaved], and a payload it lets through unfiltered is neither logged nor told to the activity feed, nor shown
+   * in [failedOpen]. For a scrape a dashboard asked for, which isn't one of Prometheus's.
    */
   fun previewBytes(
     bytes: ByteArray,
     contentType: String,
-    onFailOpen: (FailOpenReason) -> Unit = {},
+  ): FilterOutcome? = outcome(bytes, contentType) {}
+
+  // Logs why a scrape of Prometheus's went through unfiltered, and tells the activity feed, the first time for each
+  // [reason]. A dashboard's preview latched it too, so it showed the filter failed open for good, and kept the first
+  // scrape of Prometheus's that did from logging it (November 26 #18).
+  private fun noteFailOpen(
+    reason: FailOpenReason,
+    contentType: String,
+  ) {
+    when (reason) {
+      FailOpenReason.NON_TEXT -> {
+        if (contentTypeWarned.compareAndSet(expectedValue = false, newValue = true)) {
+          logger.warn { "Skipping metric filter for /$path: content type \"$contentType\" is not text" }
+          onFailedOpen("a scrape's content type, $contentType, was not text")
+        }
+      }
+
+      FailOpenReason.INVALID_UTF8 -> {
+        if (invalidUtf8Warned.compareAndSet(expectedValue = false, newValue = true)) {
+          logger.warn { "Skipping metric filter for /$path: response body is not valid UTF-8" }
+          onFailedOpen(INVALID_UTF8)
+        }
+      }
+    }
+  }
+
+  // [bytes] filtered, or null when [failsOpen] is told why they're left untouched.
+  private fun outcome(
+    bytes: ByteArray,
+    contentType: String,
+    failsOpen: (FailOpenReason) -> Unit,
   ): FilterOutcome? {
     if (!isFilterableContentType(contentType)) {
-      onFailOpen(FailOpenReason.NON_TEXT)
-      if (contentTypeWarned.compareAndSet(expectedValue = false, newValue = true)) {
-        logger.warn { "Skipping metric filter for /$path: content type \"$contentType\" is not text" }
-        onFailedOpen("a scrape's content type, $contentType, was not text")
-      }
+      failsOpen(FailOpenReason.NON_TEXT)
       return null
     }
 
@@ -171,11 +201,7 @@ internal class MetricFilter private constructor(
         null
       }
     if (decoded == null) {
-      onFailOpen(FailOpenReason.INVALID_UTF8)
-      if (invalidUtf8Warned.compareAndSet(expectedValue = false, newValue = true)) {
-        logger.warn { "Skipping metric filter for /$path: response body is not valid UTF-8" }
-        onFailedOpen(INVALID_UTF8)
-      }
+      failsOpen(FailOpenReason.INVALID_UTF8)
       return null
     }
 
@@ -316,16 +342,18 @@ internal class MetricFilter private constructor(
     internal fun isFilterableContentType(contentType: String): Boolean = Exposition.isTextContentType(contentType)
 
     // The name of a sample line that starts at text[start] with a quoted name, such as {"a.b",job="x"} 1, or null for
-    // a line with a plain name. Prometheus 3 writes a name outside the legacy character set this way.
+    // a line with a plain name. Prometheus 3 writes a name outside the legacy character set this way. The text format
+    // allows blanks before it in the braces, as before a label: { "a.b", job="x" } 1 was judged by the name "".
     private fun quotedSampleName(
       text: String,
       start: Int,
       end: Int,
-    ): String? =
-      if (text[start] == '{' && start + 1 < end && text[start + 1] == '"')
-        Exposition.unquote(text, start + 1, end)
-      else
-        null
+    ): String? {
+      if (text[start] != '{')
+        return null
+      val quote = Exposition.firstNonBlank(text, start + 1, end)
+      return if (quote < end && text[quote] == '"') Exposition.unquote(text, quote, end) else null
+    }
 
     // Metric name is everything before the first '{' or whitespace, so label values -- which may
     // contain '}' or '#' -- can never influence matching. Returns the exclusive end index of the name

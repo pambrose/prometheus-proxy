@@ -40,9 +40,11 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldStartWith
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldNotBeInstanceOf
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
@@ -60,6 +62,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.response.respond
 import io.ktor.server.engine.embeddedServer
 import io.ktor.http.HttpStatusCode
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.metrics.model.registry.PrometheusRegistry
@@ -70,6 +73,7 @@ import io.prometheus.common.TestPorts.AGENT_FAILED_SHUTDOWN_ADMIN_PORT
 import io.prometheus.common.TestPorts.AGENT_FAILED_SHUTDOWN_METRICS_PORT
 import io.prometheus.common.TestPorts.AGENT_FAILED_START_METRICS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.grpc.ProxyServiceGrpcKt
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
@@ -480,6 +484,36 @@ class AgentTest : StringSpec() {
       } finally {
         agentLogger.level = originalLevel
       }
+    }
+
+    // A JVM Error stops the agent, so there's no reconnect to pace: the run loop waited out reconnectPauseSecs first,
+    // logging "Waited ... to reconnect", as the service still read as running until the Error left run().
+    "a JVM Error that stops the agent shouldn't wait out the reconnect pause first" {
+      val limiter = mockk<RateLimiter>()
+      every { limiter.acquire() } returns 0.0
+      val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>()
+      coEvery { stub.connectAgent(any(), any()) } throws OutOfMemoryError("test")
+      lateinit var agent: Agent
+
+      val logs =
+        captureLogs("io.prometheus.Agent") {
+          agent =
+            Agent(
+              options = agentOptions(["--proxy", "localhost:$PROXY_AGENT_PORT"], exitOnMissingConfig = false),
+              inProcessServerName = "agent-error-pause-test-${System.nanoTime()}",
+              testMode = true,
+            ) {
+              reconnectLimiter = limiter
+              grpcService.grpcStub = stub
+              grpcService.unaryDeadlineSecs = 0
+              startAsync()
+            }
+          eventually(5.seconds) { agent.state() shouldBe Service.State.FAILED }
+        }.map { it.formattedMessage }
+
+      agent.failureCause().shouldBeInstanceOf<OutOfMemoryError>()
+      verify(exactly = 0) { limiter.acquire() }
+      logs.filter { it.startsWith("Waited") }.shouldBeEmpty()
     }
 
     // ==================== Finding 2: heartbeat-failure threshold before reconnect ====================

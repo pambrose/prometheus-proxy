@@ -372,6 +372,24 @@ class UtilsTest : StringSpec() {
       result shouldBe HostPort("2001:db8::1", 8443)
     }
 
+    // An endpoint with no host parsed to HostPort("", port), which passed startup and failed later: as the first
+    // endpoint, with a message about a Netty channel, and as a failover entry, on each connect attempt that reached it.
+    "parseHostPort should throw for an endpoint with no host" {
+      listOf(":$PROXY_AGENT_PORT", "[]:$PROXY_AGENT_PORT", "[]", "[ ]:$PROXY_AGENT_PORT").forEach { hostPort ->
+        val exception = shouldThrow<IllegalArgumentException> { parseHostPort(hostPort, PROXY_AGENT_PORT) }
+        exception.message shouldBe "No host in '$hostPort'"
+      }
+    }
+
+    // A port written without its colon after a bracketed IPv6 address was dropped, and the default port dialed.
+    "parseHostPort should throw for text after a bracketed IPv6 address that isn't a port" {
+      listOf("[::1]$PROXY_AGENT_PORT", "[::1]x", "[::1] :$PROXY_AGENT_PORT").forEach { hostPort ->
+        val exception = shouldThrow<IllegalArgumentException> { parseHostPort(hostPort, PROXY_AGENT_PORT) }
+        exception.message shouldContain "after the closing bracket"
+        exception.message shouldContain "'$hostPort'"
+      }
+    }
+
     // M4: parseHostPort now validates port values with descriptive error messages
     // instead of throwing raw NumberFormatException.
     "parseHostPort should throw IllegalArgumentException for non-numeric port" {
@@ -749,6 +767,15 @@ class UtilsTest : StringSpec() {
           parseEndpointList("good:$PROXY_AGENT_PORT,http://", PROXY_AGENT_PORT)
         }
       e.message.orEmpty() shouldContain "http://"
+    }
+
+    // A failover entry with no host passed startup, and failed each connect attempt that rotated to it.
+    "parseEndpointList should reject an entry with no host" {
+      val e =
+        shouldThrow<IllegalArgumentException> {
+          parseEndpointList("good:$PROXY_AGENT_PORT,http://:$PROXY_HTTP_PORT", PROXY_AGENT_PORT)
+        }
+      e.message shouldBe "No host in ':$PROXY_HTTP_PORT'"
     }
 
     // ==================== HostPort.spec Round-Trip ====================

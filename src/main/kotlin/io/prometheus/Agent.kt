@@ -393,20 +393,19 @@ class Agent(
   override fun run() {
     val endpointFailover = EndpointFailover(grpcService)
     while (isRunning) {
-      try {
-        runCatchingCancellable {
-          runBlocking {
-            connectToProxy(endpointFailover)
-            logger.info { "Disconnected from proxy at $proxyHost" }
-          }
-        }.onFailure { e -> handleConnectionFailure(e) }
-      } finally {
-        // Skip the rate-limiter wait once shutdown has flipped isRunning to false. acquire() is not
-        // interruptible, so blocking here would stall Agent.shutDown()/awaitTerminated() for up to
-        // reconnectPauseSecs; there is also no reconnect to pace when the agent is stopping.
-        if (isRunning)
-          reconnectPause()
-      }
+      runCatchingCancellable {
+        runBlocking {
+          connectToProxy(endpointFailover)
+          logger.info { "Disconnected from proxy at $proxyHost" }
+        }
+      }.onFailure { e -> handleConnectionFailure(e) }
+      // Skip the rate-limiter wait once shutdown has flipped isRunning to false. acquire() is not
+      // interruptible, so blocking here would stall Agent.shutDown()/awaitTerminated() for up to
+      // reconnectPauseSecs; there is also no reconnect to pace when the agent is stopping. Not in a finally block: a
+      // JVM Error that handleConnectionFailure rethrows stops the agent, which reads as running until the Error leaves
+      // run(), so the agent waited out the pause first, and logged a reconnect it would never make (November 26 #16).
+      if (isRunning)
+        reconnectPause()
     }
   }
 

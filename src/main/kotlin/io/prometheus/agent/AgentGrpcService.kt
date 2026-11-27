@@ -924,20 +924,27 @@ internal class AgentGrpcService(
       connectionContext.dropUnsentResults()
     }
 
-    // Shared per-stream failure policy: run [block], and on a failure log it (tagged with [name]) while the agent is
-    // still running, then tear down the shared channels. Cancellation is propagated without closing (normal shutdown),
-    // and a JVM Error without either, so it fails the connection and stops the agent (November #7). Factored out of the
-    // three coroutines below so the failure handling lives in one place.
+    // Shared per-stream policy: run [block], and on a failure, while the agent is still running, log it (tagged with
+    // [name]) and note it as what ended the connection, for the activity feed's disconnect. However [block] ends, the
+    // shared channels are torn down: a writer the proxy ended with an answer, as it ends a stream it can't read, left
+    // the other stream and the producer running until the next result for it, which was lost (November 26 #15).
+    // Cancellation and a JVM Error propagate, the Error failing the connection and stopping the agent (November #7).
+    // Factored out of the three coroutines below so the policy lives in one place.
     suspend fun runStreamTask(
       name: String,
       block: suspend () -> Unit,
     ) {
-      runCatchingNonFatal { block() }
-        .onFailure { e ->
-          if (agent.isRunning)
-            logger.logStreamFailure(name, e)
-          closeAll()
-        }
+      try {
+        runCatchingNonFatal { block() }
+          .onFailure { e ->
+            if (agent.isRunning) {
+              logger.logStreamFailure(name, e)
+              connectionContext.noteFailure(e)
+            }
+          }
+      } finally {
+        closeAll()
+      }
     }
 
     try {
@@ -970,6 +977,11 @@ internal class AgentGrpcService(
       // A writer's JVM Error cancels the scope, and a producer it cancels before the producer has run never reaches
       // its finally block, which left the connection open and its results queued. Every task has stopped here.
       endConnection()
+      // Only the flow a writer's stream collects drops what's left in its channel, so a message queued for a stream
+      // that failed before reading it stayed there, its result counted neither as sent nor as dropped (November 26
+      // #15). Each is dropped here, which counts it.
+      nonChunkedChannel.cancel()
+      chunkedChannel.cancel()
     }
   }
 

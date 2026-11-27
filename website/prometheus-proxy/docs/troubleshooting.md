@@ -73,6 +73,9 @@ Settings that fail startup since 4.5.0:
   match ([Security](security/index.md#per-agent-identities-and-path-authorization)), and, with service discovery on, a
   `proxy.service.discovery.path` of whitespace, `/` alone, or more than one leading slash
   ([Service Discovery](service-discovery.md)).
+- Since 4.7.1, an agent proxy endpoint with no host, such as `:50051` or `[]`, or with anything but `:port` after a
+  bracketed IPv6 address, such as `[::1]50051`, and a TLS certificate, key, or trust collection file the proxy or
+  agent can't read, which ended in a stack trace before.
 
 ## Agent Can't Connect to the Proxy
 
