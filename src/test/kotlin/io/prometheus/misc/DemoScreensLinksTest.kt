@@ -425,6 +425,17 @@ class DemoScreensLinksTest : StringSpec() {
           ),
       )
 
-    val DEMOS = listOf(BASICS, NETWORK, KTOR)
+    // The nginx demo's page is the proxy's. keepalive and reset recreate the proxy, but wait for its dashboard before
+    // they go on, so no step is read while it's down.
+    val NGINX =
+      ScreensDemo(
+        dir = "demos/nginx",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/nginx-demo.md",
+        pageUrl = "http://localhost:8594/screens",
+        proxyService = "proxy",
+      )
+
+    val DEMOS = listOf(BASICS, NETWORK, KTOR, NGINX)
   }
 }

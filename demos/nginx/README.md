@@ -42,7 +42,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/nginx
-make up      # pulls the images, starts everything, and prints the URLs
+make up      # pulls the images, starts everything, and prints the screens page's URL
 make tour    # walks through the guided tour below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
@@ -50,16 +50,21 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the proxy, agent, nginx, Prometheus, and Python images, which takes a few minutes. After that
 it starts in under a minute, even without a network connection.
 
+Then open the proxy's [screens page](https://prometheus-proxy.com/web-dashboard/#screens), one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, the same dashboard through nginx,
+agent-current's dashboard, and Prometheus. `make open` opens it, and the guided tour's links open in it:
+<http://localhost:8594/>
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8594/> | `NGINX_DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8594/dashboard> (its history at `/activity`) | `NGINX_DEMO_DASHBOARD_PORT` |
 | The proxy dashboard, through nginx | <http://localhost:8590/dashboard> | `NGINX_DEMO_NGINX_PORT` |
 | agent-current's dashboard | <http://localhost:8595/dashboard> (its connection at `/connection`, its history at `/activity`) | `NGINX_DEMO_AGENT_DASHBOARD_PORT` |
 | Prometheus | <http://localhost:9590> | `NGINX_DEMO_PROMETHEUS_PORT` |
 | The proxy's service discovery | <http://localhost:8580/discovery> | `NGINX_DEMO_PROXY_PORT` |
-
-`make open` opens the proxy dashboard, directly and through nginx, agent-current's dashboard, and a Prometheus graph of
-whether each agent's path answered.
 
 Each port is the basics demo's plus 500, so the demos can run side by side. If a port is already taken, set its variable
 from the table for `make up`, for example `NGINX_DEMO_PROMETHEUS_PORT=9591 make up`. `make up` saves it in
@@ -102,11 +107,12 @@ from `demos/nginx`; each one prints what to watch.
 Each agent dials nginx at `nginx.test.google.fr:443` over TLS. nginx ends the TLS and passes each gRPC call on to the
 proxy's agent port, which only nginx can reach.
 
-- Open the proxy's dashboard. Both agents are connected, each listed at the address **Unknown**. nginx relays each
-  agent's calls over connections of its own, so the proxy can't watch an agent's connection, as its transport filter
-  does, and both the proxy and the agents turn the filter off. The proxy then learns an agent has gone when the
-  agent's stream of scrape requests ends, and ties each agent's calls to the identity its token names, so each agent
-  has a token of its own. Click agent-current: its host is storefront-01, which the agent reports itself.
+- Open the proxy's dashboard in the screens page, <http://localhost:8594/screens#proxy>. Both agents are connected,
+  each listed at the address **Unknown**. nginx relays each agent's calls over connections of its own, so the proxy
+  can't watch an agent's connection, as its transport filter does, and both the proxy and the agents turn the filter
+  off. The proxy then learns an agent has gone when the agent's stream of scrape requests ends, and ties each agent's
+  calls to the identity its token names, so each agent has a token of its own. Click agent-current: its host is
+  storefront-01, which the agent reports itself.
 
 ```bash
 ./demo.sh nginx-log      # the last gRPC calls nginx passed to the proxy, by agent
@@ -123,7 +129,7 @@ proxy's agent port, which only nginx can reach.
   agent checks nginx's certificate against the name it dials: the certificate names `*.test.google.fr`, and the agent
   trusts the CA that signed it (`agent.tls.trustCertCollectionFilePath`). An agent uses TLS only when it's given what
   to trust, so this is needed even for a certificate a public CA signed: then point it at a CA bundle. Open the
-  Connection view: <http://localhost:8595/dashboard/connection>
+  Connection view: <http://localhost:8594/screens#agent-current/connection>
 
 ### 2. nginx's Stream Timeouts Cut Off an Agent from 4.6.0 Every Minute
 
@@ -139,21 +145,23 @@ results on.
 
 - agent-legacy disconnects about once a minute, with the reason **Stream terminated (transport filter disabled)**, and
   connects again a few seconds later. agent-current doesn't. The proxy dashboard's Activity view shows both:
-  <http://localhost:8594/dashboard/activity>
+  <http://localhost:8594/screens#proxy/activity>
 - An agent's stream for results sent in chunks carries something only when a result is over 32 KB gzipped, so it's
   quiet even while Prometheus scrapes the agent every 5 seconds. agent-current and the proxy send a keepalive on each
   stream after 30 seconds of quiet. agent-legacy predates them, and the proxy, seeing it doesn't take them, sends it
   none. `./demo.sh nginx-log` shows nginx ending its stream with 408, from `client_body_timeout`.
 - In Prometheus, `increase(proxy_agent_disconnects_total{reason="stream_terminated"}[1m])` climbs to about 1, and
   `up{job="warehouse"}` dips to 0 now and then: a scrape that lands while agent-legacy reconnects finds its path gone.
+  The screens page's Prometheus tab opens on the first: <http://localhost:8594/screens#prometheus>
 
 ```bash
 ./demo.sh nginx-long-timeouts   # raises both timeouts to a day, and reloads nginx
 ```
 
 - agent-legacy is cut off once more, within a minute, by the worker it's on, which keeps the old timeouts, then
-  reconnects to a new worker under the day-long ones, and stays connected. For an agent or a proxy from 4.6.0 or
-  earlier, this is the fix short of upgrading both.
+  reconnects to a new worker under the day-long ones, and stays connected, and the graph comes down to 0. For an agent
+  or a proxy from 4.6.0 or earlier, this is the fix short of upgrading both. Watch the proxy's Activity view beside
+  the graph: <http://localhost:8594/screens#proxy/activity+prometheus>
 
 ### 3. A Shorter Stream Timeout, and a Reload That Doesn't Reach Connected Agents
 
@@ -187,7 +195,7 @@ seconds, under the 30 seconds after which the keepalives start.
   Two of its streams go quiet for 20 seconds before their keepalives come, at 30: its stream for results in chunks,
   which nginx ends with 408, from `client_body_timeout`, and the proxy's stream of path notices to it, which nginx ends
   with 504, from `grpc_read_timeout`. Its Activity view shows each disconnect, with the 504 as its reason:
-  <http://localhost:8595/dashboard/activity>
+  <http://localhost:8594/screens#agent-current/activity>
 
 ```bash
 ./demo.sh keepalive 10   # recreates the proxy with a keepalive interval of 10 seconds
@@ -196,7 +204,8 @@ seconds, under the 30 seconds after which the keepalives start.
 - The proxy sets the interval for both directions, `proxy.internal.streamKeepAliveSecs`: it uses it on the streams it
   sends on, and gives it to each agent as it registers. Each agent reconnects once to the new proxy; agent-current's
   log says **Sending stream keepalives to proxy nginx.test.google.fr after 10s without a result**, and it stays
-  connected. agent-legacy, which sends none, is still cut off.
+  connected. agent-legacy, which sends none, is still cut off. agent-current's Activity view beside the proxy's shows
+  both: <http://localhost:8594/screens#agent-current/activity+proxy/activity>
 
 ```bash
 ./demo.sh reset   # nginx and the proxy as make up starts them
@@ -205,11 +214,12 @@ seconds, under the 30 seconds after which the keepalives start.
 ### 4. The Dashboard behind nginx
 
 The proxy's dashboard updates live over a WebSocket, which a reverse proxy has to pass on. Open the dashboard through
-nginx: <http://localhost:8590/dashboard>
+nginx: <http://localhost:8594/screens#through-nginx>
 
 - The page loads, then the status bar's live indicator turns into a blinking red **reconnecting...** that never
   clears. nginx's entrance is a plain `proxy_pass`, which passes each request as HTTP/1.0 and drops the `Upgrade` and
-  `Connection` headers, so the dashboard can't take the WebSocket handshake, and answers 400.
+  `Connection` headers, so the dashboard can't take the WebSocket handshake, and answers 400. Beside it, the
+  dashboard reached directly updates every second: <http://localhost:8594/screens#through-nginx+proxy>
 
 ```bash
 ./demo.sh dashboard-upgrade   # passes the WebSocket handshake's headers, over HTTP/1.1
@@ -248,7 +258,7 @@ nginx: <http://localhost:8590/dashboard>
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, nginx's configs in use, its old workers, the proxy's keepalive, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the proxy dashboard, directly and through nginx, agent-current's dashboard, and a Prometheus graph of whether each agent's path answered |  |
+| `make open` | Opens the proxy's screens page, which holds the proxy's dashboard, directly and through nginx, agent-current's, and Prometheus, in the browser |  |
 
 `reset` undoes every scenario. For a clean slate, `make down && make up`.
 
@@ -261,13 +271,13 @@ nginx: <http://localhost:8590/dashboard>
 | `nginx/agents-*.conf` | The agents' entrance: TLS on 443, `grpc_pass` to the proxy's agent port, no limit on a request body (`client_max_body_size 0`), and its stream timeouts |
 | `nginx/dashboard-*.conf` | The dashboard's entrance: a `proxy_pass` to the proxy's dashboard, without and with what its WebSocket needs |
 | `nginx/main-shutdown-timeout.conf` | `worker_shutdown_timeout`, for `nginx-shutdown-timeout` |
-| `config/proxy.conf` | The transport filter off, the dashboard, service discovery, and an identity per agent |
+| `config/proxy.conf` | The transport filter off, the dashboard and its screens page's screens, service discovery, and an identity per agent |
 | `config/agent-current.conf`, `config/agent-legacy.conf` | Each agent's transport filter off, nginx's address, the CA it trusts, its token, its path, and agent-current's dashboard |
 | `prometheus/prometheus.yml` | One HTTP service discovery job against the proxy, and one job for the proxy's own metrics |
 | `app/nginx_app.py` | The simulated services |
 | `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios. It changes nginx by copying a variant into the container's `conf.d` and reloading it, so the files here never change. Its `NEEDS_RELEASE_AFTER` is the newest release that lacks something the demo shows: until the release the docs give is later and its images are on Docker Hub, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release on Docker Hub when the demo comes to use something no release has yet |
-| `bin/screenshots.sh` | The nginx Demo page's screenshots, in the dark and light themes, written to `website/prometheus-proxy/docs/images/nginx-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
+| `bin/screenshots.sh` | The nginx Demo page's screenshots, the proxy's screens page among them, in the dark and light themes, written to `website/prometheus-proxy/docs/images/nginx-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
 
 nginx's TLS certificate and key, and the CA certificate the agents trust, are the repository's test certificates,
 `testing/certs`, mounted read-only: never use them for anything real.
