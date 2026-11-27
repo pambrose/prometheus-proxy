@@ -155,6 +155,15 @@ its own that holds them all, with Prometheus and Grafana.
   it.
 - **A screen reader hears a search's count once.** Ticking Problems only just after typing in the search said the count
   of matching rows twice.
+- **The agents dashboard's failover and discovery stats show the right colors.** Not on Primary was red while every
+  agent was on its primary proxy and green once one failed over, and Since Last Discovery was red right after a
+  successful read and green once discovery had been failing for hours. Not on Primary is now green at zero and yellow
+  from one agent, and Since Last Discovery turns yellow at 2 minutes and red at 5. Import
+  `grafana/prometheus-agents.json` again to pick them up.
+- **The success-rate alert fires when no scrape has succeeded.** `ProxyScrapeSuccessRateLow` stayed quiet, and the proxy
+  dashboard's Scrape Success Rate showed No data, for a proxy every one of whose scrapes since it started had failed,
+  since there's no success series until a scrape succeeds. Both now show 0% then. Load `grafana/alerts.yml` and import
+  `grafana/prometheus-proxy.json` again to pick them up.
 
 ### Behavior Changes
 

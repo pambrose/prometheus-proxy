@@ -58,7 +58,7 @@ proxy.metrics {
 
 ; --8<-- [start:promql-success-rate]
 # Scrape success rate (last 5 minutes):
-sum(rate(proxy_scrape_requests_total{type="success"}[5m]))
+(sum(rate(proxy_scrape_requests_total{type="success"}[5m])) or vector(0))
   / sum(rate(proxy_scrape_requests_total[5m])) * 100
 ; --8<-- [end:promql-success-rate]
 

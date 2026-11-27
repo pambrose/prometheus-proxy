@@ -1,0 +1,59 @@
+# promtool unit tests of grafana/alerts.yml, which make check-rules runs (promtool test rules). They live outside
+# grafana/, so a Prometheus that loads every rule file there doesn't load these too.
+rule_files:
+  - ../../grafana/alerts.yml
+evaluation_interval: 1m
+tests:
+  # Every scrape since the proxy started failed, so it has no success series: the alert still fires, at 0%.
+  - interval: 1m
+    input_series:
+      - series: 'proxy_scrape_requests_total{job="prometheus-proxy", instance="proxy:8082", type="agent_disconnected"}'
+        values: '0+10x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ProxyScrapeSuccessRateLow
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "Proxy scrape success rate below 99%" }
+  # Half the scrapes fail.
+  - interval: 1m
+    input_series:
+      - series: 'proxy_scrape_requests_total{job="prometheus-proxy", instance="proxy:8082", type="success"}'
+        values: '0+5x40'
+      - series: 'proxy_scrape_requests_total{job="prometheus-proxy", instance="proxy:8082", type="timed_out"}'
+        values: '0+5x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ProxyScrapeSuccessRateLow
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "Proxy scrape success rate below 99%" }
+  # Every scrape succeeds.
+  - interval: 1m
+    input_series:
+      - series: 'proxy_scrape_requests_total{job="prometheus-proxy", instance="proxy:8082", type="success"}'
+        values: '0+5x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ProxyScrapeSuccessRateLow
+        exp_alerts: []
+  # No scrape since the proxy started, so there's nothing to divide by.
+  - interval: 1m
+    input_series:
+      - series: 'proxy_start_time_seconds{job="prometheus-proxy"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ProxyScrapeSuccessRateLow
+        exp_alerts: []
+  # Scraped once, then idle: no rate in the window, so no ratio.
+  - interval: 1m
+    input_series:
+      - series: 'proxy_scrape_requests_total{job="prometheus-proxy", instance="proxy:8082", type="success"}'
+        values: '5x40'
+      - series: 'proxy_scrape_requests_total{job="prometheus-proxy", instance="proxy:8082", type="agent_disconnected"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ProxyScrapeSuccessRateLow
+        exp_alerts: []
