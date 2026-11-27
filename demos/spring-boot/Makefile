@@ -40,7 +40,7 @@ down:  ## Stop the demo and remove its containers and network
 status:  ## Show the containers, the roastery's state, and the URLs
 	@$(DEMO) status
 
-open:  ## Open the roastery, the proxy's and the agent's dashboards, and Prometheus in the browser
+open:  ## Open the proxy's screens page, which holds the roastery, both dashboards, and Prometheus, in the browser
 	@$(DEMO) open
 
 tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)

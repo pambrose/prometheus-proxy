@@ -45,9 +45,10 @@ beside the proxy's, and part 4 puts the dashboard through nginx beside the one r
 Prometheus's targets. Split: part 3's rush, Grafana beside the proxy's Paths view. No part stops the proxy.
 
 **Spring Boot** (page `http://localhost:8494/screens`). Screens: the roastery's status page, its agent's dashboard,
-and Prometheus on the batches graph. Split: part 5, the proxy beside the roastery as it stops. Part 4 stops the proxy:
-from its `proxy-stop` to its `proxy-start`, and in the `proxy-stop` scenario, links give each screen's own address, as
-the Ktor demo's part 8 does.
+and Prometheus on the batches graph. Split: part 5, the proxy beside the agent's dashboard as the roastery stops. Part 4
+stops the proxy: from its `proxy-stop` to its `proxy-start` the tour gives no link, as the agent's dashboard, opened in
+the page the step before, keeps answering there, and the `proxy-stop` scenario's links give its own address, as the
+Ktor demo's part 8 does.
 
 **Kubernetes** (page `http://localhost:8294/screens`). Screens: the agent's dashboard at the port `./demo.sh
 agent-dashboard` forwards (red until then, and after part 4 replaces the pod) and Prometheus's targets, listed in

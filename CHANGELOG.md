@@ -113,6 +113,10 @@ All notable changes to this project are documented in this file.
 - The plain Kotlin demo's proxy lists Grafana and Prometheus as its screens, and its tour, scenarios, README, and page
   link into `/screens`, which `make open` opens; its Grafana allows embedding, and `make up` builds from the checkout
   until 4.7.1 is on Docker Hub
+- The Spring Boot demo's proxy lists the roastery's status page, its agent's dashboard, and Prometheus as its screens,
+  and its tour, scenarios, README, and page link into `/screens`, which `make open` opens, but while part 4 has the
+  proxy stopped, when they give the agent dashboard's own address; `make up` builds from the checkout until 4.7.1 is
+  on Docker Hub
 - `examples/simple.conf` and the basics, network, and Kubernetes demos' agents serve their own metrics through the
   proxy with `agent.metrics.proxyPath`, in-process, where each scraped its own port, `localhost:8083`, as a path; all
   but the Kubernetes demo's, whose chart opens the port for its Service, leave the metrics port off
