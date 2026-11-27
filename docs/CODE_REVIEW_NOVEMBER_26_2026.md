@@ -1,10 +1,10 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 35 resolved, 35 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 36 resolved, 34 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
-and #51 in #599; #47, #48, #49, #50, and #52 in #600.
+and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601.
 
 **Date:** 2026-11-26
 
@@ -22,7 +22,7 @@ and #51 in #599; #47, #48, #49, #50, and #52 in #600.
 | 2  | Consolidated path takeover during mid-teardown inherits the dead previous identity's labels and retains invalidated contexts | Proxy | medium | ✅ |
 | 3  | Orphaned same-launch `AgentContext` in `settleDisplaced` is only invalidated, not removed, stranding scrapes/chunks and drifting from `ProxyRegistry.tla` | Proxy | medium | ✅ |
 | 4  | `removeFromPathManager` runs two full `O(total_paths)` scans under the global `pathMap` lock on every disconnect, including unauthenticated ones | Proxy | medium | ✅ |
-| 5  | `Proxy.shutDown()` stops sub-services without fault isolation, and `Proxy.startUp()` rollback omits `tracing?.close()` and `invalidateAllAgentContexts()` | Proxy | medium | ⬜ |
+| 5  | `Proxy.shutDown()` stops sub-services without fault isolation, and `Proxy.startUp()` rollback omits `tracing?.close()` and `invalidateAllAgentContexts()` | Proxy | medium | ✅ |
 | 6  | Race between `AgentContextManager.announceAgentContext()` and `removeFromContextManager()` can announce a removed agent and diverge eviction/disconnect metrics | Proxy | low | ✅ |
 | 7  | `ScrapeDispatch.mergeContentTexts` emits invalid blank lines in OpenMetrics output when a consolidated agent returns only `# EOF` | Proxy | low | ✅ |
 | 8  | `AgentAuthManager` strips a leading `/` from incoming paths in `isAuthorized` but not from configured `proxy.auth[].paths` globs | Proxy | low | ✅ |
@@ -274,7 +274,7 @@ Inside `synchronized(pathMap)` — the global monitor blocking every Prometheus 
 
 ---
 
-### 5. ⬜ `Proxy.shutDown()` stops sub-services without fault isolation, and `Proxy.startUp()` rollback omits `tracing?.close()` and `invalidateAllAgentContexts()`
+### 5. ✅ `Proxy.shutDown()` stops sub-services without fault isolation, and `Proxy.startUp()` rollback omits `tracing?.close()` and `invalidateAllAgentContexts()`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -288,6 +288,8 @@ Inside `synchronized(pathMap)` — the global monitor blocking every Prometheus 
 **Impact:** A single failed sub-service during shutdown can leave Jetty/Ktor threads alive (preventing JVM exit) and leak shared metrics; a partial startup failure after an early agent connect leaks Brave's `Tracing` instance and slows rollback.
 
 **Fix:** Apply the same fault-isolated `runEach()` teardown pattern used in `Agent.shutDown()` to `Proxy.shutDown()` (skipping `stopSync()` for sub-services already `FAILED` and attaching secondary exceptions as suppressed). In `Proxy.startUp()`'s failure handler, invalidate all agent contexts before stopping `grpcService` and close `tracing` if initialized before `super.shutDown()`.
+
+**Resolution:** Fixed in #601. `Proxy.shutDown()` runs every step through `runEachOrThrow`, now in `common/Teardown.kt` with the agent's `runEach` and `startOrRelease`: a sub-service that throws or times out no longer skips the rest, one that FAILED isn't stopped again (`stopUnlessFailed`), and the first failure is thrown with the others suppressed. `startUp()`'s rollback runs the same steps in the same order, so it invalidates the agent contexts before the gRPC stop and closes tracing that was built, and the startup failure is still the one thrown. Two `ProxyTest` cases, a failed startup after an agent connected and a gRPC shutdown that throws, failed before.
 
 ---
 

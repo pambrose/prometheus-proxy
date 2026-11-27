@@ -129,6 +129,11 @@ its own that holds them all, with Prometheus and Grafana.
   many paths held them up.
 - **The eviction counts agree.** `proxy_eviction_count_total` and `proxy_agent_disconnects_total{reason="eviction"}`
   could drift apart when an agent's first call came just as it was evicted.
+- **One part of the proxy that fails to stop no longer leaves the rest running.** The proxy stopped its parts one after
+  another, so one that failed to stop, or had already failed, left every part after it up, such as its scrape port, its
+  admin and metrics servers, and its Zipkin reporter. Every part is now stopped whatever another does. A proxy that
+  failed to start just after an agent connected also no longer waits 2 seconds on the agent's connection before giving
+  up.
 - **A service discovery path with two leading slashes is refused, not shared.** With `sdPath = "//discovery"`, an
   agent could register `/discovery`, and every scrape of it got the discovery document. The proxy now refuses such a
   path at startup (see Before you upgrade).

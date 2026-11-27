@@ -31,9 +31,19 @@ import io.prometheus.common.captureLogs
 import ch.qos.logback.classic.Level
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkConstructor
+import io.mockk.mockkObject
 import io.mockk.spyk
+import io.mockk.unmockkConstructor
+import io.mockk.unmockkObject
+import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.CountingProxyMetrics
+import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.ScrapeTracing
+import io.prometheus.common.TestPorts.PROXY_FAILED_SHUTDOWN_HTTP_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_SHUTDOWN_METRICS_PORT
+import io.prometheus.common.TestPorts.ZIPKIN_UNREACHABLE_PORT
 import io.prometheus.common.TestPorts.PROXY_FAILED_START_ADMIN_PORT
 import io.prometheus.common.TestPorts.PROXY_FAILED_START_METRICS_PORT
 import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_ADMIN_PORT
@@ -60,10 +70,13 @@ import com.google.common.util.concurrent.Service
 import io.kotest.assertions.assertSoftly
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import java.lang.ref.WeakReference
+import java.net.BindException
 import java.net.ServerSocket
 import io.kotest.assertions.nondeterministic.eventually
 import kotlin.time.Duration.Companion.seconds
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.maps.shouldBeEmpty
 
 @Suppress("LargeClass")
@@ -916,7 +929,129 @@ class ProxyTest : StringSpec() {
           .shouldBeEmpty()
       }
     }
+
+    // The rollback stopped the gRPC server without invalidating the agent contexts first, as shutDown() does, so the
+    // stream of an agent that connected before a later service failed held up the server's stop for its whole grace
+    // period, and it never closed the tracing a gRPC call had built (November 26 review, #5). It now runs shutDown()'s
+    // own steps, and the failure to start is the one that's thrown.
+    "a failed startup should invalidate the agents that connected and close the tracing" {
+      PrometheusRegistry.defaultRegistry.clear()
+      ServerSocket(0).use { takenHttpPort ->
+        val proxy = createTestProxy("--port", "${takenHttpPort.localPort}", *zipkinArgs())
+        // An agent that connected, and the tracing its call built, before the HTTP service failed to start.
+        val agentContext = createAgentContext().also { proxy.agentContextManager.addAgentContext(it) }
+        val tracing = spiedTracing(proxy)
+        try {
+          val failure = shouldThrow<IllegalStateException> { proxy.startSync() }
+
+          // Captured as values first, so each check reports on its own inside assertSoftly. What startUp() threw,
+          // which Guava's exception wraps, carries what the rollback threw.
+          val startFailure = failure.cause
+          val rollbackFailures = startFailure?.suppressed.orEmpty().toList()
+          val contextValid = agentContext.isValid()
+          val tracingClosed = closedOnce(tracing)
+          val reporterRunning = proxy.zipkinReporterService.isRunning
+
+          assertSoftly {
+            startFailure.causes().any { it is BindException }.shouldBeTrue()
+            // The HTTP service that failed to start is FAILED, which can't be stopped, and isn't.
+            rollbackFailures shouldBe emptyList()
+            contextValid.shouldBeFalse()
+            tracingClosed.shouldBeTrue()
+            reporterRunning.shouldBeFalse()
+          }
+        } finally {
+          unmockkObject(tracing)
+        }
+      }
+    }
+
+    // ==================== Failed shutdown ====================
+
+    // shutDown() stopped the sub-services, closed the tracing and the metrics, and ran super.shutDown() one after
+    // another, so a step that threw, a sub-service that failed to stop or timed out, skipped every step after it: the
+    // scrape port stayed bound, the shared proxy metrics kept the proxy, and the metrics server, the Zipkin reporter,
+    // and the JVM shutdown hook outlived the stop (November 26 review, #5). The gRPC service stops first, so its
+    // failure skipped all of them.
+    "a failed gRPC shutdown should still stop the proxy's other services and close its tracing and metrics" {
+      PrometheusRegistry.defaultRegistry.clear()
+      mockkConstructor(ProxyGrpcService::class)
+      try {
+        // Its own shutdown first, so the in-process server doesn't outlive the case.
+        every { anyConstructed<ProxyGrpcService>()["shutDown"]() } answers {
+          callOriginal()
+          throw IllegalStateException("gRPC shutdown failed")
+        }
+        val proxy =
+          createTestProxy(
+            "--port",
+            "$PROXY_FAILED_SHUTDOWN_HTTP_PORT",
+            "--metrics",
+            "--metrics_port",
+            "$PROXY_FAILED_SHUTDOWN_METRICS_PORT",
+            *zipkinArgs(),
+          )
+        proxy.startSync()
+        val tracing = spiedTracing(proxy)
+        val launchIdsWhileRunning = buildInfoLaunchIds()
+
+        val stopFailure = runCatching { proxy.stopSync() }.exceptionOrNull()
+
+        // Captured as values first, so each check reports on its own inside assertSoftly.
+        val state = proxy.state()
+        val httpPortFree = canBind(PROXY_FAILED_SHUTDOWN_HTTP_PORT)
+        val metricsPortFree = canBind(PROXY_FAILED_SHUTDOWN_METRICS_PORT)
+        val reporterRunning = proxy.zipkinReporterService.isRunning
+        val launchIdsAfterStop = buildInfoLaunchIds()
+        val tracingClosed = closedOnce(tracing)
+        unmockkObject(tracing)
+
+        assertSoftly {
+          stopFailure.causes().any { it.message == "gRPC shutdown failed" }.shouldBeTrue()
+          state shouldBe Service.State.FAILED
+          httpPortFree.shouldBeTrue()
+          metricsPortFree.shouldBeTrue()
+          reporterRunning.shouldBeFalse()
+          launchIdsWhileRunning shouldContain proxy.launchId
+          launchIdsAfterStop shouldNotContain proxy.launchId
+          tracingClosed.shouldBeTrue()
+        }
+      } finally {
+        unmockkConstructor(ProxyGrpcService::class)
+      }
+    }
   }
+
+  // Zipkin on, sending to a port nothing listens on, which fails without holding up a start or a stop.
+  private fun zipkinArgs() =
+    arrayOf(
+      "-Dproxy.internal.zipkin.enabled=true",
+      "-Dproxy.internal.zipkin.hostname=$LOOPBACK_HOST",
+      "-Dproxy.internal.zipkin.port=$ZIPKIN_UNREACHABLE_PORT",
+    )
+
+  // Whether nothing holds [port], bound with a listening socket as the proxy's servers bind theirs.
+  private fun canBind(port: Int) = runCatching { ServerSocket(port).close() }.isSuccess
+
+  // This throwable and its causes, outermost first; none for null.
+  private fun Throwable?.causes(): Sequence<Throwable> = generateSequence(this) { it.cause }
+
+  // The launch IDs proxy_build_info has a series for: one for each proxy whose metrics are open.
+  private fun buildInfoLaunchIds(): Set<String> =
+    PrometheusRegistry.defaultRegistry.scrape()
+      .filter { it.metadata.name == "proxy_build_info" }
+      .flatMap { it.dataPoints }
+      .mapNotNull { it.labels.get("launch_id") }
+      .toSet()
+
+  // Builds [proxy]'s tracing, as the first gRPC call or scrape does, and spies on it in place, so the close() of the
+  // instance the proxy holds is recorded. Not Brave's Tracing.current(), which is JVM-wide and set only while no other
+  // Tracing is, so one another spec left open hid the proxy's; nor a constructor mock, which didn't record the close.
+  private fun spiedTracing(proxy: Proxy): ScrapeTracing = proxy.tracing.shouldNotBeNull().also { mockkObject(it) }
+
+  // Whether [tracing] was closed once; a value, not verify()'s throw, so it reports on its own inside assertSoftly.
+  private fun closedOnce(tracing: ScrapeTracing): Boolean =
+    runCatching { verify(exactly = 1) { tracing.close() } }.isSuccess
 
   // How many times common-utils logged registering the cleanup service with the proxy while [block] ran. It logs that
   // at DEBUG, since common-utils 5.3.0.

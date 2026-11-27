@@ -280,6 +280,11 @@ object TestPorts {
   const val PROXY_FAILED_SUB_SERVICE_ADMIN_PORT = 9705
   const val AGENT_FAILED_START_METRICS_PORT = 9706
 
+  // ProxyTest: the scrape and metrics servers a proxy whose gRPC shutdown fails must still stop (November 26 review,
+  // #5).
+  const val PROXY_FAILED_SHUTDOWN_HTTP_PORT = 9764
+  const val PROXY_FAILED_SHUTDOWN_METRICS_PORT = 9765
+
   // AgentTest: the admin and metrics servers an agent whose gRPC shutdown fails must still stop (October #20).
   const val AGENT_FAILED_SHUTDOWN_ADMIN_PORT = 9707
   const val AGENT_FAILED_SHUTDOWN_METRICS_PORT = 9708

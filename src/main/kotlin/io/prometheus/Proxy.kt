@@ -41,7 +41,10 @@ import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
 import io.prometheus.common.AgentValues.labelsProblem
+import io.prometheus.common.runEachOrThrow
 import io.prometheus.common.scrapeTracingHolder
+import io.prometheus.common.startOrRelease
+import io.prometheus.common.stopUnlessFailed
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
@@ -384,30 +387,25 @@ class Proxy(
     initBlock?.invoke(this)
   }
 
+  // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- a port already in use -- the proxy
+  // goes straight to FAILED, so each part of the startup that fails releases what came before it, with shutDown()'s own
+  // steps, in its order, so the two can't drift apart. super.startUp() stops the admin, metrics, and Zipkin services it
+  // had started when it fails itself (common-utils 5.0.0); once it has returned, super.shutDown() stops them and
+  // removes its JVM shutdown hook. Left running, the admin server's threads kept a standalone proxy's JVM alive after
+  // main() threw. A sub-service that never started terminates at once, and one that failed to start isn't stopped.
   override fun startUp() {
-    // Built here, so a registry that rejects them fails startup visibly rather than the first request that counts.
-    if (isMetricsEnabled) {
-      val _ = metrics
+    startOrRelease(teardownSteps) {
+      // Built here, so a registry that rejects them fails startup visibly rather than the first request that counts.
+      if (isMetricsEnabled) {
+        val _ = metrics
+      }
+      super.startUp()
     }
-    runCatching { super.startUp() }
-      .onFailure { e ->
-        closeMetrics()
-        throw e
-      }
 
-    // Guava calls shutDown() only after startUp() succeeds, so when a sub-service fails to start, stop the ones that
-    // started, most recent first, then what super.startUp() started; super.shutDown() also removes its shutdown hook.
-    // Left running, the admin server's threads kept a standalone proxy's JVM alive after main() threw.
-    val stopActions = ArrayDeque<() -> Unit>()
-    runCatching {
+    startOrRelease(teardownSteps + { super.shutDown() }) {
       grpcService.startSync()
-      stopActions.addFirst { grpcService.stopSync() }
       httpService.startSync()
-      stopActions.addFirst { httpService.stopSync() }
-      dashboardService?.also { dashboard ->
-        dashboard.startSync()
-        stopActions.addFirst { dashboard.stopSync() }
-      }
+      dashboardService?.startSync()
 
       // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
       // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
@@ -417,34 +415,44 @@ class Proxy(
         if (!proxyConfigVals.internal.staleAgentCheckEnabled)
           logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
         agentCleanupService.startSync()
-        stopActions.addFirst { agentCleanupService.stopSync() }
       } else {
         logger.info { "Agent eviction thread not started" }
       }
-    }.exceptionOrNull()?.let { e ->
-      stopActions.forEach { stop -> runCatching(stop).exceptionOrNull()?.let(e::addSuppressed) }
-      runCatching { super.shutDown() }.exceptionOrNull()?.let(e::addSuppressed)
-      runCatching { closeMetrics() }.exceptionOrNull()?.let(e::addSuppressed)
-      throw e
     }
   }
 
-  override fun shutDown() {
-    // Fail in-flight scrape requests BEFORE invalidating agent contexts so that
-    // HTTP handlers waiting on awaitCompleted() receive the informative "Proxy is shutting down"
-    // (proxy_stopped) rather than the "Agent disconnected" (agent_disconnected) the agent context drain gives.
-    scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
-    agentContextManager.invalidateAllAgentContexts()
-    grpcService.stopSync()
-    dashboardService?.stopSync()
-    httpService.stopSync()
-    agentCleanupService?.stopSync()
-    // After the services that trace, and before super.shutDown() stops the reporter, which sends what's still queued.
-    if (tracingHolder.isInitialized())
-      tracing?.close()
-    closeMetrics()
-    super.shutDown()
-  }
+  // What the proxy releases, in this order, as it stops and when its startup fails. A startup that failed once an agent
+  // had connected stopped the gRPC server without invalidating the agent's context, so the agent's stream held up the
+  // server's stop for its whole grace period, and left open the tracing a gRPC call had built (November 26 review, #5).
+  // A sub-service that FAILED, at startup or since, isn't stopped: it has stopped as far as it can, the ServiceManager
+  // has logged why, and its stopSync() would throw. A getter built with listOf, as Agent.releaseSteps is, for the same
+  // reasons: an initBlock that starts the proxy runs before a property declared down here is set, and Dokka 2.3.0 can't
+  // translate a public class's property initialized with a collection literal.
+  private val teardownSteps: List<() -> Unit>
+    get() =
+      listOf(
+        // Fail in-flight scrape requests BEFORE invalidating agent contexts so that
+        // HTTP handlers waiting on awaitCompleted() receive the informative "Proxy is shutting down"
+        // (proxy_stopped) rather than the "Agent disconnected" (agent_disconnected) the agent context drain gives.
+        { scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED) },
+        // Before the gRPC server's stop, which waits its grace period for the agents' streams, which end once their
+        // contexts are invalid.
+        { agentContextManager.invalidateAllAgentContexts() },
+        { grpcService.stopUnlessFailed() },
+        { dashboardService?.stopUnlessFailed() },
+        { httpService.stopUnlessFailed() },
+        { agentCleanupService?.stopUnlessFailed() },
+        // After the services that trace, and before super.shutDown() stops the reporter, which sends what's still
+        // queued.
+        { if (tracingHolder.isInitialized()) tracing?.close() },
+        { closeMetrics() },
+      )
+
+  // Every step runs even when an earlier one fails, so a sub-service that fails to stop, or doesn't in time, can't
+  // leave the others running, the proxy in the metrics every proxy in the JVM shares, or the admin and metrics servers
+  // and the JVM shutdown hook that super.shutDown() stops and removes. The first failure is rethrown with the rest
+  // attached as suppressed exceptions.
+  override fun shutDown() = (teardownSteps + { super.shutDown() }).runEachOrThrow()
 
   // Removes this proxy from the proxy metrics every proxy in the JVM shares, if it built them.
   private fun closeMetrics() {

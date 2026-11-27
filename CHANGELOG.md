@@ -123,6 +123,13 @@ All notable changes to this project are documented in this file.
   emitting `AgentConnected` for a connection already gone, with no `AgentDisconnected` after it, and the cleanup
   service and the removal could disagree on whether an eviction counted, so `proxy_eviction_count_total` drifted from
   `proxy_agent_disconnects_total{reason="eviction"}`. A context's validity and announcement are now one state
+- The proxy's stop ran its steps one after another: its gRPC, dashboard, HTTP, and stale-agent cleanup services, its
+  Zipkin tracing, its metrics, then its admin and metrics servers and JVM shutdown hook. A service that failed to stop,
+  took more than 30 seconds, or had already failed skipped every step after it, leaving those services and servers
+  running and the proxy in the metrics every proxy in the JVM shares. Every step now runs, a service that has failed
+  isn't stopped again, and the first failure is thrown with the rest suppressed. A startup that failed once an agent
+  had connected, on a scrape or dashboard port that was taken, also waited out the gRPC server's 2-second grace for the
+  agent's streams, and left the tracing open; it now releases with the stop's own steps, in the same order
 - A `proxy.auth` path pattern written with a leading slash, such as `/team_a_*`, as agent paths are, loaded without a
   word and matched no path, so its identity's every registration was refused. A pattern now loses one leading slash,
   as a path does (see Behavior Changes)
