@@ -1,9 +1,9 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 15 resolved, 55 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 21 resolved, 49 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
-and #31 in #595.
+and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596.
 
 **Date:** 2026-11-26
 
@@ -49,15 +49,15 @@ and #31 in #595.
 | 30 | Theme toggle on `/screens` and its same-origin Proxy Dashboard iframe go out of sync | Dashboards | medium | ⬜ |
 | 31 | `AgentScrapeNow` strips all leading slashes (`trimStart('/')`) while `AgentSnapshot`/`AgentPathManager` strip only one, breaking Scrape now for `//...`/`///...` paths | Dashboards | low | ✅ |
 | 32 | `ScreensScript.splitPanes` misparses single-pane search links as Split layouts when a query term after `+` matches a screen ID | Dashboards | low | ⬜ |
-| 33 | `GET <base>/login` ignores `?next=...` when the viewer already has a valid session | Dashboards | low | ⬜ |
-| 34 | `DashboardSessions.isValid(..., counts = false)` mutates LRU access order on every push tick | Dashboards | low | ⬜ |
-| 35 | `DashboardServer.render` never resets `session.renderFailed` on recovery and logs nothing on repeated render errors | Dashboards | low | ⬜ |
+| 33 | `GET <base>/login` ignores `?next=...` when the viewer already has a valid session | Dashboards | low | ✅ |
+| 34 | `DashboardSessions.isValid(..., counts = false)` mutates LRU access order on every push tick | Dashboards | low | ✅ |
+| 35 | `DashboardServer.render` never resets `session.renderFailed` on recovery and logs nothing on repeated render errors | Dashboards | low | ✅ |
 | 36 | Toggling "Problems only" during the search input debounce window causes a duplicate WebSocket announce and screen-reader announcement | Dashboards | low | ⬜ |
 | 37 | Incomplete URL userinfo redaction leaks passwords containing or following `@` in `Utils.sanitizeUrl` and Spring Boot's `PrometheusProxyAgentProperties.shownUrl` | Security | medium | ⬜ |
 | 38 | Unary `ScrapeResponse` lacks header-field caps, `parseContentType` passes multi-MB and control-character parameters, `httpStatus` emits arbitrary 32-bit codes, and plain bodies bypass `maxUnzippedContentSizeMBytes` | Security | medium | ✅ |
-| 39 | Dashboard `isOriginAllowed()` ignores URL scheme and bypasses explicit `allowedOrigins` restrictions | Security | medium | ⬜ |
-| 40 | Unthrottled WebSocket per-frame full-HTML re-render amplification on dashboard `/events` | Security | medium | ⬜ |
-| 41 | Dashboard browser Basic-Auth restriction (`isBrowser`) is bypassed over plain HTTP on non-localhost hosts | Security | low | ⬜ |
+| 39 | Dashboard `isOriginAllowed()` ignores URL scheme and bypasses explicit `allowedOrigins` restrictions | Security | medium | ✅ |
+| 40 | Unthrottled WebSocket per-frame full-HTML re-render amplification on dashboard `/events` | Security | medium | ✅ |
+| 41 | Dashboard browser Basic-Auth restriction (`isBrowser`) is bypassed over plain HTTP on non-localhost hosts | Security | low | ✅ |
 | 42 | Unescaped/unsanitized inputs in log output (`ProxyHttpConfig`, `MetricFilter`, and local config parse errors in `BaseOptions`) | Security | low | ⬜ |
 | 43 | Helm charts mount the default Kubernetes ServiceAccount token unnecessarily (`automountServiceAccountToken: false` omitted) | Security | low | ⬜ |
 | 44 | Helm charts crash with nil pointer on `helm upgrade --reuse-values` from 4.6.0 (`dashboard` / `dashboard.login`) | CI/build | high | ✅ |
@@ -909,7 +909,7 @@ In configs with common screen IDs (e.g., `demos/ktor/config/proxy.conf` defines 
 
 ---
 
-### 33. ⬜ `GET <base>/login` ignores `?next=...` when the viewer already has a valid session
+### 33. ✅ `GET <base>/login` ignores `?next=...` when the viewer already has a valid session
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -931,9 +931,11 @@ When a logged-out user opens two tabs (e.g., `/screens` and `/dashboard/paths`),
 
 **Fix:** Compute `val next = safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase, site.outsidePages)` once and redirect with `call.seeOther(next)` (which falls back to `basePath` when `next` is absent or invalid).
 
+**Resolution:** Fixed in #596. `GET <base>/login` works out `safeNext(next)` once and sends a browser that already has a session there, so a stale login tab returns to `/screens` or the filtered view; an unsafe `next` still falls back to the base path.
+
 ---
 
-### 34. ⬜ `DashboardSessions.isValid(..., counts = false)` mutates LRU access order on every push tick
+### 34. ✅ `DashboardSessions.isValid(..., counts = false)` mutates LRU access order on every push tick
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -948,9 +950,11 @@ When a logged-out user opens two tabs (e.g., `/screens` and `/dashboard/paths`),
 
 **Fix:** Use insertion order (`accessOrder = false`) and explicitly re-insert (`sessions.remove(key); sessions[key] = session`) only when `counts == true` inside the same `synchronized(sessions)` block.
 
+**Resolution:** Fixed in #596. `DashboardSessions` keeps its map in insertion order and moves a session to the end only on a check that counts as a request, so the push loop's `counts = false` checks no longer move idle open tabs ahead of active sessions under the 1,000-session cap.
+
 ---
 
-### 35. ⬜ `DashboardServer.render` never resets `session.renderFailed` on recovery and logs nothing on repeated render errors
+### 35. ✅ `DashboardServer.render` never resets `session.renderFailed` on recovery and logs nothing on repeated render errors
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -963,6 +967,8 @@ Unlike `collectForPush` (which resets `collectFailing = false` on success and lo
 **Impact:** After one transient render error on a long-lived session, any later unrelated render exception on that session is silently swallowed with zero log output.
 
 **Fix:** Add `.onSuccess { session.renderFailed = false }` and an `else logger.debug { "Dashboard push failed to render again: ${e.simpleClassName}" }` branch matching `collectForPush`.
+
+**Resolution:** Fixed in #596. `render` resets `renderFailed` on success and logs a repeat failure at DEBUG, so each run of render failures is logged at ERROR once, as `collectForPush` does for collects.
 
 ---
 
@@ -1039,7 +1045,7 @@ A malicious or compromised authenticated agent (or any peer when agent auth is d
 
 ---
 
-### 39. ⬜ Dashboard `isOriginAllowed()` ignores URL scheme and bypasses explicit `allowedOrigins` restrictions
+### 39. ✅ Dashboard `isOriginAllowed()` ignores URL scheme and bypasses explicit `allowedOrigins` restrictions
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1061,9 +1067,11 @@ The same-authority fallback inspects only `URI(origin).rawAuthority` against `Ho
 
 **Fix:** Parse `origin` strictly (requiring `scheme?.lowercase() in setOf("http", "https")`, no `rawUserInfo`, empty `rawPath`, null `rawQuery`/`rawFragment`, and non-null `rawAuthority`). When `allowedOrigins` contains any entry for the same authority as `origin`, require an exact normalized origin match (including scheme) instead of falling back to scheme-blind `authority == host`.
 
+**Resolution:** Fixed in #596. `isOriginAllowed` accepts only an origin shaped as a browser sends it, `http` or `https` with a host and an optional port and nothing else, compares without default ports, and refuses an origin whose host and port an `allowedOrigins` entry names with another scheme. A host no entry names keeps the scheme-blind Host match, so same-origin access behind a TLS-terminating reverse proxy keeps working; the release notes list the pinning under Before you upgrade.
+
 ---
 
-### 40. ⬜ Unthrottled WebSocket per-frame full-HTML re-render amplification on dashboard `/events`
+### 40. ✅ Unthrottled WebSocket per-frame full-HTML re-render amplification on dashboard `/events`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1088,9 +1096,11 @@ For `DashboardLayout.AGENT` and `DashboardLayout.PATH`, `shownRegion()` returns 
 
 **Fix:** Skip `push()` when the newly parsed `view` equals the previous `session.view` (no-op on unchanged state), and coalesce rapid view changes per session through a conflated channel spaced by ~50–100 ms (reusing `DashboardServer.spaced(...)`). Optionally cap incoming frames per second per session and close abusive sockets with `TRY_AGAIN_LATER`/`POLICY_VIOLATION`.
 
+**Resolution:** Fixed in #596. A WebSocket message pushes only when its view differs from the session's, through a per-connection channel spaced at 100 ms: the first push is immediate, and a burst renders at most once an interval, the latest last (`ProxyView` is now a data class for the comparison). A `ProxyWebDashboardTest` case that sent one message five times now sends `seq` 1 to 5, as the page does. Closing abusive sockets is left out, so a real client can't be cut off by mistake.
+
 ---
 
-### 41. ⬜ Dashboard browser Basic-Auth restriction (`isBrowser`) is bypassed over plain HTTP on non-localhost hosts
+### 41. ✅ Dashboard browser Basic-Auth restriction (`isBrowser`) is bypassed over plain HTTP on non-localhost hosts
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1105,6 +1115,8 @@ Consequently, `isBrowser()` returns `false` on those deployments: a browser hold
 **Impact:** On plain-HTTP non-localhost deployments with dashboard authentication enabled, Log out and session expiration do not take effect for browsers holding cached Basic Auth credentials.
 
 **Fix:** Broaden `isBrowser(request)` to also match `wantsPage(request)` (`Accept` containing `text/html`) or browser-only headers (`Origin`, `Referer`, `Upgrade-Insecure-Requests`, `Sec-Fetch-*`), or restrict Basic Auth to non-HTML endpoints / require session cookies for WebSocket `/events` when a browser header is present.
+
+**Resolution:** Fixed in #596. `isBrowser` also counts `Upgrade-Insecure-Requests`, `Origin`, `Referer`, or a non-htmx GET for `text/html` as a browser, so over plain http a browser's saved Basic login is ignored on navigations, the page's fetches and actions, and the WebSocket handshake. `HX-Request` isn't counted, since a script needs it to call actions; the release notes list the change under Before you upgrade.
 
 ---
 
