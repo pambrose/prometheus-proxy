@@ -1,9 +1,8 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 4 fixed, 66 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 6 resolved, 64 open (4 high, 35 medium, 31 low).
 
-**Progress:** the four high-severity findings, #1, #11, #12, and #44, are fixed in #586, from steps 1, 4, and 10, whose
-other findings (#7, #38; #13, #31; #43) are still open.
+**Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593.
 
 **Date:** 2026-11-26
 
@@ -23,7 +22,7 @@ other findings (#7, #38; #13, #31; #43) are still open.
 | 4  | `removeFromPathManager` runs two full `O(total_paths)` scans under the global `pathMap` lock on every disconnect, including unauthenticated ones | Proxy | medium | ⬜ |
 | 5  | `Proxy.shutDown()` stops sub-services without fault isolation, and `Proxy.startUp()` rollback omits `tracing?.close()` and `invalidateAllAgentContexts()` | Proxy | medium | ⬜ |
 | 6  | Race between `AgentContextManager.announceAgentContext()` and `removeFromContextManager()` can announce a removed agent and diverge eviction/disconnect metrics | Proxy | low | ⬜ |
-| 7  | `ScrapeDispatch.mergeContentTexts` emits invalid blank lines in OpenMetrics output when a consolidated agent returns only `# EOF` | Proxy | low | ⬜ |
+| 7  | `ScrapeDispatch.mergeContentTexts` emits invalid blank lines in OpenMetrics output when a consolidated agent returns only `# EOF` | Proxy | low | ✅ |
 | 8  | `AgentAuthManager` strips a leading `/` from incoming paths in `isAuthorized` but not from configured `proxy.auth[].paths` globs | Proxy | low | ⬜ |
 | 9  | `ProxyOptions.sdPath` and `ProxyPathManager.reservedPathRejection` disagree on multiple leading slashes and whitespace-only paths | Proxy | low | ⬜ |
 | 10 | `ProxyServiceImpl.unregisterPath` throws unhandled `IllegalArgumentException` on blank `path`, and proxy `ActivityLog` duplicates repeated paths in a burst | Proxy | low | ⬜ |
@@ -54,7 +53,7 @@ other findings (#7, #38; #13, #31; #43) are still open.
 | 35 | `DashboardServer.render` never resets `session.renderFailed` on recovery and logs nothing on repeated render errors | Dashboards | low | ⬜ |
 | 36 | Toggling "Problems only" during the search input debounce window causes a duplicate WebSocket announce and screen-reader announcement | Dashboards | low | ⬜ |
 | 37 | Incomplete URL userinfo redaction leaks passwords containing or following `@` in `Utils.sanitizeUrl` and Spring Boot's `PrometheusProxyAgentProperties.shownUrl` | Security | medium | ⬜ |
-| 38 | Unary `ScrapeResponse` lacks header-field caps, `parseContentType` passes multi-MB and control-character parameters, `httpStatus` emits arbitrary 32-bit codes, and plain bodies bypass `maxUnzippedContentSizeMBytes` | Security | medium | ⬜ |
+| 38 | Unary `ScrapeResponse` lacks header-field caps, `parseContentType` passes multi-MB and control-character parameters, `httpStatus` emits arbitrary 32-bit codes, and plain bodies bypass `maxUnzippedContentSizeMBytes` | Security | medium | ✅ |
 | 39 | Dashboard `isOriginAllowed()` ignores URL scheme and bypasses explicit `allowedOrigins` restrictions | Security | medium | ⬜ |
 | 40 | Unthrottled WebSocket per-frame full-HTML re-render amplification on dashboard `/events` | Security | medium | ⬜ |
 | 41 | Dashboard browser Basic-Auth restriction (`isBrowser`) is bypassed over plain HTTP on non-localhost hosts | Security | low | ⬜ |
@@ -304,7 +303,7 @@ Inside `synchronized(pathMap)` — the global monitor blocking every Prometheus 
 
 ---
 
-### 7. ⬜ `ScrapeDispatch.mergeContentTexts` emits invalid blank lines in OpenMetrics output when a consolidated agent returns only `# EOF`
+### 7. ✅ `ScrapeDispatch.mergeContentTexts` emits invalid blank lines in OpenMetrics output when a consolidated agent returns only `# EOF`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -329,6 +328,8 @@ Whitespace-only non-empty bodies trigger the same defect.
 **Impact:** OpenMetrics 1.0 forbids blank lines in exposition text; Prometheus rejects the entire consolidated scrape as malformed OpenMetrics.
 
 **Fix:** Filter out empty strings after stripping `# EOF` and trailing whitespace (`val stripped = trimmed.map { it.removeSuffix(Exposition.EOF_MARKER).trimEnd() }.filter { it.isNotEmpty() }`), and when `stripped.isEmpty()` return `if (hasEof) Exposition.EOF_MARKER else ""`.
+
+**Resolution:** Fixed in #593. `mergeContentTexts` drops a body that is empty once its `# EOF` and trailing whitespace are removed, and returns `# EOF` alone when every body was empty, so a consolidated OpenMetrics scrape has no blank lines. A `ScrapeDispatchTest` case with an agent that answered only `# EOF`, or only whitespace, failed before.
 
 ---
 
@@ -990,7 +991,7 @@ Add unit tests covering email usernames (`https://alice@corp.com:s3cr3t@host/met
 
 ---
 
-### 38. ⬜ Unary `ScrapeResponse` lacks header-field caps, `parseContentType` passes multi-MB and control-character parameters, `httpStatus` emits arbitrary 32-bit codes, and plain bodies bypass `maxUnzippedContentSizeMBytes`
+### 38. ✅ Unary `ScrapeResponse` lacks header-field caps, `parseContentType` passes multi-MB and control-character parameters, `httpStatus` emits arbitrary 32-bit codes, and plain bodies bypass `maxUnzippedContentSizeMBytes`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1014,6 +1015,8 @@ A malicious or compromised authenticated agent (or any peer when agent auth is d
 2. In `parseContentType`, rebuild the returned `ContentType` from only the matched `type/subtype` plus an explicit allowlist of safe exposition parameters (`version`, `charset`, `escaping`), validated to be short printable RFC 9110 tokens with no control characters (falling back to `Text.Plain.withCharset(Charsets.UTF_8)` otherwise).
 3. Validate `srStatusCode`: allow `200..299` (excluding `204`/`205`) and `400..599`, mapping `1xx`, `3xx`, `204`/`205`, or out-of-range values to `502 Bad Gateway` (or suppressing body on `204`/`205`/`304`).
 4. Enforce `byteCount <= maxSize` on the plain-text branch of `buildSuccessResponse()`, throwing `ProxyUtils.ZipBombException` (returning `413` `payload_too_large`) when exceeded.
+
+**Resolution:** Fixed in #593. A result sent whole has its agent ID, URL, failure reason, and content type cut to 4,096 characters on arrival, as a chunked header's are (`MAX_CHUNKED_HEADER_FIELD_LENGTH` is now `MAX_RESULT_FIELD_LENGTH`). An exposition content type keeps only its formats' own parameters (`version`, `charset`, `escaping`, `proto`, `encoding`), the first of each, with a token value of at most 64 characters. A status outside 200–599, or a 204, 205, or 304, which the proxy can't serve with a body, fails the scrape as a 502 `invalid_response`, as an unusable chunked result does; other 3xx statuses still pass through. A plain body is held to `maxUnzippedContentSizeMBytes` and fails as a 413 `payload_too_large` (`ZipBombException` is now `ContentTooLargeException`). Each part has a test that failed before.
 
 ---
 
