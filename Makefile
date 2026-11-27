@@ -310,6 +310,8 @@ helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs
 		manifests=$$(docker run --rm -v "$(CURDIR)/charts:/charts:ro" $(HELM_IMAGE) template ci /charts/$$chart -f /$$values); \
 		printf '%s\n' "$$manifests" | docker run --rm -i $(KUBECONFORM_IMAGE) -strict -summary \
 			-kubernetes-version $(KUBERNETES_VERSION) -schema-location default -schema-location '$(CRD_SCHEMAS)' -; \
+		printf '%s\n' "$$manifests" | grep -q '^      automountServiceAccountToken: false$$' || \
+			{ echo "Error: $$chart's pod mounts a Kubernetes API token it doesn't use (automountServiceAccountToken)" >&2; exit 1; }; \
 		if [ "$$(basename $$values)" = secret-config-values.yaml ]; then \
 			if printf '%s\n' "$$manifests" | grep -q '^kind: ConfigMap'; then \
 				echo "Error: $$chart with existingSecret renders a ConfigMap, which would hold its config" >&2; exit 1; fi; \

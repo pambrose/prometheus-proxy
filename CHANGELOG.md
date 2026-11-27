@@ -45,6 +45,14 @@ All notable changes to this project are documented in this file.
   session cookie set at `/screens` as well as the dashboard's path, and startup refuses a list the page can't use,
   naming the screen
 
+### Security
+
+- The Helm charts set `automountServiceAccountToken: false` on their pods, so Kubernetes no longer mounts the
+  namespace's default ServiceAccount token in the proxy's and the agent's containers, neither of which calls the
+  Kubernetes API. Each chart's new `automountServiceAccountToken` value turns it back on, for an injected sidecar that
+  needs the token; a `--reuse-values` upgrade from a release without the value takes `false`, and `make helm-lint` fails
+  on a render that mounts the token
+
 ### Bug Fixes
 
 - An agent whose proxy took its connect and then refused it, its registration or every static path, added about three

@@ -33,6 +33,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- /* Unset after a helm upgrade --reuse-values from a release without it, so false, as in values.yaml. */}}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken | default false }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
