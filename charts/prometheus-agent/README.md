@@ -113,5 +113,6 @@ network in plain HTTP.
 | `extraArgs` / `env` / `envFrom`          | `[]`                                       | Extra command-line arguments and environment variables                             |
 | `resources`                              | 100m / 256Mi, limit 512Mi                  | Container resources                                                                |
 | `podSecurityContext` / `securityContext` | non-root (1001), read-only root filesystem | `/tmp` is an emptyDir                                                              |
+| `automountServiceAccountToken`           | `false`                                    | Mount the ServiceAccount's token in the pod; the agent never uses it               |
 
 `values.yaml` documents the rest (probes, pod labels and annotations, scheduling, extra volumes).

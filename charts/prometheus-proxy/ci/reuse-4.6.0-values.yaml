@@ -1,6 +1,7 @@
 # The values `helm upgrade --reuse-values` renders this chart with after a release of the 4.6.0 chart, which had no
-# dashboard.host or dashboard.login (a null deletes a key), with the dashboard turned on in the upgrade. The templates
-# take each missing value's default; reading dashboard.login failed the upgrade.
+# automountServiceAccountToken, dashboard.host, or dashboard.login (a null deletes a key), with the dashboard turned on
+# in the upgrade. The templates take each missing value's default; reading dashboard.login failed the upgrade.
+automountServiceAccountToken: null
 dashboard:
   enabled: true
   host: null

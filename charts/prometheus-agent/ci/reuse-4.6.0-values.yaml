@@ -1,6 +1,7 @@
 # The values `helm upgrade --reuse-values` renders this chart with after a release of the 4.6.0 chart, which had no
-# dashboard at all (a null deletes a key). The templates take the dashboard's defaults; reading dashboard.enabled failed
-# the upgrade.
+# automountServiceAccountToken and no dashboard at all (a null deletes a key). The templates take their defaults;
+# reading dashboard.enabled failed the upgrade.
 proxy:
   hostname: proxy.example.com:50051
+automountServiceAccountToken: null
 dashboard: null

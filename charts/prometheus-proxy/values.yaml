@@ -123,6 +123,11 @@ readinessProbe:
   initialDelaySeconds: 10
   periodSeconds: 15
 
+# The proxy never calls the Kubernetes API, so its pod doesn't mount the token of its ServiceAccount, the namespace's
+# default. Set this to true for a container added to the pod that needs the token, such as an injected sidecar that
+# authenticates with it.
+automountServiceAccountToken: false
+
 # 1001 is the UID and GID the images create their user with (etc/docker/proxy.Dockerfile); change them together.
 podSecurityContext:
   runAsNonRoot: true

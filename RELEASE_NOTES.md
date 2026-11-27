@@ -35,6 +35,9 @@ its own that holds them all, with Prometheus and Grafana.
 - **A script that sends a browser's headers must use the login page.** A script that sends the dashboard login as
   Basic Auth along with `Accept: text/html`, `Upgrade-Insecure-Requests`, `Origin`, or `Referer` now gets the login page
   or a 401, as a browser does. Drop the header from the script.
+- **The Helm charts' pods no longer get a Kubernetes API token.** Neither the proxy nor the agent uses one, so their
+  pods now set `automountServiceAccountToken: false`. If something added to the pod needs the token, such as an injected
+  sidecar that authenticates with it, set the chart's `automountServiceAccountToken` to `true`.
 
 ### New Features
 
@@ -63,6 +66,13 @@ its own that holds them all, with Prometheus and Grafana.
   With screens listed, `framingEnabled = false` still lets the page show the proxy's dashboard, from its own origin.
   Behind a reverse proxy, pass `/screens` on as well as `/dashboard`. The basics, network, and Ktor demos' tours now
   run in it.
+
+### Security
+
+- **The Helm charts' pods no longer hold a Kubernetes API token.** Kubernetes mounted the namespace's default
+  ServiceAccount token in every proxy and agent pod, though neither calls the Kubernetes API, so whoever took over the
+  container had the token too. Each chart's new `automountServiceAccountToken` value, `false` by default, turns it back
+  on (see Before you upgrade).
 
 ### Bug Fixes
 
