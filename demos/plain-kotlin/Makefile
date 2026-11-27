@@ -40,7 +40,7 @@ down:  ## Stop the demo and remove its containers and network
 status:  ## Show the containers, the ovens and their paths, the queue, and the URLs
 	@$(DEMO) status
 
-open:  ## Open the proxy's dashboard, Grafana, and Prometheus's targets in the browser
+open:  ## Open the proxy's screens page, which holds its dashboard, Grafana, and Prometheus, in the browser
 	@$(DEMO) open
 
 tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)
