@@ -33,6 +33,7 @@ internal object ThemeScript {
    * own, whose icon the stylesheet draws on the button. This keeps the button's name and tooltip in step with it,
    * naming the theme in force, auto's with the system's theme as that changes, and the next; and on a press moves to
    * the next, in the order light, dark, auto, wrapping, applies it, stores it, and says it. Auto is stored as nothing.
+   * A theme another page on the origin stores, such as the screens page's or its proxy frame's, applies here at once.
    */
   val JS =
     """
@@ -66,6 +67,16 @@ internal object ThemeScript {
     }
     showTheme();
     systemDark.addEventListener('change', showTheme);
+    // A theme set in another page on this origin, the screens page or the proxy's dashboard in its frame, or another
+    // tab: the browser tells every page but the one that stored it, so this one follows, as the head applies a stored
+    // theme, and says nothing, since the press was said where it was made.
+    window.addEventListener('storage', function (evt) {
+      if (evt.key !== '$THEME_KEY') return;
+      var t = evt.newValue;
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      else document.documentElement.removeAttribute('data-theme');
+      showTheme();
+    });
     """.trimIndent()
 
   /** [JS] with each line after the first indented by [indent], for a script whose own lines are indented so. */

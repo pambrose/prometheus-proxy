@@ -220,7 +220,9 @@ internal class DashboardScript(
         var params = new URLSearchParams();
         if (q.value.trim()) params.set('$QUERY_PARAM', q.value.trim());
         if (problems.checked) params.set('$PROBLEMS_PARAM', '$PROBLEMS_ON');
-        var search = params.toString();
+        // A space as %20, not the + URLSearchParams writes, which a link into the screens page takes for a second pane
+        // when a screen's id follows it. It writes a + typed in the search as %2B, so each + it leaves is a space.
+        var search = params.toString().replace(/\+/g, '%20');
         history.replaceState(history.state, '', window.location.pathname + (search ? '?' + search : ''));
         // The first frame rendered from this filter says how many rows it left.
         if (announce()) countDue = seq;
@@ -230,8 +232,12 @@ internal class DashboardScript(
         clearTimeout(filterTimer);
         filterTimer = setTimeout(applyFilter, $FILTER_DEBOUNCE_MILLIS);
       });
+      // At once, and in place of a search still waiting out its debounce, which this applies too: else that would
+      // announce the same filter again, and its count be said twice.
       document.body.addEventListener('change', function (evt) {
-        if (evt.target.id === '$FILTER_PROBLEMS_ID') applyFilter();
+        if (evt.target.id !== '$FILTER_PROBLEMS_ID') return;
+        clearTimeout(filterTimer);
+        applyFilter();
       });
       document.body.addEventListener('submit', function (evt) {
         if (!evt.target.matches || !evt.target.matches('form.filters')) return;
@@ -296,34 +302,90 @@ internal class DashboardScript(
       // region every frame, which would drop a request its button made. The panel is outside every pushed region, so a
       // push never clears a result. The header is the one htmx sends, which the route requires, so no page on another
       // site can make the server scrape. Closing the panel hands focus back to the button that filled it.
+      //
+      // Each request is numbered, and closing the panel counts as one, so only the latest request's answer shows: a
+      // slow scrape's, after a later click's or a close, is dropped, never written over the later result, or into the
+      // closed panel, and said. The panel has its close button in every state, the scrape in flight's, a refusal's, and
+      // no answer's included.
       var scrapedFrom = null;
+      var scrapeSeq = 0;
       function scrapeNow(btn) {
         var panel = document.getElementById('$SCRAPE_RESULT_ID');
         if (!panel) return;
         // The path is in the button's id, after the prefix.
         var path = btn.id.slice('$SCRAPE_ID_PREFIX'.length);
+        scrapeSeq += 1;
+        var mine = scrapeSeq;
         scrapedFrom = btn.id;
         panel.hidden = false;
-        panel.textContent = 'Scraping /' + path + '…';
+        showScrapeNotice(panel, path, false, 'scraping…');
         var url = panel.getAttribute('$SCRAPE_URL_ATTR') + '?path=' + encodeURIComponent(path);
         fetch(url, { method: 'POST', headers: { '${DashboardServer.HX_REQUEST_HEADER}': 'true' } })
           .then(function (response) {
+            if (mine !== scrapeSeq) return null;
             // A session that has ended: the reload brings the login page.
             if (response.status === 401) { location.reload(); return null; }
-            return response.text();
+            return response.text().then(function (body) { return { response: response, body: body }; });
           })
-          .then(function (html) {
-            if (html === null) return;
-            panel.innerHTML = html;
-            var heading = panel.querySelector('[$SAY_ATTR]');
-            // A refusal the guard answers in plain text has no heading; it is said as the panel shows it.
-            say(heading ? heading.getAttribute('$SAY_ATTR') : panel.textContent);
+          .then(function (answer) {
+            if (answer && mine === scrapeSeq) showScrapeAnswer(panel, path, answer.response, answer.body);
           }, function () {
-            panel.textContent = 'No answer from the $subject for the scrape of /' + path + '.';
-            say(panel.textContent);
+            if (mine === scrapeSeq) refuseScrape(panel, path, 'no answer from the $subject');
           });
       }
+      // The route's answer: its result, which ScrapeNowHtml renders, as it is, and said from its heading; anything
+      // else, a refusal the guard answers in plain text or a reverse proxy's error page, in words, its status and, from
+      // plain text, its start.
+      function showScrapeAnswer(panel, path, response, body) {
+        var result = scrapeResultOf(response, body);
+        if (result) {
+          panel.replaceChildren(result);
+          say(result.querySelector('[$SAY_ATTR]').getAttribute('$SAY_ATTR'));
+          return;
+        }
+        var plain = /^text\/plain/i.test(response.headers.get('Content-Type') || '');
+        var reason = plain && body.trim() ? body.trim().slice(0, $REFUSAL_CHARS) : response.statusText;
+        refuseScrape(panel, path, (response.status + ' ' + reason).trim());
+      }
+      // The route's result, parsed inert in a template, which runs and loads nothing, or null for an answer that isn't
+      // one. Only an HTML fragment whose one element starts with a heading the page can say reaches the panel as
+      // markup, so an error page an answer brings, its styles included, never does.
+      function scrapeResultOf(response, body) {
+        if (!/^text\/html/i.test(response.headers.get('Content-Type') || '')) return null;
+        var parsed = document.createElement('template');
+        parsed.innerHTML = body;
+        var root = parsed.content.children.length === 1 ? parsed.content.firstElementChild : null;
+        var head = root && root.firstElementChild;
+        return root && root.tagName === 'DIV' && head && head.matches('div.sr-head[$SAY_ATTR]') ? root : null;
+      }
+      function refuseScrape(panel, path, reason) {
+        showScrapeNotice(panel, path, true, reason);
+        say('Not scraped: /' + path + ', ' + reason + '.');
+      }
+      // A heading of the script's own, laid out as a result's (ScrapeNowHtml), "not scraped" first for a refusal, with
+      // the result's close button; built as text, so nothing an answer holds reaches the page as markup.
+      function showScrapeNotice(panel, path, refused, text) {
+        var head = document.createElement('div');
+        head.className = 'sr-head';
+        if (refused) head.appendChild(textSpan('tag crit', 'not scraped'));
+        head.appendChild(textSpan('sr-path', '/' + path));
+        head.appendChild(textSpan(refused ? '' : 'dim', text));
+        var close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'close';
+        close.setAttribute('aria-label', '${ScrapeNowHtml.CLOSE_LABEL}');
+        close.title = '${ScrapeNowHtml.CLOSE_TITLE}';
+        head.appendChild(close);
+        panel.replaceChildren(head);
+      }
+      function textSpan(cls, text) {
+        var span = document.createElement('span');
+        if (cls) span.className = cls;
+        span.textContent = text;
+        return span;
+      }
       function closeScrapeResult(panel) {
+        scrapeSeq += 1;
         panel.hidden = true;
         panel.textContent = '';
         var btn = scrapedFrom && document.getElementById(scrapedFrom);
@@ -452,5 +514,9 @@ internal class DashboardScript(
     // How long a copy button shows its result: long enough to notice after the click, brief enough that it reads
     // as the click's answer rather than as a state of the row.
     const val COPY_MARK_MILLIS = 1500
+
+    // How much of a plain-text refusal of a scrape-now the panel shows: the guard's are a few words, and a reverse
+    // proxy's can run on.
+    const val REFUSAL_CHARS = 200
   }
 }

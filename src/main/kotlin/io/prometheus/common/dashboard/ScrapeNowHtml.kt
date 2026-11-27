@@ -54,6 +54,10 @@ internal sealed interface ScrapeNowResult {
  * but text. The heading carries the sentence the page's script says aloud.
  */
 internal object ScrapeNowHtml {
+  /** The close button's name, and its tooltip, on the result's heading and on the page script's own lines alike. */
+  const val CLOSE_LABEL = "Close the scrape result"
+  const val CLOSE_TITLE = "Close"
+
   fun render(result: ScrapeNowResult): String {
     // Block-bodied, as the other renderers are: CodeScene counts a conditional in an expression body's trailing lambda
     // as a Global Conditional.
@@ -94,8 +98,8 @@ internal object ScrapeNowHtml {
 
   private fun DIV.closeButton() {
     button(type = ButtonType.button, classes = "close") {
-      attributes["aria-label"] = "Close the scrape result"
-      attributes["title"] = "Close"
+      attributes["aria-label"] = CLOSE_LABEL
+      attributes["title"] = CLOSE_TITLE
     }
   }
 

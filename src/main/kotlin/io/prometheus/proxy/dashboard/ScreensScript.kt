@@ -164,7 +164,9 @@ internal object ScreensScript {
         return path === null || path === undefined ? id : id + '/' + path;
       }
       // Shows the layout and its screens, marks the tabs and the layout buttons, and puts it in the hash; nothing in a
-      // copy that isn't the page, which shows its handoff notice until Stay here makes it the page.
+      // copy that isn't the page, which shows its handoff notice until Stay here makes it the page. A shown pane's
+      // slot, 1 for the screen alone or on the left and 2 for the right, places it in its column side by side and in
+      // its row where Split stacks (ScreensCss), so the panes follow first and second, not the page's order.
       function render() {
         if (!isThePage) return;
         stage.className = 'stage ' + layout;
@@ -174,7 +176,8 @@ internal object ScreensScript {
           var current = layout !== 'all' && id === first;
           var isSecond = layout === 'split' && id === second;
           panes[id].classList.toggle('shown', at >= 0);
-          panes[id].style.gridColumn = layout === 'all' || at < 0 ? '' : String(at + 1);
+          if (layout === 'all' || at < 0) panes[id].style.removeProperty('--slot');
+          else panes[id].style.setProperty('--slot', String(at + 1));
           markLink(tabs[id], current, isSecond, 'page');
           markLink(menuItems[id], current, isSecond, 'true');
           if (at >= 0 && layout !== 'all') show(id);
@@ -259,7 +262,8 @@ internal object ScreensScript {
         return pane;
       }
       // A link's panes, split at the first + that a screen's id follows, alone or before its path: a + elsewhere is
-      // part of a pane's query, where the dashboards' search writes a space as +.
+      // part of a pane's query, where a plain form writes a space as +. The dashboards' search writes one as %20, so
+      // a search whose next word is a screen's id can't split.
       function splitPanes(text) {
         var at = text.indexOf('+');
         while (at >= 0) {
