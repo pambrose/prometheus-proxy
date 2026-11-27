@@ -18,6 +18,7 @@
 
 package io.prometheus.agent.filter
 
+import ch.qos.logback.classic.Level
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -26,6 +27,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.prometheus.common.captureLogs
 
 class MetricFilterTest : StringSpec() {
   private fun filter(
@@ -82,6 +84,34 @@ class MetricFilterTest : StringSpec() {
       filter.linesDropped shouldBe 4
     }
 
+    // A dashboard's Scrape now previews the filter, and leaves no trace in what the agent reports. A preview the filter
+    // let through unfiltered marked the filter failed open for good, logged the WARN, told the activity feed, and so
+    // kept the first scrape of Prometheus's that failed open from logging or telling it.
+    "a preview the filter lets through unfiltered should leave no trace" {
+      val reasons = mutableListOf<String>()
+      val filter =
+        MetricFilter.createOrNull(emptyList(), listOf("go_.*"), "test_path") { reasons += it }.shouldNotBeNull()
+
+      val previewLogs =
+        captureLogs("io.prometheus.agent.filter") {
+          filter.previewBytes("up 1\n".encodeToByteArray(), "application/vnd.google.protobuf").shouldBeNull()
+          filter.previewBytes(byteArrayOf(0xC3.toByte(), 0x28), "text/plain").shouldBeNull()
+        }
+
+      previewLogs.shouldBeEmpty()
+      reasons.shouldBeEmpty()
+      filter.failedOpen.shouldBeNull()
+
+      val scrapeLogs =
+        captureLogs("io.prometheus.agent.filter") {
+          filter.filterBytes("up 1\n".encodeToByteArray(), "application/vnd.google.protobuf").shouldBeNull()
+        }
+
+      scrapeLogs.map { it.level } shouldBe [Level.WARN]
+      reasons shouldBe ["a scrape's content type, application/vnd.google.protobuf, was not text"]
+      filter.failedOpen shouldBe "a scrape's content type was not text"
+    }
+
     // Prometheus 3 offers escaping=allow-utf-8, which the agent passes on, so a target can write a name outside the
     // legacy character set quoted: `# TYPE "a.b" counter`, and `{"a.b",job="x"} 1` with the name as the first thing in
     // the braces. The filter kept the quotes in the family name and read the sample name as "", so an allow list
@@ -115,6 +145,15 @@ class MetricFilterTest : StringSpec() {
       val payload = "# TYPE \"say \\\"hi\\\"\" gauge\n{\"say \\\"hi\\\"\"} 1\nup 1\n"
 
       filter(deny = ["say \"hi\""]).filterText(payload).text shouldBe "up 1\n"
+    }
+
+    // The text format allows blanks inside the braces, before a quoted name as before a label. After `{ ` the sample
+    // was judged by the name "", so an allow list dropped it and a deny list kept it.
+    "a quoted name after blanks in the braces should be judged by that name" {
+      val payload = "{ \"a.b\", job=\"x\" } 1\n{\t\"a.b\"} 2\nother 3\n"
+
+      filter(allow = ["a\\.b"]).filterText(payload).text shouldBe "{ \"a.b\", job=\"x\" } 1\n{\t\"a.b\"} 2\n"
+      filter(deny = ["a\\.b"]).filterText(payload).text shouldBe "other 3\n"
     }
 
     // The text format allows blanks before a line's first token. A sample line indented that way was judged by the

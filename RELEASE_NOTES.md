@@ -23,6 +23,11 @@ its own that holds them all, with Prometheus and Grafana.
   `//metrics`, which no scrape can reach and the proxy refuses, now stops the agent at startup, naming it, where 4.7.0
   ran without it; a discovered one is skipped when the agent reads its discovery file. Use one segment, such as
   `app_metrics`.
+- **An agent with a proxy endpoint it can't dial no longer starts.** A proxy endpoint with no host, such as `:50051` or
+  `[]`, or with anything but `:port` after a bracketed IPv6 address, such as `[::1]50051`, now stops the agent at
+  startup, naming it. As the only or first endpoint, one with no host already failed startup, with a less clear
+  message; as a later failover entry, it let the agent start and failed each connect that reached it, and
+  `[::1]50051` dialed `[::1]` on the default port. Write the endpoint in full, such as `[::1]:50051`.
 - **A `proxy.auth` pattern no path can match, or an unusable service discovery path, now stops the proxy at startup.** A
   `proxy.auth` path pattern with a `/` after its leading one, such as `team_a/*`, and, with service discovery on, a
   `proxy.service.discovery.path` of whitespace, `/` alone, or two leading slashes, such as `//discovery`, now fail
@@ -169,6 +174,33 @@ its own that holds them all, with Prometheus and Grafana.
   dashboard's Scrape Success Rate showed No data, for a proxy every one of whose scrapes since it started had failed,
   since there's no success series until a scrape succeeds. Both now show 0% then. Load `grafana/alerts.yml` and import
   `grafana/prometheus-proxy.json` again to pick them up.
+- **A stuck `MetricsSource` isn't called again while another stuck call is out.** When overlapping scrapes of a path
+  served in-process, two of Prometheus's or one and a Scrape now, both gave up on calls to its `MetricsSource` that
+  ignored the timeout's interrupt, the agent called the source again as soon as one of those calls returned, though the
+  other was still stuck, so stuck calls could pile up, each holding a thread. It now waits for all of them.
+- **A failed response stream is counted and explained.** When a stream the agent sends results on failed before
+  reading the results queued for it, `agent_scrape_result_count_total` counted them neither as sent nor as `dropped`;
+  they now count as `dropped`. The agent dashboard's `disconnected` line now gives such a failure's reason, too.
+- **The agent reconnects when the proxy ends a response stream.** A response stream the proxy ended without an error,
+  as it ends one it can't read, left the agent connected until its next result for that stream, which was lost, so
+  that scrape waited out the proxy's timeout. The agent now reconnects at once.
+- **An agent stopping on a JVM error stops at once.** An agent stopping on an `OutOfMemoryError` or another JVM `Error`
+  first waited out `agent.internal.reconnectPauseSecs`, 3 seconds by default, and logged that it had waited to
+  reconnect, for a reconnect it would never make.
+- **A TLS file that can't be read is an invalid setting.** A certificate, key, or trust collection file that exists but
+  can't be read by the proxy or agent, such as one a container's user may not open, ended the process with a stack
+  trace, and reached an embedded agent's app as a `FileNotFoundException`, not a `ConfigLoadException`. It now fails
+  startup with `Invalid configuration`, naming the setting and the file.
+- **Scrape now leaves a path's filter as it found it.** A Scrape now, from either dashboard, of a path whose filter
+  couldn't read the answer, such as a protobuf or non-UTF-8 body, logged the filter's warning, added `not filtered` to
+  the agent's Activity view, and marked the filter failed open for good, so when one of Prometheus's scrapes did the
+  same later, nothing was logged.
+- **A proxy endpoint with no host, or a bracketed IPv6 address with a stray port, is refused.** A failover entry such
+  as `:50052` failed each connect that reached it, and `[::1]50051` dropped its `50051` and dialed the default port.
+  The agent now refuses both at startup (see Before you upgrade).
+- **A quoted metric name after a blank is filtered by its name.** A metric filter took a sample written as
+  `{ "a.b", job="x" } 1`, with a blank before its quoted name, to have no name, so an allow list for `a.b` dropped it
+  and a deny list for it kept it.
 
 ### Behavior Changes
 

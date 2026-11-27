@@ -222,12 +222,14 @@ class AgentGrpcServiceTest : StringSpec() {
         }
       val nonChunked = CompletableDeferred<ScrapeResponse>()
       val chunked = CompletableDeferred<ChunkedScrapeResponse>()
+      // Each stream reads on after its first message, as the proxy does: one that ended would end the connection,
+      // and with it the other stream, perhaps before its own first message.
       coEvery { stub.writeResponsesToProxy(any(), any()) } coAnswers {
-        nonChunked.complete(arg<Flow<ScrapeResponse>>(0).first())
+        arg<Flow<ScrapeResponse>>(0).collect { nonChunked.complete(it) }
         EMPTY_INSTANCE
       }
       coEvery { stub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
-        chunked.complete(arg<Flow<ChunkedScrapeResponse>>(0).first())
+        arg<Flow<ChunkedScrapeResponse>>(0).collect { chunked.complete(it) }
         EMPTY_INSTANCE
       }
       service.registerAgent(CountDownLatch(1))
@@ -2538,6 +2540,66 @@ class AgentGrpcServiceTest : StringSpec() {
         errors.map { it.formattedMessage } shouldBe emptyList()
         verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
         verify(exactly = 2) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
+      }
+    }
+
+    // A result the producer had queued for a writer whose stream failed before reading it stayed in the closed channel:
+    // only the flow gRPC collects drops what's left in it, so it counted neither as sent nor as dropped.
+    "a result queued for a writer whose stream failed before reading any should count as dropped" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val agent = service.agent.countsDroppedResults()
+        val forwarded = CompletableDeferred<Unit>()
+        coEvery { mockStub.writeResponsesToProxy(any(), any()) } coAnswers {
+          forwarded.await()
+          throw StatusException(Status.UNAVAILABLE)
+        }
+        coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
+          arg<Flow<ChunkedScrapeResponse>>(0).collect()
+          EMPTY_INSTANCE
+        }
+        val connectionContext = countingConnectionContext(agent).withResults(1)
+        every { agent.markMsgSent() } answers { forwarded.complete(Unit) }
+
+        withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(agent, connectionContext) }
+
+        verify(exactly = 0) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
+        verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
+      }
+    }
+
+    // The failure of a connection's task is what its disconnect line in the activity feed names. A response stream's
+    // failure ended the connection without being noted, so the line gave no reason.
+    "a response stream's failure should be what ended the connection" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val failure = StatusException(Status.UNAVAILABLE.withDescription("proxy went away"))
+        coEvery { mockStub.writeResponsesToProxy(any(), any()) } coAnswers {
+          arg<Flow<ScrapeResponse>>(0).collect()
+          EMPTY_INSTANCE
+        }
+        coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } throws failure
+        val connectionContext = AgentConnectionContext(128)
+
+        withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(service.agent, connectionContext) }
+
+        connectionContext.endedBy shouldBe failure
+      }
+    }
+
+    // The proxy ends a response stream it can't read with an answer, not a failure. The agent went on with the other
+    // stream and its scrapes, each result forwarded to the ended one lost, until a send to its channel failed.
+    "a response stream the proxy ends should end the connection" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.writeResponsesToProxy(any(), any()) } returns EMPTY_INSTANCE
+        coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
+          arg<Flow<ChunkedScrapeResponse>>(0).collect()
+          EMPTY_INSTANCE
+        }
+        val connectionContext = AgentConnectionContext(128)
+
+        withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(service.agent, connectionContext) }
+
+        connectionContext.connected.shouldBeFalse()
+        connectionContext.endedBy.shouldBeNull()
       }
     }
   }

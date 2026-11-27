@@ -38,9 +38,9 @@ package io.prometheus.common
  * variable, or the builder: a value of the wrong type or out of range, an unresolved `${…}` substitution, a malformed
  * proxy endpoint, a duplicate `pathConfigs` or `filters` entry, a path with a character the proxy refuses
  * (whitespace, a control character, `?`, or `#`), a filter regex that doesn't compile, an HTTPS trust store that is
- * missing or malformed, or TLS material it can't use: a certificate chain, private key, or trust collection whose file
- * is missing or malformed, whose PEM can't be read, or that is given both as a file and as PEM, or a certificate
- * chain without its key, or a key without its chain.
+ * missing, unreadable, or malformed, or TLS material it can't use: a certificate chain, private key, or trust
+ * collection whose file is missing, unreadable, or malformed, whose PEM can't be read, or that is given both as a file
+ * and as PEM, or a certificate chain without its key, or a key without its chain.
  *
  * In standalone mode (`exitOnMissingConfig = true`) such a failure terminates the process via
  * `exitProcess` instead. Embedders that host an Agent inside their own JVM should catch this

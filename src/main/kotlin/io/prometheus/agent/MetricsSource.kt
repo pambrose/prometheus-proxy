@@ -32,8 +32,8 @@ import java.io.OutputStream
  *
  * At the agent's scrape timeout, the agent interrupts the call and answers the scrape without waiting for it. A call
  * that ignores the interrupt, such as one blocked on a socket read, holds its thread until it returns, and the agent
- * doesn't call the source again until then, failing its scrapes meanwhile. Whatever [write] throws, short of a
- * `VirtualMachineError` such as `OutOfMemoryError`, fails the scrape it was called for, and nothing else.
+ * doesn't call the source again until every such call has, failing its scrapes meanwhile. Whatever [write] throws,
+ * short of a `VirtualMachineError` such as `OutOfMemoryError`, fails the scrape it was called for, and nothing else.
  *
  * A Prometheus Java client's `PrometheusRegistry`, the one Micrometer's `PrometheusMeterRegistry` gives too, needs no
  * source of its own: [of] gives one, and the builder's [source][EmbeddedAgentConfig.Builder.source] takes the registry

@@ -171,9 +171,9 @@ import io.prometheus.agent.ShownFailure
  *   `FAILED`, rather than ending only a connection or a scrape
  *
  * Built directly, the constructor throws [IllegalArgumentException] for a setting it rejects: an HTTPS trust store or
- * TLS certificate file that is missing or malformed, a duplicate `pathConfigs` or `filters` entry, a path with a
- * character the proxy refuses (whitespace, a control character, `?`, or `#`), or a filter regex that doesn't compile.
- * [startAsyncAgent] and [startSyncAgent] report those as they report an invalid option: a
+ * TLS certificate file that is missing, unreadable, or malformed, a duplicate `pathConfigs` or `filters` entry, a path
+ * with a character the proxy refuses (whitespace, a control character, `?`, or `#`), or a filter regex that doesn't
+ * compile. [startAsyncAgent] and [startSyncAgent] report those as they report an invalid option: a
  * [io.prometheus.common.ConfigLoadException] when embedded, and a logged error and exit code 1 otherwise.
  *
  * @param options Configuration options for the agent, typically loaded from command line or config files
@@ -393,20 +393,19 @@ class Agent(
   override fun run() {
     val endpointFailover = EndpointFailover(grpcService)
     while (isRunning) {
-      try {
-        runCatchingCancellable {
-          runBlocking {
-            connectToProxy(endpointFailover)
-            logger.info { "Disconnected from proxy at $proxyHost" }
-          }
-        }.onFailure { e -> handleConnectionFailure(e) }
-      } finally {
-        // Skip the rate-limiter wait once shutdown has flipped isRunning to false. acquire() is not
-        // interruptible, so blocking here would stall Agent.shutDown()/awaitTerminated() for up to
-        // reconnectPauseSecs; there is also no reconnect to pace when the agent is stopping.
-        if (isRunning)
-          reconnectPause()
-      }
+      runCatchingCancellable {
+        runBlocking {
+          connectToProxy(endpointFailover)
+          logger.info { "Disconnected from proxy at $proxyHost" }
+        }
+      }.onFailure { e -> handleConnectionFailure(e) }
+      // Skip the rate-limiter wait once shutdown has flipped isRunning to false. acquire() is not
+      // interruptible, so blocking here would stall Agent.shutDown()/awaitTerminated() for up to
+      // reconnectPauseSecs; there is also no reconnect to pace when the agent is stopping. Not in a finally block: a
+      // JVM Error that handleConnectionFailure rethrows stops the agent, which reads as running until the Error leaves
+      // run(), so the agent waited out the pause first, and logged a reconnect it would never make (November 26 #16).
+      if (isRunning)
+        reconnectPause()
     }
   }
 
@@ -1106,8 +1105,8 @@ class Agent(
      *   value of the wrong type or out of range, an unresolved `${…}` substitution, a malformed proxy endpoint, a
      *   duplicate `pathConfigs` or `filters` entry, a path with a character the proxy refuses (whitespace, a control
      *   character, `?`, or `#`), a filter regex that doesn't compile, or an HTTPS trust store or TLS certificate file
-     *   that is missing or malformed. Credentials in a config URL are redacted from its message and from every message
-     *   in its cause chain.
+     *   that is missing, unreadable, or malformed. Credentials in a config URL are redacted from its message and from
+     *   every message in its cause chain.
      * @throws IllegalStateException if the Agent fails to start, for example because its admin, metrics, or dashboard
      *   port is already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
      *   Also when the Agent doesn't start within 30 seconds, with a `java.util.concurrent.TimeoutException` as the

@@ -1,10 +1,10 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 36 resolved, 34 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 43 resolved, 27 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
-and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601.
+and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16, #17, #18, #19, and #20 in #602.
 
 **Date:** 2026-11-26
 
@@ -31,13 +31,13 @@ and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601.
 | 11 | Double-slash path stripping (`//foo`, `//`) causes permanent 404s for static paths, infinite discovery flapping + static-path clobbering, and a phantom `metricsProxyPath` | Agent | high | ✅ |
 | 12 | Reclaim loop tight-spins with zero delay (unbounded gRPC flood) when `rejectedPathRetryMaxSecs == 1`, and fires every reclaim 1s early otherwise | Agent | high | ✅ |
 | 13 | Connection stays stuck forever serving zero paths (no reconnect or failover) when a taken-over static path is permanently rejected on reclaim | Agent | medium | ✅ |
-| 14 | Concurrent overlapping scrapes of the same `MetricsSource` defeat `AgentHttpService.stuckSources` protection | Agent | medium | ⬜ |
-| 15 | `writeResponsesToProxyUntilDisconnected` can drop `RESULT_DROPPED` metrics on early writer exit, loses `endedBy` on stream failure, and doesn't tear down on early normal completion | Agent | medium | ⬜ |
-| 16 | Fatal JVM `Error` in `Agent.run()` blocks for `reconnectPauseSecs` and logs `"Waited ... to reconnect"` before terminating | Agent | medium | ⬜ |
-| 17 | TLS context build errors (`SSLException`) and unreadable TLS files (`FileNotFoundException`) bypass `failOnInvalidConfig` | Agent | medium | ⬜ |
-| 18 | `MetricFilter.previewBytes` mutates fail-open latches, logs warnings, and records `FILTER_FAILED_OPEN` during dashboard "Scrape now" previews | Agent | low | ⬜ |
-| 19 | `Utils.parseHostPort` accepts empty hosts (`":50051"`, `"[]:50051"`, `"[]"`) and silently discards trailing garbage after bracketed IPv6 (`"[::1]50051"`) | Agent | low | ⬜ |
-| 20 | `MetricFilter.quotedSampleName` misses Prometheus 3 UTF-8 samples with whitespace after `{` | Agent | low | ⬜ |
+| 14 | Concurrent overlapping scrapes of the same `MetricsSource` defeat `AgentHttpService.stuckSources` protection | Agent | medium | ✅ |
+| 15 | `writeResponsesToProxyUntilDisconnected` can drop `RESULT_DROPPED` metrics on early writer exit, loses `endedBy` on stream failure, and doesn't tear down on early normal completion | Agent | medium | ✅ |
+| 16 | Fatal JVM `Error` in `Agent.run()` blocks for `reconnectPauseSecs` and logs `"Waited ... to reconnect"` before terminating | Agent | medium | ✅ |
+| 17 | TLS context build errors (`SSLException`) and unreadable TLS files (`FileNotFoundException`) bypass `failOnInvalidConfig` | Agent | medium | ✅ |
+| 18 | `MetricFilter.previewBytes` mutates fail-open latches, logs warnings, and records `FILTER_FAILED_OPEN` during dashboard "Scrape now" previews | Agent | low | ✅ |
+| 19 | `Utils.parseHostPort` accepts empty hosts (`":50051"`, `"[]:50051"`, `"[]"`) and silently discards trailing garbage after bracketed IPv6 (`"[::1]50051"`) | Agent | low | ✅ |
+| 20 | `MetricFilter.quotedSampleName` misses Prometheus 3 UTF-8 samples with whitespace after `{` | Agent | low | ✅ |
 | 21 | `EmbeddedAgentInfo.shutdown()` / `close()` and `Agent.stop()` sneaky-throw undeclared checked `TimeoutException` (Java interop hazard) | Embedding | medium | ⬜ |
 | 22 | `EmbeddedAgentConfig.Builder.path()` and `scrapeSelf()` accept `"/"`-only paths and blank URLs, silently dropping targets instead of failing validation | Embedding | medium | ⬜ |
 | 23 | `EnvironmentSetting.check()` validates and fails on `fromEnvironment()` values overridden by an earlier `setting()` call | Embedding | medium | ⬜ |
@@ -500,7 +500,7 @@ The same stall occurs if `/a` was retryably rejected at connect while `/b` was t
 
 ---
 
-### 14. ⬜ Concurrent overlapping scrapes of the same `MetricsSource` defeat `AgentHttpService.stuckSources` protection
+### 14. ✅ Concurrent overlapping scrapes of the same `MetricsSource` defeat `AgentHttpService.stuckSources` protection
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -519,9 +519,11 @@ The same stall occurs if `/a` was retryably rejected at connect while `/b` was t
 
 **Fix:** Replace `MutableSet<MetricsSource>` with `ConcurrentHashMap<MetricsSource, Int>` tracking the count of abandoned in-flight calls per source: increment via `stuckSources.merge(source, 1, Int::plus)` before registering `invokeOnCompletion`, decrement/remove via `stuckSources.compute(source) { _, c -> (c ?: 0).dec().takeIf { it > 0 } }` on completion, and gate entry on `source in stuckSources`.
 
+**Resolution:** Fixed in #602. `stuckSources` is a `ConcurrentHashMap<MetricsSource, Int>` counting a source's abandoned calls, raised before the completion handler is added and lowered as each returns, so a source isn't called again until every call its scrapes gave up on has returned. A `MetricsSourceTest` case with two overlapping abandoned calls, one still stuck, failed before.
+
 ---
 
-### 15. ⬜ `writeResponsesToProxyUntilDisconnected` can drop `RESULT_DROPPED` metrics on early writer exit, loses `endedBy` on response-stream failure, and doesn't tear down on early normal stream completion
+### 15. ✅ `writeResponsesToProxyUntilDisconnected` can drop `RESULT_DROPPED` metrics on early writer exit, loses `endedBy` on response-stream failure, and doesn't tear down on early normal stream completion
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -539,9 +541,11 @@ Three related bugs in `writeResponsesToProxyUntilDisconnected`:
 
 **Fix:** In the outer `finally` of `writeResponsesToProxyUntilDisconnected` (after `coroutineScope` exits and all three child coroutines have finished), cancel `nonChunkedChannel` and `chunkedChannel` as well as calling `endConnection()`. In `runStreamTask`, call `connectionContext.noteFailure(e)` while `agent.isRunning`, and invoke `closeAll()` in a `finally` block so any writer exit immediately tears down the connection.
 
+**Resolution:** Fixed in #602. After the three stream tasks end, both outgoing channels are cancelled as well as closed, so a result queued for a writer that failed before reading it counts as `dropped`. `runStreamTask` notes a stream's failure as the connection's `endedBy` while the agent runs, and tears the connection down in a `finally`, so a writer the proxy ends without an error ends the connection. Three `AgentGrpcServiceTest` cases failed before.
+
 ---
 
-### 16. ⬜ Fatal JVM `Error` in `Agent.run()` blocks for `reconnectPauseSecs` and logs `"Waited ... to reconnect"` before terminating
+### 16. ✅ Fatal JVM `Error` in `Agent.run()` blocks for `reconnectPauseSecs` and logs `"Waited ... to reconnect"` before terminating
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -570,9 +574,11 @@ When `handleConnectionFailure(e)` (`Agent.kt:680`) rethrows a JVM `Error` (e.g.,
 
 **Fix:** Remove the `try / finally` wrapper and place `if (isRunning) reconnectPause()` sequentially after `.onFailure { e -> handleConnectionFailure(e) }` inside the `while (isRunning)` loop, so rethrown `Error`s (and `CancellationException`s) exit `run()` immediately without pausing.
 
+**Resolution:** Fixed in #602. `reconnectPause()` follows the connection attempt in `run()` instead of sitting in a `finally`, so a JVM `Error` that `handleConnectionFailure` rethrows leaves `run()` at once, without acquiring the limiter or logging a reconnect. An `AgentTest` case failed before.
+
 ---
 
-### 17. ⬜ TLS context build errors (`SSLException`) and unreadable TLS files (`FileNotFoundException`) bypass `failOnInvalidConfig`
+### 17. ✅ TLS context build errors (`SSLException`) and unreadable TLS files (`FileNotFoundException`) bypass `failOnInvalidConfig`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -593,9 +599,11 @@ Unlike `AgentHttpService.kt:137-148`, which wraps `resolveHttpsTrustManager` fai
 
 **Fix:** Wrap `IOException` (including `SSLException`) in `TlsSource.withStream` and `TlsMaterial.clientContext` / `serverContext` into `IllegalArgumentException` with a message naming the TLS setting (never the PEM contents), matching `AgentHttpService.kt:137-148`.
 
+**Resolution:** Fixed in #602. An unreadable TLS file is an `IllegalArgumentException` naming its setting and file, and an `SSLException` from building the client or server context is wrapped likewise, naming the settings the material came from, never a PEM value, so both reach `failOnInvalidConfig` and `ConfigLoadException`. A mismatched certificate and key don't throw at the build with either Netty provider (they fail at the handshake), so that wrapping is defensive and tested with a mock; checking the pair at startup is left out.
+
 ---
 
-### 18. ⬜ `MetricFilter.previewBytes` mutates fail-open latches, logs warnings, and records `FILTER_FAILED_OPEN` during dashboard "Scrape now" previews
+### 18. ✅ `MetricFilter.previewBytes` mutates fail-open latches, logs warnings, and records `FILTER_FAILED_OPEN` during dashboard "Scrape now" previews
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -611,9 +619,11 @@ Unlike `AgentHttpService.kt:137-148`, which wraps `resolveHttpsTrustManager` fai
 
 **Fix:** Extract a private helper taking `recordFailOpen: Boolean` (`true` for `filterBytes`, `false` for `previewBytes`) so `previewBytes` neither mutates the latches, logs warnings, nor invokes `onFailedOpen`.
 
+**Resolution:** Fixed in #602. `filterBytes` and `previewBytes` share the filtering (`outcome`), and only `filterBytes` goes through `noteFailOpen`, which latches the warn-once flags, logs, and tells the activity feed, so a dashboard preview leaves no trace. A `MetricFilterTest` case failed before.
+
 ---
 
-### 19. ⬜ `Utils.parseHostPort` accepts empty hosts (`":50051"`, `"[]:50051"`, `"[]"`) and silently discards trailing garbage after bracketed IPv6 (`"[::1]50051"`)
+### 19. ✅ `Utils.parseHostPort` accepts empty hosts (`":50051"`, `"[]:50051"`, `"[]"`) and silently discards trailing garbage after bracketed IPv6 (`"[::1]50051"`)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -629,9 +639,11 @@ Unlike `AgentHttpService.kt:137-148`, which wraps `resolveHttpsTrustManager` fai
 
 **Fix:** Require the extracted `host` to be non-blank (`require(host.isNotBlank())`), and in the bracketed-IPv6 branch require either `closeBracket == hostPort.lastIndex` or `hostPort[closeBracket + 1] == ':'`, throwing `IllegalArgumentException` on unexpected trailing characters.
 
+**Resolution:** Fixed in #602. `parseHostPort` refuses a blank host (`No host in '...'`) and anything after a bracketed IPv6 address other than `:port`. Every caller is on the agent side (`--proxy`, `PROXY_HOSTNAME`, `agent.proxy.endpoints`/`hostname`, `PROMETHEUS_PROXY`); the release notes list the new refusal under Before you upgrade.
+
 ---
 
-### 20. ⬜ `MetricFilter.quotedSampleName` misses Prometheus 3 UTF-8 samples with whitespace after `{`
+### 20. ✅ `MetricFilter.quotedSampleName` misses Prometheus 3 UTF-8 samples with whitespace after `{`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -644,6 +656,8 @@ Unlike `AgentHttpService.kt:137-148`, which wraps `resolveHttpsTrustManager` fai
 **Impact:** An allow list drops the sample and a deny list fails to drop it whenever an exporter formats quoted metric names with a space after `{`.
 
 **Fix:** In `quotedSampleName`, skip leading blanks after `'{'` via `val q = Exposition.firstNonBlank(text, start + 1, end)` before testing `q < end && text[q] == '"'`, then pass `q` to `Exposition.unquote(text, q, end)`.
+
+**Resolution:** Fixed in #602. `quotedSampleName` skips blanks after `{` (`Exposition.firstNonBlank`) before looking for the quote, so `{ "a.b", job="x" } 1` is judged by `a.b`. `MetricFilterTest` cases under an allow and a deny list failed before.
 
 ---
 

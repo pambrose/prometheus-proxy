@@ -45,7 +45,11 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlin.concurrent.thread
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -102,6 +106,7 @@ class MetricsSourceTest : StringSpec() {
     accept: String = "",
     params: String = "",
     path: String = "metrics",
+    timeout: Duration = Duration.ZERO,
   ) = scrapeRequest {
     agentId = "agent-1"
     scrapeId = 1L
@@ -109,6 +114,7 @@ class MetricsSourceTest : StringSpec() {
     this.accept = accept
     encodedQueryParams = params
     debugEnabled = true
+    scrapeTimeoutMillis = timeout.inWholeMilliseconds
   }
 
   // A source stuck in a call that ignores interrupts, as a socket read does, until [release] counts down, which a
@@ -327,6 +333,51 @@ class MetricsSourceTest : StringSpec() {
         refused.srStatusCode shouldBe 503
         refused.srFailureReason shouldContain "hasn't returned"
         calls.get() shouldBe 1
+
+        release.countDown()
+        eventually(5.seconds) { service.fetchScrapeUrl(request()).srStatusCode shouldBe 200 }
+      } finally {
+        release.countDown()
+        service.close()
+      }
+    }
+
+    // A source may be called by overlapping scrapes, two of Prometheus's or one and a Scrape now. With two of its
+    // calls abandoned, the one that answered the interrupt cleared the mark the other, still stuck, had set, so the
+    // source was called again, and each abandoned call held another thread.
+    "a source shouldn't be called again until every call its scrapes gave up on has returned" {
+      val release = CountDownLatch(1)
+      val calls = AtomicInteger()
+      val agent = agent(scrapeTimeoutSecs = 5)
+      val source =
+        MetricsSource { _, _, out ->
+          when (calls.incrementAndGet()) {
+            // Ignores the interrupt, as a socket read does
+            1 -> stuckSource(release).write("", emptySet(), out)
+
+            // Ends at the interrupt
+            2 -> Thread.sleep(30_000)
+
+            else -> out.write(BODY.toByteArray())
+          }
+          TEXT_FORMAT
+        }
+      agent.pathManager.registerPath("metrics", IN_PROCESS_TARGET, metricsSource = source)
+      val service = AgentHttpService(agent)
+      try {
+        // The stuck call's scrape gives up first, then the other's, whose call returns at the interrupt.
+        coroutineScope {
+          val stuck = async { service.fetchScrapeUrl(request(timeout = 500.milliseconds)) }
+          val interrupted = async { service.fetchScrapeUrl(request(timeout = 1500.milliseconds)) }
+          stuck.await().srStatusCode shouldBe 408
+          interrupted.await().srStatusCode shouldBe 408
+        }
+        calls.get() shouldBe 2
+
+        val refused = service.fetchScrapeUrl(request())
+        refused.srStatusCode shouldBe 503
+        refused.srFailureReason shouldContain "hasn't returned"
+        calls.get() shouldBe 2
 
         release.countDown()
         eventually(5.seconds) { service.fetchScrapeUrl(request()).srStatusCode shouldBe 200 }

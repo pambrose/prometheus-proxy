@@ -126,8 +126,9 @@ For metrics in another form, `source(path, source)` takes a `MetricsSource`, whi
 on each scrape: it writes them, in a format the scrape's `Accept` header allows, to the stream it's given, and returns
 the content type it wrote, an empty one meaning the text format. Calls can overlap, as scrapes do, so it must be safe to
 call from several threads. At the scrape timeout, the agent interrupts the call; one that ignores the interrupt, such as
-one blocked on a socket read, keeps its thread, and the source isn't called again until it returns. Whatever it throws,
-an `Error` included, fails only its scrape; only a `VirtualMachineError`, such as `OutOfMemoryError`, isn't kept to it.
+one blocked on a socket read, keeps its thread, and the source isn't called again until every such call has returned.
+Whatever it throws, an `Error` included, fails only its scrape; only a `VirtualMachineError`, such as
+`OutOfMemoryError`, isn't kept to it.
 `MetricsSource.of(registry)` is the source `source(path, registry)` gives a registry.
 
 ### The Agent's Own Metrics
@@ -425,8 +426,8 @@ can't be loaded or parsed, or for a setting the agent can't use, from the config
 - an unresolved `${…}` substitution;
 - a malformed proxy endpoint;
 - a duplicate `pathConfigs` or `filters` entry, or a filter regex that doesn't compile;
-- an HTTPS trust store (`agent.http.trustStorePath`) or TLS certificate file that is missing or malformed, or a TLS
-  certificate or key given as PEM that can't be read, or given as both a file and PEM.
+- an HTTPS trust store (`agent.http.trustStorePath`) or TLS certificate file that is missing, unreadable, or
+  malformed, or a TLS certificate or key given as PEM that can't be read, or given as both a file and PEM.
 
 Credentials in a config URL are redacted from its message and from every message in its cause chain. The cause is the
 exception that rejected the setting, usually an `IllegalArgumentException`. When that exception's message held a URL

@@ -272,31 +272,26 @@ internal object Utils {
     }
   }
 
+  // An endpoint with no host, such as ":50051" or "[]", passed here and failed later: as the first endpoint, at
+  // startup, with a message about a Netty channel, and as a failover entry, on each connect attempt that reached it.
+  // Text after a bracketed IPv6 address that isn't ":port", such as the port of "[::1]50051" written without its
+  // colon, was dropped, and the default port dialed (November 26 #19).
   fun parseHostPort(
     hostPort: String,
     defaultPort: Int,
   ): HostPort {
     require(hostPort.isNotBlank()) { "Host/port string must not be blank" }
     return when {
-      // Bracketed IPv6: [::1]:50051 or [::1]
+      // Bracketed IPv6: [::1]:50051 or [::1], and nothing else after the brackets
       hostPort.startsWith("[") -> {
         val closeBracket = hostPort.indexOf(']')
-        when {
-          closeBracket == -1 -> {
-            throw IllegalArgumentException("Malformed IPv6 address in '$hostPort': missing closing bracket")
-          }
-
-          closeBracket + 1 < hostPort.length && hostPort[closeBracket + 1] == ':' -> {
-            HostPort(
-              hostPort.substring(1, closeBracket),
-              parsePort(hostPort.substring(closeBracket + 2), hostPort),
-            )
-          }
-
-          else -> {
-            HostPort(hostPort.substring(1, closeBracket), defaultPort)
-          }
+        require(closeBracket != -1) { "Malformed IPv6 address in '$hostPort': missing closing bracket" }
+        val rest = hostPort.substring(closeBracket + 1)
+        require(rest.isEmpty() || rest.startsWith(':')) {
+          "Malformed endpoint '$hostPort': '$rest' after the closing bracket isn't ':port'"
         }
+        val port = if (rest.isEmpty()) defaultPort else parsePort(rest.substring(1), hostPort)
+        HostPort(hostPort.substring(1, closeBracket), port)
       }
 
       // No colon: plain hostname
@@ -315,7 +310,7 @@ internal object Utils {
         val portStr = hostPort.substringAfter(':')
         HostPort(host, parsePort(portStr, hostPort))
       }
-    }
+    }.also { require(it.host.isNotBlank()) { "No host in '$hostPort'" } }
   }
 }
 

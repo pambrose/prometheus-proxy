@@ -16,14 +16,19 @@
 
 package io.prometheus.common
 
+import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.utils.TlsContext
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl.ClientAuth
+import io.netty.handler.ssl.SslContext
+import io.netty.handler.ssl.SslContextBuilder
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.InputStream
 import java.util.Base64
+import javax.net.ssl.SSLException
 
 /**
  * One piece of TLS material, a certificate chain, a private key, or a trust collection, given either as a file
@@ -44,6 +49,9 @@ internal class TlsSource(
   /** Both settings, for a message about the material however it is given. */
   val settings: String get() = "$pathSetting or $pemSetting"
 
+  /** The setting the material is given by: its PEM's when that's set, else its file's. */
+  val givenSetting: String get() = if (pem.isNotEmpty()) pemSetting else pathSetting
+
   val isGiven: Boolean get() = path.isNotEmpty() || pem.isNotEmpty()
 
   /** Requires the material to come one way: a file and a PEM together would leave unclear which one is used. */
@@ -51,7 +59,9 @@ internal class TlsSource(
     require(path.isEmpty() || pem.isEmpty()) { "Set $pathSetting or $pemSetting, not both" }
   }
 
-  // The material's bytes, from the PEM when given, else from the file, which has to exist; null when neither is.
+  // The material's bytes, from the PEM when given, else from the file, which has to exist and be readable; null when
+  // neither is. A file that can't be opened, as one the process's user may not read, threw FileNotFoundException,
+  // which isn't a setting the agent or proxy rejects, as an IllegalArgumentException is (see TlsMaterial.built).
   fun <T> withStream(block: (InputStream) -> T): T? =
     when {
       pem.isNotEmpty() -> {
@@ -63,7 +73,14 @@ internal class TlsSource(
         val file = File(path)
         require(file.exists() && file.isFile) { "File \"$path\" does not exist" }
         logger.info { "Reading $pathSetting: \"$path\"" }
-        file.inputStream().use(block)
+        val stream =
+          try {
+            file.inputStream()
+          } catch (e: FileNotFoundException) {
+            val why = e.message ?: e.simpleClassName
+            throw IllegalArgumentException("Unable to read $pathSetting \"$path\": $why", e)
+          }
+        stream.use(block)
       }
 
       else -> {
@@ -142,7 +159,7 @@ internal object TlsMaterial {
     val mutualAuth = certChain.isGiven
     if (mutualAuth)
       certChain.withStream { certIn -> privateKey.withStream { keyIn -> builder.keyManager(certIn, keyIn) } }
-    return TlsContext(builder.build(), mutualAuth)
+    return TlsContext(built(builder, certChain, privateKey, trust), mutualAuth)
   }
 
   /**
@@ -165,8 +182,24 @@ internal object TlsMaterial {
       trust.withStream { builder.trustManager(it) }
       builder.clientAuth(ClientAuth.REQUIRE)
     }
-    return TlsContext(builder.build(), mutualAuth)
+    return TlsContext(built(builder, certChain, privateKey, trust), mutualAuth)
   }
+
+  // [builder]'s context, from [sources]. Material the build can't use throws an SSLException, which isn't a setting the
+  // agent or proxy rejects, as an IllegalArgumentException is: an embedded host got it in place of a
+  // ConfigLoadException, and a standalone agent or proxy a stack trace in place of "Invalid configuration" (November 26
+  // #17). The message names the settings the material came from, never their values.
+  private fun built(
+    builder: SslContextBuilder,
+    vararg sources: TlsSource,
+  ): SslContext =
+    try {
+      builder.build()
+    } catch (e: SSLException) {
+      val given = sources.filter { it.isGiven }.map { it.givenSetting }
+      val from = if (given.isEmpty()) "the JVM default trust store" else given.joinToString(", ")
+      throw IllegalArgumentException("Unable to build the TLS context from $from: ${e.message ?: e.simpleClassName}", e)
+    }
 
   private val logger = logger {}
 }

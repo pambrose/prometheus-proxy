@@ -244,8 +244,9 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
   `agent_dashboard_scrapes_total` counts instead; and a call the proxy refuses with `UNAUTHENTICATED` after a connect
   logged at ERROR, naming where the token is set, and another status at INFO, as before; a connection task's JVM
-  `Error` failing the connection's scope, which stops the agent, rather than ending the connection quietly; and a
-  connection's results it can't send counted as dropped
+  `Error` failing the connection's scope, which stops the agent, rather than ending the connection quietly, and,
+  rethrown by the run loop, stopping it without waiting out the reconnect pause; and a connection's results it can't
+  send counted as dropped
 - **AgentStartupTest** — a start that fails or takes too long releases what the agent opened: a dashboard that fails
   to start, on a port the spec holds, stops the admin, metrics, and Zipkin services and removes the JVM shutdown hook,
   through `startSync()` and through `startAsyncAgent(Config)`, and a release step that throws (a MockK constructor
@@ -257,7 +258,9 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   a connect counted once the proxy registered the agent, a refused registration as rejected; each endpoint advance and
   each heartbeat sent counted, by outcome; a scrape request's wait for its scrape recorded, not a dashboard's; and a
   result counted as sent once a writer takes it, and as dropped when the stream fails first, the results the producer
-  hadn't forwarded included, with no ERROR logged when the other writer is the one that failed; a JVM `Error` in a
+  hadn't forwarded included, and those queued for a stream that failed before reading any, with no ERROR logged when
+  the other writer is the one that failed; a response stream's failure noted as what ended the connection, and a
+  stream the proxy ends with an answer ending it too; a JVM `Error` in a
   heartbeat or a response stream propagated, not taken for a transient failure; a connect after failed ones dialing an
   in-process proxy started meanwhile at once, rather than waiting out gRPC's backoff, and the channel's backoff reset
   only after a failed connect;
@@ -398,7 +401,8 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   logged as a failed scrape of `in-process`, not an HTTP request, but a `VirtualMachineError` propagating; every byte
   kept when it writes from several threads at once; read by the dashboard's fetch, which counts nothing; a call that
   ignores the interrupt times out on time, holds neither another path's source nor the service's `close()`, and the
-  source isn't called again until it returns; and the docs site's worker, in Kotlin and in Java, doing its work
+  source isn't called again until it returns, nor, when overlapping scrapes gave up on two calls, until both have; and
+  the docs site's worker, in Kotlin and in Java, doing its work
 - **RegistryMetricsSourceTest** — a `PrometheusRegistry` served in-process (`MetricsSource.of`, from Kotlin and from
   Java): written in the text format or OpenMetrics, as the scrape accepts, and only the families it names; a source of
   the default registry leaving out the agent metrics while an agent collects them, named or not, and serving it all
@@ -480,7 +484,8 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   logged as a failed tick
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved;
-  and why a filter lets a scrape through unfiltered, told once per cause
+  a quoted name judged by its name, blanks before it in the braces or not; and why a filter lets a scrape through
+  unfiltered, told once per cause, and a dashboard's preview that it lets through leaving no trace
 
 Three support helpers also live here (not test classes themselves):
 
@@ -978,10 +983,13 @@ Two support helpers also live here (not test classes themselves):
   as base64 of PEM (wrapped in lines or not), or as PEM on one line with literal `\n` escapes, and anything else is
   refused without the value in the message; a file and a PEM for the same material are refused; server and client
   contexts from PEM, from a mix of PEM and files, and, with no PEM, from common-utils' file builders (MockK); malformed
-  PEM armor refused without its content; and the options resolve each `*Pem` setting, turn TLS on with it, log only
-  whether it is set, and, embedded, throw `ConfigLoadException`
+  PEM armor refused without its content; a file that exists but can't be read, and a context the TLS builder can't
+  build (a MockK static mock of `GrpcSslContexts`), refused as an invalid setting, naming the settings; and the options
+  resolve each `*Pem` setting, turn TLS on with it, log only whether it is set, and, embedded, throw
+  `ConfigLoadException`, for a file the agent can't read too
 - **UtilsTest** — Utility functions: parseHostPort, parseEndpointList, sanitizeUrl, appendQueryParams, toJsonElement,
-  setLogLevel, exceptionDetails; failureKey, which keys a failure by its gRPC status code, wrapped or not, and one
+  setLogLevel, exceptionDetails; an endpoint with no host, or with anything but `:port` after a bracketed IPv6
+  address, refused; failureKey, which keys a failure by its gRPC status code, wrapped or not, and one
   without a status by its class, and its message only when asked; setLogLevel without Logback warning and setting
   nothing, and no main class but `LogbackLevels` naming a Logback class, since the library leaves Logback to the app
 
