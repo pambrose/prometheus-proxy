@@ -140,6 +140,49 @@ class DashboardServerTest : StringSpec() {
       isOriginAllowed("http://proxy:8094", host = null, allowedOrigins = emptyList()).shouldBeFalse()
     }
 
+    // A browser's Origin is a scheme, a host, and a port, no more. The host check read only the authority, so a page of
+    // any scheme, or a value with a path, a query, or a login in it, passed whenever its authority matched the Host.
+    "an origin that isn't http or https, or carries more than a scheme, a host, and a port, should be refused" {
+      listOf(
+        "ws://proxy:8094",
+        "ftp://proxy:8094",
+        "file://proxy:8094",
+        "chrome-extension://proxy:8094",
+        "http://proxy:8094/",
+        "http://proxy:8094/dashboard",
+        "http://proxy:8094?x=1",
+        "http://proxy:8094#x",
+        "http://user@proxy:8094",
+        "http:proxy:8094",
+      ).forEach { origin ->
+        isOriginAllowed(origin, "proxy:8094", emptyList()).shouldBeFalse()
+      }
+    }
+
+    // A dashboard behind a TLS-terminating reverse proxy that passes the browser's Host sees an https Origin and a Host
+    // with no port, and one reached directly an http one: the dashboard can't tell which scheme the browser used.
+    "an http or https origin naming the dashboard's own host should be allowed without allowedOrigins" {
+      isOriginAllowed("https://dash.example.com", "dash.example.com", emptyList()).shouldBeTrue()
+      isOriginAllowed("http://dash.example.com", "dash.example.com", emptyList()).shouldBeTrue()
+      isOriginAllowed("HTTPS://DASH.example.com", "dash.example.com", emptyList()).shouldBeTrue()
+      isOriginAllowed("http://[::1]:8094", "[::1]:8094", emptyList()).shouldBeTrue()
+    }
+
+    // allowedOrigins listing the https origin was bypassed by the host check, which let in the same host over http, as
+    // from a plain-http page on that name, whenever the reverse proxy passed the browser's Host on.
+    "an allowedOrigins entry should pin the scheme of the host it names" {
+      val https = listOf("https://dash.example.com")
+      isOriginAllowed("https://dash.example.com", "dash.example.com", https).shouldBeTrue()
+      isOriginAllowed("http://dash.example.com", "dash.example.com", https).shouldBeFalse()
+      // An entry's default port, written out, names the same origin as a browser's, which never writes it.
+      isOriginAllowed("https://dash.example.com", "dash.example.com", ["https://dash.example.com:443"]).shouldBeTrue()
+      isOriginAllowed("http://dash.example.com", "dash.example.com", ["https://dash.example.com:443"]).shouldBeFalse()
+      // The dashboard's own host, reached by another name, as through a port-forward, keeps the host check.
+      isOriginAllowed("http://localhost:8094", "localhost:8094", https).shouldBeTrue()
+      // Another port of the listed host is another authority, which the entry doesn't name.
+      isOriginAllowed("http://dash.example.com:8094", "dash.example.com:8094", https).shouldBeTrue()
+    }
+
     // ==================== Host allowlist: see DashboardServer.isHostAllowed ====================
 
     // Opt-in: with no allowedHosts, there is no allowlist and every Host is allowed, even with allowedOrigins set.

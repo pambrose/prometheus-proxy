@@ -74,6 +74,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -94,6 +95,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -207,8 +209,9 @@ internal interface DashboardSite<V : Any, S : Any> {
  *   routing, a page request is sent to the login page and anything else gets a 401. Without a password, the port has no
  *   authentication. Either way, what the server can bound, it does: a foreign browser origin is refused on the
  *   WebSocket and every action ([pageGuard]), sessions are capped, a session that stops reading is closed rather than
- *   buffered for, and a page request or a browser message renders the recent snapshot rather than collecting one (see
- *   [SnapshotCache]). Setting `allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
+ *   buffered for, a page request or a browser message renders the recent snapshot rather than collecting one (see
+ *   [SnapshotCache]), and a browser's messages push to its page at most once an interval, and only as they change
+ *   what it shows. Setting `allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
  *   With `framingEnabled` false, no response may be framed by another page, and with a password set, none but the
  *   versioned assets may be kept in a browser's cache. The root's redirect to the site's [DashboardSite.home] and a
  *   HEAD asking whether the dashboard is up need no login. A refused Origin or Host, which needs no login, is logged
@@ -259,12 +262,13 @@ internal class DashboardServer<V : Any, S : Any>(
     @Volatile
     var view: V? = null
 
-    // Whether a push for this session has failed to render, which is logged once rather than every refresh.
+    // Whether this session's last push failed to render, so a run of failures is logged at ERROR once rather than every
+    // refresh.
     @Volatile
     var renderFailed = false
 
     // Held for the whole of a push to this session, from reading its view to recording what was sent. The push loop
-    // and the session's own socket coroutine both push, and without it the two could record in one order and send in
+    // and the session's own coroutines both push, and without it the two could record in one order and send in
     // the other, leaving [sent] naming a frame the page never got.
     val pushing = Mutex()
 
@@ -390,7 +394,8 @@ internal class DashboardServer<V : Any, S : Any>(
     if (needsNoLogin(call.request))
       return
     // A browser must use the login page: one that once saved a Basic login sends it with every request, which would
-    // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read.
+    // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read: one with
+    // none of the headers a browser sends (see isBrowser).
     val header = if (isBrowser(call.request)) null else call.request.headers[HttpHeaders.Authorization]
     if (header == null || !basicLoginAnswered(call, header, login))
       refuseWithoutLogin(call)
@@ -640,15 +645,17 @@ internal class DashboardServer<V : Any, S : Any>(
       else -> null
     }
 
-  // The login page and its form, and Log out, only with a password set.
+  // The login page and its form, and Log out, only with a password set. A browser that already has a session, as one
+  // signed in from another tab, goes on to the login page's next, which the page would have sent it to.
   private fun Route.loginRoutes(credentials: DashboardLogin) {
     route(loginPath) {
       install(originGuard)
       get {
+        val next = safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase, site.outsidePages)
         if (logins.isValid(call.request.cookies[sessionCookie]))
-          call.seeOther(basePath)
+          call.seeOther(next)
         else
-          call.respondLogin(safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase, site.outsidePages))
+          call.respondLogin(next)
       }
       post { call.logIn(credentials) }
     }
@@ -696,7 +703,7 @@ internal class DashboardServer<V : Any, S : Any>(
     }
   }
 
-  // The page's WebSocket: the frame for what it shows at once, and again with each message saying what it shows.
+  // The page's WebSocket: the frame for what it shows at once, and again as its messages change what it shows.
   private fun Route.events() {
     route("$routeBase/events") {
       install(pageGuard)
@@ -715,14 +722,9 @@ internal class DashboardServer<V : Any, S : Any>(
         sessions.add(session)
         try {
           // A frame at once, rather than making the browser wait for the first change or tick. The regions that depend
-          // on what the page shows follow its first message, below.
+          // on what the page shows follow its first message (see readViews).
           push(session, snapshots.recent())
-          for (frame in incoming) {
-            if (frame is Frame.Text) {
-              session.view = site.parseView(frame.readText())
-              push(session, snapshots.recent())
-            }
-          }
+          readViews(session)
         } finally {
           sessions.remove(session)
           sessionCount -= 1
@@ -730,6 +732,31 @@ internal class DashboardServer<V : Any, S : Any>(
       }
     }
   }
+
+  // Reads what [session]'s page shows from its messages, and pushes it a frame for each change: the first at once, and
+  // the rest of a burst at most once a VIEW_PUSH_INTERVAL, the latest last. A message is a few bytes, and its frame can
+  // be the page's whole table, so a push for every message would let a client sending them in a loop have the process
+  // render as fast as it sends; a message that changes nothing pushes nothing. The view is recorded as it comes, so a
+  // push from the loop in between renders it too.
+  private suspend fun DefaultWebSocketServerSession.readViews(session: Session<V>) =
+    coroutineScope {
+      val changed = Channel<Unit>(Channel.CONFLATED)
+      val pusher =
+        launch {
+          changed.receiveAsFlow().spaced(VIEW_PUSH_INTERVAL).collect { push(session, snapshots.recent()) }
+        }
+      try {
+        for (frame in incoming) {
+          val view = (frame as? Frame.Text)?.let { site.parseView(it.readText()) }
+          if (view != null && view != session.view) {
+            session.view = view
+            changed.trySend(Unit)
+          }
+        }
+      } finally {
+        pusher.cancel()
+      }
+    }
 
   // How [socket], run by the coroutine [connection], is closed when its session ends. With a reason, a close frame,
   // which a reading browser answers at once, waited for at most CLOSE_TIMEOUT; without one, or past that, the
@@ -854,14 +881,19 @@ internal class DashboardServer<V : Any, S : Any>(
 
   // The frame for [session] from [snapshot], or null when the render threw. Rendered apart from the send: a send fails
   // when the browser has gone, which is routine, but a render that throws is a bug in the page; caught with the sends,
-  // it froze every session on that page with nothing logged above DEBUG. Callers hold the session's pushing lock.
+  // it froze every session on that page with nothing logged above DEBUG. The first failure of a run is logged at ERROR,
+  // and the rest at DEBUG, as the push loop's collects are. Callers hold the session's pushing lock.
   private fun render(
     session: Session<V>,
     snapshot: S,
   ): DashboardFrame? =
     runCatching { site.frame(snapshot, session.view, session.sent, routeBase) }
+      .onSuccess { session.renderFailed = false }
       .onFailure { e ->
-        if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
+        if (session.renderFailed)
+          logger.debug { "Dashboard push failed to render again: ${e.simpleClassName}" }
+        else
+          logger.error(e) { "Failed to render a dashboard push" }
         session.renderFailed = true
       }.getOrNull()
 
@@ -893,6 +925,10 @@ internal class DashboardServer<V : Any, S : Any>(
   companion object {
     // How often a burst of changes wakes the push loop at most, after the first change, which wakes it at once.
     private val CHANGE_PUSH_INTERVAL = 250.milliseconds
+
+    // How often a burst of a page's messages pushes to it at most, after the first, which pushes at once: well under
+    // what a viewer notices, since a message is a click or a filter's change.
+    private val VIEW_PUSH_INTERVAL = 100.milliseconds
 
     /**
      * [this] with its values spaced at least [interval] apart: the first at once, then, after each interval, the latest
@@ -1039,11 +1075,25 @@ internal class DashboardServer<V : Any, S : Any>(
     }
 
     // Fetch Metadata's header, which every current browser sends with every request, a WebSocket handshake included,
-    // and a script such as curl doesn't.
+    // but only to an https or localhost origin, and a script such as curl doesn't.
     internal const val SEC_FETCH_MODE = "Sec-Fetch-Mode"
 
-    /** Whether [request] came from a browser, which must log in on the login page rather than with Basic Auth. */
-    private fun isBrowser(request: ApplicationRequest) = request.headers[SEC_FETCH_MODE] != null
+    // Sent by a browser with each page navigation, over plain http too.
+    internal const val UPGRADE_INSECURE_REQUESTS = "Upgrade-Insecure-Requests"
+
+    // The headers a browser sends and a script such as curl doesn't (see isBrowser).
+    private val BROWSER_HEADERS =
+      listOf(SEC_FETCH_MODE, UPGRADE_INSECURE_REQUESTS, HttpHeaders.Origin, HttpHeaders.Referrer)
+
+    /**
+     * Whether [request] came from a browser, which must log in on the login page rather than with Basic Auth: it
+     * carries a header a browser sends and a script doesn't. Fetch Metadata's [SEC_FETCH_MODE] alone missed every
+     * browser on the dashboard's plain http at any address but localhost, where a browser doesn't send it. So also a
+     * page navigation ([UPGRADE_INSECURE_REQUESTS], or [wantsPage]'s HTML), an Origin, which a browser sends with every
+     * WebSocket handshake and every POST, and a Referer, which it sends with the page's own requests.
+     */
+    private fun isBrowser(request: ApplicationRequest) =
+      BROWSER_HEADERS.any { it in request.headers } || wantsPage(request)
 
     // A browser's navigation to a page, which the auth check sends to the login page rather than refusing: a GET that
     // takes HTML and isn't htmx's own request.
@@ -1077,9 +1127,13 @@ internal class DashboardServer<V : Any, S : Any>(
      *
      * No Origin is allowed: browsers send one on every WebSocket handshake and every POST, so its absence means a
      * non-browser client, and this check exists to stop a browser being turned against the dashboard. Otherwise the
-     * origin must name the host the request was addressed to -- the dashboard's own page -- or match an [allowedOrigins]
-     * entry, for a dashboard behind a reverse proxy that rewrites Host. Anything unparseable, including the opaque
-     * `null` origin, is refused.
+     * origin must be one a browser sends, an `http` or `https` scheme and a host with an optional port, and match an
+     * [allowedOrigins] entry, for a dashboard behind a reverse proxy that rewrites Host, or name the host the request
+     * was addressed to -- the dashboard's own page. That host check takes either scheme, since a dashboard behind a
+     * reverse proxy that terminates TLS and passes the browser's Host on can't tell which one the browser used; an
+     * [allowedOrigins] entry for the origin's host and port pins it, so with `https://dash.example.com` listed,
+     * `http://dash.example.com` is refused, though its Host matches. Anything unparseable, including the opaque `null`
+     * origin, is refused, and an entry that doesn't parse is ignored.
      *
      * This does not stop DNS rebinding, where the attacker's origin and the Host header agree; see [isHostAllowed].
      */
@@ -1089,12 +1143,33 @@ internal class DashboardServer<V : Any, S : Any>(
       allowedOrigins: Collection<String>,
     ): Boolean {
       if (origin == null) return true
-      val authority = runCatching { URI(origin).rawAuthority }.getOrNull()
-      return allowedOrigins.any { normalizeOrigin(it) == normalizeOrigin(origin) } ||
-        (authority != null && host != null && authority.equals(host, ignoreCase = true))
+      val sent = webOrigin(origin) ?: return false
+      val allowed = allowedOrigins.mapNotNull { webOrigin(it.trim().trimEnd('/')) }
+      return when {
+        sent in allowed -> true
+        allowed.any { authorityOf(it) == authorityOf(sent) } -> false
+        else -> host != null && authorityOf(sent) == host.lowercase()
+      }
     }
 
-    private fun normalizeOrigin(origin: String) = origin.trim().trimEnd('/').lowercase()
+    // The default port of each scheme a browser's page can have, which a browser leaves out of an Origin.
+    private val DEFAULT_PORTS = mapOf("http" to ":80", "https" to ":443")
+
+    // [value] as a browser writes an origin, <scheme>://<host>[:<port>], lowercased and without its scheme's default
+    // port; null unless it is an http or https URL of a host and an optional port alone, with no user info, path,
+    // query, or fragment. The authority is read raw, so a host name a browser takes, with an underscore, isn't refused.
+    private fun webOrigin(value: String): String? {
+      val uri = runCatching { URI(value) }.getOrNull() ?: return null
+      val scheme = uri.scheme?.lowercase()
+      val defaultPort = DEFAULT_PORTS[scheme] ?: return null
+      val authority = uri.rawAuthority?.lowercase().orEmpty()
+      val hostOnly = authority.isNotEmpty() && '@' !in authority
+      val nothingElse = uri.rawPath.isNullOrEmpty() && uri.rawQuery == null && uri.rawFragment == null
+      return if (hostOnly && nothingElse) "$scheme://${authority.removeSuffix(defaultPort)}" else null
+    }
+
+    // The host and port of an origin webOrigin wrote.
+    private fun authorityOf(origin: String) = origin.substringAfter("://")
 
     private const val LOCALHOST = "localhost"
 

@@ -29,6 +29,12 @@ its own that holds them all, with Prometheus and Grafana.
   startup, naming the setting, where 4.7.0 started with them. Give a pattern one segment, such as `team_a_*`, and the
   discovery path one leading slash at most, such as `/discovery`. A pattern with one leading slash, such as `/team_a_*`,
   is fine, and now matches.
+- **An origin in `allowedOrigins` now pins its scheme.** With `https://dash.example.com` listed, a page opened at
+  `http://dash.example.com` is refused, where earlier releases let it in when the reverse proxy passed the browser's
+  `Host` on. If viewers open the dashboard over both, list both origins.
+- **A script that sends a browser's headers must use the login page.** A script that sends the dashboard login as
+  Basic Auth along with `Accept: text/html`, `Upgrade-Insecure-Requests`, `Origin`, or `Referer` now gets the login page
+  or a 401, as a browser does. Drop the header from the script.
 
 ### New Features
 
@@ -118,6 +124,17 @@ its own that holds them all, with Prometheus and Grafana.
   path at startup (see Before you upgrade).
 - **The proxy's Activity view names a path once per line.** Clicking Scrape now on one path a few times showed
   `/orders, /orders, /orders`; the line now names `/orders` once and counts the clicks.
+- **`allowedOrigins` can't be bypassed over plain http.** Behind a reverse proxy that passes the browser's `Host` on, a
+  page at the dashboard's public name over `http` passed the Origin check with only the `https` origin listed, and,
+  without a login, could read the dashboard. An origin listed in `allowedOrigins` now pins its scheme.
+- **Log out signs out a browser that saved the login as Basic Auth, over plain http too.** The dashboard told a browser
+  from a script by a header browsers send only over `https` or to `localhost`, so elsewhere such a browser skipped the
+  login page and stayed signed in after Log out. It now knows a browser by its other headers too.
+- **A flood of WebSocket messages can't keep a dashboard rendering.** Each message a page sent rendered and sent its
+  whole view at once. A page's messages now update it only when they change what it shows, at most every 100
+  milliseconds.
+- **A signed-in browser that opens the login page goes on to its page.** Reloading a tab left on the login page after
+  signing in from another went to the dashboard, not to the page the login was for, such as an agent's page.
 
 ### Behavior Changes
 

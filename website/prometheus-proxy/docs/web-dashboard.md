@@ -107,11 +107,15 @@ restart signs everyone out; a page left open then goes to the login page by itse
 `SameSite=Lax`, named for the dashboard's port (so two proxies on one host keep their own), set at the dashboard's path,
 and at `/screens` too while [screens](#screens) are listed, so the screens page gets it, and `Secure` when the browser
 reached the dashboard over `https`, as through a reverse proxy. Signing in from a link into the screens page returns to
-it, with the screen and view the link named. With a login set, the dashboard tells the browser to keep none of its pages
-(`Cache-Control: no-store`), so a page behind the login isn't kept to be shown again after Log out.
+it, with the screen and view the link named, and a browser already signed in, as from another tab, that opens the login
+page goes straight on to the page it was for. With a login set, the dashboard tells the browser to keep none of its
+pages (`Cache-Control: no-store`), so a page behind the login isn't kept to be shown again after Log out.
 
 A script sends the login with each request as HTTP Basic Auth instead, and needs no session. A browser can't: it always
-gets the login page, even with a Basic login it saved for the dashboard's address earlier, so Log out signs it out.
+gets the login page, even with a Basic login it saved for the dashboard's address earlier, so Log out signs it out. The
+dashboard tells a browser by the headers a script doesn't send: a page navigation's `Accept: text/html` or
+`Upgrade-Insecure-Requests`, an `Origin` or a `Referer`, or `Sec-Fetch-Mode`, which a browser sends only over `https`
+or to `localhost`. So a script that sends one of those gets the login page, or a 401, as a browser does.
 
 ```bash
 curl -u admin:'<the password>' http://proxy-host:8094/dashboard/paths
@@ -597,7 +601,11 @@ guards against the first on its own, and against the other two with a setting ea
   dashboard refuses a handshake whose `Origin` is not its own host. Behind a reverse proxy that rewrites
   the Host header, the browser's origin is the proxy's public name, so list it in
   `proxy.dashboard.allowedOrigins`, or pass the browser's Host on; see
-  [Behind a reverse proxy](#behind-a-reverse-proxy).
+  [Behind a reverse proxy](#behind-a-reverse-proxy). The dashboard can't tell whether a reverse proxy in front of it
+  terminates TLS, so it takes its own host over `http` or `https`. An origin listed in `allowedOrigins` pins its
+  scheme for its host and port: with `https://dash.example.com` listed, a page at `http://dash.example.com` is
+  refused, though the Host the reverse proxy passes on matches. An origin must be `http` or `https`, a host, and an
+  optional port, as a browser sends it.
 - **DNS rebinding.** A page can point its own DNS name at the dashboard's address, after which the browser
   sends that name as both `Origin` and `Host`, and the Origin check passes. List the names you reach the
   dashboard by in `proxy.dashboard.allowedHosts` and it refuses any other host name with a 403, on every
@@ -648,7 +656,9 @@ and Log out forms as well.
 
 Open pages, one WebSocket each, are also capped at `proxy.dashboard.maxSessions` (default 50). A client that sends an
 oversized message is disconnected, and so is one that stops reading, once 32 updates are waiting for it, which frees its
-place under the cap; no one client can hold up the others' updates. Neither list stops someone who can reach the port
+place under the cap; no one client can hold up the others' updates. A page's messages, which say what it shows, update
+it only when they change that, and at most once every 100 milliseconds, the first at once, so a client sending them in
+a loop can't have the proxy render its pages as fast as it sends. Neither list stops someone who can reach the port
 directly; a login does. Both are lists, so set them in a config file; see
 [Dashboard configuration](configuration/proxy.md#dashboard).
 

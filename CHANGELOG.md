@@ -126,6 +126,25 @@ All notable changes to this project are documented in this file.
 - A line of the proxy's Activity view for a burst named a path once per event, `/orders, /orders, /orders` for Scrape
   now clicked three times, and counted each repeat in its "and N more". It names and counts each path once, as the
   agent's view does
+- A dashboard's Origin check let in any origin whose host and port matched the request's `Host`, whatever its scheme,
+  ahead of `allowedOrigins`: with only `https://dash.example.com` listed, behind a reverse proxy that passes the
+  browser's `Host` on, a page at `http://dash.example.com` passed it, and could read the dashboard's WebSocket with no
+  login set. An `allowedOrigins` entry now pins the scheme of the host and port it names (see Behavior Changes)
+- A browser's saved Basic login got past a dashboard's login page, and outlasted Log out, over plain http at any
+  address but `localhost`, since the dashboard knew a browser only by `Sec-Fetch-Mode`, which browsers send only to
+  https and `localhost`. It now knows one by a navigation's `Accept: text/html` or `Upgrade-Insecure-Requests`, an
+  `Origin`, or a `Referer` too (see Behavior Changes)
+- Each message on a dashboard page's WebSocket rendered and sent the page's whole frame at once, so a client sending
+  tiny messages in a loop had the proxy or agent render its tables as fast as it sent them. A page's messages now push
+  only when they change what it shows, the first at once and the rest of a burst at most once every 100 milliseconds
+- A browser with a dashboard session that opened the login page, as on reloading a tab left there after signing in
+  from another, went to the dashboard's base path, not to the page in the login page's `next`, such as an agent's page
+- The push loop's check of each open page's session, every refresh, made it the most recently used of the 1,000
+  sessions a dashboard keeps, so past that cap an idle open tab outlived a session someone had just used. Only a
+  request moves a session now
+- After a dashboard push failed to render once for a page, no later failure for that page was logged, however long it
+  rendered fine in between. A run of failures is now logged at ERROR once and the rest of the run at DEBUG, as the push
+  loop's failed collects are
 
 ### Behavior Changes
 
@@ -143,6 +162,12 @@ All notable changes to this project are documented in this file.
 - The agent dashboard's Scrape now drops one leading slash from the path it's asked for, as the dashboard drops it
   from the paths it shows and the proxy's Scrape now from its path, and refuses a path with a slash left, which names no
   path the agent has, where it dropped every leading slash, so `//orders` scraped `orders`
+- An `allowedOrigins` entry pins the scheme of the host and port it names: with `https://dash.example.com` listed,
+  `http://dash.example.com` is refused, though its `Host` matches. A host no entry names is still taken over http or
+  https when it's the request's `Host`. An `Origin` other than an http or https scheme, a host, and an optional port, as
+  a browser sends it, is refused
+- A dashboard ignores the Basic Auth of a request with `Upgrade-Insecure-Requests`, an `Origin`, a `Referer`, or, on a
+  GET not from htmx, `Accept: text/html`, as a browser's, so a script sending one of those gets the login page or a 401
 - The dashboards' theme picker is one button in place of three, to take less of the top bar: it shows the theme in
   force, light, dark, or auto, and each click moves to the next, in that order; its tooltip names the theme in force
   and the next

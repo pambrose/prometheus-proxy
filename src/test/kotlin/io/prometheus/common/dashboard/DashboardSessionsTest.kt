@@ -111,6 +111,20 @@ class DashboardSessionsTest : StringSpec() {
       listOf(a, c, d).forEach { sessions.isValid(it).shouldBeTrue() }
     }
 
+    // The push loop checks every open page's session each tick, which isn't a request: that check moved the session
+    // to the most recently used, so past the cap an idle open tab outlived a session someone had just used.
+    "a check that doesn't count as a request should leave a session's place in line, past the cap" {
+      val sessions = DashboardSessions(maxSessions = 3)
+      val idle = sessions.create()
+      val b = sessions.create()
+      val c = sessions.create()
+      repeat(5) { sessions.isValid(idle, counts = false).shouldBeTrue() }
+      val d = sessions.create()
+      sessions.size shouldBe 3
+      sessions.isValid(idle).shouldBeFalse()
+      listOf(b, c, d).forEach { sessions.isValid(it).shouldBeTrue() }
+    }
+
     "an expired session is forgotten" {
       val clock = TestTimeSource()
       val sessions = DashboardSessions(timeSource = clock)

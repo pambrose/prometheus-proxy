@@ -191,8 +191,9 @@ colon in it, or a control character in either. The dashboard serves plain HTTP, 
 
 Without a login, the proxy logs a warning at startup when the dashboard is enabled on all interfaces. A WebSocket from a browser
 origin other than the dashboard's own host is refused; behind a reverse proxy that rewrites the Host header, list the
-public origin (for example `"https://dash.example.com"`) in `allowedOrigins`. Being a list, `allowedOrigins` must be
-set in a config file rather than with `-D`.
+public origin (for example `"https://dash.example.com"`) in `allowedOrigins`. An origin listed there pins its scheme
+for its host and port, so listing `"https://dash.example.com"` refuses `http://dash.example.com`. Being a list,
+`allowedOrigins` must be set in a config file rather than with `-D`.
 
 `allowedHosts` (for example `["dash.internal"]`) lists the names you reach the dashboard by, which stops DNS rebinding.
 It is off while empty, the default, and like `allowedOrigins` must be set in a config file. See

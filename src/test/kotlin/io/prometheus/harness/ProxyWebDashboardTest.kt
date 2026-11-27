@@ -608,7 +608,8 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // A browser message used to run a full snapshot collect, which takes the path-map lock every scrape takes, so a
     // client looping messages coupled scrape latency to the dashboard. A message now re-renders the recent snapshot.
-    // No agent connects and the refresh interval outlasts the spec, so nothing may collect while the spy counts.
+    // No agent connects and the refresh interval outlasts the spec, so nothing may collect while the spy counts. Each
+    // message carries its own seq, as a page's do, since one that repeats what the page shows renders nothing.
     "messages over the WebSocket should re-render without collecting a snapshot each" {
       withDashboard(
         CACHE_HTTP_PORT,
@@ -627,9 +628,9 @@ class ProxyWebDashboardTest : StringSpec() {
 
           mockkObject(ProxySnapshot.Companion)
           try {
-            repeat(MESSAGE_COUNT) {
-              send(Frame.Text("""{"layout":"AGENT"}"""))
-              nextText() shouldContain "hx-swap-oob"
+            (1..MESSAGE_COUNT).forEach { seq ->
+              send(Frame.Text("""{"layout":"AGENT","seq":$seq}"""))
+              nextText() shouldContain """${DashboardPage.VIEW_ATTR}="$seq""""
             }
             verify(exactly = 0) { ProxySnapshot.collect(any(), any()) }
           } finally {
