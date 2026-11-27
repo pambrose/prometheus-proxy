@@ -514,7 +514,8 @@ class Agent(
       startHeartBeat(connectionContext)
     }
 
-    // The proxy's notices about paths another agent took over, and the task that takes each back once it's free.
+    // The proxy's notices about paths another agent took over, and the task that takes each back once it's free, which
+    // ends the connection once a refusal that can't clear leaves it serving nothing.
     launchConnectionTask(connectionContext, "readPathNoticesFromProxy") {
       grpcService.readPathNoticesFromProxy()
     }
@@ -555,11 +556,12 @@ class Agent(
     pathManager.retryRejectedStaticPathsWhile(retryInterval) { isConnectionLive(connectionContext) }
     if (!isConnectionLive(connectionContext))
       return
-    // Retrying ended with no static path registered -- each rejection turned out not to clear -- and no discovery to
-    // serve anything else, so this proxy serves nothing for the agent. Returning ends the connection (see
-    // launchConnectionTask), as registerPaths does at connect, so the agent reconnects or fails over. Otherwise every
-    // rejected path registered: idle until the connection ends.
-    if (pathManager.servesNoStaticPath() && pathDiscoveryService == null)
+    // Retrying ended with no static path registered or taken over -- each rejection turned out not to clear -- and no
+    // discovery to serve anything else, so this proxy serves nothing for the agent. Returning ends the connection (see
+    // launchConnectionTask), as registerPaths does at connect, so the agent reconnects or fails over; the reclaim task
+    // does the same once it drops the last taken-over path (see AgentPathManager.servesNothing). Otherwise every
+    // rejected path registered, or a taken-over one waits for its reclaim: idle until the connection ends.
+    if (pathManager.servesNothing)
       logger.warn { "Proxy rejected every static path for a cause that can't clear; ending the connection" }
     else
       awaitCancellation()

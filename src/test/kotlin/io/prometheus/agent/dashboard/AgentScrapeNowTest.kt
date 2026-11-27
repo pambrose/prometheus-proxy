@@ -30,9 +30,13 @@ import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.ktor.http.HttpStatusCode
+import io.mockk.every
+import io.mockk.mockk
 import io.prometheus.Agent
+import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.IN_PROCESS_TARGET
 import io.prometheus.agent.MetricsSource
+import io.prometheus.agent.PathSource
 import io.prometheus.agent.ScrapeTarget
 import io.prometheus.agent.embeddedAgent
 import io.prometheus.agent.filter.MetricFilter
@@ -152,6 +156,54 @@ class AgentScrapeNowTest : StringSpec() {
       fetches.asked.single().first shouldBe "http://payments.invalid/metrics"
       fetches.asked.single().second.shouldBeNull()
       result.shouldBeInstanceOf<ScrapeNowResult.Done>().summary.excerpt shouldBe BODY
+    }
+
+    // One leading slash is dropped, as the dashboard drops it from the paths it shows, and the proxy's Scrape now from
+    // the path it's given. No path has a slash left after that, so one asked for with two names none, and isn't
+    // scraped as the path without them (November 26 #31).
+    "a path asked for with a second leading slash should be refused, without a fetch" {
+      val fetches = Fetches()
+
+      val result = AgentScrapeNow(agent(), fetch = fetches::fetch).scrape("//payments_metrics", "c")
+
+      fetches.asked.shouldBeEmpty()
+      result shouldBe
+        ScrapeNowResult.Refused(
+          HttpStatusCode.NotFound,
+          "//payments_metrics isn't configured, discovered, or registered",
+        )
+    }
+
+    // The path manager's lookup drops every leading slash, for the scrapes an old proxy sends, so through it a
+    // registered path asked for with two would be scraped, at the path's URL but without its filter.
+    "a registered path asked for with a second leading slash should be refused, not scraped without its filter" {
+      val filter = mockk<MetricFilter>()
+      val context =
+        AgentPathManager.PathContext(
+          pathId = 1L,
+          path = "orders_metrics",
+          url = "http://orders.invalid/metrics",
+          labels = "{}",
+          source = PathSource.STATIC,
+          filter = filter,
+        )
+      val manager = mockk<AgentPathManager>()
+      every { manager[any()] } answers {
+        context.takeIf { AgentPathManager.requestedPathKey(firstArg()) == context.path }
+      }
+      every { manager.pathConfigs } returns emptyList()
+      every { manager.filtersByPath } returns mapOf(context.path to filter)
+      val agent = mockk<Agent>()
+      every { agent.pathManager } returns manager
+      every { agent.pathDiscoveryService } returns null
+      val fetches = Fetches()
+      val scrapes = AgentScrapeNow(agent, fetch = fetches::fetch)
+
+      scrapes.scrape("//orders_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Refused>().status shouldBe
+        HttpStatusCode.NotFound
+      scrapes.scrape("/orders_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
+
+      fetches.asked shouldBe listOf("http://orders.invalid/metrics" to filter)
     }
 
     "a failed scrape should carry its reason" {

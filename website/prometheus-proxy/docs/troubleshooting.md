@@ -229,6 +229,11 @@ The proxy tells the displaced agent, which logs a WARN naming the agent that too
 agent serves it, within seconds, without reconnecting, and never while the other agent does, even after its own
 connection drops and it reconnects.
 
+If the proxy refuses to give the path back for a cause that can't clear, such as an identity no longer allowed it, the
+agent stops waiting for it, and the dashboard shows it `refused`. An agent left with no static path served, none to
+retry, and no discovery then reconnects rather than stay connected to a proxy that serves none of its paths; as at any
+connect, a proxy that refuses every one of its static paths sends it on to the next in `agent.proxy.endpoints`.
+
 If both agents should serve the paths, set `agent.consolidated = true` on each. If only one should, remove the
 paths from the other's config, or stop it. Earlier versions disconnected the displaced agent, so the two took the
 paths from each other in turn, each reconnecting every few seconds. Agents and proxies predating the notice show a
