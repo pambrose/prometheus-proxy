@@ -74,36 +74,31 @@ internal class PathCounts(
       countedIdentities.remove(agentId)
     val identityCount = identityCounts.addTo(counted, delta)
     if (delta > 0) {
-      warnNearAgentLimit(agentId, agentCount)
-      warnNearIdentityLimit(counted, identityCount)
+      warnNearLimit(agentsNearLimit, agentId, agentCount, proxy.maxPathsPerAgent) { max ->
+        "Agent $agentId serves $agentCount of $max paths allowed by proxy.internal.maxPathsPerAgent"
+      }
+      warnNearLimit(identitiesNearLimit, counted, identityCount, proxy.maxPathsPerIdentity) { max ->
+        "The agents ${identityDesc(counted)} serve $identityCount of $max paths allowed by " +
+          "proxy.internal.maxPathsPerIdentity"
+      }
     } else {
       agentsNearLimit.fell(agentId, agentCount)
       identitiesNearLimit.fell(counted, identityCount)
     }
   }
 
-  // Warns as [agentId], now serving [count] paths, reaches 80% of maxPathsPerAgent, so an operator hears about it
-  // before its registrations start failing.
-  private fun warnNearAgentLimit(
-    agentId: String,
+  // Warns as [key]'s count, now [count], reaches 80% of [max], so an operator hears about it before the registrations
+  // start failing: an agent's for maxPathsPerAgent, an identity's agents' for maxPathsPerIdentity. [warning] is the
+  // line, given the limit.
+  private fun warnNearLimit(
+    warnings: NearLimitWarnings<String>,
+    key: String,
     count: Int,
+    max: Int,
+    warning: (Int) -> String,
   ) {
-    val max = proxy.maxPathsPerAgent
-    if (agentsNearLimit.rose(agentId, count, max))
-      logger.warn { "Agent $agentId serves $count of $max paths allowed by proxy.internal.maxPathsPerAgent" }
-  }
-
-  // Warns as the agents of [identity], now serving [count] paths, reach 80% of maxPathsPerIdentity, so an operator
-  // hears about it before their registrations start failing.
-  private fun warnNearIdentityLimit(
-    identity: String,
-    count: Int,
-  ) {
-    val max = proxy.maxPathsPerIdentity
-    if (identitiesNearLimit.rose(identity, count, max))
-      logger.warn {
-        "The agents ${identityDesc(identity)} serve $count of $max paths allowed by proxy.internal.maxPathsPerIdentity"
-      }
+    if (warnings.rose(key, count, max))
+      logger.warn { warning(max) }
   }
 
   companion object {
