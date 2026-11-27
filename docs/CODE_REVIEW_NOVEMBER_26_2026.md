@@ -1,10 +1,10 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 30 resolved, 40 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 35 resolved, 35 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
-and #51 in #599.
+and #51 in #599; #47, #48, #49, #50, and #52 in #600.
 
 **Date:** 2026-11-26
 
@@ -64,12 +64,12 @@ and #51 in #599.
 | 44 | Helm charts crash with nil pointer on `helm upgrade --reuse-values` from 4.6.0 (`dashboard` / `dashboard.login`) | CI/build | high | ✅ |
 | 45 | Inverted severity thresholds in `grafana/prometheus-agents.json` (Panels 27 "Not on Primary" and 38 "Since Last Discovery") | CI/build | medium | ✅ |
 | 46 | `ProxyScrapeSuccessRateLow` alert and Proxy Grafana Panel 4 silently miss 0% success rate when no scrape has succeeded since startup | CI/build | medium | ✅ |
-| 47 | `etc/consumer-check/check.sh` silently skips the last JAR on the Maven classpath | CI/build | medium | ⬜ |
-| 48 | `docs.yml/build` is omitted from `RELEASE_REQUIRED_JOBS` in `Makefile` despite comments and docs stating `make release-check` requires it | CI/build | medium | ⬜ |
-| 49 | `build.gradle.kts` `checkedFiles()` omits `charts/` and `.claude/skills/publishing-release/SKILL.md` (and doesn't exclude `demos/**/__pycache__/**`) | CI/build | medium | ⬜ |
-| 50 | `demos/nginx/bin/screenshots.sh` `shows_reconnecting` uses stale 4.7.0 top-bar pixel coordinates after 4.7.1's 1-button theme switcher | CI/build | low | ⬜ |
+| 47 | `etc/consumer-check/check.sh` silently skips the last JAR on the Maven classpath | CI/build | medium | ✅ |
+| 48 | `docs.yml/build` is omitted from `RELEASE_REQUIRED_JOBS` in `Makefile` despite comments and docs stating `make release-check` requires it | CI/build | medium | ✅ |
+| 49 | `build.gradle.kts` `checkedFiles()` omits `charts/` and `.claude/skills/publishing-release/SKILL.md` (and doesn't exclude `demos/**/__pycache__/**`) | CI/build | medium | ✅ |
+| 50 | `demos/nginx/bin/screenshots.sh` `shows_reconnecting` uses stale 4.7.0 top-bar pixel coordinates after 4.7.1's 1-button theme switcher | CI/build | low | ✅ |
 | 51 | Dead color overrides in `demos/network/grafana/dashboards/network-overview.json` (Panels 14 and 18) | CI/build | low | ✅ |
-| 52 | Minor build/script drift (`Makefile` `.PHONY`, unused `NEXT_AGENT_DASHBOARD_URL` and stale comment in `demos/ktor/demo.sh`, stale port/binding/URL in `bin/docker-*.sh`) | CI/build | low | ⬜ |
+| 52 | Minor build/script drift (`Makefile` `.PHONY`, unused `NEXT_AGENT_DASHBOARD_URL` and stale comment in `demos/ktor/demo.sh`, stale port/binding/URL in `bin/docker-*.sh`) | CI/build | low | ✅ |
 | 53 | `ProxyPathManagerLincheckTest` externally serializes all `ProxyPathManager` mutations behind `pathLock` and omits `maxPathsPerIdentity` | Tests | medium | ⬜ |
 | 54 | Tautological `Bug #1` test in `AgentTest` tests a local copy-pasted `Semaphore` instead of `Agent.processScrapeRequests` | Tests | medium | ⬜ |
 | 55 | Leaked Logback logger level mutation in `BaseOptionsTest` contaminates subsequent specs in `unitTest` | Tests | medium | ⬜ |
@@ -1280,7 +1280,7 @@ If a newly started or restarted proxy fails 100% of scrapes (e.g., after a bad d
 
 ---
 
-### 47. ⬜ `etc/consumer-check/check.sh` silently skips the last JAR on the Maven classpath
+### 47. ✅ `etc/consumer-check/check.sh` silently skips the last JAR on the Maven classpath
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1297,9 +1297,11 @@ Verified directly in `maven-dependency-plugin-3.11.0.jar` (`BuildClasspathMojo.s
 while IFS= read -r jar || [ -n "$jar" ]; do
 ```
 
+**Resolution:** Fixed in #600. `check.sh` reads the classpath's last line without a trailing newline (`while IFS= read -r jar || [ -n "$jar" ]`), so the last jar is checked for a Logback config, and the agent's jar is found when it comes last.
+
 ---
 
-### 48. ⬜ `docs.yml/build` is omitted from `RELEASE_REQUIRED_JOBS` in `Makefile` despite comments and docs stating `make release-check` requires it
+### 48. ✅ `docs.yml/build` is omitted from `RELEASE_REQUIRED_JOBS` in `Makefile` despite comments and docs stating `make release-check` requires it
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1316,9 +1318,11 @@ Four places — `.github/workflows/docs.yml:4-6`, `docs/RELEASE.md:38-39`, `CiHy
 
 **Fix:** Add `docs.yml/build` to `RELEASE_REQUIRED_JOBS` in `Makefile:75-77`.
 
+**Resolution:** Fixed in #600. `RELEASE_REQUIRED_JOBS` includes `docs.yml/build`, which runs on every push to `master` and so on the release commit, and is the build the `make gh-docs` deploy repeats. `release-check` already failed a `build` run that failed or was pending; the gap was a commit the job never ran for. `CiHygieneTest` checks each listed job is one a workflow runs, under the name `release-check` reads.
+
 ---
 
-### 49. ⬜ `build.gradle.kts` `checkedFiles()` omits `charts/` and `.claude/skills/publishing-release/SKILL.md` (and doesn't exclude `demos/**/__pycache__/**`)
+### 49. ✅ `build.gradle.kts` `checkedFiles()` omits `charts/` and `.claude/skills/publishing-release/SKILL.md` (and doesn't exclude `demos/**/__pycache__/**`)
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1335,9 +1339,11 @@ Conversely, `fileTree("demos")` at `build.gradle.kts:445` excludes `**/build/**`
 
 **Fix:** In `build.gradle.kts:430-459`, add `fileTree("charts")` and `".claude/skills/publishing-release/SKILL.md"` to `checkedFiles()`, add `"**/__pycache__/**"` to `fileTree("demos")`'s exclusions, and update the input list in `docs/TESTING.md:50-56`.
 
+**Resolution:** Fixed in #600. `checkedFiles()` includes `charts/` and `.claude/skills/publishing-release/SKILL.md`, which `ReleaseCheckTest` reads, and excludes `demos/**/__pycache__/**`; `docs/TESTING.md`'s Test Inputs match, and `ReleaseCheckTest` fails on a file the release checks read that isn't a `unitTest` input.
+
 ---
 
-### 50. ⬜ `demos/nginx/bin/screenshots.sh` `shows_reconnecting` uses stale 4.7.0 top-bar pixel coordinates after 4.7.1's 1-button theme switcher
+### 50. ✅ `demos/nginx/bin/screenshots.sh` `shows_reconnecting` uses stale 4.7.0 top-bar pixel coordinates after 4.7.1's 1-button theme switcher
 
 **Severity:** low · **Confidence:** plausible (layout shift confirmed; live trigger on next screenshot capture)
 
@@ -1351,6 +1357,8 @@ Conversely, `fileTree("demos")` at `build.gradle.kts:445` excludes `**/build/**`
 **Impact:** The next `make screenshots` run for the nginx demo will likely exhaust all 5 retries in `shoot_reconnecting` and abort.
 
 **Fix:** Shift/widen the crop region in `demos/nginx/bin/screenshots.sh:176` to cover the updated indicator position (e.g., `140x15+760+17`) and verify on the next screenshot capture.
+
+**Resolution:** Closed in #600 as not a defect. #587 retook `dashboard-reconnecting.webp` on 2026-11-26, after the one-button theme switcher, with this check. The Screens button #577 added to the bar offsets the switcher's shrink, so "reconnecting…" spans CSS x 712–799, covering the check's 722–787 crop (0.089 and 0.091 against the 0.02 threshold); the suggested `140x15+760+17` would score 0.0096 on the dark capture and fail.
 
 ---
 
@@ -1375,7 +1383,7 @@ Both panels carry copy-pasted `byName` overrides for `"prometheus-proxy"` (orang
 
 ---
 
-### 52. ⬜ Minor build/script drift (`Makefile` `.PHONY`, `demos/ktor/demo.sh`, `bin/docker-*.sh`)
+### 52. ✅ Minor build/script drift (`Makefile` `.PHONY`, `demos/ktor/demo.sh`, `bin/docker-*.sh`)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1392,6 +1400,8 @@ Both panels carry copy-pasted `byName` overrides for `"prometheus-proxy"` (orang
 **Impact:** Minor build/script hygiene issues and stale helper script defaults.
 
 **Fix:** Add `readme-diagram` to `.PHONY` in `Makefile`; drop `NEXT_AGENT_DASHBOARD_URL` and update the line 60 comment in `demos/ktor/demo.sh`; remove `-p 8083:8083`, bind `127.0.0.1:`, and reference `$VERSION` in `bin/docker-{agent,proxy}.sh`.
+
+**Resolution:** Fixed in #600. `readme-diagram` is in `.PHONY`, and the Ktor demo's `NEEDS_RELEASE_AFTER` comment names what 4.7.1 brings; `NEXT_AGENT_DASHBOARD_URL` was already gone (#585). `bin/docker-proxy.sh` and `bin/docker-agent.sh` run both containers on the Docker page's `prometheus-proxy-net` network, publish only on `127.0.0.1`, drop the unused agent metrics port, and fetch `simple.conf` at the release they run.
 
 ---
 

@@ -26,6 +26,7 @@ import com.charleskorn.kaml.YamlScalar
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
@@ -59,6 +60,34 @@ class CiHygieneTest : StringSpec() {
   // The Makefile's assignments, by name.
   private val makeVars by lazy {
     MAKE_ASSIGNMENT.findAll(File(MAKEFILE).readText()).associate { it.groupValues[1] to it.groupValues[2] }
+  }
+
+  // The jobs make release-check requires to have run and passed for the release commit, as workflow-file/job-name:
+  // RELEASE_REQUIRED_JOBS, with the lines it continues onto, split as release-check splits it.
+  private val requiredJobs by lazy {
+    requireNotNull(REQUIRED_JOBS.find(File(MAKEFILE).readText())) { "no RELEASE_REQUIRED_JOBS in the Makefile" }
+      .groupValues[1]
+      .replace(CONTINUATION, " ")
+      .split(';')
+      .map { it.trim() }
+  }
+
+  // Each run of a workflow job as release-check reads it from the Actions API, workflow-file/name: the job's name, or
+  // its key without one, a run per value of each matrix variable the name holds.
+  private val jobRuns by lazy {
+    workflows.flatMap { (file, root) ->
+      root.get<YamlMap>("jobs")?.entries.orEmpty().flatMap { (key, node) ->
+        val job = node as YamlMap
+        val name = job.get<YamlScalar>("name")?.content ?: key.content
+        val matrix = job.get<YamlMap>("strategy")?.get<YamlMap>("matrix")
+        MATRIX_VARIABLE
+          .findAll(name)
+          .fold(listOf(name)) { names, variable ->
+            val values = matrix?.get<YamlList>(variable.groupValues[1])?.items.orEmpty().map { it.scalar() }
+            names.flatMap { run -> values.map { run.replace(variable.value, it) } }
+          }.map { "$file/$it" }
+      }
+    }
   }
 
   // Every demo's compose file, one per directory under demos/ that has one.
@@ -192,9 +221,19 @@ class CiHygieneTest : StringSpec() {
       setupUv.map { (_, step) -> step.input("version") ?: step.input("version-file") }.distinct() shouldHaveSize 1
     }
 
+    // A job renamed, or a matrix value changed, without RELEASE_REQUIRED_JOBS following it would stop the next release
+    // at release-check, which finds no such job for the commit.
+    "every job RELEASE_REQUIRED_JOBS lists should be one a workflow runs, under the name release-check reads" {
+      jobRuns shouldContainAll listOf("$DOCS_WORKFLOW/build", "security.yml/image-scan (proxy)")
+      requiredJobs.shouldNotBeEmpty()
+      requiredJobs.filterNot { it in jobRuns }.shouldBeEmpty()
+    }
+
     // The live site describes the release its visitors can install, so only make release deploys it, through the
     // workflow_dispatch make gh-docs starts once the release is published. A push to master builds the site and the
-    // KDocs, a check make release-check requires, without uploading or deploying them.
+    // KDocs, a check make release-check requires, without uploading or deploying them. Its check of every check run
+    // passes a commit this job never ran for, so the job is in RELEASE_REQUIRED_JOBS too, as the build the deploy
+    // repeats.
     "the docs site should deploy only from the workflow_dispatch make release starts" {
       workflows
         .getValue(DOCS_WORKFLOW)
@@ -220,6 +259,7 @@ class CiHygieneTest : StringSpec() {
       val makefile = File(MAKEFILE).readText()
       makefile shouldContain Regex("""(?m)^gh-docs:.*\n\tgh workflow run $DOCS_WORKFLOW$""")
       makefile shouldContain "$(MAKE) --no-print-directory gh-docs"
+      requiredJobs shouldContain "$DOCS_WORKFLOW/build"
     }
 
     // datreeio's main branch moves, and with it the ServiceMonitor schema that helm-lint validates against.
@@ -230,6 +270,8 @@ class CiHygieneTest : StringSpec() {
   }
 
   private fun YamlNode.has(key: String) = (this as YamlMap).get<YamlNode>(key) != null
+
+  private fun YamlNode.scalar() = (this as YamlScalar).content
 
   // The value a step gives one of its action's inputs, if it gives one.
   private fun YamlNode.input(key: String) = (this as YamlMap).get<YamlMap>("with")?.get<YamlScalar>(key)?.content
@@ -250,6 +292,14 @@ class CiHygieneTest : StringSpec() {
     private const val UPLOAD_PAGES = "actions/upload-pages-artifact@"
     private const val DISPATCH_ONLY = "github.event_name == 'workflow_dispatch'"
     private val MAKE_ASSIGNMENT = Regex("""(?m)^([A-Z][A-Z0-9_]*) :?= (.*)$""")
+
+    // RELEASE_REQUIRED_JOBS' value, with the lines it continues onto, and a line's backslash-newline, which make reads
+    // as a space.
+    private val REQUIRED_JOBS = Regex("""(?m)^RELEASE_REQUIRED_JOBS := ((?:[^\n]*\\\n)*[^\n]*)""")
+    private val CONTINUATION = Regex("""\\\n\s*""")
+
+    // A matrix variable in a job's name, ${{ matrix.<variable> }}.
+    private val MATRIX_VARIABLE = Regex("""\$\{\{\s*matrix\.([\w-]+)\s*}}""")
 
     // A `const val` whose name ends in _IMAGE, with its string on the same line or the next.
     private val CONTAINER_IMAGE = Regex("""const val ([A-Z][A-Z0-9_]*_IMAGE) =\s*"([^"]*)"""")

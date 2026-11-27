@@ -426,7 +426,8 @@ fun Project.configureTesting() {
 fun Project.testConfigFiles(): FileCollection = files(fileTree("config/test-configs"), fileTree("testing"))
 
 // What the specs that check the docs, CI, and demos against the code read: misc/, TestingGuideTest among them, and
-// TestPortsTest. Not the code reviews, which no spec reads, or what a demo's build or demo.sh writes.
+// TestPortsTest. Not the code reviews, which no spec reads, or what a demo's build, its Python, or demo.sh writes.
+// ReleaseCheckTest checks that every file release-check reads is here.
 fun Project.checkedFiles(): FileCollection =
   files(
     "Makefile",
@@ -438,11 +439,16 @@ fun Project.checkedFiles(): FileCollection =
     "gradle.properties",
     "settings.gradle.kts",
     "config/config.conf",
+    // The release skill, which release-check reads for the version, and ReleaseCheckTest for its list of bumped files.
+    ".claude/skills/publishing-release/SKILL.md",
     fileTree(".github"),
     fileTree("docs") { exclude("**/CODE_REVIEW_*.md") },
     fileTree("website/prometheus-proxy/docs"),
     "website/prometheus-proxy/zensical.toml",
-    fileTree("demos") { exclude("**/build/**", "**/.gradle/**", "**/.kotlin/**", "**/target/**", "*/docker/.env*") },
+    fileTree("demos") {
+      exclude("**/build/**", "**/.gradle/**", "**/.kotlin/**", "**/target/**", "**/__pycache__/**", "*/docker/.env*")
+    },
+    fileTree("charts"),
     fileTree("examples"),
     fileTree("etc"),
     fileTree("grafana"),

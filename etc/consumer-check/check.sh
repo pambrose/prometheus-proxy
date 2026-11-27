@@ -151,7 +151,8 @@ logback_resolved="$(resolved '^ch[.]qos[.]logback$')"
 [ -z "$logback_resolved" ] ||
   fail "Logback is on the classpath, which displaces the host's own SLF4J provider: $(joined <<< "$logback_resolved")"
 library=""
-while IFS= read -r jar; do
+# dependency:build-classpath ends the file without a newline, so read fails on the last jar's line, having read it.
+while IFS= read -r jar || [ -n "$jar" ]; do
   [ -n "$jar" ] || continue
   case "$jar" in */prometheus-proxy-"$version".jar) library="$jar" ;; esac
   configs="$(unzip -Z1 "$jar" 2>/dev/null | awk '/^logback(-test)?[.]xml$/' | joined)"

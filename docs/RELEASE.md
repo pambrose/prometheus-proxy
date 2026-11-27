@@ -25,15 +25,16 @@ checkout. It first runs `make release-check`, which publishes nothing and fails 
 - the GPG setup and Maven Central credentials `publish-maven-central` needs are in place (step 6), and Docker is
   running.
 
-It then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, checks the
-published images with `make docker-verify`, tags the commit as the version and pushes the tag with `make release-tag`,
-creates the GitHub release on the tag with the JARs (`make github-release`, step 7), and deploys the docs site with
-`make gh-docs`. The tag and the GitHub release come first because the site's `git clone --branch` commands check out
-the tag, and its Quick Start downloads the release's JARs. It ends by printing the Homebrew step (step 9), which stays
-manual. Run `make release-check` on its own to see what's still missing. If a release stops after publishing
-somewhere, finish it with the remaining targets, since `release-check` refuses a version that is already published.
-`master` needs no change meanwhile: the demos build the proxy and agent from the checkout until the release's images
-are on Docker Hub (step 2).
+It then runs `make all-tests` (every test, Lincheck, the container suite, and `make tla-checks-full`, the full TLA+
+checks, whose slower reconnect config CI runs only when `specs/tla/` changes) and `make distro`, asks once, publishes to
+Maven Central and Docker Hub, checks the published images with `make docker-verify`, tags the commit as the version and
+pushes the tag with `make release-tag`, creates the GitHub release on the tag with the JARs (`make github-release`, step
+7), and deploys the docs site with `make gh-docs`. The tag and the GitHub release come first because the site's
+`git clone --branch` commands check out the tag, and its Quick Start downloads the release's JARs. It ends by printing
+the Homebrew step (step 9), which stays manual. Run `make release-check` on its own to see what's still missing. If a
+release stops after publishing somewhere, finish it with the remaining targets, since `release-check` refuses a version
+that is already published. `master` needs no change meanwhile: the demos build the proxy and agent from the checkout
+until the release's images are on Docker Hub (step 2).
 
 Merging doesn't deploy the site; only a release does. The docs workflow (`.github/workflows/docs.yml`) builds the
 site and the KDocs on every push to `master`, as a check `make release-check` requires, but deploys only from a
@@ -101,8 +102,8 @@ is, unreleased pages included.
    `make release`: `make release-check` refuses a date other than the day it runs, so a release cut later than planned
    dates them again first.
 
-4) Verify everything passes before merging: `make tests` (or `make all-tests` to also run the
-   Docker-based container suite).
+4) Verify everything passes before merging: `make tests` (or `make all-tests` to also run Lincheck, the
+   Docker-based container suite, and the full TLA+ checks).
 
 5) Build the standalone fat jars: `make distro`. This produces `build/libs/prometheus-agent.jar` and
    `build/libs/prometheus-proxy.jar`.

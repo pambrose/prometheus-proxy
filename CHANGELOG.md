@@ -215,6 +215,18 @@ All notable changes to this project are documented in this file.
   and the Spring Boot starter's tests, which lacked the Jackson annotations on Spring's `Health`
 - The demos' screenshot scripts share one `bin/screenshots-lib.sh` for finding Chrome, capturing pages, waiting, and
   writing WebP, where each had drifted from its own copy
+- `make release-check` requires the docs workflow's `build` job (`docs.yml/build`), which builds the site and the KDocs
+  as the deploy `make release` ends with does, to have run and passed for the release commit, as its docs said; a
+  commit the job never ran for passed
+- `make consumer-check` checks the last jar on the Maven classpath too: Maven ends the classpath file without a
+  newline, so the check never looked in that jar for a Logback config, and would have failed to find the agent's own
+  jar had it come last
+- `unitTest` reruns when a Helm chart or the publishing-release skill changes, which the release checks' specs read,
+  and no longer reruns when a demo's Python leaves bytecode (`__pycache__`) in its directory
+- `bin/docker-proxy.sh` and `bin/docker-agent.sh` run the proxy and agent on one Docker network, as the Docker page
+  does, where the agent connects to the proxy by its container name, or to `PROXY_HOSTNAME` when it's set, in place of
+  a hard-coded `mymachine.lan`. They publish their ports on `127.0.0.1` only, no longer publish the agent's metrics
+  port, which `examples/simple.conf` leaves off, and fetch `simple.conf` at the release they run, not `master`
 
 ### Documentation
 
