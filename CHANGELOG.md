@@ -107,6 +107,9 @@ All notable changes to this project are documented in this file.
   tour, scenarios, README, and page link into `/screens`, which `make open` opens, but for part 8, which stops the
   proxy and gives each screen's own address; its Grafana allows embedding, and `make up` builds from the checkout until
   4.7.1 is on Docker Hub
+- The nginx demo's proxy lists its screens, agent-current's dashboard and the proxy's own through nginx among them, and
+  its tour, scenarios, README, and page link into `/screens`, which `make open` opens; `make up` builds from the
+  checkout until 4.7.1 is on Docker Hub
 - `examples/simple.conf` and the basics, network, and Kubernetes demos' agents serve their own metrics through the
   proxy with `agent.metrics.proxyPath`, in-process, where each scraped its own port, `localhost:8083`, as a path; all
   but the Kubernetes demo's, whose chart opens the port for its Service, leave the metrics port off
