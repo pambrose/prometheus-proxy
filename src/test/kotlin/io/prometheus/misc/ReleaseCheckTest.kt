@@ -42,6 +42,11 @@ class ReleaseCheckTest : StringSpec() {
     val errors: String,
   )
 
+  private class CheckedInputs(
+    val files: Set<String>,
+    val trees: Set<String>,
+  )
+
   // A release whose sections both changelogs date the same day: the newest one below the top, which is released.
   private class Release(
     val version: String,
@@ -53,6 +58,18 @@ class ReleaseCheckTest : StringSpec() {
   private val siteVersion by lazy { make("site-version").also { it.exitCode shouldBe 0 }.output }
 
   private val releaseVersionFiles by lazy { makeVariable("RELEASE_VERSION_FILES").split(Regex("""\s+""")) }
+
+  // What checkedFiles() in build.gradle.kts makes inputs of unitTest, which runs these specs: the files it names, and
+  // the directories it takes whole with fileTree.
+  private val checkedInputs by lazy {
+    val script = File(BUILD_SCRIPT).readText()
+    require(CHECKED_FILES in script) { "no checkedFiles() in $BUILD_SCRIPT" }
+    val list = script.substringAfter(CHECKED_FILES).substringBefore("\n  )\n")
+    CheckedInputs(
+      files = CHECKED_FILE.findAll(list).map { it.groupValues[1] }.toSet(),
+      trees = CHECKED_TREE.findAll(list).map { it.groupValues[1] }.toSet(),
+    )
+  }
 
   private val released by lazy {
     val sections = CHANGELOG_SECTION.findAll(File(CHANGELOG).readText()).map { it.groupValues }.toList()
@@ -201,6 +218,23 @@ class ReleaseCheckTest : StringSpec() {
       withClue("the website pages $SKILL names") { skillPages shouldBe listed }
     }
 
+    // Gradle reruns unitTest when one of its inputs changes, not when a file its specs open does, so a file these
+    // specs read that isn't one let an edit to it pass on the run before's result, up to date or from the build
+    // cache: the charts' Chart.yaml files and the publishing-release skill, which release-check reads too.
+    "every file the release checks read should be an input of unitTest, so an edit to one reruns them" {
+      val inputs = checkedInputs
+      inputs.files shouldContainAll listOf(MAKEFILE, CHANGELOG)
+      inputs.trees shouldContainAll listOf("docs", "demos")
+
+      val read =
+        releaseVersionFiles + demoScripts().map { it.path } +
+          listOf(MAKEFILE, CHANGELOG, RELEASE_NOTES, GRADLE_PROPERTIES, RELEASE_GUIDE, SKILL)
+      read
+        .distinct()
+        .filterNot { path -> path in inputs.files || inputs.trees.any { path.startsWith("$it/") } }
+        .shouldBeEmpty()
+    }
+
     // GitHub shows a release's line breaks as written, so a paragraph or list item wrapped over lines would show
     // broken there.
     "the GitHub release notes should be the release notes' section, unwrapped, then the full changelog's link" {
@@ -305,6 +339,7 @@ class ReleaseCheckTest : StringSpec() {
 
   companion object {
     private const val MAKEFILE = "Makefile"
+    private const val BUILD_SCRIPT = "build.gradle.kts"
     private const val CHANGELOG = "CHANGELOG.md"
     private const val RELEASE_NOTES = "RELEASE_NOTES.md"
     private const val GRADLE_PROPERTIES = "gradle.properties"
@@ -323,5 +358,10 @@ class ReleaseCheckTest : StringSpec() {
     private val NEEDS_RELEASE_AFTER = Regex("""(?m)^NEEDS_RELEASE_AFTER=([0-9.]+)$""")
     private val BACKTICKED = Regex("""`([^`\s]+)`""")
     private val BRACES = Regex("""^([^{]*)\{([^}]*)}(.*)$""")
+
+    // checkedFiles()'s list in build.gradle.kts, a file it names on a line of its own, and a directory it takes whole.
+    private const val CHECKED_FILES = "fun Project.checkedFiles(): FileCollection =\n  files(\n"
+    private val CHECKED_FILE = Regex("""(?m)^\s+"([^"]+)",$""")
+    private val CHECKED_TREE = Regex("""fileTree\("([^"]+)"\)""")
   }
 }

@@ -10,7 +10,7 @@
         coverage-open coverage-packages coverage-clean reports site-version gh-docs \
         gh-status tsconfig distro docker-push docker-verify homebrew-formulae release release-check _confirm-release \
         release-tag tree depends lint detekt detekt-baseline \
-        versions versions-all kdocs clean-site check-site upgrade-site build-site site \
+        versions versions-all kdocs clean-site check-site upgrade-site build-site site readme-diagram \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _check-maven-central-env _require-version _require-gradle-version _tla-tools \
         _check-demos-pull-release _check-changelogs _check-version-files github-release github-release-notes
@@ -68,13 +68,15 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud
 # the full TLA+ checks) and the distro build, so these are what cover the coverage floors, the alerting rules, the Helm
 # charts and their install into kind, the docs site build, what a Maven build that embeds the agent gets from the POM
 # about to be published (consumer-check), and the image and workflow scans; ci.yml/tla and the container suite are here
-# too, so a commit CI failed them on stops first. The site build is here because make release ends by deploying the
-# site, so a commit whose site doesn't build stops before anything is published. The workflow file tells apart jobs
-# with the same name, such as ci.yml's and docs.yml's build. Renaming one of these jobs, or adding a check a release
-# should wait for, means updating this list.
+# too, so a commit CI failed them on stops first. The site builds are here because make release ends by deploying the
+# site, so a commit whose site doesn't build stops before anything is published: ci.yml/docs-site builds the site as
+# a pull request does, and docs.yml/build builds it and the KDocs as the deploy that make gh-docs starts does. The
+# workflow file tells apart jobs with the same name, such as ci.yml's and docs.yml's build. Renaming one of these jobs,
+# or adding a check a release should wait for, means updating this list (CiHygieneTest checks each is a job a workflow
+# runs).
 RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml/docs-site;ci.yml/consumer-check;\
-	container-tests.yml/container-tests;container-tests.yml/helm-smoke;security.yml/image-scan (proxy);\
-	security.yml/image-scan (agent);security.yml/codeql;zizmor.yml/code-scanning
+	docs.yml/build;container-tests.yml/container-tests;container-tests.yml/helm-smoke;\
+	security.yml/image-scan (proxy);security.yml/image-scan (agent);security.yml/codeql;zizmor.yml/code-scanning
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 # Where site-version looks: the docs site's pages, the snippet directories zensical.toml's snippets base_path names, and

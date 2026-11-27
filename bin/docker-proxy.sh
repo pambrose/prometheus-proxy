@@ -17,6 +17,14 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1 &&
   exit 1
 fi
 
-docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
-  --env PROXY_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+# The proxy and the agent (bin/docker-agent.sh) share a Docker network, as the Docker page's Basic Usage runs them, so
+# the agent reaches the proxy by its container name. Every port is published on this machine's 127.0.0.1 only, as
+# nothing here asks for a token or a login: the scrape port, the metrics and admin ports examples/simple.conf turns on,
+# and the agents' port, for an agent run on this machine. The config is the release's, which the image runs.
+NETWORK=prometheus-proxy-net
+docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null || exit 1
+
+docker run --rm --name prometheus-proxy --network "$NETWORK" \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8082:8082 -p 127.0.0.1:8092:8092 -p 127.0.0.1:50051:50051 \
+  --env PROXY_CONFIG="https://raw.githubusercontent.com/pambrose/prometheus-proxy/${VERSION}/examples/simple.conf" \
   "$IMAGE"

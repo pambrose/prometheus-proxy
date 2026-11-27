@@ -49,11 +49,13 @@ them, a change that edited only a workflow, the `Makefile`, or this document pas
 it, up to date, or from the build cache after a clean. Every `Test` task takes the configs in `config/test-configs`
 and the certificates in `testing`. `unitTest` (and `test`) also takes what the specs that check the docs, CI, and demos
 read: the top-level `Makefile`, `README.md`, `AGENTS.md`, changelogs, `llms.txt`, `gradle.properties`, and
-`settings.gradle.kts`; `config/config.conf`; `.github`; `docs` (not the code reviews); the docs site's pages and
-`zensical.toml`; `demos` (not what a demo's build or `demo.sh` writes); `examples`, `etc`, `grafana`, `bin`, `logback`,
-and `src/shadow/resources`; and the text of the sources, main and test, both subprojects' included, and of the docs
-site's snippet files beside the test sources. An edit to any of them reruns `unitTest`, but not the harness specs. A
-spec that reads a file outside those needs it added there.
+`settings.gradle.kts`; `config/config.conf`; the publishing-release skill
+(`.claude/skills/publishing-release/SKILL.md`); `.github`; `docs` (not the code reviews); the docs site's pages and
+`zensical.toml`; `demos` (not what a demo's build, its Python, or `demo.sh` writes); `charts`; `examples`, `etc`,
+`grafana`, `bin`, `logback`, and `src/shadow/resources`; and the text of the sources, main and test, both subprojects'
+included, and of the docs site's snippet files beside the test sources. An edit to any of them reruns `unitTest`, but
+not the harness specs. A spec that reads a file outside those needs it added there; `ReleaseCheckTest` fails on a file
+`make release-check` reads that isn't.
 
 ### Make Targets
 
@@ -1024,10 +1026,11 @@ These support helpers also live here (not test classes themselves):
   (`demos/*/docker/compose.yml`, every demo's but the Kubernetes demo's) pulls is pinned by digest and any Prometheus it
   runs is the `Makefile`'s, as is every image the Kubernetes demo's manifests and kind configs (`demos/kubernetes/k8s`
   and `demos/kubernetes/kind`) name, the kind node image among them, every `astral-sh/setup-uv` step installs a pinned
-  uv, the same one in each, the CRD schemas `helm-lint` validates against come from a fixed commit, and `docs.yml`
-  uploads and deploys the site only from the `workflow_dispatch` `make release` starts with `make gh-docs`, so a hung
-  job gives its check back, what CI runs changes only with a diff here, and a push to `master` leaves the live site
-  alone
+  uv, the same one in each, the CRD schemas `helm-lint` validates against come from a fixed commit, `docs.yml`
+  uploads and deploys the site only from the `workflow_dispatch` `make release` starts with `make gh-docs`, and every
+  job `RELEASE_REQUIRED_JOBS` lists is one a workflow runs, under the name `make release-check` reads (a matrix job's
+  per value), `docs.yml`'s `build` among them, so a hung job gives its check back, what CI runs changes only with a
+  diff here, a push to `master` leaves the live site alone, and a release waits for the build its deploy repeats
 - **CliReferenceTest** — the CLI Reference's tables against the code: each row's options are all the names of one
   JCommander `@Parameter` of its role's options or `BaseOptions`, and every option has a row; each row's variable is
   one its role's options read (an `EnvVars` entry they import), every one they read has a row, and every `EnvVars`
@@ -1115,7 +1118,8 @@ These support helpers also live here (not test classes themselves):
   refuses a release at or below a demo's `NEEDS_RELEASE_AFTER`, or a demo whose value it can't read (in a temporary
   copy of the demos). `make github-release-notes` gives a release's `RELEASE_NOTES.md` section with each paragraph and
   list item on one line, its headings a level up, and the full changelog's link last. Step 2 of `docs/RELEASE.md` and
-  the publishing-release skill name the website pages `RELEASE_VERSION_FILES` lists, no more and no fewer
+  the publishing-release skill name the website pages `RELEASE_VERSION_FILES` lists, no more and no fewer. Every file
+  these checks read is an input of `unitTest` (`checkedFiles()` in `build.gradle.kts`), so an edit to one reruns them
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here
   instead of only in the container suite

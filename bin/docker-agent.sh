@@ -17,7 +17,14 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1 &&
   exit 1
 fi
 
-docker run --rm -p 8083:8083 -p 8093:8093 \
-  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  --env PROXY_HOSTNAME=mymachine.lan \
+# The agent joins the proxy's Docker network (bin/docker-proxy.sh), as the Docker page's Basic Usage runs them, and
+# connects to the proxy by its container name, or to PROXY_HOSTNAME when it's set. Its admin port is published on this
+# machine's 127.0.0.1 only; it serves its own metrics through the proxy, at /agent_metrics, so its metrics port stays
+# off. The config is the release's, which the image runs.
+NETWORK=prometheus-proxy-net
+docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null || exit 1
+
+docker run --rm --network "$NETWORK" -p 127.0.0.1:8093:8093 \
+  --env AGENT_CONFIG="https://raw.githubusercontent.com/pambrose/prometheus-proxy/${VERSION}/examples/simple.conf" \
+  --env PROXY_HOSTNAME="${PROXY_HOSTNAME:-prometheus-proxy}" \
   "$IMAGE"
