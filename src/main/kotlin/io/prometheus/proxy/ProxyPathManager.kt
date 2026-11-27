@@ -21,6 +21,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.AgentValues.pathCharacterProblem
+import io.prometheus.common.AgentValues.segmentProblem
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.AgentValues.truncate
 import io.prometheus.grpc.PathRejectionCause
@@ -763,7 +764,7 @@ internal class ProxyPathManager(
     key: String,
     shown: String,
   ): String? {
-    if ('/' !in key) return null
+    if (segmentProblem(key) == null) return null
     return "Multi-segment path not supported (use a single path segment): /$shown"
       .also { logger.error { it } }
   }

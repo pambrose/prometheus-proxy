@@ -22,6 +22,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.Url
 import io.ktor.http.encodeURLParameter
 import io.prometheus.Agent
+import io.prometheus.common.AgentValues.segmentProblem
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.EnvVars
 import io.prometheus.common.Utils.sanitizeUrl
@@ -414,6 +416,7 @@ class EmbeddedAgentConfig private constructor(
       apply {
         val normalized = path.trim().removePrefix("/")
         if (normalized.isEmpty()) invalid("A path is required")
+        requireOneSegment(path)
         put("metrics.proxyPath", normalized)
         put("metrics.proxyPathLabels", labelsJson(labels) ?: "{}")
       }
@@ -493,6 +496,7 @@ class EmbeddedAgentConfig private constructor(
     ): Builder =
       apply {
         if (path.isBlank()) invalid("A path is required")
+        requireOneSegment(path)
         val credentials = userInfo(username, password)
         val target =
           if (credentials.isEmpty()) {
@@ -518,7 +522,8 @@ class EmbeddedAgentConfig private constructor(
      * Has the agent serve [source], the app's own metrics read in-process, to Prometheus at the proxy's [path]: the app
      * needs no metrics endpoint, port, or credentials for the agent to read them, and the agent opens no connection to
      * it. A [path] that a `pathConfigs` entry or another path also names, or that has whitespace, a control character,
-     * `?`, or `#`, fails [EmbeddedAgentConfig.start], as such a `pathConfigs` entry does. The path's target shows as
+     * `?`, or `#`, fails [EmbeddedAgentConfig.start], as such a `pathConfigs` entry does, and one of more than one
+     * segment, such as `app/metrics` or `//metrics`, throws [ConfigLoadException] here. The path's target shows as
      * `in-process`. See [MetricsSource] for how the agent calls it. [source] comes last, so a Kotlin lambda can follow
      * the call.
      */
@@ -560,6 +565,7 @@ class EmbeddedAgentConfig private constructor(
       apply {
         val normalized = path.removePrefix("/")
         if (normalized.isBlank()) invalid("A path is required")
+        requireOneSegment(path)
         sources +=
           AgentPathManager.PathConfig(
             name = normalized,
@@ -665,6 +671,13 @@ class EmbeddedAgentConfig private constructor(
         .let(::sanitizeUrlsInText)
 
     private fun invalid(message: String): Nothing = throw ConfigLoadException(message)
+
+    // Refuses [path] when it's more than one segment once a leading slash is dropped, as the agent refuses such a
+    // configured path. The builder drops one slash and the agent another, so "//foo" served "foo" (November 26 #11).
+    private fun requireOneSegment(path: String) {
+      segmentProblem(path.trim().removePrefix("/"))
+        ?.let { invalid("Path '${shownValue(path)}' is one the proxy refuses: $it") }
+    }
 
     // Logs why a start failed, and tells each of [handlers], in turn, as startIfConfigured and reportFailure do
     private fun reportFailure(

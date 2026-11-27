@@ -1116,9 +1116,15 @@ class AgentPathManagerTest : StringSpec() {
     }
 
     // November #16: the proxy refuses a path with a character no scrape's request path can carry. Refused here too, a
-    // pathConfigs entry with one fails at startup, naming it, rather than being refused at every connect.
-    "construction should reject a pathConfigs entry whose path no scrape can carry, naming it" {
-      for (path in ["app metrics", "metrics?format=x", "a#b", """a\tb""", """a\nb"""]) {
+    // pathConfigs entry with one fails at startup, naming it, rather than being refused at every connect. So does one
+    // of more than one segment, which the proxy refuses too: "//foo" lost one slash here and one at the proxy, which
+    // took it as "foo", while the agent kept it as "/foo", so every scrape of it 404ed (November 26 #11).
+    "construction should reject a pathConfigs entry whose path the proxy refuses, naming it" {
+      val character = "can't appear in a scrape's request path"
+      val refusals =
+        ["app metrics", "metrics?format=x", "a#b", """a\tb""", """a\nb"""].map { it to character } +
+          ["//foo", "app/metrics", "/app/metrics", "//"].map { it to "one segment" }
+      for ((path, reason) in refusals) {
         val agent =
           createMockAgent(
             pathConfigsHocon =
@@ -1132,7 +1138,7 @@ class AgentPathManagerTest : StringSpec() {
 
         withClue(path) {
           message shouldContain "\"bad\""
-          message shouldContain "can't appear in a scrape's request path"
+          message shouldContain reason
           message.none { it == '\n' || it == '\t' }.shouldBeTrue()
         }
       }
@@ -1149,29 +1155,6 @@ class AgentPathManagerTest : StringSpec() {
         )
 
       AgentPathManager(agent).toPlainText() shouldContain "team-a.metrics~1"
-    }
-
-    // The proxy drops one leading slash, as the agent does, and refuses a path with a slash left in it. "//foo" lost
-    // one here and one at the proxy, which took it as "foo", while the agent kept it as "/foo", so every scrape of it
-    // 404ed (November 26 #11). Refused at startup, naming it, as a path with a character no scrape can carry is.
-    "construction should reject a pathConfigs entry of more than one segment, naming it" {
-      for (path in ["//foo", "app/metrics", "/app/metrics", "//"]) {
-        val agent =
-          createMockAgent(
-            pathConfigsHocon =
-              """
-              { name = "ok", path = "metrics", url = "http://localhost:9100/metrics", labels = "{}" },
-              { name = "bad", path = "$path", url = "http://localhost:9200/metrics", labels = "{}" }
-              """,
-          )
-
-        val message = shouldThrow<IllegalArgumentException> { AgentPathManager(agent) }.message.orEmpty()
-
-        withClue(path) {
-          message shouldContain "\"bad\""
-          message shouldContain "one segment"
-        }
-      }
     }
 
     // A discovered "//metrics" was keyed as "/metrics" and registered as "metrics", so each reconcile found the path it
@@ -2300,7 +2283,8 @@ class AgentPathManagerTest : StringSpec() {
     "the reclaim loop should wait out a one-second backoff between refused reclaims" {
       val agent = createMockAgent(agentHocon = "internal { rejectedPathRetrySecs = 1, rejectedPathRetryMaxSecs = 1 }")
       val grpc = agent.grpcService
-      val manager = AgentPathManager(agent)
+      // Never advanced, so the next try stays a second away however long the test takes.
+      val manager = AgentPathManager(agent, TestTimeSource())
       manager.registerPath("metrics", METRICS_URL)
       manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
       // As after a reconnect: the reclaim is due at once.
@@ -2322,12 +2306,12 @@ class AgentPathManagerTest : StringSpec() {
               active.load()
             }
           }
-        delay(500.milliseconds)
+        delay(100.milliseconds)
         active.store(false)
         val passesSeen = passes.load()
         loop.cancelAndJoin()
 
-        withClue("loop passes in half a second") { passesSeen shouldBeLessThan 10 }
+        withClue("loop passes in a tenth of a second") { passesSeen shouldBeLessThan 10 }
         coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
       }
     }

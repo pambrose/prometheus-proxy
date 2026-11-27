@@ -722,19 +722,20 @@ internal class ProxyServiceImpl(
       }
     }
 
-    // Whether this stream may extend or finish [context], the transfer for [scrapeId]: its connection may, checked on
-    // the owner the transfer recorded when it was opened, not on a fresh lookup of the scrape, and it opened the
-    // transfer. A connection can carry more than one stream, as can an identity with the transport filter disabled, and
-    // a second stream passed the connection's check, so it could extend a transfer the first had opened, and the two
-    // updated its checksum, counts, and buffer at once (November 26 #1).
+    // Whether this stream may extend or finish [context], the transfer for [scrapeId]: it opened the transfer, which
+    // its header could only once the connection's owner check passed. A connection can carry more than one stream, as
+    // can an identity with the transport filter disabled, and a second stream passed that check, so it could extend a
+    // transfer the first had opened, and the two updated its checksum, counts, and buffer at once (November 26 #1).
+    // Data for a transfer this stream didn't open is refused: another agent's is logged and counted by the owner
+    // check, checked on the owner the transfer recorded, and another stream's of this connection is warned of here.
     private fun owns(
       context: ChunkedContext,
       scrapeId: Long,
     ): Boolean {
-      if (!isScrapeOwnedByConnection(connectionAgentId, context.owner, scrapeId, RPC_NAME))
-        return false
       if (transfers[scrapeId] === context)
         return true
+      if (!isScrapeOwnedByConnection(connectionAgentId, context.owner, scrapeId, RPC_NAME))
+        return false
       if (scrapeId != lastForeignScrapeId) {
         lastForeignScrapeId = scrapeId
         logger.warn {
@@ -899,31 +900,30 @@ internal class ProxyServiceImpl(
     }
 
     // Cleans up the chunked contexts the stream left without a summary (e.g., due to stream cancellation or agent
-    // disconnect mid-transfer). Runs in writeChunkedResponsesToProxy's finally, so it must not suspend. A transfer is
-    // opened only by the agent its scrape was sent to, and scrapeIds are never reused, so removing by scrapeId never
-    // removes another agent's transfer.
+    // disconnect mid-transfer). Runs in writeChunkedResponsesToProxy's finally, so it must not suspend. It removes only
+    // the transfers this stream opened, each if it's still the one for its scrapeId, so it never removes another
+    // stream's or another agent's.
     //
     // This sweep can race Proxy.removeAgentContext() (from the transport-terminated or cleanup-service
     // thread), Proxy.removeAgentContextIfCurrent() (as a scrape-request stream ends, with the transport
     // filter disabled), and the scrape's HTTP handler, which removes the transfer as it returns, for the same
     // scrapeId. Double-handling is prevented by two invariants that future edits must preserve:
-    // (a) contextManager.removeChunkedContext() is a ConcurrentHashMap.remove(), so only one caller gets
-    // the non-null context and the ?.also block (warn + failScrapeRequest + metric) runs at most once,
+    // (a) contextManager.removeChunkedContext() is a ConcurrentHashMap.remove(), so only one caller removes
+    // the context and the block below (warn + failScrapeRequest + metric) runs at most once,
     // and either removal, which counts the transfers it reclaims in the same metric, never counts one
     // this sweep removed; and (b) failScrapeRequest() -> ScrapeRequestWrapper.complete() is idempotent
     // via an AtomicBoolean compareAndSet, so even a double-fail has no observable effect.
     fun abandonUnfinished() {
-      transfers.keys.forEach { scrapeId ->
-        contextManager.removeChunkedContext(scrapeId)
-          ?.also {
-            logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" }
-            proxy.scrapeRequestManager.failScrapeRequest(
-              scrapeId,
-              "Chunked transfer abandoned: stream terminated before summary received",
-              ProxyFailure.AGENT_DISCONNECTED,
-            )
-            countAbandonedTransfer()
-          }
+      transfers.forEach { (scrapeId, context) ->
+        if (contextManager.removeChunkedContext(scrapeId, context)) {
+          logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" }
+          proxy.scrapeRequestManager.failScrapeRequest(
+            scrapeId,
+            "Chunked transfer abandoned: stream terminated before summary received",
+            ProxyFailure.AGENT_DISCONNECTED,
+          )
+          countAbandonedTransfer()
+        }
       }
     }
   }

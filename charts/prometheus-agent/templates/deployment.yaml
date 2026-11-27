@@ -84,7 +84,7 @@ spec:
               value: {{ $dashboard.enabled | quote }}
             - name: DASHBOARD_PORT
               value: {{ $dashboard.port | quote }}
-            {{- with include "prometheus-agent.dashboardHost" . }}
+            {{- with $dashboard.host }}
             - name: DASHBOARD_HOST
               value: {{ . | quote }}
             {{- end }}

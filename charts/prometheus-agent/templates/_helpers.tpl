@@ -46,6 +46,7 @@ The dashboard values as YAML, each one the values lack at its default here, for 
 helm upgrade --reuse-values renders this chart with the values of the release it upgrades, from that release's chart,
 and 4.6.0's had no dashboard at all, so reading dashboard.enabled failed the upgrade. The host is 127.0.0.1 when the
 values have no such key; given as empty, it stays empty, leaving the address to agent.dashboard.host in the config.
+The defaults repeat values.yaml's, so keep the two in step.
 */}}
 {{- define "prometheus-agent.dashboard" -}}
 {{- $given := .Values.dashboard | default dict }}
@@ -59,12 +60,7 @@ login:
   key: {{ $login.key | default "password" | quote }}
 {{- end }}
 
-{{/* The dashboard's listen address (see prometheus-agent.dashboard). */}}
-{{- define "prometheus-agent.dashboardHost" -}}
-{{- (include "prometheus-agent.dashboard" . | fromYaml).host }}
-{{- end }}
-
 {{/* Whether the dashboard listens only on the pod's loopback, which port-forward reaches and no other pod can. */}}
 {{- define "prometheus-agent.dashboardIsLocal" -}}
-{{- if has (include "prometheus-agent.dashboardHost" .) (list "127.0.0.1" "localhost" "::1") }}true{{ end }}
+{{- if has (include "prometheus-agent.dashboard" . | fromYaml).host (list "127.0.0.1" "localhost" "::1") }}true{{ end }}
 {{- end }}

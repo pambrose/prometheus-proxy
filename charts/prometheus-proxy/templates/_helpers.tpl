@@ -51,6 +51,7 @@ helm upgrade --reuse-values renders this chart with the values of the release it
 and 4.6.0's had no dashboard.host or dashboard.login, so reading dashboard.login failed the upgrade. The host is
 127.0.0.1 when the values have no such key; given as empty, it stays empty, leaving the address to
 proxy.dashboard.host in the config.
+The defaults repeat values.yaml's, so keep the two in step.
 */}}
 {{- define "prometheus-proxy.dashboard" -}}
 {{- $given := .Values.dashboard | default dict }}
@@ -64,12 +65,7 @@ login:
   key: {{ $login.key | default "password" | quote }}
 {{- end }}
 
-{{/* The dashboard's listen address (see prometheus-proxy.dashboard). */}}
-{{- define "prometheus-proxy.dashboardHost" -}}
-{{- (include "prometheus-proxy.dashboard" . | fromYaml).host }}
-{{- end }}
-
 {{/* Whether the dashboard listens only on the pod's loopback, which port-forward reaches and no other pod can. */}}
 {{- define "prometheus-proxy.dashboardIsLocal" -}}
-{{- if has (include "prometheus-proxy.dashboardHost" .) (list "127.0.0.1" "localhost" "::1") }}true{{ end }}
+{{- if has (include "prometheus-proxy.dashboard" . | fromYaml).host (list "127.0.0.1" "localhost" "::1") }}true{{ end }}
 {{- end }}

@@ -775,11 +775,6 @@ internal class AgentPathManager(
     require(url.isNotBlank()) { "Blank URL" }
 
     val path = pathVal.removePrefix("/")
-    // Each path is checked as it comes in: pathConfigs at startup, and a discovered one by DiscoveredPath.usable, which
-    // keeps a key, a discovered path or a reclaim's, from starting with a slash this would drop. A slash left here
-    // would be dropped again by the proxy, which would take the path under a key this agent never looks it up by
-    // (November 26 #11).
-    require(segmentProblem(path) == null) { "Path /${shownValue(path)} isn't one segment" }
     val labelsJson = labels.defaultEmptyJsonObject()
     val context = PathContext(0L, path, url, labelsJson, source, filtersByPath[path], target.source)
     registering[path] = NO_NOTICE
@@ -1178,8 +1173,9 @@ internal class AgentPathManager(
     // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
     val quotedName: String get() = "\"$name\""
 
-    // Mirrors DiscoveredPath.usable: doRegisterPath requires both, so an entry missing either can never register. A
-    // path of just "/" normalizes to "", so it is as unusable as a blank one.
+    // doRegisterPath requires both, so an entry missing either can never register, and is skipped, as discovery skips
+    // its own (DiscoveredPath.usable). A path of just "/" normalizes to "", so it is as unusable as a blank one. Unlike
+    // a discovered one, a path of more than one segment fails startup (see pathConfigs): a mistake, not a placeholder.
     val usable: Boolean get() = path.removePrefix("/").isNotBlank() && url.isNotBlank()
   }
 

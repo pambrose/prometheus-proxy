@@ -88,9 +88,10 @@ All notable changes to this project are documented in this file.
 - `startIfConfigured(onFailure)` guards its `onFailure` as it does the builder's handlers: one that throws is logged,
   and the start still returns null, where it threw out of the call
 - An agent refuses a path of more than one segment, such as `app/metrics` or `//metrics`, which the proxy refuses at
-  registration: a `pathConfigs` entry, a `source()` path, or `agent.metrics.proxyPath` fails the agent's startup,
-  naming it, where the proxy refused the path at each connect, and a discovery entry is skipped when the file is read,
-  as one without a path or a URL is
+  registration: a `pathConfigs` entry or `agent.metrics.proxyPath` fails the agent's startup, naming it, where the
+  proxy refused the path at each connect; the embedded builder's `path()`, `scrapeSelf()`, `source()`, and
+  `agentMetricsAt()` throw `ConfigLoadException` for one; and a discovery entry is skipped when the file is read, as
+  one without a path or a URL is
 - The dashboards' theme picker is one button in place of three, to take less of the top bar: it shows the theme in
   force, light, dark, or auto, and each click moves to the next, in that order; its tooltip names the theme in force
   and the next

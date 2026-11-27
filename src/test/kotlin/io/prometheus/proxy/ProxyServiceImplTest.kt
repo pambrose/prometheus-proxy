@@ -43,7 +43,6 @@ import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
-import io.mockk.CapturingSlot
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -122,16 +121,6 @@ class ProxyServiceImplTest : StringSpec() {
   // A tracked scrape sent to [owner], as a mocked ScrapeRequestManager returns it.
   private fun trackedScrape(owner: AgentContext = mockk(relaxed = true)): ScrapeRequestWrapper =
     mockk<ScrapeRequestWrapper>(relaxed = true).also { every { it.agentContext } returns owner }
-
-  // Has this relaxed mock hand back the transfer a stream opens for [scrapeId], as the real manager does, since only
-  // the stream that opened a transfer may extend or finish it (November 26 #1). Returns the slot holding what it
-  // opened.
-  private fun AgentContextManager.keepsTransferFor(scrapeId: Long): CapturingSlot<ChunkedContext> {
-    val opened = slot<ChunkedContext>()
-    every { putChunkedContext(scrapeId, capture(opened)) } returns true
-    every { getChunkedContext(scrapeId) } answers { if (opened.isCaptured) opened.captured else null }
-    return opened
-  }
 
   // A test that checks what really happens to a scrape or a chunked transfer passes real managers (or spies on them);
   // the rest get relaxed mocks.
@@ -1961,8 +1950,8 @@ class ProxyServiceImplTest : StringSpec() {
     }
 
     "writeChunkedResponsesToProxy should continue processing after NOT_SET message" {
-      val proxy = createMockProxy()
-      val contextManager = proxy.agentContextManager
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      val proxy = createMockProxy(agentContextManager = contextManager)
       val scrapeRequestManager = proxy.scrapeRequestManager
       val service = ProxyServiceImpl(proxy)
 
@@ -2003,10 +1992,6 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
 
-      // One context for the whole transfer, the one the header opened: the chunk is applied to it, then the summary
-      // reads it.
-      contextManager.keepsTransferFor(scrapeId)
-
       // NOT_SET message first, then a valid header-chunk-summary sequence
       val result = service.writeChunkedResponsesToProxy(flowOf(emptyResponse, header, chunk, summary))
 
@@ -2044,13 +2029,10 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeChunkedResponsesToProxy should clean up orphaned contexts on stream failure" {
       val counters = ChunkFailureCounters()
-      val proxy = createMockProxy(isRunning = true, metrics = counters.metrics)
-      val contextManager = proxy.agentContextManager
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      val proxy = createMockProxy(isRunning = true, metrics = counters.metrics, agentContextManager = contextManager)
       val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 400L
-
-      val chunkedContext = mockk<ChunkedContext>(relaxed = true)
-      every { contextManager.removeChunkedContext(scrapeId) } returns chunkedContext
 
       val header = chunkedScrapeResponse {
         header = headerData {
@@ -2077,7 +2059,8 @@ class ProxyServiceImplTest : StringSpec() {
       // Verify the header was stored
       verify { contextManager.putChunkedContext(scrapeId, any()) }
       // Verify the orphaned context was cleaned up
-      verify { contextManager.removeChunkedContext(scrapeId) }
+      verify { contextManager.removeChunkedContext(scrapeId, any()) }
+      contextManager.chunkedContextMapView.shouldBeEmpty()
       // Bug #4: Verify the waiting HTTP handler is notified via failScrapeRequest
       verify {
         scrapeRequestManager.failScrapeRequest(
@@ -2095,14 +2078,11 @@ class ProxyServiceImplTest : StringSpec() {
     }
 
     "writeChunkedResponsesToProxy should clean up multiple orphaned contexts on stream failure" {
-      val proxy = createMockProxy(isRunning = true)
-      val contextManager = proxy.agentContextManager
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      val proxy = createMockProxy(isRunning = true, agentContextManager = contextManager)
       val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId1 = 401L
       val scrapeId2 = 402L
-
-      every { contextManager.removeChunkedContext(scrapeId1) } returns mockk(relaxed = true)
-      every { contextManager.removeChunkedContext(scrapeId2) } returns mockk(relaxed = true)
 
       val header1 = chunkedScrapeResponse {
         header = headerData {
@@ -2139,8 +2119,9 @@ class ProxyServiceImplTest : StringSpec() {
       verify { contextManager.putChunkedContext(scrapeId1, any()) }
       verify { contextManager.putChunkedContext(scrapeId2, any()) }
       // Both orphaned contexts should be cleaned up
-      verify { contextManager.removeChunkedContext(scrapeId1) }
-      verify { contextManager.removeChunkedContext(scrapeId2) }
+      verify { contextManager.removeChunkedContext(scrapeId1, any()) }
+      verify { contextManager.removeChunkedContext(scrapeId2, any()) }
+      contextManager.chunkedContextMapView.shouldBeEmpty()
       // Bug #4: Both orphaned scrape requests should be failed
       verify {
         scrapeRequestManager.failScrapeRequest(
@@ -2163,8 +2144,8 @@ class ProxyServiceImplTest : StringSpec() {
     }
 
     "writeChunkedResponsesToProxy should not clean up completed contexts on stream failure" {
-      val proxy = createMockProxy(isRunning = true)
-      val contextManager = proxy.agentContextManager
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      val proxy = createMockProxy(isRunning = true, agentContextManager = contextManager)
       val scrapeRequestManager = proxy.scrapeRequestManager
       val completedScrapeId = 403L
       val orphanedScrapeId = 404L
@@ -2172,10 +2153,6 @@ class ProxyServiceImplTest : StringSpec() {
       val data = "test data".toByteArray()
       val crc = CRC32()
       crc.update(data)
-
-      // The completed transfer's context, which its header opens, its chunk is applied to, and its summary then removes
-      val completed = contextManager.keepsTransferFor(completedScrapeId)
-      every { contextManager.removeChunkedContext(orphanedScrapeId) } returns mockk(relaxed = true)
 
       val header1 = chunkedScrapeResponse {
         header = headerData {
@@ -2231,11 +2208,10 @@ class ProxyServiceImplTest : StringSpec() {
       result shouldBe EMPTY_INSTANCE
 
       // Completed context was removed by summary processing (assignScrapeResults called), and not again by the sweep
-      verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId, completed.captured) }
-      verify(exactly = 0) { contextManager.removeChunkedContext(completedScrapeId) }
+      verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId, any()) }
       verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any(), any()) }
       // Orphaned context should be cleaned up and failed during cleanup phase
-      verify { contextManager.removeChunkedContext(orphanedScrapeId) }
+      verify { contextManager.removeChunkedContext(orphanedScrapeId, any()) }
       // Bug #4: Only the orphaned scrape should be failed, not the completed one
       verify {
         scrapeRequestManager.failScrapeRequest(
@@ -2254,8 +2230,8 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeChunkedResponsesToProxy should notify handler on chunk validation failure" {
       val counters = ChunkFailureCounters()
-      val proxy = createMockProxy(metrics = counters.metrics)
-      val contextManager = proxy.agentContextManager
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      val proxy = createMockProxy(metrics = counters.metrics, agentContextManager = contextManager)
       val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 500L
 
@@ -2284,12 +2260,8 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
 
-      // The real ChunkedContext the header opens, so applyChunk() actually validates
-      val opened = contextManager.keepsTransferFor(scrapeId)
-
       val service = ProxyServiceImpl(proxy)
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk))
-      val context = opened.captured
 
       result shouldBe EMPTY_INSTANCE
 
@@ -2298,7 +2270,8 @@ class ProxyServiceImplTest : StringSpec() {
         scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Chunk") }, ProxyFailure.INVALID_RESPONSE)
       }
       // The context the chunk failed on should have been cleaned up
-      verify { contextManager.removeChunkedContext(scrapeId, context) }
+      verify { contextManager.removeChunkedContext(scrapeId, any()) }
+      contextManager.chunkedContextMapView.shouldBeEmpty()
       // Counted at the chunk stage only: the failed transfer is not also counted as abandoned at stream end.
       verify(exactly = 1) { counters.chunkStage.inc() }
       verify(exactly = 0) { counters.summaryStage.inc() }
@@ -2307,8 +2280,8 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeChunkedResponsesToProxy should notify handler on summary validation failure" {
       val counters = ChunkFailureCounters()
-      val proxy = createMockProxy(metrics = counters.metrics)
-      val contextManager = proxy.agentContextManager
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      val proxy = createMockProxy(metrics = counters.metrics, agentContextManager = contextManager)
       val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 501L
 
@@ -2346,9 +2319,6 @@ class ProxyServiceImplTest : StringSpec() {
           summaryChecksum = 99999L // Wrong checksum
         }
       }
-
-      // The real ChunkedContext the header opens, which the chunk is applied to, so applySummary() validates
-      contextManager.keepsTransferFor(scrapeId)
 
       val service = ProxyServiceImpl(proxy)
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk, summary))
@@ -2694,36 +2664,9 @@ class ProxyServiceImplTest : StringSpec() {
 
       fun chunkAndSummary(text: String): List<ChunkedScrapeResponse> {
         val data = text.toByteArray()
-        val crc = CRC32().apply { update(data) }
-        return [
-          chunkedScrapeResponse {
-            chunk = chunkData {
-              chunkScrapeId = scrape.scrapeId
-              chunkCount = 1
-              chunkByteCount = data.size
-              chunkChecksum = crc.value
-              chunkBytes = ByteString.copyFrom(data)
-            }
-          },
-          chunkedScrapeResponse {
-            summary = summaryData {
-              summaryScrapeId = scrape.scrapeId
-              summaryChunkCount = 1
-              summaryByteCount = data.size
-              summaryChecksum = crc.value
-            }
-          },
-        ]
+        return [chunkFor(scrape.scrapeId, data), summaryFor(scrape.scrapeId, data)]
       }
-      val header = chunkedScrapeResponse {
-        header = headerData {
-          headerValidResponse = true
-          headerScrapeId = scrape.scrapeId
-          headerAgentId = owner.agentId
-          headerStatusCode = 200
-          headerContentType = "text/plain"
-        }
-      }
+      val header = chunkedHeaderFrom(owner.agentId, scrape.scrapeId)
       val opened = CompletableDeferred<Unit>()
       val resume = CompletableDeferred<Unit>()
 

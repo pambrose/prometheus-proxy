@@ -29,7 +29,7 @@ It is unauthenticated (set dashboard.login.existingSecret to require a login). R
   kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-agent.fullname" . }} {{ $dashboard.port }}
 then open http://localhost:{{ $dashboard.port }}/dashboard
 {{- if not (include "prometheus-agent.dashboardIsLocal" .) }}
-{{- with include "prometheus-agent.dashboardHost" . }}
+{{- with $dashboard.host }}
 
 WARNING: dashboard.host is {{ . }}, not the pod's loopback, so any pod in the cluster can open
 the agent's dashboard at the pod's address. Set dashboard.host to 127.0.0.1 unless a Service of your own
