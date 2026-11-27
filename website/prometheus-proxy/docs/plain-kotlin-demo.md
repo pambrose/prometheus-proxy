@@ -217,6 +217,12 @@ them at once, and Prometheus, which reads it every 5 seconds, scrapes each new o
 change to its config. The three clear the backlog in about two minutes. The screens page shows the new ovens' paths
 join the proxy dashboard's Paths view beside Grafana: <http://localhost:8694/screens#proxy/paths+grafana>
 
+<figure markdown="span">
+  ![Three ovens' paths in the proxy's Paths view beside Grafana, as they clear a rush's backlog](images/plain-kotlin-demo/screens.webp#only-dark){ loading=lazy }
+  ![Three ovens' paths in the proxy's Paths view beside Grafana, as they clear a rush's backlog](images/plain-kotlin-demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The proxy's screens page: three ovens' paths beside the Bakery dashboard, as they clear the backlog</figcaption>
+</figure>
+
 `./demo.sh scale 1` stops the other two with SIGTERM, as a scale-in on Kubernetes or ECS does, and shows each one's
 log:
 

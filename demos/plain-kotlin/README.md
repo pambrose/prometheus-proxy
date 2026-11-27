@@ -310,8 +310,9 @@ and frees its resources.
 | `config/proxy.conf` | The proxy's dashboard and its screens page's screens, metrics, and service discovery; its token comes from the environment |
 | `prometheus/prometheus.yml` | One job from the proxy's service discovery, with the agents' metrics as a job of their own, and the proxy's own metrics |
 | `grafana/` | The provisioned datasource, dashboard folder, and Bakery dashboard |
-| `Makefile` | The demo's targets: `make up`, `make up-local`, `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists |
+| `Makefile` | The demo's targets: `make up`, `make up-local`, `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the newest release that lacks something the demo shows: until the release the docs give is later and its images are on Docker Hub, `make up` builds from this checkout, as `make up-local` does, so set it to the latest release on Docker Hub when the demo comes to use something no release has yet |
+| `bin/screenshots.sh` | The Plain Kotlin Demo page's screenshot of the proxy's screens page, in the dark and light themes. `make screenshots` builds and starts the demo, waits three minutes so Grafana's graphs have some history, plays part 3 of the tour, a rush and two more ovens, which it leaves to clear the backlog before it goes back to one, and writes the shot to `website/prometheus-proxy/docs/images/plain-kotlin-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_HISTORY_WAIT=1` skips the wait, and `WAIT_SECS` sets how long each wait for the scene may take before the script fails (default 150) |
 
 From the repository root, `make check-rules` validates the Prometheus config with promtool, `ConfigFileKeysTest` checks
 every key in `config/proxy.conf` against `config/config.conf`, and CI builds the oven against the checkout

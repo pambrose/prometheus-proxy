@@ -212,7 +212,8 @@ own dashboard stops: <http://localhost:8494/screens#proxy+agent>
 | `docker/compose.yml` | The services above, with the agent's dashboard turned on in the roastery's environment, and each screen's address in the proxy's. |
 | `prometheus/prometheus.yml` | Prometheus's scrape config. |
 | `demo.sh` | Starts and stops the demo, runs its scenarios, and the tour. |
-| `Makefile` | `make up`, `up-local`, `down`, `status`, `open`, `logs`, and `tour`, which run `demo.sh`. |
+| `Makefile` | `make up`, `up-local`, `down`, `status`, `open`, `logs`, and `tour`, which run `demo.sh`, and `screenshots`, which runs `bin/screenshots.sh`. |
+| `bin/screenshots.sh` | The Spring Boot Demo page's screenshot of the proxy's screens page, the proxy's dashboard beside the agent's, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agent's uptime reads in minutes, and writes it to `website/prometheus-proxy/docs/images/spring-boot-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). It's for maintaining the site, so `make help` leaves it out. While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, and `WAIT_SECS` sets how long each wait for the scene may take before the script fails (default 150). |
 
 ## The Other Demos
 
