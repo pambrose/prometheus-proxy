@@ -37,6 +37,7 @@ import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
+import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -53,6 +54,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
@@ -1627,7 +1629,7 @@ class ProxyPathManagerTest : StringSpec() {
       line("Added path /metrics for agentId ${first.agentId}")
       line("Added path /metrics for agentId ${second.agentId}")
       line("Overwriting path /metrics") shouldContain first.agentId
-      line("Invalidating orphaned") shouldContain first.agentId
+      line("Removing orphaned") shouldContain first.agentId
       line("Removed path /metrics") shouldContain second.agentId
       for (marker in ["FIRST-NAME", "SECOND-HOST", "LABELS-MARKER"]) {
         messages.filter { marker in it }.shouldBeEmpty()
@@ -2036,7 +2038,7 @@ class ProxyPathManagerTest : StringSpec() {
       val line = messages.single { it.startsWith("agentId ${oldAgent.agentId} ") }
       line shouldContain "agentId ${newAgent.agentId}"
       line shouldContain "consolidated"
-      messages.filter { it.startsWith("Invalidating orphaned") }.shouldBeEmpty()
+      messages.filter { it.startsWith("Removing orphaned") }.shouldBeEmpty()
       messages.filter { "OLD-NAME" in it || "NEW-NAME" in it }.shouldBeEmpty()
     }
 
@@ -2595,6 +2597,177 @@ class ProxyPathManagerTest : StringSpec() {
       verify(exactly = 2) { history.forgetDeparture("shared_metrics") }
       verify(exactly = 1) {
         history.recordDeparture("shared_metrics", match { it.agentContexts.single().agentId == second.agentId })
+      }
+    }
+
+    // ==================== Agents that are gone, and contexts left behind ====================
+
+    // removeAgentContext invalidates a context before it sweeps its paths, so a registration can come in between. On a
+    // consolidated path whose agents were all gone, another identity's agent, or a redeploy with new labels, joined as
+    // one more agent: the gone agent stayed first, so scrapes still went to it and the path showed its target, and the
+    // path kept the gone agent's labels, which outlived its sweep. A registration now takes the gone agents off first.
+    "an agent joining a consolidated path whose agents are gone should drop them and serve its own labels" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val gone = createAgentContext(consolidated = true)
+      val newcomer = createAgentContext(consolidated = true)
+
+      manager.addPath("metrics", """{"team":"a"}""", gone, PathMetadata("http://a", "", "team_a")).shouldBeNull()
+      gone.invalidate()
+      manager.addPath("metrics", """{"team":"b"}""", newcomer, PathMetadata("http://b", "", "team_b")).shouldBeNull()
+
+      manager.getAgentContextInfo("metrics").shouldNotBeNull().apply {
+        agentContexts shouldBe listOf(newcomer)
+        identityName shouldBe "team_b"
+        labels shouldBe JsonObject(mapOf("team" to JsonPrimitive("b")))
+        sdLabels shouldBe labels
+        targetUrl shouldBe "http://b"
+        agentTargets.keys shouldBe setOf(newcomer.agentId)
+      }
+      manager.pathCountFor(gone.agentId) shouldBe 0
+      manager.identityPathCountFor("team_a") shouldBe 0
+      manager.pathCountFor(newcomer.agentId) shouldBe 1
+
+      // The gone agent's sweep, when it comes, finds the path no longer its own.
+      manager.removeFromPathManager(gone.agentId, RemovalReason.TERMINATION) shouldBe 0
+      manager.getAgentContextInfo("metrics").shouldNotBeNull().labels shouldBe
+        JsonObject(mapOf("team" to JsonPrimitive("b")))
+    }
+
+    // The agents still serving the path keep it as it was, with its first registrant's labels; only the gone ones go.
+    "an agent joining a consolidated path should drop the agents that are gone and keep those still serving it" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val live = createAgentContext(consolidated = true)
+      val gone = createAgentContext(consolidated = true)
+      val newcomer = createAgentContext(consolidated = true)
+      manager.addPath("metrics", """{"team":"a"}""", live, PathMetadata("http://live", "", "team_a")).shouldBeNull()
+      manager.addPath("metrics", """{"team":"a"}""", gone, PathMetadata("http://gone", "", "team_a")).shouldBeNull()
+
+      gone.invalidate()
+      manager.addPath("metrics", """{"team":"x"}""", newcomer, PathMetadata("http://new", "", "team_a")).shouldBeNull()
+
+      manager.getAgentContextInfo("metrics").shouldNotBeNull().apply {
+        agentContexts shouldBe listOf(live, newcomer)
+        labels shouldBe JsonObject(mapOf("team" to JsonPrimitive("a")))
+        targetUrl shouldBe "http://live"
+        agentTargets.keys shouldBe setOf(live.agentId, newcomer.agentId)
+      }
+      manager.pathCountFor(gone.agentId) shouldBe 0
+      manager.identityPathCountFor("team_a") shouldBe 2
+    }
+
+    // An orphaned context of the agent's own launch was only invalidated: it stayed in the context manager, and a
+    // scrape it had already been sent, or a chunked transfer it had begun, waited for its eviction or its timeout. The
+    // registration that orphans it now removes it, as a disconnect would, once it has let go of the path map, since the
+    // removal sweeps the context's paths under it.
+    "a registration that orphans a context of its own launch should remove it, outside the path map's lock" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val oldAgent = launched("remote-old", "launch-1")
+      val newAgent = launched("remote-new", "launch-1")
+      // Whether another thread could read the path map while the orphan was removed.
+      var lockFree = false
+      every { proxy.removeAgentContextIfCurrent(oldAgent, RemovalReason.REPLACED) } answers {
+        val reader = Thread { manager.pathMapSize }.apply { start() }
+        reader.join(5_000)
+        lockFree = !reader.isAlive
+        true
+      }
+
+      manager.addPath("metrics", "{}", oldAgent).shouldBeNull()
+      manager.addPath("metrics", "{}", newAgent).shouldBeNull()
+
+      oldAgent.isValid().shouldBeFalse()
+      verify(exactly = 1) { proxy.removeAgentContextIfCurrent(oldAgent, RemovalReason.REPLACED) }
+      lockFree.shouldBeTrue()
+    }
+
+    // A displaced agent of another launch keeps its connection, and one with paths left isn't orphaned.
+    "a registration should remove no displaced context but an orphan of its own launch" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val otherLaunch = launched("remote-other", "launch-other")
+      val busy = launched("remote-busy", "launch-1")
+      val newAgent = launched("remote-new", "launch-1")
+      manager.addPath("a_metrics", "{}", otherLaunch).shouldBeNull()
+      manager.addPath("b_metrics", "{}", busy).shouldBeNull()
+      manager.addPath("c_metrics", "{}", busy).shouldBeNull()
+
+      manager.addPath("a_metrics", "{}", newAgent).shouldBeNull()
+      manager.addPath("b_metrics", "{}", newAgent).shouldBeNull()
+
+      verify(exactly = 0) { proxy.removeAgentContextIfCurrent(any(), any()) }
+      otherLaunch.isValid().shouldBeTrue()
+      busy.isValid().shouldBeTrue()
+    }
+
+    // ==================== A disconnect's sweep ====================
+
+    // The transport filter makes a context for every connection to the agent port, a port scanner's and a bad token's
+    // included, and removes it as the connection closes. Each removal scanned every entry of the path map twice under
+    // its lock, for the paths the agent served and those it waited on, though it served and waited on none, stalling
+    // every scrape's lookup on a proxy with many paths.
+    "removing an agent that serves no path and waits on none should not scan the path map" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val contexts = (1..20).map { createMockAgentContext() }
+      contexts.forEachIndexed { i, context -> manager.addPath("p$i", "{}", context).shouldBeNull() }
+      clearMocks(
+        contexts.first(),
+        *contexts.drop(1).toTypedArray(),
+        answers = false,
+        recordedCalls = true,
+        childMocks = false,
+        verificationMarks = false,
+        exclusionRules = false,
+      )
+
+      manager.removeFromPathManager("never-registered", RemovalReason.TERMINATION) shouldBe 0
+
+      contexts.forEach { verify(exactly = 0) { it.agentId } }
+      manager.pathMapSize shouldBe 20
+    }
+
+    // An agent waiting on paths is taken off those paths' waiting lists alone, which the manager indexes by agent. The
+    // index changes with every waiting list, so it must name exactly the paths each agent waits on, whatever happens to
+    // the paths: takeovers, refused reclaims, unregisters, and disconnects, in any order.
+    "the paths each agent waits on should always be the paths whose waiting lists name it" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val random = Random(seed = 26)
+      val paths = (1..4).map { "p$it" }
+      val agents = (1..6).map { noticed("launch-$it") }.toMutableList()
+
+      fun checkIndex() {
+        val infos = manager.allPathContextInfos()
+        agents.forEach { agent ->
+          val waitedOn = infos.filterValues { info -> info.waiting.any { it.agentId == agent.agentId } }.keys
+          withClue(agent.agentId) { manager.waitedPathsOf(agent.agentId) shouldBe waitedOn }
+        }
+      }
+
+      repeat(400) { step ->
+        val agent = agents.random(random)
+        val path = paths.random(random)
+        when (random.nextInt(6)) {
+          0, 1 -> {
+            manager.addPath(path, "{}", agent)
+          }
+
+          2 -> {
+            manager.addPath(path, "{}", agent, reclaim)
+          }
+
+          3 -> {
+            manager.removePath(path, agent.agentId)
+          }
+
+          else -> {
+            agent.invalidate()
+            manager.removeFromPathManager(agent.agentId, RemovalReason.TERMINATION)
+            manager.waitedPathsOf(agent.agentId).shouldBeEmpty()
+            // Its agent reconnects, as a connection of the same launch.
+            agents[agents.indexOf(agent)] = noticed(agent.launchId)
+          }
+        }
+        withClue("step $step") { checkIndex() }
       }
     }
   }

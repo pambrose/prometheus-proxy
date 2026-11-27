@@ -24,6 +24,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -95,6 +96,31 @@ class AgentAuthManagerTest : StringSpec() {
       val identity = identity("app.v1")
       identity.isAuthorized("app.v1").shouldBeTrue()
       identity.isAuthorized("appxv1").shouldBeFalse()
+    }
+
+    // A path loses one leading slash before its globs see it, but a configured glob kept its own, so "/team_a_*",
+    // written as agent paths and the denial log write them, loaded without a word and refused every path. A glob loses
+    // one leading slash too, as a path does.
+    "a configured pattern with a leading slash matches a path with or without one" {
+      val identity = AgentAuthManager.create([AuthEntry("team_a", "tok_a", ["/team_a_*"])], "").resolveToken("tok_a")
+
+      identity.shouldNotBeNull().isAuthorized("team_a_metrics").shouldBeTrue()
+      identity.isAuthorized("/team_a_metrics").shouldBeTrue()
+      identity.isAuthorized("team_b_metrics").shouldBeFalse()
+    }
+
+    // A path the proxy accepts has no '/' once its leading one is gone (AgentValues.segmentProblem), so a pattern with
+    // one left can't match any, as the agent's own path with one left fails its startup.
+    "a configured pattern with a slash after its leading one fails startup, naming it" {
+      listOf("//team_a_*", "team_a/*", "/team_a/metrics").forEach { glob ->
+        val message =
+          shouldThrow<IllegalArgumentException> {
+            AgentAuthManager.create([AuthEntry("team_a", "tok_a", ["ok_*", glob])], "")
+          }.message
+        message shouldBe
+          "proxy.auth identity 'team_a' has path pattern '$glob', which no path can match: a path is one segment, " +
+          "with no '/' after its leading one"
+      }
     }
 
     "multiple patterns authorize a path matching any of them" {
@@ -294,6 +320,21 @@ class AgentAuthManagerTest : StringSpec() {
       val message =
         shouldThrow<ConfigLoadException> { failOnInvalidConfig(embedded = true) { AgentAuthManager(proxy) } }.message
       message shouldBe "Invalid configuration: $reservedNameMessage"
+    }
+
+    "a pattern no path can match in a config file fails startup as an invalid configuration" {
+      val fileOptions =
+        proxyOptionsFromConfig("""proxy.auth = [{ name = "team_a", token = "tok", paths = ["//team_a_*"] }]""")
+      val proxy =
+        mockk<Proxy> {
+          every { proxyConfigVals } returns fileOptions.configVals.proxy
+          every { options } returns fileOptions
+        }
+      val message =
+        shouldThrow<ConfigLoadException> { failOnInvalidConfig(embedded = true) { AgentAuthManager(proxy) } }.message
+      message shouldBe
+        "Invalid configuration: proxy.auth identity 'team_a' has path pattern '//team_a_*', which no path can match: " +
+        "a path is one segment, with no '/' after its leading one"
     }
 
     // resolveToken() takes the first digest match, so two identities sharing a token silently

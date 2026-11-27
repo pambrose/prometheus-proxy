@@ -63,14 +63,15 @@ internal class AgentContextCleanupService(
         if (inactiveTime > maxAgentInactivityTime) {
           // A connection that never authenticated isn't an agent, so closing it is logged at DEBUG and isn't counted
           // as an eviction (October #4).
-          val announced = agentContext.announced
           val message =
             "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
-          if (announced) logger.info { message } else logger.debug { message }
+          if (agentContext.announced) logger.info { message } else logger.debug { message }
           // Counted only when this removed it: the transport filter, or the agent's stream ending, can remove the same
-          // context in between, and that removal is a disconnect, not an eviction.
-          val evicted = proxy.removeAgentContext(agentId, RemovalReason.EVICTION) != null
-          if (announced && evicted)
+          // context in between, and that removal is a disconnect, not an eviction. Whether it was announced is read
+          // from the context removed, which its removal fixed: read before, it could be announced in between, and the
+          // removal then counted a disconnect by eviction that this didn't count as one.
+          val evicted = proxy.removeAgentContext(agentId, RemovalReason.EVICTION)
+          if (evicted?.announced == true)
             proxy.metrics { agentEvictionCount.inc() }
         } else {
           logger.debug {

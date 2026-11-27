@@ -66,6 +66,7 @@ import kotlin.time.Duration.Companion.seconds
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.maps.shouldBeEmpty
 
+@Suppress("LargeClass")
 class ProxyTest : StringSpec() {
   private fun createTestProxy(vararg extraArgs: String) =
     Proxy(
@@ -598,7 +599,7 @@ class ProxyTest : StringSpec() {
       RemovalReason.entries.associate {
         it.metricLabel to counts.agentDisconnects.labelValues(it.metricLabel).get()
       } shouldBe
-        mapOf("eviction" to 1.0, "termination" to 1.0, "stream_terminated" to 1.0)
+        mapOf("eviction" to 1.0, "termination" to 1.0, "stream_terminated" to 1.0, "replaced" to 1.0)
     }
 
     // An eviction is the agent going quiet, the problem the feed exists to show; a closed connection is an agent
@@ -625,6 +626,44 @@ class ProxyTest : StringSpec() {
       }
       leave(RemovalReason.STREAM_TERMINATED).detail shouldBe
         "Stream terminated (transport filter disabled); released 1 path"
+      leave(RemovalReason.REPLACED).detail shouldBe "Replaced by a newer connection of the same agent; released 1 path"
+    }
+
+    // A registration that takes a path from a stale connection of its own agent, the agent having reconnected before
+    // the proxy saw the old connection close, orphans it. The orphan was only invalidated: a scrape it had already been
+    // sent hung until the orphan was evicted or the scrape timed out, a chunked transfer it had begun stayed buffered,
+    // and it stayed in the context manager, to be counted as an eviction later. It is removed at once now, as a
+    // connection its agent replaced.
+    "a context orphaned by a registration of its own launch should be removed at once, failing its scrapes" {
+      val proxy = createTestProxy("--dashboard")
+
+      fun connect(remote: String) =
+        AgentContext(remote).apply {
+          assignProperties(
+            registerAgentRequest {
+              agentName = "agent-east"
+              launchId = "launch-east"
+            },
+          )
+          proxy.agentContextManager.addAgentContext(this)
+        }
+
+      val stale = connect("stale-remote")
+      val current = connect("current-remote")
+      proxy.pathManager.addPath("metrics", "", stale).shouldBeNull()
+      // Sent to the stale connection and read off its queue, so only removing it can fail the scrape.
+      val scrape = ScrapeRequestWrapper(stale, "metrics", "", "", null, false)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE).shouldBeTrue()
+
+      proxy.pathManager.addPath("metrics", "", current).shouldBeNull()
+
+      proxy.agentContextManager.getAgentContext(stale.agentId).shouldBeNull()
+      proxy.agentContextManager.getAgentContext(current.agentId).shouldNotBeNull()
+      scrape.proxyFailure shouldBe ProxyFailure.AGENT_DISCONNECTED
+      proxy.activityLog.shouldNotBeNull().entries().first().apply {
+        kind shouldBe ActivityKind.AGENT_DISCONNECTED
+        detail shouldBe "Replaced by a newer connection of the same agent; released 0 paths"
+      }
     }
 
     // A connection that closed before it authenticated was never shown as connected, so it mustn't be shown leaving.

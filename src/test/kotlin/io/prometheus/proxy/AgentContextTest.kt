@@ -238,6 +238,34 @@ class AgentContextTest : StringSpec() {
       context.isNotValid().shouldBeTrue()
     }
 
+    // ProxyServerInterceptor announces a context on its first authenticated call, while transportTerminated or the
+    // cleanup service may be removing it. Validity and the announcement were two flags: an announcement that checked
+    // validity just before the removal invalidated the context still marked it announced just after, so the removal,
+    // having read it unannounced, emitted no AgentDisconnected for the AgentConnected that followed, and the cleanup
+    // service and the removal disagreed on whether to count the eviction. They are one state now, so a context
+    // invalidated unannounced stays so.
+    "a context invalidated before it was announced should never be announced" {
+      val context = AgentContext("remote-addr")
+
+      context.invalidate()
+
+      context.markAnnounced().shouldBeFalse()
+      context.announced.shouldBeFalse()
+    }
+
+    "a context announced before it was invalidated should be announced once, and stay announced" {
+      val context = AgentContext("remote-addr")
+
+      context.markAnnounced().shouldBeTrue()
+      context.markAnnounced().shouldBeFalse()
+      context.invalidate()
+      context.invalidate()
+
+      context.announced.shouldBeTrue()
+      context.isValid().shouldBeFalse()
+      context.markAnnounced().shouldBeFalse()
+    }
+
     // M3: invalidate() now drains buffered scrape requests and fails each with an agent-disconnected result,
     // so HTTP handlers waiting on awaitCompleted() are notified immediately instead of
     // waiting for the full scrape timeout to expire.

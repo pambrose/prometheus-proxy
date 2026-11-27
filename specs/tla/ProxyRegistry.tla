@@ -8,7 +8,9 @@
 (*                           invalidate() and its drain                    *)
 (*   ProxyPathManager     -- addPath (after registerPath's out-of-lock     *)
 (*                           lookup, addValidatedPath's                    *)
-(*                           synchronized(pathMap) block), removePath,     *)
+(*                           synchronized(pathMap) block, and its removal  *)
+(*                           of the contexts it orphaned, once it lets go  *)
+(*                           of the lock), removePath,                     *)
 (*                           removeFromPathManager                         *)
 (*   ScrapeRequestManager -- tracked scrapes, the ownership check on the   *)
 (*                           lookup that completes, CAS completion        *)
@@ -55,11 +57,16 @@ CONSTANTS
                     \* only as a reclaim; FALSE models agents and proxies predating notices
     CheckHolder,    \* FALSE drops the proxy's refusal of a reclaim while a live agent of another launch holds the
                     \* path, as a proxy predating the flag ignores it, to see TLC catch the reclaim displacing it
-    KeepTold        \* FALSE has the agent forget its taken-over paths as it reconnects, as before it kept them, to see
+    KeepTold,       \* FALSE has the agent forget its taken-over paths as it reconnects, as before it kept them, to see
                     \* TLC catch the reconnect registering one the usual way
+    DropGone,       \* FALSE has a consolidated registration join the path's agents that are gone, as before November 26
+                    \* #2's fix, to see TLC catch the path keeping a gone agent's labels under another identity
+    RemoveOrphans   \* FALSE leaves a context a registration orphans invalidated but registered, as before November 26
+                    \* #3's fix, to see TLC catch a scrape it was sent waiting on an agent that has left it
 
 ASSUME UseTimeout \in BOOLEAN /\ CheckOwnership \in BOOLEAN /\ SameLookup \in BOOLEAN /\ StreamSameLookup \in BOOLEAN
 ASSUME UseReclaim \in BOOLEAN /\ CheckHolder \in BOOLEAN /\ KeepTold \in BOOLEAN
+ASSUME DropGone \in BOOLEAN /\ RemoveOrphans \in BOOLEAN
 ASSUME Modes \subseteq BOOLEAN /\ Modes # {}
 
 VARIABLES
@@ -80,8 +87,10 @@ VARIABLES
 
     \* ProxyPathManager
     regPending,     \* SUBSET (Conns \X Paths): registerPath past its out-of-lock lookup
-    pathMap,        \* [Paths -> [consolidated, identity, ctxs]]; ctxs = {} means absent
+    pathMap,        \* [Paths -> [consolidated, identity, labels, ctxs]]; ctxs = {} means absent. labels is the identity
+                    \* of the agent whose registration the entry's labels came from
     pathCount,      \* [Conns -> Nat]: pathCounts
+    orphaned,       \* SUBSET Conns: contexts a registration orphaned, which addPath removes once it lets go of the lock
 
     \* HTTP handlers and ScrapeRequestManager
     hstate,         \* [Scrapes -> {"idle","picked","tracked","enqueued","awaiting","done"}]
@@ -104,13 +113,15 @@ VARIABLES
     regReclaim      \* SUBSET (Conns \X Paths): the registrations in regPending sent as reclaims
 
 connVars  == <<phase, inMgr, valid, draining, queue, tokens, reading, agentHas>>
-pathVars  == <<regPending, pathMap, pathCount>>
+pathVars  == <<regPending, pathMap, pathCount, orphaned>>
 scrapeVars == <<hstate, target, tracked, result, completedBy, checked>>
 streamVars == <<rsPhase, rsOf>>
 noticeVars == <<notices, told, heard, regReclaim>>
 vars == <<ident, consol, launch, connVars, pathVars, scrapeVars, streamVars, noticeVars>>
 
-Absent == [consolidated |-> FALSE, identity |-> CHOOSE i \in Identities : TRUE, ctxs |-> {}]
+AnyIdentity == CHOOSE i \in Identities : TRUE
+
+Absent == [consolidated |-> FALSE, identity |-> AnyIdentity, labels |-> AnyIdentity, ctxs |-> {}]
 
 -----------------------------------------------------------------------------
 (* Helpers *)
@@ -174,7 +185,7 @@ SweepPaths(c) ==
                     ELSE pathMap[p]]
     /\ pathCount' = [pathCount EXCEPT ![c] = 0]
     /\ UNCHANGED <<ident, consol, launch, streamVars, inMgr, valid, draining, queue, tokens, reading, agentHas, regPending,
-                   scrapeVars, noticeVars>>
+                   orphaned, scrapeVars, noticeVars>>
 
 \* removeAgentContext step 3: failAllScrapeRequests for the agent's tracked scrapes.
 FailScrapes(c) ==
@@ -211,7 +222,8 @@ RegisterStart(c, p) ==
     /\ <<c, p>> \notin regPending
     /\ regPending' = regPending \cup {<<c, p>>}
     /\ regReclaim' = IF UseReclaim /\ p \in told[launch[c]] THEN regReclaim \cup {<<c, p>>} ELSE regReclaim
-    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathMap, pathCount, scrapeVars, notices, told, heard>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathMap, pathCount, orphaned, scrapeVars, notices, told,
+                   heard>>
 
 \* The agent's reclaim loop tries a taken-over path again, as a reclaim, until the proxy accepts it.
 Reclaim(c, p) ==
@@ -239,24 +251,32 @@ RegisterLocked(c, p) ==
            \* registration of its own launch, on another connection, may have taken the path back after the reclaim
            \* started, and lost it again.
            toldAgain == valid[c] /\ ~conflict /\ heldOff
+           \* withoutGoneAgents: a consolidated registration takes the path's agents that are gone, invalidated but not
+           \* yet swept, off the path and their counts first, and the path starts afresh, with the registering agent's
+           \* labels, when none is left. Joined as they were, they kept the path's labels, another identity's perhaps.
+           gone == IF consol[c] /\ DropGone THEN {o \in others : ~valid[o]} ELSE {}
+           kept == e.ctxs \ gone
            \* A displaced agent left with no paths is invalidated inside the lock when it is a stale connection of the
-           \* registering agent's launch. One of another launch stays connected without paths: invalidating it only
-           \* made it reconnect and displace the registering agent in turn.
+           \* registering agent's launch, an orphan, and removed once the lock is let go of (RemoveOrphan). One of
+           \* another launch stays connected without paths: invalidating it only made it reconnect and displace the
+           \* registering agent in turn.
            newCount == [x \in Conns |->
                           IF x = c THEN IF already THEN pathCount[x] ELSE pathCount[x] + 1
-                          ELSE IF ~consol[c] /\ x \in others THEN pathCount[x] - 1
+                          ELSE IF (~consol[c] /\ x \in others) \/ x \in gone THEN pathCount[x] - 1
                           ELSE pathCount[x]]
            orphans == IF consol[c] THEN {} ELSE {o \in others : newCount[o] = 0 /\ valid[o] /\ launch[o] = launch[c]}
            \* takeOverPath tells each displaced agent of another launch, which stays connected, that the path is taken.
            tellees == IF UseReclaim /\ ~consol[c] THEN {o \in others : valid[o] /\ launch[o] # launch[c]} ELSE {}
        IN IF rejected
           THEN /\ notices' = IF toldAgain THEN [notices EXCEPT ![c] = @ \cup {p}] ELSE notices
-               /\ UNCHANGED <<connVars, pathMap, pathCount, told, heard>>
+               /\ UNCHANGED <<connVars, pathMap, pathCount, orphaned, told, heard>>
           ELSE /\ pathMap' = [pathMap EXCEPT ![p] =
                                 [consolidated |-> consol[c],
                                  identity     |-> ident[c],
-                                 ctxs         |-> IF consol[c] THEN e.ctxs \cup {c} ELSE {c}]]
+                                 labels       |-> IF consol[c] /\ kept # {} THEN e.labels ELSE ident[c],
+                                 ctxs         |-> IF consol[c] THEN kept \cup {c} ELSE {c}]]
                /\ pathCount' = newCount
+               /\ orphaned' = IF RemoveOrphans THEN orphaned \cup orphans ELSE orphaned
                /\ valid' = [x \in Conns |-> IF x \in orphans THEN FALSE ELSE valid[x]]
                /\ draining' = [x \in Conns |-> IF x \in orphans THEN TRUE ELSE draining[x]]
                \* The registering agent forgets an unread notice about the path (forgetPathNotice), and, as the proxy's
@@ -279,7 +299,20 @@ Unregister(c, p) ==
     /\ c \in pathMap[p].ctxs
     /\ pathMap' = [pathMap EXCEPT ![p] = IF @.ctxs = {c} THEN Absent ELSE [@ EXCEPT !.ctxs = @ \ {c}]]
     /\ pathCount' = [pathCount EXCEPT ![c] = @ - 1]
-    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, regPending, scrapeVars, noticeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, regPending, orphaned, scrapeVars, noticeVars>>
+
+\* addPath, once addValidatedPath lets go of the path map's lock, removes each context the registration orphaned
+\* (Proxy.removeAgentContextIfCurrent), as a disconnect does, unless a disconnect removed it first. Its scrapes then
+\* fail at once: invalidated alone, it stayed registered, and a scrape it had been sent waited on an agent that had
+\* left the connection, for an eviction or a timeout.
+RemoveOrphan(c) ==
+    /\ c \in orphaned
+    /\ orphaned' = orphaned \ {c}
+    /\ IF c \in inMgr
+       THEN RemoveCtx(c) /\ UNCHANGED <<queue, tokens, reading>>
+       ELSE UNCHANGED <<connVars, notices>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, regPending, pathMap, pathCount, scrapeVars, told, heard,
+                   regReclaim>>
 
 \* readPathNoticesFromProxy delivers an unread notice, and the agent counts the path as taken over.
 NoticeEmit(c, p) ==
@@ -386,7 +419,8 @@ EmitCancelled(c, s) ==
                    hstate, target, tracked, checked, noticeVars>>
 
 \* The agent answers a scrape it was sent (writeResponsesToProxy -> assignScrapeResults, which checks the owner on the
-\* wrapper it completes).
+\* wrapper it completes). A connection the proxy invalidated but hasn't removed, an orphan, may still answer, but
+\* nothing promises it will, since its agent has left it: Fairness covers only a valid connection's.
 Respond(c, s) ==
     /\ phase[c] = "live"
     /\ s \in agentHas[c]
@@ -500,6 +534,7 @@ Init ==
     /\ regPending = {}
     /\ pathMap = [p \in Paths |-> Absent]
     /\ pathCount = [c \in Conns |-> 0]
+    /\ orphaned = {}
     /\ hstate = [s \in Scrapes |-> "idle"]
     /\ target = [s \in Scrapes |-> NoConn]
     /\ tracked = {}
@@ -524,7 +559,7 @@ Environment ==
 
 \* Steps the system promises to finish once started.
 System ==
-    \/ \E c \in Conns : SweepPaths(c) \/ FailScrapes(c) \/ Drain(c) \/ DrainEnd(c) \/ Read(c)
+    \/ \E c \in Conns : SweepPaths(c) \/ FailScrapes(c) \/ Drain(c) \/ DrainEnd(c) \/ Read(c) \/ RemoveOrphan(c)
     \/ \E c \in Conns, p \in Paths : RegisterLocked(c, p) \/ NoticeEmit(c, p) \/ Reclaim(c, p)
     \/ \E s \in Scrapes : HttpTrack(s) \/ HttpEnqueue(s) \/ HttpSend(s) \/ HttpFinish(s)
     \/ \E c \in Conns, s \in Scrapes : Emit(c, s) \/ Respond(c, s)
@@ -533,11 +568,12 @@ Next == Environment \/ System
 
 Fairness ==
     /\ \A c \in Conns : WF_vars(SweepPaths(c)) /\ WF_vars(FailScrapes(c)) /\ WF_vars(Drain(c))
-                        /\ WF_vars(DrainEnd(c)) /\ WF_vars(Read(c))
+                        /\ WF_vars(DrainEnd(c)) /\ WF_vars(Read(c)) /\ WF_vars(RemoveOrphan(c))
     /\ \A c \in Conns, p \in Paths : WF_vars(RegisterLocked(c, p)) /\ WF_vars(NoticeEmit(c, p)) /\ WF_vars(Reclaim(c, p))
     /\ \A s \in Scrapes : WF_vars(HttpTrack(s)) /\ WF_vars(HttpEnqueue(s)) /\ WF_vars(HttpSend(s))
                           /\ WF_vars(HttpFinish(s))
-    /\ \A c \in Conns, s \in Scrapes : WF_vars(Emit(c, s)) /\ WF_vars(Respond(c, s))
+    \* Only a valid connection is sure to send and answer what it reads: an orphan's agent has left it.
+    /\ \A c \in Conns, s \in Scrapes : WF_vars(valid[c] /\ Emit(c, s)) /\ WF_vars(valid[c] /\ Respond(c, s))
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
@@ -555,6 +591,7 @@ TypeOK ==
     /\ agentHas \in [Conns -> SUBSET Scrapes]
     /\ regPending \subseteq Conns \X Paths
     /\ pathCount \in [Conns -> Nat]
+    /\ orphaned \subseteq Conns
     /\ hstate \in [Scrapes -> {"idle", "picked", "tracked", "enqueued", "awaiting", "done"}]
     /\ target \in [Scrapes -> Conns \cup {NoConn}]
     /\ tracked \subseteq Scrapes
@@ -588,6 +625,11 @@ IdentityIsolation ==
 \* Only the agent a scrape was sent to can answer it.
 AnswerFromOwner ==
     \A s \in Scrapes : completedBy[s] # NoConn => completedBy[s] = target[s]
+
+\* A path serves the labels of its own identity's agents: never those of an agent of another identity that is gone,
+\* which a consolidated registration kept when it joined the gone agent rather than taking it off the path.
+LabelsOfPathIdentity ==
+    \A p \in Paths : pathMap[p].ctxs # {} => pathMap[p].labels = pathMap[p].identity
 
 \* A consolidated agent never shares a path with a non-consolidated one.
 ModesNeverMix ==

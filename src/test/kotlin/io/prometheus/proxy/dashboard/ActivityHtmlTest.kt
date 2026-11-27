@@ -103,6 +103,13 @@ class ActivityHtmlTest : StringSpec() {
         ["registered ×40", "agent-east", "/a_metrics, /b_metrics, /c_metrics and 37 more"]
     }
 
+    // A burst that repeats its paths, as Scrape now clicked again on one path does, counts each path once.
+    "a burst should count its paths, not its events, after the paths it names" {
+      val repeats = activityEntry(paths = ["orders_metrics"], count = 3, pathCount = 1)
+
+      firstRow(activityPush([repeats])).take(4).drop(1) shouldBe ["registered ×3", "agent-east", "/orders_metrics"]
+    }
+
     "a line with no agent should show a dash for it" {
       val badToken = activityEntry(ActivityKind.BAD_TOKEN, agentName = "", paths = emptyList())
 

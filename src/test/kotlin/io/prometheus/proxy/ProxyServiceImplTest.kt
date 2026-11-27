@@ -53,6 +53,7 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.metrics.core.datapoints.CounterDataPoint
 import io.prometheus.metrics.core.metrics.Counter
+import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeTracing
 import io.prometheus.common.collectingScrapeTracing
@@ -1215,6 +1216,26 @@ class ProxyServiceImplTest : StringSpec() {
 
       coVerify { proxy.pathManager.removePath(testPath, testAgentId) }
       verify { mockAgentContext.markActivityTime(false) }
+    }
+
+    // registerPath refuses a blank path with a reason, but unregisterPath passed it to removePath, whose require threw,
+    // so a client that sent one got Status.UNKNOWN and the proxy logged a server exception.
+    "unregisterPath should refuse a blank path with a reason rather than throw" {
+      val (proxy, agentContext) = proxyWithRealPathManager()
+      val service = ProxyServiceImpl(proxy)
+
+      listOf("", "   ").forEach { blank ->
+        val response =
+          service.unregisterPath(
+            unregisterPathRequest {
+              agentId = agentContext.agentId
+              path = blank
+            },
+          )
+
+        response.valid.shouldBeFalse()
+        response.reason shouldBe BLANK_PATH_MSG
+      }
     }
 
     "unregisterPath should fail with missing agent context" {

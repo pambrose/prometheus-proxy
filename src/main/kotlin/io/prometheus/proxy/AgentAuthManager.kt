@@ -19,6 +19,7 @@ package io.prometheus.proxy
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Context
 import io.prometheus.Proxy
+import io.prometheus.common.AgentValues.segmentProblem
 import io.prometheus.common.Utils.sha256
 import java.security.MessageDigest
 
@@ -104,9 +105,9 @@ internal class AgentAuthManager private constructor(
     /**
      * Builds the manager from raw entries, validating up front (fail-fast at startup).
      *
-     * Rejects empty names/tokens, an entry named [LEGACY_IDENTITY_NAME], duplicate identity names, and
-     * identities that share a token. A non-empty [legacyToken] is appended as an allow-all identity named
-     * [LEGACY_IDENTITY_NAME].
+     * Rejects empty names/tokens, an entry named [LEGACY_IDENTITY_NAME], duplicate identity names, identities that
+     * share a token, and path patterns no path can match. Each pattern loses one leading slash, as a path does. A
+     * non-empty [legacyToken] is appended as an allow-all identity named [LEGACY_IDENTITY_NAME].
      */
     internal fun create(
       authEntries: List<AuthEntry>,
@@ -122,7 +123,7 @@ internal class AgentAuthManager private constructor(
             "proxy.auth identity name '${entry.name}' is reserved for the legacy proxy.agentToken"
           }
           require(entry.token.isNotEmpty()) { "proxy.auth identity '${entry.name}' has an empty token" }
-          AgentIdentity(entry.name, sha256(entry.token), entry.paths.toList())
+          AgentIdentity(entry.name, sha256(entry.token), pathGlobs(entry))
         }
 
       val legacyIdentity =
@@ -161,6 +162,21 @@ internal class AgentAuthManager private constructor(
 
       return AgentAuthManager(allIdentities)
     }
+
+    // [entry]'s path patterns, each without one leading slash, as a path loses one before its patterns see it: a
+    // pattern written as agent paths are, "/team_a_*", loaded without a word and matched no path, so it refused every
+    // path the identity registered. A pattern with a slash left in it can't match any path the proxy accepts, which has
+    // none once its leading one is gone (AgentValues.segmentProblem), so it fails startup, as an agent's configured
+    // path with one left does.
+    private fun pathGlobs(entry: AuthEntry): List<String> =
+      entry.paths.map { glob ->
+        val key = glob.removePrefix("/")
+        val problem = segmentProblem(key)
+        require(problem == null) {
+          "proxy.auth identity '${entry.name}' has path pattern '$glob', which no path can match: $problem"
+        }
+        key
+      }
 
     /**
      * Returns whether the single-segment [glob] matches all of [text], case-sensitively: `*` matches any run of

@@ -72,7 +72,7 @@ proxy {
 Scope agents to specific paths with `proxy.auth`: a list of named identities, each with its own token
 and allowed path glob patterns. The proxy resolves an agent's token to an identity and rejects any
 `registerPath` for a path that does not match the identity's patterns. An empty `paths` list allows
-all paths. A legacy `proxy.agentToken` (above) is honored alongside `auth` as an allow-all identity,
+all paths. A pattern loses one leading `/`, as a path does, and one with a `/` left after it fails startup. A legacy `proxy.agentToken` (above) is honored alongside `auth` as an allow-all identity,
 easing migration. See
 [Per-Agent Identities and Path Authorization](../security/index.md#per-agent-identities-and-path-authorization)
 for details and a migration walkthrough.
@@ -103,7 +103,7 @@ Enable Prometheus HTTP service discovery:
 | Setting / CLI Option / Env Var                                                                                                                   | Default          | Description                                                                                              |
 |:-------------------------------------------------------------------------------------------------------------------------------------------------|:-----------------|:---------------------------------------------------------------------------------------------------------|
 | [`proxy.service.discovery.enabled`](../cli-reference.md#proxy.service.discovery.enabled)<br>`--sd_enabled`<br>`SD_ENABLED`                       | false            | Serve Prometheus's HTTP service discovery                                                                |
-| [`proxy.service.discovery.path`](../cli-reference.md#proxy.service.discovery.path)<br>`--sd_path`<br>`SD_PATH`                                   | "discovery"      | The path it's served at                                                                                  |
+| [`proxy.service.discovery.path`](../cli-reference.md#proxy.service.discovery.path)<br>`--sd_path`<br>`SD_PATH`                                   | "discovery"      | The path it's served at, with at most one leading `/`                                                    |
 | [`proxy.service.discovery.targetPrefix`](../cli-reference.md#proxy.service.discovery.targetPrefix)<br>`--sd_target_prefix`<br>`SD_TARGET_PREFIX` | "localhost:8080" | Each target's address: the proxy's `host:port` as Prometheus reaches it, or an `http(s)` URL             |
 | `proxy.service.discovery.reserveJobAndInstanceLabels`                                                                                            | false            | Also drop the `job` and `instance` labels an agent gives a path; labels starting `__` are always dropped |
 

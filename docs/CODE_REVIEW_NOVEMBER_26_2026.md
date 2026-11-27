@@ -1,8 +1,9 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 8 resolved, 62 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 15 resolved, 55 open (4 high, 35 medium, 31 low).
 
-**Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #13 and #31 in #595.
+**Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
+and #31 in #595.
 
 **Date:** 2026-11-26
 
@@ -17,15 +18,15 @@
 | #  | Finding | Area | Severity | Status |
 |----|---------|------|----------|--------|
 | 1  | `ChunkedContext` is unsynchronized and reachable across concurrent `writeChunkedResponsesToProxy` streams | Proxy | high | ✅ |
-| 2  | Consolidated path takeover during mid-teardown inherits the dead previous identity's labels and retains invalidated contexts | Proxy | medium | ⬜ |
-| 3  | Orphaned same-launch `AgentContext` in `settleDisplaced` is only invalidated, not removed, stranding scrapes/chunks and drifting from `ProxyRegistry.tla` | Proxy | medium | ⬜ |
-| 4  | `removeFromPathManager` runs two full `O(total_paths)` scans under the global `pathMap` lock on every disconnect, including unauthenticated ones | Proxy | medium | ⬜ |
+| 2  | Consolidated path takeover during mid-teardown inherits the dead previous identity's labels and retains invalidated contexts | Proxy | medium | ✅ |
+| 3  | Orphaned same-launch `AgentContext` in `settleDisplaced` is only invalidated, not removed, stranding scrapes/chunks and drifting from `ProxyRegistry.tla` | Proxy | medium | ✅ |
+| 4  | `removeFromPathManager` runs two full `O(total_paths)` scans under the global `pathMap` lock on every disconnect, including unauthenticated ones | Proxy | medium | ✅ |
 | 5  | `Proxy.shutDown()` stops sub-services without fault isolation, and `Proxy.startUp()` rollback omits `tracing?.close()` and `invalidateAllAgentContexts()` | Proxy | medium | ⬜ |
-| 6  | Race between `AgentContextManager.announceAgentContext()` and `removeFromContextManager()` can announce a removed agent and diverge eviction/disconnect metrics | Proxy | low | ⬜ |
+| 6  | Race between `AgentContextManager.announceAgentContext()` and `removeFromContextManager()` can announce a removed agent and diverge eviction/disconnect metrics | Proxy | low | ✅ |
 | 7  | `ScrapeDispatch.mergeContentTexts` emits invalid blank lines in OpenMetrics output when a consolidated agent returns only `# EOF` | Proxy | low | ✅ |
-| 8  | `AgentAuthManager` strips a leading `/` from incoming paths in `isAuthorized` but not from configured `proxy.auth[].paths` globs | Proxy | low | ⬜ |
-| 9  | `ProxyOptions.sdPath` and `ProxyPathManager.reservedPathRejection` disagree on multiple leading slashes and whitespace-only paths | Proxy | low | ⬜ |
-| 10 | `ProxyServiceImpl.unregisterPath` throws unhandled `IllegalArgumentException` on blank `path`, and proxy `ActivityLog` duplicates repeated paths in a burst | Proxy | low | ⬜ |
+| 8  | `AgentAuthManager` strips a leading `/` from incoming paths in `isAuthorized` but not from configured `proxy.auth[].paths` globs | Proxy | low | ✅ |
+| 9  | `ProxyOptions.sdPath` and `ProxyPathManager.reservedPathRejection` disagree on multiple leading slashes and whitespace-only paths | Proxy | low | ✅ |
+| 10 | `ProxyServiceImpl.unregisterPath` throws unhandled `IllegalArgumentException` on blank `path`, and proxy `ActivityLog` duplicates repeated paths in a burst | Proxy | low | ✅ |
 | 11 | Double-slash path stripping (`//foo`, `//`) causes permanent 404s for static paths, infinite discovery flapping + static-path clobbering, and a phantom `metricsProxyPath` | Agent | high | ✅ |
 | 12 | Reclaim loop tight-spins with zero delay (unbounded gRPC flood) when `rejectedPathRetryMaxSecs == 1`, and fires every reclaim 1s early otherwise | Agent | high | ✅ |
 | 13 | Connection stays stuck forever serving zero paths (no reconnect or failover) when a taken-over static path is permanently rejected on reclaim | Agent | medium | ✅ |
@@ -188,7 +189,7 @@ Because HTTP/2 gRPC permits multiple concurrent `writeChunkedResponsesToProxy` s
 
 ---
 
-### 2. ⬜ Consolidated path takeover during mid-teardown inherits the dead previous identity's `labels`/`sdLabels` and retains invalidated `AgentContext`s
+### 2. ✅ Consolidated path takeover during mid-teardown inherits the dead previous identity's `labels`/`sdLabels` and retains invalidated `AgentContext`s
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -215,9 +216,11 @@ For a consolidated path `/p`:
 
 **Fix:** In `addValidatedPath` (`ProxyPathManager.kt:489-491`), before joining an existing consolidated `agentInfo`, filter out already-invalidated `AgentContext`s from `agentInfo` and decrement their path counts via `countPaths(dead.agentId, -1)` (keeping `PathCountsAgree` intact). If no live contexts remain, store `entry` directly so `B1` starts clean with its own `labels`, `sdLabels`, `targetUrl`, `pathSource`, and `[B1]`.
 
+**Resolution:** Fixed in #594. A consolidated registration first takes the path's gone agents, invalidated but not yet swept, off the entry and off their path counts (`ProxyPathManager.withoutGoneAgents`); with none left, the path starts afresh with the new agent's labels, `sdLabels`, and target. `ProxyRegistry.tla` models it with a `labels` field and a `LabelsOfPathIdentity` invariant, which TLC reports violated with `DropGone = FALSE`.
+
 ---
 
-### 3. ⬜ Orphaned same-launch `AgentContext` in `settleDisplaced` is only invalidated, not removed — stranding in-flight scrapes/chunks, while `ProxyRegistry.tla` masks the liveness gap
+### 3. ✅ Orphaned same-launch `AgentContext` in `settleDisplaced` is only invalidated, not removed — stranding in-flight scrapes/chunks, while `ProxyRegistry.tla` masks the liveness gap
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -240,9 +243,11 @@ When an agent's connection goes half-open (the primary reason an agent reconnect
 
 **Fix:** Return orphaned `AgentContext`s from `takeOverPath` / `addValidatedPath` and, immediately after releasing `synchronized(pathMap)`, tear them down via `proxy.removeAgentContextIfCurrent(orphan, ...)` (using `RemovalReason.TERMINATION` or a dedicated reason) — or at minimum reclaim their chunked contexts and fail their in-flight scrapes immediately. Update `ProxyRegistry.tla` so `Emit`/`Respond` require `valid[c]` and orphan teardown removes/fails in-flight scrapes, then run `make tla-checks-full`.
 
+**Resolution:** Fixed in #594. A registration that orphans a context of its own launch still invalidates it under the lock, then removes it once `addPath` lets the lock go, through `Proxy.removeAgentContextIfCurrent` with a new `RemovalReason.REPLACED`, so its in-flight scrapes fail as `agent_disconnected`, its chunked transfers are reclaimed, and it counts in `proxy_agent_disconnects_total{reason="replaced"}`. `ProxyRegistry.tla` adds a `RemoveOrphan` step, and `Emit`/`Respond` are fair only for valid connections; with `RemoveOrphans = FALSE`, TLC reports `EveryScrapeFinishes` violated. `ProxyRegistryReconnect.cfg` sets it `FALSE`, leaving an orphan to `Disconnect`, to keep that config's run time.
+
 ---
 
-### 4. ⬜ `removeFromPathManager` performs two full `O(total_paths)` scans under the global `pathMap` lock on every disconnect, including unauthenticated connections
+### 4. ✅ `removeFromPathManager` performs two full `O(total_paths)` scans under the global `pathMap` lock on every disconnect, including unauthenticated connections
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -264,6 +269,8 @@ Inside `synchronized(pathMap)` — the global monitor blocking every Prometheus 
 1. Skip the `filterValues` scan whenever `pathCountFor(agentId) == 0`.
 2. Maintain a secondary index `waitedPathsByAgent: HashMap<String, MutableSet<String>>` (guarded by `pathMap`, updated whenever `waiting` changes in `takeOverPath`, `reclaimRejection`, `removePath`, `dropAgentFromPath`, and `removeFromPathManager`) so removing a departing agent from `waiting` lists visits only the paths it waited on (`O(waited)` — `O(1)` for normal and unauthenticated disconnects).
 
+**Resolution:** Fixed in #594. The path map is now `PathEntries`, whose `store` is the only way to change an entry and keeps an index of the paths each agent waits on, so a disconnect visits only those, and `removeFromPathManager` scans the entries an agent serves only when its path count is above zero: a connection that serves no path and waits on none, such as a probe's, reads no entry. A disconnect of an agent that serves paths still scans the map once. The path-count bookkeeping moved to `PathCounts`, with `countPaths` still the only way to change it.
+
 ---
 
 ### 5. ⬜ `Proxy.shutDown()` stops sub-services without fault isolation, and `Proxy.startUp()` rollback omits `tracing?.close()` and `invalidateAllAgentContexts()`
@@ -283,7 +290,7 @@ Inside `synchronized(pathMap)` — the global monitor blocking every Prometheus 
 
 ---
 
-### 6. ⬜ Race between `AgentContextManager.announceAgentContext()` and `removeFromContextManager()` can announce a removed agent and diverge eviction/disconnect metrics
+### 6. ✅ Race between `AgentContextManager.announceAgentContext()` and `removeFromContextManager()` can announce a removed agent and diverge eviction/disconnect metrics
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -300,6 +307,8 @@ Inside `synchronized(pathMap)` — the global monitor blocking every Prometheus 
 **Impact:** Stray `AgentConnected` events for terminated connections and permanent drift between `proxy_eviction_count_total` and `proxy_agent_disconnects_total{reason="eviction"}`.
 
 **Fix:** Collapse `valid` and `announced` into a single atomic state machine (`AtomicReference<State>`: `PENDING`, `ANNOUNCED`, `INVALIDATED_PENDING`, `INVALIDATED_ANNOUNCED`) so `markAnnounced()` CASes `PENDING -> ANNOUNCED` and fails atomically once invalidated; have `AgentContextCleanupService` check `removed.announced` on the returned `AgentContext` after `removeAgentContext(...)`.
+
+**Resolution:** Fixed in #594. `AgentContext` keeps validity and announcement as one atomic state: `markAnnounced()` fails once the context is invalidated, and `announced` can't change after invalidation. `AgentContextCleanupService` decides whether to count an eviction from the context its removal released.
 
 ---
 
@@ -333,7 +342,7 @@ Whitespace-only non-empty bodies trigger the same defect.
 
 ---
 
-### 8. ⬜ `AgentAuthManager` strips a leading `/` from incoming paths in `isAuthorized` but not from configured `proxy.auth[].paths` globs
+### 8. ✅ `AgentAuthManager` strips a leading `/` from incoming paths in `isAuthorized` but not from configured `proxy.auth[].paths` globs
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -347,9 +356,11 @@ Whitespace-only non-empty bodies trigger the same defect.
 
 **Fix:** Normalize `entry.paths.map { it.removePrefix("/") }` in `AgentAuthManager.create` (matching `AgentPathManager`'s handling of `pathConfigs` and `filters`), or reject patterns containing `/` at startup with a clear `require(...)` error.
 
+**Resolution:** Fixed in #594. `AgentAuthManager.create` drops one leading slash from each `proxy.auth[].paths` pattern, as a path loses one, and a pattern with a `/` left after that fails startup, naming the identity and the pattern; the release notes list it under Before you upgrade.
+
 ---
 
-### 9. ⬜ `ProxyOptions.sdPath` and `ProxyPathManager.reservedPathRejection` disagree on multiple leading slashes and whitespace-only paths
+### 9. ✅ `ProxyOptions.sdPath` and `ProxyPathManager.reservedPathRejection` disagree on multiple leading slashes and whitespace-only paths
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -365,9 +376,11 @@ Whitespace-only non-empty bodies trigger the same defect.
 
 **Fix:** Validate `require(sdPath.trimStart('/').isNotBlank())` when `sdEnabled` (mirroring `blitzPath`) and compare against `proxy.options.sdPath.trimStart('/')` in `reservedPathRejection` (or normalize `sdPath` once in `ProxyOptions`).
 
+**Resolution:** Fixed in #594. With service discovery on, startup refuses an `sdPath` that is blank once one leading slash is dropped, or that has more than one leading slash, so the key `reservedPathRejection` compares against is always the route's own. An `sdPath` of several segments is still accepted, since no agent path can collide with it.
+
 ---
 
-### 10. ⬜ `ProxyServiceImpl.unregisterPath` throws unhandled `IllegalArgumentException` on blank `path`, and proxy `ActivityLog` duplicates repeated paths in a burst
+### 10. ✅ `ProxyServiceImpl.unregisterPath` throws unhandled `IllegalArgumentException` on blank `path`, and proxy `ActivityLog` duplicates repeated paths in a burst
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -384,6 +397,8 @@ Whitespace-only non-empty bodies trigger the same defect.
 **Impact:** Non-stock gRPC clients can trigger `Status.UNKNOWN` server exceptions on blank `unregisterPath`; the proxy Activity feed renders duplicate path names and inflated "+N more" counts for repeated events on the same path.
 
 **Fix:** Return `unregisterPathResponse { valid = false; reason = BLANK_PATH_MSG }` in `ProxyServiceImpl.unregisterPath` when `request.path.isBlank()`; deduplicate burst paths in proxy `ActivityLog` using the same per-line `counted` set + `pathCount` pattern as `AgentActivityLog`.
+
+**Resolution:** Fixed in #594. `unregisterPath` answers a blank path with `valid = false` and `Blank path`, rather than throwing, and the proxy's `ActivityLog` names and counts each path in a burst once (`ActivityEntry.pathCount`), as the agent's does, so the Activity view's "and N more" counts paths, not events.
 
 ---
 

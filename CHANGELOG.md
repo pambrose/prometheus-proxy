@@ -98,6 +98,34 @@ All notable changes to this project are documented in this file.
 - `proxy.internal.maxUnzippedContentSizeMBytes` bounded only a gzipped body, so one the agent sent plain passed any
   lower limit, `0` (refuse all content) included. A plain body is now held to it too, and one past it fails its scrape
   with a 413, `payload_too_large`
+- A consolidated path whose agents had all gone, but whose removal hadn't yet swept the path, took a new agent as one
+  more: the gone agent stayed first, so scrapes still went to it and the dashboard showed its target, and the path
+  kept its labels and `sdLabels` after the sweep, another identity's when the new agent was of another. A registration
+  now takes a consolidated path's gone agents off it first, and a path left with none starts afresh, with the new
+  agent's labels
+- A stale connection of an agent that reconnected before the proxy saw the old one close, orphaned once the new
+  connection took its last path, was only invalidated: it stayed registered, a scrape already sent to it waited for
+  its eviction or `scrapeRequestTimeoutSecs`, its chunked transfer stayed buffered, and its eviction later counted in
+  `proxy_eviction_count_total`. The proxy now removes it at once, failing its scrapes as `agent_disconnected`, and
+  counts it in `proxy_agent_disconnects_total` with the new reason `replaced`
+- Every connection to the agent port that closed, a port scanner's or a bad token's among them, scanned the whole path
+  map twice under its lock, stalling scrapes on a proxy with many paths. Removing an agent now scans the map only when
+  the agent serves a path, and visits only the paths whose waiting lists name it
+- An agent's first authenticated call could announce its context just as its connection's removal invalidated it,
+  emitting `AgentConnected` for a connection already gone, with no `AgentDisconnected` after it, and the cleanup
+  service and the removal could disagree on whether an eviction counted, so `proxy_eviction_count_total` drifted from
+  `proxy_agent_disconnects_total{reason="eviction"}`. A context's validity and announcement are now one state
+- A `proxy.auth` path pattern written with a leading slash, such as `/team_a_*`, as agent paths are, loaded without a
+  word and matched no path, so its identity's every registration was refused. A pattern now loses one leading slash,
+  as a path does (see Behavior Changes)
+- With service discovery on, an `sdPath` with two leading slashes, such as `//discovery`, was served at `/discovery`
+  but never reserved, so an agent could register `/discovery`, whose every scrape got the service discovery document,
+  and one of whitespace passed startup. Both now fail startup (see Behavior Changes)
+- `unregisterPath` with a blank path threw, so its caller got `Status.UNKNOWN`; it now answers `valid = false` with a
+  reason, as `registerPath` does
+- A line of the proxy's Activity view for a burst named a path once per event, `/orders, /orders, /orders` for Scrape
+  now clicked three times, and counted each repeat in its "and N more". It names and counts each path once, as the
+  agent's view does
 
 ### Behavior Changes
 
@@ -121,6 +149,10 @@ All notable changes to this project are documented in this file.
 - The dashboards' tabs are underlined, as a code host's are, in place of outlined folder tabs: each is a borderless
   link with an icon before its name, a rounded ground on hover, and the current one bold over the accent line along
   the bar's rule
+- The proxy refuses to start with a `proxy.auth` path pattern that has a `/` after its leading one, such as
+  `team_a/*` or `//team_a_*`, which no path the proxy accepts can match, naming the identity and the pattern
+- With service discovery on, the proxy refuses to start with an `sdPath` of whitespace, `/` alone, or more than one
+  leading slash, such as `//discovery`, naming it; a path of several segments, a route of its own, is still accepted
 
 ### Build & Tooling
 
@@ -185,6 +217,11 @@ All notable changes to this project are documented in this file.
   its Running in the Background examples run on the Basic Usage network. The Quick Start's Docker tab says that Docker
   publishes its ports past the host's firewall, and to add TLS and a token before agents connect over a network you
   don't trust
+- `specs/tla/ProxyRegistry.tla` models a consolidated registration taking a path's gone agents off it and a
+  registration's removal of the contexts it orphans, with a new invariant, `LabelsOfPathIdentity`, and two flags,
+  `DropGone` and `RemoveOrphans`, that bring back the old behavior for TLC to catch. The Monitoring page gives the
+  `replaced` reason, the Security and Proxy Configuration pages the pattern rule, and Troubleshooting both new startup
+  refusals
 
 ## [4.7.0] - 2026-11-24
 

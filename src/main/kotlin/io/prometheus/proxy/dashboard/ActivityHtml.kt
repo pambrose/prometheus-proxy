@@ -151,7 +151,7 @@ internal object ActivityHtml {
       // Named as the other views name it, so a line can be read against the agent list.
       td { +(entry.agentName.takeIf { it.isNotEmpty() }?.let(::agentLabel) ?: DASH) }
       if (showIdentity) td("dim") { +(identityLabel(entry.identity) ?: DASH) }
-      activityPathsCell(entry.paths, entry.count - entry.paths.size)
+      activityPathsCell(entry.paths, entry.pathCount - entry.paths.size)
       // The one column that wraps: a rejection's reason is a sentence.
       td("dim wrap") { +entry.detail.ifEmpty { DASH } }
     }

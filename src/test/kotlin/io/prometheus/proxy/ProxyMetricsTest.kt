@@ -441,7 +441,8 @@ class ProxyMetricsTest : StringSpec() {
       ) = registeredCounts(name, label).keys
 
       labels("proxy_chunk_validation_failures", "stage") shouldBe setOf("chunk", "summary")
-      labels("proxy_agent_disconnects", "reason") shouldBe setOf("eviction", "termination", "stream_terminated")
+      labels("proxy_agent_disconnects", "reason") shouldBe
+        setOf("eviction", "termination", "stream_terminated", "replaced")
       labels("proxy_agent_auth_failures", "reason") shouldBe setOf("missing_token", "unknown_token")
       labels("proxy_agent_connect_refusals", "reason") shouldBe setOf("identity_limit", "transport_filter_mismatch")
       labels("proxy_path_rejections", "cause") shouldBe

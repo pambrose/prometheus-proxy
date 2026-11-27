@@ -29,7 +29,8 @@ package io.prometheus.proxy
  * @param logText the reason as the log gives it, in parentheses after the agentId, and as a failed scrape's reason
  *   gives it after "Agent disconnected: "
  * @param activityKind how the activity feed names the departure: an eviction is the agent going quiet, which is a
- *   problem; the rest are an agent stopping or losing its connection, which the proxy can't tell apart
+ *   problem; the rest are an agent stopping or losing its connection, which the proxy can't tell apart, or leaving a
+ *   connection for a newer one
  */
 internal enum class RemovalReason(
   val logText: String,
@@ -43,6 +44,12 @@ internal enum class RemovalReason(
 
   /** With the transport filter disabled, the agent's scrape-request stream ended. */
   STREAM_TERMINATED("Stream terminated (transport filter disabled)", ActivityKind.AGENT_DISCONNECTED),
+
+  /**
+   * A newer connection of the same agent, by its launch id, took the context's last path: the agent reconnected before
+   * the proxy saw its old connection close, so it has left the old one, which ProxyPathManager calls an orphan.
+   */
+  REPLACED("Replaced by a newer connection of the same agent", ActivityKind.AGENT_DISCONNECTED),
   ;
 
   /** What the activity feed says caused the departure, given `proxy.internal.maxAgentInactivitySecs`. */
@@ -50,6 +57,6 @@ internal enum class RemovalReason(
     when (this) {
       EVICTION -> "No contact within proxy.internal.maxAgentInactivitySecs (${maxInactivitySecs}s)"
       TERMINATION -> "Connection closed"
-      STREAM_TERMINATED -> logText
+      STREAM_TERMINATED, REPLACED -> logText
     }
 }

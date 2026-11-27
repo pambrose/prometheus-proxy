@@ -497,19 +497,23 @@ Three support helpers also live here (not test classes themselves):
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup;
   `removeAgentContext` counts each chunked transfer it reclaims as abandoned, and never one the stream's sweep counted,
   and puts the agent's departure in the activity feed, an eviction as a problem, with the paths it served; and counts an
-  announced agent's removal in `proxy_agent_disconnects_total` by its reason, and not an unannounced connection's
+  announced agent's removal in `proxy_agent_disconnects_total` by its reason, and not an unannounced connection's; a
+  context orphaned by a registration of its own launch is removed at once, its scrape failed as agent_disconnected, and
+  its departure in the activity feed as replaced
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent (recording the identity the call authenticated as for
   the dashboard, without binding the context to it, and the connect in the activity feed), registerPath (a path the
-  identity may not register noted as a rejection), heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
-  when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
-  just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
-  are cut, and a late result or transfer logs nothing above DEBUG; every result and chunked message, its scrape tracked
-  or not, marks the agent that sent it active (with the transport filter disabled, only when sent as the identity the
-  agent connected as), and a late result doesn't count as a completed request; with the transport filter disabled, a
-  scrape-request stream that names an agentId before it is assigned neither streams nor removes the context another identity then
-  connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents; a forward
-  span is tagged with its request's queue wait before the send, so a scrape that ends while the send waits keeps it,
-  and is annotated as sent only while its scrape still awaits the result
+  identity may not register noted as a rejection), unregisterPath (a blank path refused with a reason, not thrown on),
+  heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent
+  neither completes nor fails it, even when its `agentId` or `headerAgentId` names that agent; a transfer ends with its
+  scrape, even one whose scrape ended just before it was stored, one stream has at most the agent's backlog cap of
+  transfers under way, a header's strings are cut, and a late result or transfer logs nothing above DEBUG; every result
+  and chunked message, its scrape tracked or not, marks the agent that sent it active (with the transport filter
+  disabled, only when sent as the identity the agent connected as), and a late result doesn't count as a completed
+  request; with the transport filter disabled, a scrape-request stream that names an agentId before it is assigned
+  neither streams nor removes the context another identity then connects with under it, and 10,000 connects by one
+  identity leave at most `maxAgentsPerIdentity` agents; a forward span is tagged with its request's queue wait before
+  the send, so a scrape that ends while the send waits keeps it, and is annotated as sent only while its scrape still
+  awaits the result
 - **ProxyServiceImplMetricsTest** — what each RPC counts, read from real collectors (`CountingProxyMetrics`): a
   connect only once accepted, and a refused one as a refusal by reason (a `transportFilterDisabled` mismatch, the
   `maxAgentsPerIdentity` limit); a heartbeat only once accepted; every path rejection by its cause, not only a path's
@@ -562,7 +566,11 @@ Three support helpers also live here (not test classes themselves):
   the agents of one identity are refused past `maxPathsPerIdentity` together, agents with no identity sharing one
   limit, the count follows each way a path leaves, and a redeploy at the limit still takes over its own paths; and the
   80% warnings of `maxPathsPerAgent` and `maxPathsPerIdentity` come once until the count falls below 70%, an agent
-  that leaves starting over
+  that leaves starting over; a consolidated registration takes the path's gone agents off it first, starting the path
+  afresh with its own labels when none is left; a registration that orphans a context of its own launch removes it, and
+  only it, once it lets go of the path map; removing an agent that serves and waits on no path reads no entry of the
+  map; and the index of the paths each agent waits on agrees with the waiting lists through random takeovers,
+  reclaims, unregisters, and disconnects
 - **NearLimitWarningsTest** — when the proxy warns that a count nears its limit: as it reaches 80%, and again only
   once it has fallen below 70%, for each key on its own; the first whole count past 80% of a small limit, never for a
   limit of 0, and without overflow near `Int.MAX_VALUE`
@@ -577,7 +585,7 @@ Three support helpers also live here (not test classes themselves):
   path it serves
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
   queue; and a scrape request, or a path notice, queued just as its wait times out returned by that wait, not lost
-  (`lateArrival`)
+  (`lateArrival`); a context invalidated before it was announced is never announced, and one announced before stays so
 - **AgentContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the scrape-request
   hand-off -- write, read, invalidate -- from three threads under model checking and stress; each write's outcome
   must fit a sequential order, and no accepted request may be stranded after invalidate
@@ -586,16 +594,18 @@ Three support helpers also live here (not test classes themselves):
   agent limit, a removal frees a slot, and a refused add logs a WARN, and goes in the activity feed, at most once a
   minute for each identity; and an identity's 80% warning comes once until its count falls below 70%
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs);
-  an eviction that finds the context already removed isn't counted
+  an eviction that finds the context already removed isn't counted, and one is counted as the removal released the
+  context, announced or not, though it was announced just as the sweep removed it
 - **RemovalReasonTest** — why the proxy removed an agent's context: each reason logs as its string always did, only an
   eviction is a problem in the activity feed, and each gives the feed its cause, an eviction naming
   `proxy.internal.maxAgentInactivitySecs`
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
-- **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options, the `proxy.internal` limits,
-  and the agent-port authentication warnings; an `http.idleTimeoutSecs` of 0 or a negative other than -1, and a
-  configured `sdTargetPrefix` with a query or fragment, fail startup with an `Invalid configuration:` message naming
-  the setting; the blitz path kept without its leading slashes, and one of slashes alone, blank, or of more than one
-  segment failing startup while blitz is on. The dashboard's options are ProxyDashboardOptionsTest's
+- **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options, the `proxy.internal` limits, and
+  the agent-port authentication warnings; an `http.idleTimeoutSecs` of 0 or a negative other than -1, and a configured
+  `sdTargetPrefix` with a query or fragment, fail startup with an `Invalid configuration:` message naming the setting;
+  the blitz path kept without its leading slashes, and one of slashes alone, blank, or of more than one segment failing
+  startup while blitz is on; a `sdPath` that names no path, or has more than one leading slash, failing startup while
+  service discovery is on, and one of several segments accepted. The dashboard's options are ProxyDashboardOptionsTest's
 - **ProxyDashboardOptionsTest** — the dashboard's options, split from ProxyOptionsTest: off by default, on a port
   apart from the admin port, set by its flags; its port refused out of range, and its path, host, session cap,
   refresh interval, path history, and activity log size refused when unusable while the dashboard is on, and logged
@@ -625,8 +635,9 @@ Three support helpers also live here (not test classes themselves):
   dropped once full, a burst from one agent folded into one line that counts it and names its first paths, bursts from
   agents registering at once each one line, a burst ending at its window or at another agent, kind, or group, a source's
   events within its window counted on one line, past its most sources a window the rest counted on one, every value cut,
-  a log with no room refused, and which kinds are problems; every write, a burst's join and a source's repeat included,
-  adding one to the change count a snapshot reads with the lines, and a read leaving it as it was
+  a log with no room refused, and which kinds are problems; a burst naming and counting each of its paths once, until
+  its window has passed; every write, a burst's join and a source's repeat included, adding one to the change count a
+  snapshot reads with the lines, and a read leaving it as it was
 - **PathHistoryTest** — the dashboard's per-path scrape history and departures: each path keeps only its newest
   records, newest first, and a busy path can't push another's out; recording alone holds the history to the live paths
   plus the gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path
@@ -658,7 +669,9 @@ Three support helpers also live here (not test classes themselves):
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities and of the reserved name
   `legacy-agent-token`, with or without the legacy token set (a name that only resembles it is accepted); read from a
-  config file through a MockK `Proxy`, the reserved name fails startup as `Invalid configuration:`
+  config file through a MockK `Proxy`, the reserved name fails startup as `Invalid configuration:`; a pattern written
+  with a leading slash matches as a path does, and one with a slash after it fails startup, naming the identity and the
+  pattern
 - **AgentAuthServerInterceptorTest** — gRPC auth interceptor: a valid token exposes the resolved identity in the
   context; a missing, unknown or same-length wrong token closes the call with UNAUTHENTICATED, and goes in the
   activity feed, naming its host, a host's repeats counted on its line; and every refused call is reported for
@@ -749,13 +762,13 @@ Three support helpers also live here (not test classes themselves):
   the dots' `no-cors` probe, paused while hidden, in words, reloading a screen that answers again; Left and Right
   and shift-click; the All grid's scale; and the theme button's script, shared with the dashboards (`ThemeScript`)
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
-  first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
-  agent, and an agent not yet registered named by `agentLabel`; the Identity column while agent auth is on; escaped
-  values; the search, its match count, and its empty states, a path matched with its slash and an agent by its label;
-  the form at the view's own route; the column guide (every header explained in its order, Identity only
-  while agent auth is on, every problem kind named in Event's explanation, and the panel outside every push); and the
-  push carrying the status bar and the table, out of band, or the status bar alone, still the frame's first tag, when
-  the page already shows the table
+  first; problems as crit tags and take-overs as warn tags; a burst's count and first paths, its "and N more" counting
+  paths rather than events; dashes for a line with no agent, and an agent not yet registered named by `agentLabel`; the
+  Identity column while agent auth is on; escaped values; the search, its match count, and its empty states, a path
+  matched with its slash and an agent by its label; the form at the view's own route; the column guide (every header
+  explained in its order, Identity only while agent auth is on, every problem kind named in Event's explanation, and the
+  panel outside every push); and the push carrying the status bar and the table, out of band, or the status bar alone,
+  still the frame's first tag, when the page already shows the table
 - **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
   samples, and `# EOF`; families and samples counted as the agent's metric filter reads them: a quoted name whole, a
   tab after the keyword, a HELP or UNIT line with no TYPE, an indented comment, and lines split at line feeds alone; an

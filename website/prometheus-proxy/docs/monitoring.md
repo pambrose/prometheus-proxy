@@ -144,7 +144,7 @@ Since 4.3.0, three more groups are available, also off by default:
 | `proxy_scrape_requests_total`             | `type`    | Scrape request outcomes (see below)                             |
 | `proxy_connect_count_total`               | —         | Agent connects the proxy accepted                               |
 | `proxy_agent_connect_refusals_total`      | `reason`  | Agent connects refused (see below)                              |
-| `proxy_agent_disconnects_total`           | `reason`  | Agents the proxy removed: `eviction`, `termination`, `stream_terminated` |
+| `proxy_agent_disconnects_total`           | `reason`  | Agents the proxy removed: `eviction`, `termination`, `stream_terminated`, `replaced` |
 | `proxy_eviction_count_total`              | —         | Stale agent evictions                                           |
 | `proxy_heartbeat_count_total`             | —         | Heartbeats the proxy accepted                                   |
 | `proxy_agent_auth_failures_total`         | `reason`  | Agent calls refused for their token: `missing_token`, `unknown_token` |
@@ -202,8 +202,9 @@ alert built on them, see the first event rather than only a second one.
 **Agents that leave:** `proxy_agent_disconnects_total` counts each agent the proxy removes, by why:
 `eviction` (no contact within [`maxAgentInactivitySecs`](configuration/proxy.md#internal-settings), also in
 `proxy_eviction_count_total`), `termination` (its
-connection closed), or `stream_terminated` (its scrape stream ended, with `transportFilterDisabled`). A connection that
-never authenticated, such as a port probe, isn't counted.
+connection closed), `stream_terminated` (its scrape stream ended, with `transportFilterDisabled`), or `replaced` (the
+agent reconnected before the proxy saw its old connection close, and its new one took the old one's last path). A
+connection that never authenticated, such as a port probe, isn't counted.
 
 **Late and abandoned results:** a result that arrives after its scrape ended, usually at Prometheus's or the proxy's
 timeout, counts in `proxy_late_scrape_results_total`. The scrape itself was already counted as `timed_out` or
