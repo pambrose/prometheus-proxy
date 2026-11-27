@@ -135,6 +135,16 @@ its own that holds them all, with Prometheus and Grafana.
   milliseconds.
 - **A signed-in browser that opens the login page goes on to its page.** Reloading a tab left on the login page after
   signing in from another went to the dashboard, not to the page the login was for, such as an agent's page.
+- **Scrape now's panel always closes, and shows the scrape you asked for last.** A slow scrape's result could replace a
+  later one's, or appear after you closed the panel; while a scrape ran, or after a refusal or no answer, the panel had
+  no close button and stayed until a reload; and behind a reverse proxy, the proxy's HTML error page was drawn in it.
+  Now only the latest scrape's result shows, the panel can always be closed, and any other answer is shown in words,
+  with its status.
+- **The theme follows you across a dashboard's tabs.** Picking a theme changed only the tab you picked it in, so two
+  tabs of one dashboard could show different themes until reloaded. Every open page of the dashboard now changes with
+  it.
+- **A screen reader hears a search's count once.** Ticking Problems only just after typing in the search said the count
+  of matching rows twice.
 
 ### Behavior Changes
 

@@ -19,11 +19,16 @@
 package io.prometheus.proxy.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.ktor.http.HttpStatusCode
 import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardServer
+import io.prometheus.common.dashboard.ScrapeNowHtml
+import io.prometheus.common.dashboard.ScrapeNowResult
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.snapshot
 
@@ -34,6 +39,15 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.snapshot
  * scrape times in the viewer's zone, and htmx's config and assets.
  */
 class DashboardScriptTest : StringSpec() {
+  private val script = DashboardScript(
+    subject = "proxy",
+    views = DashboardLayout.entries,
+    selectionSegment = "agents",
+  ).js
+
+  // The body of the script's function [name], up to the next function at the script's top level, two spaces in.
+  private fun body(name: String) = script.substringAfter("function $name(").substringBefore("\n  function ")
+
   init {
     // ==================== Frames, views, and scrape-now ====================
 
@@ -87,9 +101,84 @@ class DashboardScriptTest : StringSpec() {
 
       page shouldContain "closest('button.scrape-now')"
       page shouldContain "method: 'POST', headers: { '${DashboardServer.HX_REQUEST_HEADER}': 'true' }"
-      page shouldContain "panel.innerHTML = html;"
+      page shouldContain "panel.replaceChildren(result);"
       // Closing the panel hands focus back to the button that filled it.
       page shouldContain "function closeScrapeResult(panel)"
+    }
+
+    // A slow scrape's answer that came after a later click's, or after the panel was closed, wrote over the later
+    // result, or into the closed panel, and was said. Each request is numbered, and a close counts as one, so only the
+    // latest request's answer shows.
+    "a scrape-now's answer should show only while its request is the latest, and never once the panel is closed" {
+      script shouldContain "var scrapeSeq = 0;"
+      body("scrapeNow").apply {
+        this shouldContain "scrapeSeq += 1;\n    var mine = scrapeSeq;"
+        // On the response, before a 401's reload, and again once its body is in, or it fails.
+        this shouldContain "if (mine !== scrapeSeq) return null;"
+        this shouldContain
+          "if (answer && mine === scrapeSeq) showScrapeAnswer(panel, path, answer.response, answer.body);"
+        this shouldContain "if (mine === scrapeSeq) refuseScrape(panel, path, 'no answer from the proxy');"
+      }
+      body("closeScrapeResult") shouldContain "scrapeSeq += 1;"
+    }
+
+    // A scrape in flight, a refusal the guard answers in plain text, a reverse proxy's error page, or no answer at all
+    // left the panel open with no close button, and Escape closes only the column guide, so it stayed until a reload.
+    "the scrape-now panel should have its close button in every state" {
+      body("scrapeNow").apply {
+        this shouldContain "showScrapeNotice(panel, path, false, 'scraping…');"
+        this shouldNotContain "panel.textContent ="
+      }
+      body("refuseScrape") shouldContain "showScrapeNotice(panel, path, true, reason);"
+      body("showScrapeNotice").apply {
+        this shouldContain "close.className = 'close';"
+        this shouldContain "close.setAttribute('aria-label', '${ScrapeNowHtml.CLOSE_LABEL}');"
+        this shouldContain "close.title = '${ScrapeNowHtml.CLOSE_TITLE}';"
+        this shouldContain "panel.replaceChildren(head);"
+      }
+      // The same close button as the result's own, which the same click handler closes.
+      ScrapeNowHtml.render(ScrapeNowResult.Refused(HttpStatusCode.NotFound, "gone")) shouldContain
+        """<button type="button" class="close" aria-label="${ScrapeNowHtml.CLOSE_LABEL}" """ +
+        """title="${ScrapeNowHtml.CLOSE_TITLE}">"""
+    }
+
+    // Behind a reverse proxy, a 502's HTML error page went into the panel as markup, its styles and all. Only the
+    // route's own result, an HTML fragment whose one element starts with a heading the page can say, is put in as
+    // markup, parsed inert first; anything else is said in words, as text.
+    "only the scrape-now route's own result should reach the panel as markup" {
+      body("scrapeResultOf").apply {
+        this shouldContain "if (!/^text\\/html/i.test(response.headers.get('Content-Type') || '')) return null;"
+        this shouldContain "var parsed = document.createElement('template');"
+        this shouldContain "parsed.content.children.length === 1"
+        this shouldContain "head.matches('div.sr-head[${DashboardPage.SAY_ATTR}]')"
+      }
+      body("showScrapeAnswer").apply {
+        this shouldContain "var result = scrapeResultOf(response, body);"
+        this shouldContain "/^text\\/plain/i.test("
+        this shouldContain "refuseScrape(panel, path, "
+      }
+      body("textSpan") shouldContain "span.textContent = text;"
+      // The template's alone: nothing else in the script parses markup.
+      Regex("""\.innerHTML\s*=""").findAll(script).map { it.value }.toList() shouldBe listOf(".innerHTML =")
+      body("scrapeResultOf") shouldContain "parsed.innerHTML = body;"
+    }
+
+    // ==================== The search ====================
+
+    // Typing schedules the search, and a "Problems only" change within its debounce applied the filter at once and
+    // again when the timer ran out: two announces, and the count said twice.
+    "a Problems only change should apply the filter once, in place of a search still waiting" {
+      script.substringAfter("addEventListener('change', function (evt) {").substringBefore("});").apply {
+        this shouldContain "clearTimeout(filterTimer);"
+        indexOf("clearTimeout(filterTimer);") shouldBeLessThan indexOf("applyFilter();")
+      }
+    }
+
+    // The screens page takes a + before a screen's id in a link for a second pane, so #proxy/activity?q=refused+agent,
+    // a search for "refused agent", opened Split with the query cut. URLSearchParams escapes a + typed in the search as
+    // %2B, so every + it writes is a space.
+    "the search should write a space in the page's URL as %20, never +" {
+      body("applyFilter") shouldContain "var search = params.toString().replace(/\\+/g, '%20');"
     }
 
     // Light, dark, or auto, from the bar's button, kept in this browser; the head applies it before the page draws.

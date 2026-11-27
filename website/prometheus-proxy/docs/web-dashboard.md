@@ -176,7 +176,8 @@ The browser tab's title names the proxy the same way and counts the failing and 
 At the bar's end, the theme button shows the theme in force, **light** (the sun), **dark** (the moon), or **auto**
 (the half-filled circle), the default, which follows your system's light or dark setting. Each click moves to the next
 theme, in that order, and its tooltip names the theme in force and the next. The browser remembers the choice for that
-dashboard, and its login page uses it too.
+dashboard, and its login page uses it too. The dashboard's other open pages follow a change at once, the
+[screens page](#screens) and the dashboard in its frame included.
 
 ### The Live Indicator
 
@@ -503,9 +504,10 @@ A link can say what the page shows, after its `#`:
 | `/screens#proxy/paths+grafana` | Two screens side by side, left then right |
 
 A screen's id in a link is its name in lowercase, each run of other characters a `-`; the proxy's own is `proxy`. A link
-with a path loads it, reloading a screen already open; a bare id only brings the screen up. A link opened while the page
-is already open in another tab goes to that tab, and the new tab closes itself, or, where the browser won't let it,
-says where the link went.
+with a path loads it, reloading a screen already open; a bare id only brings the screen up. Write a space in a query as
+`%20`, as the dashboards' search does in their address: a `+` followed by a screen's id starts the second pane. A link
+opened while the page is already open in another tab goes to that tab, and the new tab closes itself, or, where the
+browser won't let it, says where the link went.
 
 Every screen has to allow framing, and the page can't tell a screen that refused it from a blank one, so it looks
 empty; use **Open in a tab** for such a screen. Agents' dashboards allow it from 4.7.1 unless their

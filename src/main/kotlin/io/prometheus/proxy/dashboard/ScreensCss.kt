@@ -127,7 +127,9 @@ internal object ScreensCss {
     .pane { display:none; flex-direction:column; min-width:0; min-height:0; background:var(--surface);
       border:1px solid var(--line); border-radius:3px; overflow:hidden; }
     .pane.shown { display:flex; }
-    .stage.one .pane.shown, .stage.split .pane.shown { grid-row:1; }
+    /* A shown pane's slot, which the script sets (--slot), is its column, so Split shows first and second in their
+       order, whatever the page's. */
+    .stage.one .pane.shown, .stage.split .pane.shown { grid-row:1; grid-column:var(--slot); }
     .pane-bar { display:flex; align-items:center; gap:9px; min-height:30px; padding:2px 10px;
       border-bottom:1px solid var(--line-soft); font-size:11.5px; color:var(--ink-2); }
     .pane-bar .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); font-weight:600; }
@@ -156,10 +158,10 @@ internal object ScreensCss {
       text-align:center; color:var(--ink-2); background:var(--bg); }
     .pane.is-down .view .down { display:grid; }
     .view .down strong { color:var(--crit); font-weight:600; }
-    /* Narrow, Split stacks its panes, each still at its own narrow layout. */
+    /* Narrow, Split stacks its panes, each still at its own narrow layout, its slot now its row, so first is on top. */
     @media (max-width:720px) {
       .stage.split { grid-template-columns:1fr; grid-template-rows:1fr 1fr; }
-      .stage.split .pane.shown { grid-row:auto; grid-column:auto !important; }
+      .stage.split .pane.shown { grid-column:1; grid-row:var(--slot); }
       body.screens .nav { flex-basis:100%; }
     }
     @media (pointer: coarse) {

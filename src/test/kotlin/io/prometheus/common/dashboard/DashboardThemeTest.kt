@@ -101,6 +101,26 @@ class DashboardThemeTest : StringSpec() {
       }
     }
 
+    // The screens page and the proxy's dashboard in its frame share the stored theme, as two of a dashboard's tabs
+    // do: a press in one changed that one alone, and the other's next press moved on from its own. The browser tells
+    // every other page on the origin of a change to storage, never the page that made it, so each follows the change,
+    // as the head applies a stored theme, and says nothing, since the press was made, and said, in another page.
+    "a theme set in another page on this origin should apply at once, unsaid" {
+      ThemeScript.JS
+        .substringAfter("window.addEventListener('storage', function (evt) {", missingDelimiterValue = "")
+        .substringBefore("});")
+        .apply {
+          this shouldContain "if (evt.key !== '${DashboardPage.THEME_KEY}') return;"
+          this shouldContain "var t = evt.newValue;"
+          this shouldContain
+            "if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);"
+          this shouldContain "else document.documentElement.removeAttribute('data-theme');"
+          this shouldContain "showTheme();"
+          this shouldNotContain "say("
+          this shouldNotContain "localStorage"
+        }
+    }
+
     // One button, which takes the bar's end's room of one, not three. Its name and tooltip, which name the theme in
     // force and the next, are the page's script's, which reads the theme the head applied (see DashboardScriptTest),
     // since the server can't know it; until then it is named for what it sets.

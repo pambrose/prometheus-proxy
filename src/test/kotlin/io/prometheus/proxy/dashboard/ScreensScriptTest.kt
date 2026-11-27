@@ -53,8 +53,9 @@ class ScreensScriptTest : StringSpec() {
       }
     }
 
-    // The dashboards' own search writes a space in its query as +, so #proxy/activity?q=agent+rogue is one pane: a +
-    // splits the link only where a screen's id follows it, alone or before its path.
+    // A query can write a space as +, as a plain form does, so #proxy/activity?q=agent+rogue is one pane: a + splits
+    // the link only where a screen's id follows it, alone or before its path. The dashboards' own search writes a
+    // space as %20 (DashboardScriptTest), so a search for "refused agent" can't be taken for a second pane.
     "a + in a pane's query should stay in its path, and only a + before a screen's id split the link" {
       body("splitPanes").apply {
         this shouldContain "var at = text.indexOf('+');"
@@ -98,6 +99,24 @@ class ScreensScriptTest : StringSpec() {
       body("setSrc") shouldContain "frame.src = url;"
       listOf("appendChild", "insertBefore", ".append(", ".prepend(", "replaceChild", ".before(", ".after(")
         .filter { it in js } shouldBe emptyList()
+    }
+
+    // At 720px and under, Split stacks its panes, where auto-placement put them in the page's order, the proxy's first,
+    // whatever the link or a swap said: #grafana+proxy showed the proxy on top, and swapping the panes moved only the
+    // tabs' marks. Each shown pane carries its slot, which places it in its column side by side and in its row
+    // stacked, so the panes follow first and second while the page's order, and each frame's place in it, stay.
+    "Split should place each pane in its slot, side by side or stacked, whatever the page's order" {
+      body("render").apply {
+        this shouldContain "if (layout === 'all' || at < 0) panes[id].style.removeProperty('--slot');"
+        this shouldContain "else panes[id].style.setProperty('--slot', String(at + 1));"
+      }
+      js shouldNotContain "gridColumn"
+      ScreensCss.CSS.apply {
+        this shouldContain ".stage.one .pane.shown, .stage.split .pane.shown { grid-row:1; grid-column:var(--slot); }"
+        substringAfter("@media (max-width:720px) {").substringBefore("\n}") shouldContain
+          ".stage.split .pane.shown { grid-column:1; grid-row:var(--slot); }"
+        this shouldNotContain "grid-column:auto"
+      }
     }
 
     // A url at the root, as the proxy's own at a root mount, mustn't double its slash before a path. Where a screen

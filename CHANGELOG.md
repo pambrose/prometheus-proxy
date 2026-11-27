@@ -145,6 +145,15 @@ All notable changes to this project are documented in this file.
 - After a dashboard push failed to render once for a page, no later failure for that page was logged, however long it
   rendered fine in between. A run of failures is now logged at ERROR once and the rest of the run at DEBUG, as the push
   loop's failed collects are
+- A dashboard's Scrape now showed a slow scrape's answer over a later click's result, or in the panel after it was
+  closed, and said it aloud; left the panel with no close button while a scrape ran, after a plain-text refusal, or
+  with no answer, so it stayed until a reload; and put any answer in as markup, a reverse proxy's HTML error page and
+  its styles included. Only the latest scrape's answer now shows, the panel always has its close button, and an answer
+  other than the dashboard's own result shows as text: its status, and the start of a plain-text body
+- Picking a theme changed only the tab it was picked in: the dashboard's other open tabs kept theirs until reloaded.
+  Every open page on the dashboard's origin now follows a change at once, said aloud only where it was made
+- Ticking Problems only within a quarter second of typing in the search applied the filter twice, sending the server
+  the same filter again and saying the row count twice
 
 ### Behavior Changes
 

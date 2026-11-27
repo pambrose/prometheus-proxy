@@ -1,9 +1,9 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 21 resolved, 49 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 26 resolved, 44 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
-and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596.
+and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597.
 
 **Date:** 2026-11-26
 
@@ -44,15 +44,15 @@ and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596.
 | 25 | Ktor plugin `AgentLifecycle` has `beginStop()`/`finishStop()` and `start()`/`beginStop()` races plus unguarded `Thread.join()` throwing checked `InterruptedException` | Embedding | medium | ⬜ |
 | 26 | Spring Boot starter's default `metricsPath()` uses `spring.application.name` verbatim, failing startup when the app name contains spaces or disallowed path characters | Embedding | low | ⬜ |
 | 27 | `EmbeddedAgentInfo` leaks internal `STOP_THREAD_NAME` constant as a `public static final` JVM field | Embedding | low | ⬜ |
-| 28 | `/screens` Split layout ignores `first`/`second` pane ordering at `<= 720px`, breaking pane swaps and `#later+earlier` links | Dashboards | medium | ⬜ |
-| 29 | `DashboardScript.scrapeNow` lacks an in-flight guard, leaves `#scrape-result` uncloseable on network/non-panel errors, and writes arbitrary error bodies via `innerHTML` | Dashboards | medium | ⬜ |
-| 30 | Theme toggle on `/screens` and its same-origin Proxy Dashboard iframe go out of sync | Dashboards | medium | ⬜ |
+| 28 | `/screens` Split layout ignores `first`/`second` pane ordering at `<= 720px`, breaking pane swaps and `#later+earlier` links | Dashboards | medium | ✅ |
+| 29 | `DashboardScript.scrapeNow` lacks an in-flight guard, leaves `#scrape-result` uncloseable on network/non-panel errors, and writes arbitrary error bodies via `innerHTML` | Dashboards | medium | ✅ |
+| 30 | Theme toggle on `/screens` and its same-origin Proxy Dashboard iframe go out of sync | Dashboards | medium | ✅ |
 | 31 | `AgentScrapeNow` strips all leading slashes (`trimStart('/')`) while `AgentSnapshot`/`AgentPathManager` strip only one, breaking Scrape now for `//...`/`///...` paths | Dashboards | low | ✅ |
-| 32 | `ScreensScript.splitPanes` misparses single-pane search links as Split layouts when a query term after `+` matches a screen ID | Dashboards | low | ⬜ |
+| 32 | `ScreensScript.splitPanes` misparses single-pane search links as Split layouts when a query term after `+` matches a screen ID | Dashboards | low | ✅ |
 | 33 | `GET <base>/login` ignores `?next=...` when the viewer already has a valid session | Dashboards | low | ✅ |
 | 34 | `DashboardSessions.isValid(..., counts = false)` mutates LRU access order on every push tick | Dashboards | low | ✅ |
 | 35 | `DashboardServer.render` never resets `session.renderFailed` on recovery and logs nothing on repeated render errors | Dashboards | low | ✅ |
-| 36 | Toggling "Problems only" during the search input debounce window causes a duplicate WebSocket announce and screen-reader announcement | Dashboards | low | ⬜ |
+| 36 | Toggling "Problems only" during the search input debounce window causes a duplicate WebSocket announce and screen-reader announcement | Dashboards | low | ✅ |
 | 37 | Incomplete URL userinfo redaction leaks passwords containing or following `@` in `Utils.sanitizeUrl` and Spring Boot's `PrometheusProxyAgentProperties.shownUrl` | Security | medium | ⬜ |
 | 38 | Unary `ScrapeResponse` lacks header-field caps, `parseContentType` passes multi-MB and control-character parameters, `httpStatus` emits arbitrary 32-bit codes, and plain bodies bypass `maxUnzippedContentSizeMBytes` | Security | medium | ✅ |
 | 39 | Dashboard `isOriginAllowed()` ignores URL scheme and bypasses explicit `allowedOrigins` restrictions | Security | medium | ✅ |
@@ -791,7 +791,7 @@ Inside `private companion object`, line 196 declares `const val STOP_THREAD_NAME
 
 ## 📊 Dashboards & `/screens`
 
-### 28. ⬜ `/screens` Split layout ignores `first`/`second` pane ordering at `<= 720px`, breaking pane swaps and `#later+earlier` links
+### 28. ✅ `/screens` Split layout ignores `first`/`second` pane ordering at `<= 720px`, breaking pane swaps and `#later+earlier` links
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -819,9 +819,11 @@ With neither `grid-row` nor `order` carrying the slot index, CSS Grid auto-place
 
 **Fix:** Preserve the no-DOM-move invariant by setting a CSS custom property `--slot` (`panes[id].style.setProperty('--slot', String(at + 1))` when `layout === 'split' && at >= 0`, else `removeProperty('--slot')`) instead of `gridColumn`. In `ScreensCss.kt`, use `.stage.split .pane.shown { grid-row:1; grid-column:var(--slot); }` above 720px and `.stage.split .pane.shown { grid-column:1; grid-row:var(--slot); }` inside `@media (max-width:720px)` (removing `!important`).
 
+**Resolution:** Fixed in #597. Each shown pane carries a `--slot` (1 or 2) in place of an inline `grid-column`, which the CSS uses as the column side by side and as the row when narrow Split stacks, so the panes follow the link and every swap at any width, and no frame moves or reloads.
+
 ---
 
-### 29. ⬜ `DashboardScript.scrapeNow` lacks an in-flight guard, leaves `#scrape-result` uncloseable on network/non-panel errors, and writes arbitrary error bodies via `innerHTML`
+### 29. ✅ `DashboardScript.scrapeNow` lacks an in-flight guard, leaves `#scrape-result` uncloseable on network/non-panel errors, and writes arbitrary error bodies via `innerHTML`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -837,9 +839,11 @@ With neither `grid-row` nor `order` carrying the slot index, CSS Grid auto-place
 
 **Fix:** Add a monotonic `var scrapeSeq = 0;` incremented in both `scrapeNow` and `closeScrapeResult` (optionally with `AbortController`), ignoring stale callbacks (`reqId !== scrapeSeq`). Assign `panel.innerHTML` only when the response is `text/html` from the scrape-now handler (e.g., checking `Content-Type` and a response header or expected `sr-head` marker); otherwise render the text safely via `textContent` inside a DOM-constructed `.sr-head` wrapper that includes a working `.close` button (using the same wrapper for network errors and `"Scraping /…"`).
 
+**Resolution:** Fixed in #597. Each Scrape now is numbered, and closing the panel counts as one, so a late answer is dropped. The panel has its close button in every state: scraping, refused, or no answer. Only the route's own result, one element starting with a `.sr-head[data-say]`, parsed in an inert `<template>`, goes in as markup; anything else shows as text, its status and the start of a plain-text body.
+
 ---
 
-### 30. ⬜ Theme toggle on `/screens` and its same-origin Proxy Dashboard iframe go out of sync
+### 30. ✅ Theme toggle on `/screens` and its same-origin Proxy Dashboard iframe go out of sync
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -866,6 +870,8 @@ window.addEventListener('storage', function (evt) {
 ```
 Because `storage` events fire only in *other* same-origin browsing contexts, `/screens`, its proxy iframe, and sibling dashboard tabs stay synchronized immediately without looping.
 
+**Resolution:** Fixed in #597. `ThemeScript` listens for `storage` events on the theme key and applies the new theme as the head script does, without announcing it, so the screens page, the proxy dashboard in its frame, and any other dashboard tab on the origin stay in step.
+
 ---
 
 ### 31. ✅ `AgentScrapeNow` strips all leading slashes (`trimStart('/')`) while `AgentSnapshot`/`AgentPathManager` strip only one, breaking Scrape now for `//...` / `///...` paths
@@ -888,7 +894,7 @@ Because `AgentPathManager` and `AgentSnapshot` (`AgentSnapshot.kt:279, 284`) nor
 
 ---
 
-### 32. ⬜ `ScreensScript.splitPanes` misparses single-pane search links as Split layouts when a query term after `+` matches a screen ID
+### 32. ✅ `ScreensScript.splitPanes` misparses single-pane search links as Split layouts when a query term after `+` matches a screen ID
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -906,6 +912,8 @@ In configs with common screen IDs (e.g., `demos/ktor/config/proxy.conf` defines 
 **Impact:** Sharing or bookmarking a `/screens` link to a multi-word dashboard search whose trailing word (or word before `/`) matches a screen ID opens the wrong layout and drops part of the query.
 
 **Fix:** Encode spaces as `%20` in `DashboardScript.applyFilter` (`params.toString().replace(/\+/g, '%20')`), which Ktor decodes identically while avoiding collisions inside `/screens` hashes.
+
+**Resolution:** Fixed in #597. `applyFilter` writes a space as `%20` (a typed `+` was already `%2B`), which Ktor reads as before, so a copied search can't be taken for a second pane. `splitPanes` is unchanged, as the page itself writes `id/path?query+id2` hashes.
 
 ---
 
@@ -972,7 +980,7 @@ Unlike `collectForPush` (which resets `collectFailing = false` on success and lo
 
 ---
 
-### 36. ⬜ Toggling "Problems only" during the search input debounce window causes a duplicate WebSocket announce and screen-reader announcement
+### 36. ✅ Toggling "Problems only" during the search input debounce window causes a duplicate WebSocket announce and screen-reader announcement
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -985,6 +993,8 @@ Typing in `#filter-q` schedules `filterTimer = setTimeout(applyFilter, 250)`. Un
 **Impact:** Duplicate WebSocket frame round-trip and duplicate match-count announcement in `#conn-announce`.
 
 **Fix:** Call `clearTimeout(filterTimer);` before `applyFilter();` in the `#filter-problems` `change` handler.
+
+**Resolution:** Fixed in #597. The Problems only handler cancels the pending search before applying the filter, so the filter is sent once and the count said once.
 
 ---
 
