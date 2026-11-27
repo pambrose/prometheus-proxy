@@ -88,6 +88,8 @@ its own that holds them all, with Prometheus and Grafana.
 - **The nginx demo's tour runs in one browser tab.** The proxy's screens page holds its dashboard, the same dashboard
   through nginx, agent-current's dashboard, and Prometheus: `make up` prints its address, `make open` opens it, and
   the tour's links open in it.
+- **The plain Kotlin demo's tour runs in one browser tab.** The proxy's screens page holds its dashboard, Grafana's
+  Bakery dashboard, and Prometheus: `make up` prints its address, `make open` opens it, and the tour's links open in it.
 - **The `docker run` examples keep their ports off the network.** The quick-start commands no longer publish the
   agents' port, 50051, which their agent reaches over the shared Docker network, and publish the scrape, admin, and
   metrics ports on `127.0.0.1` only. The Docker page's production example, for agents on other hosts, publishes 50051

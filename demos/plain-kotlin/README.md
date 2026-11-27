@@ -59,7 +59,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/plain-kotlin
-make up      # builds the oven, starts everything, and prints the URLs
+make up      # builds the oven, starts everything, and prints the screens page's URL
 make tour    # walks through the guided tour below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
@@ -67,14 +67,19 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the oven, which takes a few minutes. After that it starts in under a
 minute.
 
+Then open the proxy's [screens page](https://prometheus-proxy.com/web-dashboard/#screens), one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, Grafana, and Prometheus. The ovens have none:
+they serve nothing. `make open` opens it, and the guided tour's links open in it: <http://localhost:8694/>
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8694/> | `PLAIN_KOTLIN_DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8694/dashboard> | `PLAIN_KOTLIN_DEMO_DASHBOARD_PORT` |
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3600> | `PLAIN_KOTLIN_DEMO_GRAFANA_PORT` |
 | Prometheus's targets | <http://localhost:9690/targets> | `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT` |
 | The proxy's service discovery | <http://localhost:8680/discovery> | `PLAIN_KOTLIN_DEMO_PROXY_PORT` |
-
-`make open` opens the proxy's dashboard, Grafana, and Prometheus's targets in your browser.
 
 Each port is the basics demo's plus 600, so the demos can run side by side. If a port is already taken, set its variable
 from the table for `make up`, for example `PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`. `make up` saves it in
@@ -188,13 +193,13 @@ connections are the two it opened, to Redis and to the proxy's agent port. Prome
 the proxy all the same, `oven_<id>_metrics`, under the `oven` job, and its agent's own, `oven_<id>_agent_metrics`,
 under `oven-agent`. Its config names neither: its one job reads the proxy's service discovery, which lists each path an
 agent registered, and the code above does the rest. Prometheus's targets page shows both:
-<http://localhost:9690/targets>
+<http://localhost:8694/screens#prometheus/targets>
 
 ### 2. The Metrics in Grafana
 
 Grafana lands on the **Bakery** dashboard: ovens scraped, agents connected, waiting orders, orders baked a minute, and
 the bake time, then each oven's orders, the backlog against the number of ovens, bake times, and how much of its time
-each oven spends baking. Open it: <http://localhost:3600>
+each oven spends baking. Open it in the screens page: <http://localhost:8694/screens#grafana>
 
 ```bash
 ./demo.sh metrics
@@ -218,7 +223,8 @@ In Grafana's **Waiting orders, and ovens**, the backlog climbs by about nine ord
 to one oven, it would reach nearly 500 and take about a quarter of an hour to clear. Each new oven's agent registers its
 two paths, the proxy's service discovery lists them at once, and Prometheus, which reads it every 5 seconds, scrapes
 each new oven as a target of its own, with no change to its config. **Orders baked / sec, by oven** gains a series for
-each, and the three clear the backlog in about two minutes.
+each, and the three clear the backlog in about two minutes. Watch the new ovens' paths join the proxy dashboard's
+Paths view beside Grafana: <http://localhost:8694/screens#proxy/paths+grafana>
 
 ### 4. Scaling In Stops Ovens Cleanly
 
@@ -236,7 +242,8 @@ config change. A scrape that comes between an agent's disconnect and that refres
 a terminating pod's can on Kubernetes: **Scrape up, by oven** shows it, and the command says whether one did.
 
 The proxy dashboard's Activity view lists each stopped oven's agent as disconnected, and its Paths view marks the
-stopped ovens' paths `gone` and keeps them for an hour, so it's clear what left: <http://localhost:8694/dashboard/paths>
+stopped ovens' paths `gone` and keeps them for an hour, so it's clear what left:
+<http://localhost:8694/screens#proxy/paths>
 
 ### 5. No Proxy, No Outage
 
@@ -289,7 +296,7 @@ and frees its resources.
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the ovens and their paths, the queue, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the proxy's dashboard, Grafana, and Prometheus's targets in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds its dashboard, Grafana, and Prometheus, in the browser |  |
 
 ## How It's Put Together
 
@@ -300,7 +307,7 @@ and frees its resources.
 | `app/Dockerfile` | Builds the oven's image: compiled inside Docker against the latest release (`make up`), or from the build on the host (`make up-local`), on the Temurin JRE, whose shell `demo.sh sockets` reads `/proc` with |
 | `counter/counter.sh` | The counter: the trickle of orders, and a rush |
 | `docker/compose.yml` | The services, their ports, their images, the ovens' settings, and the misconfigured ovens' |
-| `config/proxy.conf` | The proxy's dashboard, metrics, and service discovery; its token comes from the environment |
+| `config/proxy.conf` | The proxy's dashboard and its screens page's screens, metrics, and service discovery; its token comes from the environment |
 | `prometheus/prometheus.yml` | One job from the proxy's service discovery, with the agents' metrics as a job of their own, and the proxy's own metrics |
 | `grafana/` | The provisioned datasource, dashboard folder, and Bakery dashboard |
 | `Makefile` | The demo's targets: `make up`, `make up-local`, `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists |

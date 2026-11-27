@@ -436,6 +436,16 @@ class DemoScreensLinksTest : StringSpec() {
         proxyService = "proxy",
       )
 
-    val DEMOS = listOf(BASICS, NETWORK, KTOR, NGINX)
+    // The plain Kotlin demo's page is the proxy's, which no part of its tour stops.
+    val PLAIN_KOTLIN =
+      ScreensDemo(
+        dir = "demos/plain-kotlin",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/plain-kotlin-demo.md",
+        pageUrl = "http://localhost:8694/screens",
+        proxyService = "proxy",
+      )
+
+    val DEMOS = listOf(BASICS, NETWORK, KTOR, NGINX, PLAIN_KOTLIN)
   }
 }

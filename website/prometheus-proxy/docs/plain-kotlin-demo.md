@@ -71,7 +71,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/plain-kotlin
-make up      # builds the oven, starts everything, prints the URLs
+make up      # builds the oven, starts everything, prints the screens page's URL
 make tour    # walks through the scenarios below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
@@ -79,8 +79,15 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the oven, which takes a few minutes. After that it starts in under a
 minute.
 
+Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8694/>, one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, Grafana, and Prometheus. The ovens have none:
+they serve nothing. `make open` opens it, and the tour's links open in it.
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8694/> | `PLAIN_KOTLIN_DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8694/dashboard> | `PLAIN_KOTLIN_DEMO_DASHBOARD_PORT` |
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3600> | `PLAIN_KOTLIN_DEMO_GRAFANA_PORT` |
 | Prometheus's targets | <http://localhost:9690/targets> | `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT` |
@@ -207,7 +214,8 @@ The backlog climbs by about nine orders a second while the rush lasts. Left to o
 half coming in, it would reach nearly 500 and take about a quarter of an hour to clear. `./demo.sh scale 3` runs
 `docker compose up --scale oven=3`: each new oven's agent registers its two paths, the proxy's service discovery lists
 them at once, and Prometheus, which reads it every 5 seconds, scrapes each new oven as a target of its own, with no
-change to its config. The three clear the backlog in about two minutes.
+change to its config. The three clear the backlog in about two minutes. The screens page shows the new ovens' paths
+join the proxy dashboard's Paths view beside Grafana: <http://localhost:8694/screens#proxy/paths+grafana>
 
 `./demo.sh scale 1` stops the other two with SIGTERM, as a scale-in on Kubernetes or ECS does, and shows each one's
 log:
@@ -274,7 +282,7 @@ log, and stop it, and each oven bakes:
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the ovens and their paths, the queue, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the proxy's dashboard, Grafana, and Prometheus's targets in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds its dashboard, Grafana, and Prometheus, in the browser |  |
 
 ## Going Further
 
