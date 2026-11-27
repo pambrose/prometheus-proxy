@@ -36,6 +36,11 @@ services:
     command: ["-Dproxy.internal.streamKeepAliveSecs=${NGINX_DEMO_KEEPALIVE_SECS:-30}"]
     environment:
       PROXY_CONFIG: /app/proxy.conf
+      # Where a browser on this machine reaches each screen of the proxy's screens page (proxy.conf), at the ports this
+      # file publishes them on.
+      NGINX_DEMO_AGENT_URL: http://localhost:${NGINX_DEMO_AGENT_DASHBOARD_PORT:-8595}/dashboard
+      NGINX_DEMO_NGINX_URL: http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard
+      NGINX_DEMO_PROMETHEUS_URL: http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9590}
     volumes:
       - ../config/proxy.conf:/app/proxy.conf:ro
     # Its agent port, 50051, is published nowhere: only nginx reaches it, on the demo's network.

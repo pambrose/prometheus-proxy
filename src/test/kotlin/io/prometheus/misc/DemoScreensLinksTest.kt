@@ -26,6 +26,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.proxy.dashboard.Screen
 import java.io.File
 
@@ -37,13 +38,14 @@ import java.io.File
 class DemoScreensLinksTest : StringSpec() {
   // A demo whose tour runs in a screens page: its directory, the proxy config (in the directory) that lists the
   // screens, its docs page, the page's address at the default port, the compose service of the proxy that serves it,
-  // and, for a demo that stops that proxy, the stretches of its files read while it's down.
+  // or null for the Kubernetes demo's, which the proxy chart runs, and, for a demo that stops that proxy, the stretches
+  // of its files read while it's down.
   private data class ScreensDemo(
     val dir: String,
     val config: String,
     val page: String,
     val pageUrl: String,
-    val proxyService: String,
+    val proxyService: String?,
     val proxyDown: List<ProxyDown> = emptyList(),
   ) {
     // A link in the README or docs page, which give the page's address at the default port.
@@ -51,12 +53,13 @@ class DemoScreensLinksTest : StringSpec() {
   }
 
   // A stretch of one of a demo's files that runs, or is read, while the page's proxy is stopped: in [file], after each
-  // of [after] in turn, up to [before]. It gives [directUrl], a screen's own address, and no link into the page.
+  // of [after] in turn, up to [before]. It gives no link into the page, and [directUrl], a screen's own address, unless
+  // that's null, for a stretch that gives no address at all.
   private data class ProxyDown(
     val file: String,
     val after: List<String>,
     val before: String,
-    val directUrl: String,
+    val directUrl: String?,
   )
 
   // A demo's screen entries, from its config, read without the environment, as each url is a default overridden by
@@ -152,6 +155,47 @@ class DemoScreensLinksTest : StringSpec() {
     return (if (end < 0) rest else rest.take(end)).joinToString("\n")
   }
 
+  // The page's proxy's environment, a line "NAME: value" for each variable, with each port variable in a value written
+  // ${VARIABLE:-default}: compose's, for the proxy's service, or, for the Kubernetes demo's proxy, the env values
+  // demo.sh gives the proxy chart, each shell variable in them replaced by what the script sets it to.
+  private fun ScreensDemo.proxyEnvironment(): String {
+    if (proxyService != null) return composeService(proxyService)
+    val script = File(dir, "demo.sh").readText()
+    val values = CHART_ENV_VALUE.findAll(script).associate { it.groupValues[1] to it.groupValues[2] }
+    return CHART_ENV_NAME.findAll(script).joinToString("\n") { name ->
+      "  ${name.groupValues[2]}: ${expanded(script, values[name.groupValues[1]].orEmpty())}"
+    }
+  }
+
+  // [text] with each $NAME or ${NAME} in it replaced by what [script] sets NAME to, in turn, until only the
+  // ${VARIABLE:-default} a port is read from are left, a cluster_port call's default being its last argument.
+  private fun expanded(
+    script: String,
+    text: String,
+  ): String =
+    SHELL_VARIABLE.replace(text) { match ->
+      val name = match.groupValues[1].ifEmpty { match.groupValues[2] }
+      val assigned = Regex("""(?m)^${Regex.escape(name)}="(.*)"$""").find(script)?.groupValues?.get(1)
+      if (assigned == null) {
+        match.value
+      } else {
+        CLUSTER_PORT.find(assigned)?.let { "\${${it.groupValues[1]}:-${it.groupValues[2]}}" }
+          ?: expanded(script, assigned)
+      }
+    }
+
+  // Whether the demo publishes a port on the host from [variable]: compose's 127.0.0.1:${variable:-<port>}:, or, for
+  // the Kubernetes demo, a kind node's hostPort whose comment names it, or demo.sh's port-forward to a port it sets.
+  private fun ScreensDemo.publishes(variable: String): Boolean {
+    if (proxyService != null) return published(variable).containsMatchIn(File(dir, COMPOSE).readText())
+    val kind = File(dir, "kind").listFiles().orEmpty().joinToString("\n") { it.readText() }
+    if (Regex("""hostPort: \d+ +# ${Regex.escape(variable)}\b""").containsMatchIn(kind)) return true
+    val script = File(dir, "demo.sh").readText()
+    return Regex("""(?m)^([A-Z_]+)="\$\{${Regex.escape(variable)}:-\d+}"$""").findAll(script).any { port ->
+      Regex("""port-forward [^;\n]*(\\\n[^;\n]*)?"\$${port.groupValues[1]}:""").containsMatchIn(script)
+    }
+  }
+
   init {
     "each demo's proxy config should list its screens" {
       DEMOS.forEach { demo -> withClue(demo.dir) { screenIds.getValue(demo).shouldNotBeEmpty() } }
@@ -244,8 +288,9 @@ class DemoScreensLinksTest : StringSpec() {
                 text.substringAfter(marker, missingDelimiterValue = "")
               }
               .substringBefore(down.before)
+          stretch.shouldNotBeEmpty()
           listOf("SCREENS_URL" in stretch, "/screens#" in stretch) shouldBe listOf(false, false)
-          stretch shouldContain down.directUrl
+          down.directUrl?.let { stretch shouldContain it }
         }
       }
     }
@@ -264,26 +309,26 @@ class DemoScreensLinksTest : StringSpec() {
       }
     }
 
-    // A screen's url is its default port's, and compose gives the page's proxy the url a moved port makes, as ${?NAME},
-    // so a port moved with a *_PORT variable moves its tab too. Each ${?NAME} in the config is set to a marker, so each
-    // url says which variable it reads. Compose's value, its ports at their defaults, must be the screen's url, and
-    // each port variable in it one that publishes a port: a screen with no override, a variable compose doesn't set,
-    // or one that names another screen's port, as a slip among the near-identical lines would, leaves the tab behind.
-    "every screen should follow its port: compose gives the page's proxy each url, from the port it publishes" {
+    // A screen's url is its default port's, and the page's proxy is given the url a moved port makes, as ${?NAME}, by
+    // compose, or by demo.sh through the proxy chart's env, so a port moved with a *_PORT variable moves its tab too.
+    // Each ${?NAME} in the config is set to a marker, so each url says which variable it reads. The value given, its
+    // ports at their defaults, must be the screen's url, and each port variable in it one that publishes a port: a
+    // screen with no override, a variable the proxy isn't given, or one that names another screen's port, as a slip
+    // among the near-identical lines would, leaves the tab behind.
+    "every screen should follow its port: the page's proxy is given each url, from a port the demo publishes" {
       DEMOS.forEach { demo ->
         withClue(demo.dir) {
           val names = OPTIONAL.findAll(File(demo.dir, demo.config).readText()).map { it.groupValues[1] }.toSet()
           val urls = demo.entries(names.associateWith { "$MARKER$it" }).associate { it.name to it.url }
           urls.filterValues { !it.startsWith(MARKER) }.keys.shouldBeEmpty()
           val defaults = demo.entries().associate { it.name to it.url }
-          val service = demo.composeService(demo.proxyService)
-          val compose = File(demo.dir, COMPOSE).readText()
+          val environment = demo.proxyEnvironment()
           urls
             .mapNotNull { (screen, marked) ->
               val name = marked.removePrefix(MARKER)
               val value =
-                Regex("""(?m)^\s+${Regex.escape(name)}:\s*(\S+)""").find(service)?.groupValues?.get(1)
-                  ?: return@mapNotNull "$screen: compose doesn't give ${demo.proxyService} $name"
+                Regex("""(?m)^\s+${Regex.escape(name)}:\s*(\S+)""").find(environment)?.groupValues?.get(1)
+                  ?: return@mapNotNull "$screen: ${demo.proxyService ?: "the proxy chart"} isn't given $name"
               val ports = PORT_DEFAULT.findAll(value).map { it.groupValues[1] }.toList()
               val atDefaults = PORT_DEFAULT.replace(value) { it.groupValues[2] }
               when {
@@ -295,8 +340,8 @@ class DemoScreensLinksTest : StringSpec() {
                   "$screen: $name names no port variable"
                 }
 
-                ports.any { !published(it).containsMatchIn(compose) } -> {
-                  "$screen: $name's port isn't one compose publishes"
+                ports.any { !demo.publishes(it) } -> {
+                  "$screen: $name's port isn't one the demo publishes"
                 }
 
                 else -> {
@@ -342,6 +387,14 @@ class DemoScreensLinksTest : StringSpec() {
 
     // A port compose publishes on the host from [variable]: "127.0.0.1:${variable:-<port>}:<port in the container>".
     fun published(variable: String) = Regex("""127\.0\.0\.1:\$\{${Regex.escape(variable)}:-\d+}:""")
+
+    // The Kubernetes demo's env values for the proxy chart, each "env[<i>].name=<NAME>" and "env[<i>].value=<value>"
+    // in demo.sh; a port demo.sh reads with cluster_port "${VARIABLE:-}" <NodePort> <default>; and a shell variable,
+    // $NAME or ${NAME}, but not ${NAME:-default}.
+    val CHART_ENV_NAME = Regex("""env\[(\d+)]\.name=([A-Za-z0-9_]+)""")
+    val CHART_ENV_VALUE = Regex("""env\[(\d+)]\.value=([^"\s]+)""")
+    val CLUSTER_PORT = Regex("""cluster_port "\$\{([A-Za-z0-9_]+):-}" \d+ (\d+)""")
+    val SHELL_VARIABLE = Regex("""\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)})""")
 
     val BASICS =
       ScreensDemo(
@@ -425,6 +478,77 @@ class DemoScreensLinksTest : StringSpec() {
           ),
       )
 
-    val DEMOS = listOf(BASICS, NETWORK, KTOR)
+    // The nginx demo's page is the proxy's. keepalive and reset recreate the proxy, but wait for its dashboard before
+    // they go on, so no step is read while it's down.
+    val NGINX =
+      ScreensDemo(
+        dir = "demos/nginx",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/nginx-demo.md",
+        pageUrl = "http://localhost:8594/screens",
+        proxyService = "proxy",
+      )
+
+    // The plain Kotlin demo's page is the proxy's, which no part of its tour stops.
+    val PLAIN_KOTLIN =
+      ScreensDemo(
+        dir = "demos/plain-kotlin",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/plain-kotlin-demo.md",
+        pageUrl = "http://localhost:8694/screens",
+        proxyService = "proxy",
+      )
+
+    // The Spring Boot demo's page is the proxy's, which part 4 of its tour stops. The tour gives no address while
+    // it's down: the agent's dashboard, open in the page from the step before, keeps answering there.
+    val SPRING_BOOT =
+      ScreensDemo(
+        dir = "demos/spring-boot",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/spring-boot-demo.md",
+        pageUrl = "http://localhost:8494/screens",
+        proxyService = "proxy",
+        proxyDown =
+          listOf(
+            ProxyDown(
+              file = "demos/spring-boot/demo.sh",
+              after = listOf("\n  proxy-stop)"),
+              before = "\n    ;;",
+              directUrl = "\$AGENT_DASHBOARD_URL/connection",
+            ),
+            // Part 4 of the tour, from its proxy-stop to its proxy-start.
+            ProxyDown(
+              file = "demos/spring-boot/demo.sh",
+              after = listOf("\n  if part 4 ", "-- proxy-stop"),
+              before = "-- proxy-start",
+              directUrl = null,
+            ),
+            ProxyDown(
+              file = "demos/spring-boot/README.md",
+              after = listOf("### 4. The Proxy Goes Away", "`./demo.sh proxy-stop` stops the proxy"),
+              before = "`./demo.sh proxy-start`",
+              directUrl = "http://localhost:8495/dashboard/connection",
+            ),
+            ProxyDown(
+              file = "website/prometheus-proxy/docs/spring-boot-demo.md",
+              after = listOf("## The Agent's Dashboard", "`./demo.sh proxy-stop` stops the proxy"),
+              before = "`./demo.sh proxy-start`",
+              directUrl = "http://localhost:8495/dashboard/connection",
+            ),
+          ),
+      )
+
+    // The Kubernetes demo's page is the proxy's, which the proxy chart runs, and no part of its tour stops; demo.sh
+    // gives it each screen's url through the chart's env.
+    val KUBERNETES =
+      ScreensDemo(
+        dir = "demos/kubernetes",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/kubernetes-demo.md",
+        pageUrl = "http://localhost:8294/screens",
+        proxyService = null,
+      )
+
+    val DEMOS = listOf(BASICS, NETWORK, KTOR, NGINX, PLAIN_KOTLIN, SPRING_BOOT, KUBERNETES)
   }
 }

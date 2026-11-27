@@ -61,8 +61,9 @@ RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The newest release that lacks something the demo shows. up runs the release the docs give (make site-version)
 # once it's later than this and its images are on Docker Hub, and otherwise builds the proxy and agent from this
 # checkout, as up-local does, so nothing here changes with a release. When the demo comes to use something no
-# release has yet, set this to the latest release on Docker Hub.
-NEEDS_RELEASE_AFTER=4.6.0
+# release has yet, set this to the latest release on Docker Hub. 4.7.0 lacks the proxy's screens page and the
+# dashboards' framing, which 4.7.1 brings.
+NEEDS_RELEASE_AFTER=4.7.0
 
 # nginx's config variants (nginx/): the agents' entrance, agents-<variant>.conf, and the dashboard's,
 # dashboard-<variant>.conf, each copied into conf.d as agents.conf or dashboard.conf.
@@ -85,12 +86,19 @@ NGINX_DASHBOARD_URL="http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard"
 AGENT_DASHBOARD_URL="http://localhost:${NGINX_DEMO_AGENT_DASHBOARD_PORT:-8595}/dashboard"
 PROMETHEUS_URL="http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9590}"
 PROXY_URL="http://localhost:${NGINX_DEMO_PROXY_PORT:-8580}"
-# Prometheus graphs, over the last 10 minutes: whether each agent's path answered, and how often nginx closed an
-# agent's stream.
+# The proxy's screens page, which holds every screen above in one browser tab (proxy.conf's screens). The tour links
+# into it: ${SCREENS_URL}#<screen>, #<screen>/<view>, or #<screen>+<screen> for two side by side; a link with a view,
+# such as #through-nginx/, reloads its screen. keepalive and reset recreate the proxy, and the page with it, but wait
+# for its dashboard before they go on.
+SCREENS_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/screens"
+# The proxy's dashboard port's root, which leads to the screens page: the short address make up prints.
+SCREENS_HOME_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/"
+# Prometheus graphs, over the last 10 minutes, as paths on Prometheus for its screen in the page: whether each agent's
+# path answered, and how often nginx closed an agent's stream.
 GRAPH_OPTIONS="g0.tab=graph&g0.range_input=10m"
-UP_GRAPH_URL="$PROMETHEUS_URL/query?g0.expr=up%7Bjob%3D~%22storefront%7Cwarehouse%22%7D&$GRAPH_OPTIONS"
+UP_GRAPH_PATH="query?g0.expr=up%7Bjob%3D~%22storefront%7Cwarehouse%22%7D&$GRAPH_OPTIONS"
 CUTS_QUERY="increase(proxy_agent_disconnects_total%7Breason%3D%22stream_terminated%22%7D%5B1m%5D)"
-CUTS_GRAPH_URL="$PROMETHEUS_URL/query?g0.expr=$CUTS_QUERY&$GRAPH_OPTIONS"
+CUTS_GRAPH_PATH="query?g0.expr=$CUTS_QUERY&$GRAPH_OPTIONS"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -145,7 +153,7 @@ Lifecycle:
   up-local                 Start it with the proxy and agent built from this checkout (needs a JDK 17 or later)
   down                     Stop the demo and remove its containers and network
   status                   Show the containers, nginx's configs, the keepalive interval, and the URLs
-  open                     Open the proxy dashboard, directly and through nginx, agent-current's, and Prometheus
+  open                     Open the proxy's screens page, which holds every dashboard and Prometheus
   logs [service]           Follow the logs (proxy, nginx, agent-current, agent-legacy, ...)
   tour [part]              Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
@@ -167,11 +175,8 @@ EOF
 print_urls() {
   echo
   bold "Prometheus Proxy nginx demo"
-  echo "  Proxy dashboard:          $DASHBOARD_URL"
-  echo "  The same, through nginx:  $NGINX_DASHBOARD_URL"
-  echo "  agent-current:            $AGENT_DASHBOARD_URL"
-  echo "  Prometheus:               $PROMETHEUS_URL"
-  echo "  Proxy discovery:          $PROXY_URL/discovery"
+  echo "  All screens:      $SCREENS_HOME_URL"
+  echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
   wrap "" "" "Demo overview: ${PAGE_URL}#what-this-demo-shows"
   echo
@@ -264,7 +269,7 @@ reload_point() {
   if (($1)); then
     point "Within ${SHUTDOWN_SECS} seconds, nginx's old workers close the agents' connections, and each agent" \
       "reconnects at once, to a new worker, under this config: each shows a disconnect and a connect in the proxy's" \
-      "Activity view, $DASHBOARD_URL/activity"
+      "Activity view, ${SCREENS_URL}#proxy/activity"
   else
     point "nginx's old workers keep the connections they have, under the config they opened with: an agent connected" \
       "now meets this config only when its connection ends, which for an agent whose keepalives keep its streams" \
@@ -545,6 +550,7 @@ start_demo() {
   wait_for "$NGINX_DASHBOARD_URL" "The proxy dashboard, through nginx,"
   wait_for "$AGENT_DASHBOARD_URL" "agent-current's dashboard"
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
+  wait_for "$SCREENS_URL" "The proxy's screens page"
   print_urls
 }
 
@@ -573,18 +579,13 @@ cmd_status() {
 }
 
 cmd_open() {
-  local opener url
   if command -v open >/dev/null 2>&1; then
-    opener=open
+    open "$SCREENS_HOME_URL"
   elif command -v xdg-open >/dev/null 2>&1; then
-    opener=xdg-open
+    xdg-open "$SCREENS_HOME_URL"
   else
     print_urls
-    return
   fi
-  for url in "$DASHBOARD_URL" "$NGINX_DASHBOARD_URL" "$AGENT_DASHBOARD_URL" "$UP_GRAPH_URL"; do
-    "$opener" "$url"
-  done
 }
 
 # The tour: the presenter's script (README.md), one part at a time. It numbers each part's steps, and waits for Enter
@@ -801,14 +802,17 @@ cmd_tour() {
       "agent-legacy, of release 4.6.0, beside a warehouse. Each dials nginx at nginx.test.google.fr:443 over TLS." \
       "nginx ends the TLS and passes each gRPC call on to the proxy's agent port, which only nginx can reach." \
       "Prometheus scrapes both agents' paths through the proxy every 5 seconds."
-    instruct "Open the proxy dashboard: $DASHBOARD_URL" \
-      "Both agents are connected, each listed at the address Unknown. nginx relays each agent's calls over" \
-      "connections of its own, so the proxy can't watch an agent's connection, as its transport filter does, and" \
-      "both the proxy and the agents turn the filter off. The proxy then learns an agent has gone when the agent's" \
-      "stream of scrape requests ends, and ties each agent's calls to the identity its token names, so each agent" \
-      "has a token of its own. Click agent-current: its host is storefront-01, which the agent reports itself."
+    instruct "Open the demo's screens, on the proxy dashboard: ${SCREENS_URL}#proxy" \
+      "This is the proxy's screens page, one browser tab that holds every screen in the demo: the proxy's" \
+      "dashboard, the same dashboard through nginx, which part 4 comes to, agent-current's dashboard, and" \
+      "Prometheus. The steps from here link into this page, so keep it open, and each link opens in it. On the" \
+      "proxy dashboard, both agents are connected, each listed at the address Unknown. nginx relays each agent's" \
+      "calls over connections of its own, so the proxy can't watch an agent's connection, as its transport filter" \
+      "does, and both the proxy and the agents turn the filter off. The proxy then learns an agent has gone when the" \
+      "agent's stream of scrape requests ends, and ties each agent's calls to the identity its token names, so each" \
+      "agent has a token of its own. Click agent-current: its host is storefront-01, which the agent reports itself."
     step "Show the last gRPC calls nginx passed to the proxy, by agent." -- nginx-log
-    instruct "Open agent-current's own dashboard, and its Connection view: $AGENT_DASHBOARD_URL/connection" \
+    instruct "Open agent-current's own dashboard, on its Connection view: ${SCREENS_URL}#agent-current/connection" \
       "agent-current is connected to nginx.test.google.fr:443, using TLS (no mutual auth). The agent checks nginx's" \
       "certificate against the name it dials: the certificate names *.test.google.fr, and the agent trusts the CA" \
       "that signed it, which its config names. agent-legacy, of 4.6.0, has no dashboard: the agent dashboard came" \
@@ -819,19 +823,20 @@ cmd_tour() {
     "for 60 seconds. Here you see what that does to an agent from before the keepalives, and how raising" \
     "nginx's timeouts fixes it. It matters if the proxy or any agent you run behind a reverse proxy is on 4.6.0" \
     "or earlier, as while you upgrade one before the other: keepalives flow only when both ends are newer."; then
-    instruct "Open the proxy dashboard's Activity view: $DASHBOARD_URL/activity" \
+    instruct "Open the proxy dashboard's Activity view: ${SCREENS_URL}#proxy/activity" \
       "About once a minute, agent-legacy disconnects, with the reason 'Stream terminated (transport filter" \
       "disabled)', and connects again a few seconds later. agent-current doesn't. An agent's stream for results sent" \
       "in chunks carries something only when a result is over 32 KB gzipped, so it's quiet even while Prometheus" \
       "scrapes the agent every 5 seconds. agent-current and the proxy send a keepalive on each stream after 30" \
       "seconds of quiet. agent-legacy predates them, and the proxy, seeing it doesn't take them, sends it none."
-    instruct "Open Prometheus's graph of how often nginx closed an agent's stream: $CUTS_GRAPH_URL" \
+    instruct "Open Prometheus's graph of how often nginx closed a stream: ${SCREENS_URL}#prometheus/$CUTS_GRAPH_PATH" \
       "It climbs to about one a minute. A scrape that lands while agent-legacy reconnects finds its path gone, and" \
-      "fails: up{job=\"warehouse\"} dips to 0 now and then, $UP_GRAPH_URL"
+      "fails: up{job=\"warehouse\"} dips to 0 now and then, ${SCREENS_URL}#prometheus/$UP_GRAPH_PATH"
     step "Raise both of nginx's stream timeouts to a day, and reload nginx." -- nginx-long-timeouts
-    instruct "Watch the proxy dashboard's Activity view for a minute or two: $DASHBOARD_URL/activity" \
+    instruct "Watch the proxy dashboard's Activity view beside Prometheus's graph for a minute or two." \
       "agent-legacy is cut off once more, by the worker it's on, which keeps the old timeouts. It reconnects to a" \
-      "new worker, under the day-long timeouts, and then stays connected: no more disconnects from it."
+      "new worker, under the day-long timeouts, and then stays connected: no more disconnects from it, and the" \
+      "graph comes down to 0. Open the two side by side: ${SCREENS_URL}#proxy/activity+prometheus"
   fi
 
   if part 3 "Some load balancers close a quiet connection sooner than nginx's 60 seconds. Here nginx's timeouts" \
@@ -841,27 +846,27 @@ cmd_tour() {
     step "List nginx's processes." -- nginx-workers
     step "Set nginx's worker_shutdown_timeout to ${SHUTDOWN_SECS} seconds, and restart nginx to bring it in." \
       -- nginx-shutdown-timeout
-    instruct "Watch agent-current's Activity view for a minute: $AGENT_DASHBOARD_URL/activity" \
+    instruct "Watch agent-current's Activity view for a minute: ${SCREENS_URL}#agent-current/activity" \
       "Now under the 20-second timeouts, agent-current disconnects about every 20 seconds, and connects again at" \
       "once. Two of its streams go quiet for 20 seconds before their keepalives come, at 30: its stream for results" \
       "in chunks, which nginx ends with 408, from client_body_timeout, and the proxy's stream of path notices to" \
       "it, which nginx ends with 504, from grpc_read_timeout. Each disconnect's reason is the 504."
     step "Recreate the proxy with a keepalive interval of 10 seconds, under nginx's 20." -- keepalive 10
-    instruct "Watch agent-current's Activity view for a minute: $AGENT_DASHBOARD_URL/activity" \
+    instruct "Watch agent-current's Activity view beside the proxy's for a minute." \
       "After its reconnect to the new proxy, agent-current stays connected: a keepalive every 10 seconds keeps each" \
       "of its streams from going quiet for nginx's 20. agent-legacy, which sends none, is still cut off about every" \
-      "20 seconds, in the proxy's Activity view."
+      "20 seconds, in the proxy's. Open the two side by side: ${SCREENS_URL}#agent-current/activity+proxy/activity"
     put_back "put nginx and the proxy back as the demo started them" reset
   fi
 
   if part 4 "The proxy's dashboard updates live, over a WebSocket. Here you put it behind nginx, as you would to" \
     "end its TLS there, and see what nginx has to pass on for the WebSocket to open."; then
-    instruct "Open the dashboard through nginx: $NGINX_DASHBOARD_URL" \
+    instruct "Open the dashboard through nginx: ${SCREENS_URL}#through-nginx" \
       "The page loads, then the status bar's live indicator turns into a blinking red 'reconnecting...' that" \
       "never clears, and nothing on the page moves. nginx's entrance for it is a plain proxy_pass, which passes" \
       "each request on as HTTP/1.0 and drops the headers that ask to turn a request into a WebSocket, Upgrade and" \
       "Connection. The dashboard can't take the request as a WebSocket handshake, and answers 400. Compare the" \
-      "dashboard reached directly, which updates every second: $DASHBOARD_URL"
+      "dashboard reached directly, which updates every second, beside it: ${SCREENS_URL}#through-nginx+proxy"
     step "Pass the WebSocket handshake's headers, over HTTP/1.1." -- dashboard-upgrade
     step "Pass the Host header the browser sent too." -- dashboard-host
   fi
@@ -950,24 +955,24 @@ main() {
     reload_point "$shutdown"
     if ((shutdown)); then
       point "agent-legacy then stays connected: the proxy's Activity view shows no more disconnects from it," \
-        "$DASHBOARD_URL/activity"
+        "${SCREENS_URL}#proxy/activity"
     elif [[ "$before" == long-timeouts ]]; then
       point "These timeouts were in place already, so the reload changes nothing for agent-legacy: once its" \
         "connection is with a worker under them, it stays connected, and the proxy's Activity view shows no more" \
-        "disconnects from it, $DASHBOARD_URL/activity"
+        "disconnects from it, ${SCREENS_URL}#proxy/activity"
     elif [[ "$before" == "changed by hand" ]]; then
       point "agent-legacy keeps the connection it has only until the timeouts of the worker it's on end a quiet" \
         "stream. It then reconnects to a new worker, under these timeouts, and stays connected: the proxy's" \
-        "Activity view shows no more disconnects from it after that, $DASHBOARD_URL/activity"
+        "Activity view shows no more disconnects from it after that, ${SCREENS_URL}#proxy/activity"
     else
       within="a minute"
       [[ "$before" != short-timeouts ]] || within="20 seconds"
       point "agent-legacy is cut off once more, within $within, by the worker it's on, which keeps the old" \
         "timeouts. It reconnects to a new worker, under these timeouts, and then stays connected: the proxy's" \
-        "Activity view shows no more disconnects from it, $DASHBOARD_URL/activity"
+        "Activity view shows no more disconnects from it, ${SCREENS_URL}#proxy/activity"
     fi
     point "Prometheus's graph of nginx closing an agent's stream settles at 0 within a minute or two:" \
-      "$CUTS_GRAPH_URL"
+      "${SCREENS_URL}#prometheus/$CUTS_GRAPH_PATH"
     ;;
   nginx-short-timeouts)
     local shutdown=0 before ka vs against
@@ -991,39 +996,41 @@ main() {
     if [[ "$vs" == sooner ]]; then
       point "agent-current stays connected, whichever worker it's on: a keepalive every $ka seconds keeps each of" \
         "its streams from going quiet for 20, so these timeouts never end one. Its own Activity view shows no" \
-        "disconnect from a timeout: $AGENT_DASHBOARD_URL/activity"
+        "disconnect from a timeout: ${SCREENS_URL}#agent-current/activity"
       if ((shutdown)); then
         point "agent-legacy, which sends no keepalives, is cut off about every 20 seconds, and a scrape that lands" \
-          "while it reconnects fails, so its path dips in Prometheus: $UP_GRAPH_URL"
+          "while it reconnects fails, so its path dips in Prometheus: ${SCREENS_URL}#prometheus/$UP_GRAPH_PATH"
       fi
     elif ((shutdown)); then
       case "$vs" in
       off)
         point "Then both agents are cut off about every 20 seconds, agent-current included: with the keepalives" \
           "off, its streams go as quiet as agent-legacy's. Its own Activity view shows each disconnect, with the" \
-          "reason: $AGENT_DASHBOARD_URL/activity"
+          "reason: ${SCREENS_URL}#agent-current/activity"
         ;;
       same)
         point "Then agent-legacy is cut off about every 20 seconds. agent-current's keepalives come after 20" \
           "seconds, just as these timeouts would end a quiet stream, so whether it's cut off too is a race. Its own" \
-          "Activity view shows any disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
+          "Activity view shows any disconnect, with the reason: ${SCREENS_URL}#agent-current/activity"
         ;;
       *)
         point "Then both agents are cut off about every 20 seconds, agent-current included: its stream for results" \
           "in chunks, and the proxy's stream of path notices to it, go quiet for 20 seconds before their keepalives" \
-          "come, at $ka. Its own Activity view shows each disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
+          "come, at $ka. Its own Activity view shows each disconnect, with the reason:" \
+          "${SCREENS_URL}#agent-current/activity"
         ;;
       esac
-      point "A scrape that lands while an agent reconnects fails, so both paths dip in Prometheus: $UP_GRAPH_URL"
+      point "A scrape that lands while an agent reconnects fails, so both paths dip in Prometheus:" \
+        "${SCREENS_URL}#prometheus/$UP_GRAPH_PATH"
       follow_up "Next, run" "$0 keepalive 10"
     elif [[ "$(keepalive_vs "$ka" "$(timeout_of "$before")")" == sooner ]]; then
       point "agent-current isn't cut off, though its keepalives come after $ka seconds: its connection is with an" \
         "old worker, under the timeouts it opened with. Its own Activity view stays quiet:" \
-        "$AGENT_DASHBOARD_URL/activity"
+        "${SCREENS_URL}#agent-current/activity"
     else
       point "agent-current keeps the connection it has only until the timeouts of the worker it's on end a quiet" \
         "stream. It then reconnects to a new worker, under these timeouts, and is cut off about every 20 seconds." \
-        "Its own Activity view shows each disconnect: $AGENT_DASHBOARD_URL/activity"
+        "Its own Activity view shows each disconnect: ${SCREENS_URL}#agent-current/activity"
     fi
     ((shutdown)) || follow_up "To see the old workers, run" "$0 nginx-workers"
     ;;
@@ -1069,7 +1076,7 @@ main() {
       watch_for
       point "The restart closes every connection, so each agent reconnects once, within a few seconds, to a worker" \
         "under the config in place: the proxy's Activity view shows a disconnect and a connect for each," \
-        "$DASHBOARD_URL/activity"
+        "${SCREENS_URL}#proxy/activity"
       point "Every agent now runs under the agents' entrance in place, $(conf_file agents)."
       point "From now on, a reload reaches every agent within ${SHUTDOWN_SECS} seconds, at the cost of one reconnect" \
         "each, which a scrape can land in."
@@ -1081,7 +1088,7 @@ main() {
     since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     if ! start_proxy "$secs"; then
       bold "The proxy already runs with a keepalive interval of ${secs} seconds, so nothing changed"
-      follow_up "To see the proxy's settings, open" "$DASHBOARD_URL/settings"
+      follow_up "To see the proxy's settings, open" "${SCREENS_URL}#proxy/settings"
       return
     fi
     line="$(keepalive_line_since "$since")"
@@ -1114,25 +1121,25 @@ main() {
           "leave both connected."
       else
         point "With the keepalives off, agent-current's streams go as quiet as agent-legacy's, and $timeouts, cut it" \
-          "off as often: its Activity view shows each disconnect, $AGENT_DASHBOARD_URL/activity"
+          "off as often: its Activity view shows each disconnect, ${SCREENS_URL}#agent-current/activity"
       fi
       ;;
     sooner)
       point "agent-current stays connected: a keepalive every $secs seconds keeps each of its streams from going" \
-        "quiet as long as $timeouts. Its Activity view shows no more disconnects, $AGENT_DASHBOARD_URL/activity"
+        "quiet as long as $timeouts. Its Activity view shows no more disconnects, ${SCREENS_URL}#agent-current/activity"
       ;;
     same)
       point "agent-current's keepalives come just as $timeouts, would end a quiet stream, so whether nginx cuts it" \
-        "off is a race. Its Activity view shows any disconnect, $AGENT_DASHBOARD_URL/activity"
+        "off is a race. Its Activity view shows any disconnect, ${SCREENS_URL}#agent-current/activity"
       ;;
     later)
       point "agent-current's keepalives come too late for $timeouts: nginx ends its quiet streams first, and cuts it" \
-        "off as often as agent-legacy. Its Activity view shows each disconnect, $AGENT_DASHBOARD_URL/activity"
+        "off as often as agent-legacy. Its Activity view shows each disconnect, ${SCREENS_URL}#agent-current/activity"
       ;;
     *)
       point "The agents' entrance was changed by hand: agent-current stays connected under stream timeouts longer" \
         "than ${secs} seconds, and is cut off under shorter ones. Its Activity view shows each disconnect," \
-        "$AGENT_DASHBOARD_URL/activity"
+        "${SCREENS_URL}#agent-current/activity"
       ;;
     esac
     if [[ "$entrance" == long-timeouts ]]; then
@@ -1141,7 +1148,7 @@ main() {
         "nginx's stream timeouts are a day long, in nginx/agents-long-timeouts.conf."
     else
       point "agent-legacy, from 4.6.0, sends no keepalives, so nginx's stream timeouts still cut it off: the proxy's" \
-        "Activity view shows each disconnect, $DASHBOARD_URL/activity"
+        "Activity view shows each disconnect, ${SCREENS_URL}#proxy/activity"
     fi
     if ((secs != DEFAULT_KEEPALIVE_SECS)); then
       follow_up "To put the default back, run" "$0 keepalive $DEFAULT_KEEPALIVE_SECS"
@@ -1155,7 +1162,7 @@ main() {
       "WebSocket handshake reaches it as a plain request, which it answers with 400."
     watch_for
     point "Reload the dashboard through nginx: it shows a blinking red 'reconnecting...', and nothing on it moves:" \
-      "$NGINX_DASHBOARD_URL"
+      "${SCREENS_URL}#through-nginx/"
     ;;
   dashboard-upgrade)
     use_conf dashboard upgrade
@@ -1167,11 +1174,11 @@ main() {
       "takes a WebSocket, and any POST, only from a page of its own, an Origin that matches the Host, so another" \
       "site's page can't use it, and refuses this one with 403."
     watch_for
-    point "Reload the dashboard through nginx: it's still 'reconnecting...': $NGINX_DASHBOARD_URL"
+    point "Reload the dashboard through nginx: it's still 'reconnecting...': ${SCREENS_URL}#through-nginx/"
     point "The proxy logs the refusal, 'Refused a dashboard request from origin', naming the address the browser" \
       "opened, and the setting that would allow it, proxy.dashboard.allowedOrigins. To see it, run $0 logs proxy"
     point "In the Paths view, click the scrape button, the circular arrow beside /storefront_metrics: the result" \
-      "says 'Origin not allowed', since the button sends a POST: $NGINX_DASHBOARD_URL/paths"
+      "says 'Origin not allowed', since the button sends a POST: ${SCREENS_URL}#through-nginx/paths"
     follow_up "Next, run" "$0 dashboard-host"
     ;;
   dashboard-host)
@@ -1184,7 +1191,7 @@ main() {
       "another Host."
     watch_for
     point "Reload the dashboard through nginx: the live indicator stops blinking, and the page updates every" \
-      "second, as it does reached directly: $NGINX_DASHBOARD_URL"
+      "second, as it does reached directly: ${SCREENS_URL}#through-nginx/"
     point "The scrape button in the Paths view works through nginx too, and shows the start of what Prometheus" \
       "gets from /storefront_metrics."
     point "Here nginx passes the dashboard on over plain HTTP. If it ended TLS in front of the dashboard, the" \

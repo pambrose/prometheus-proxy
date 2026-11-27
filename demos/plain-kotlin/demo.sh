@@ -57,12 +57,11 @@ save_ports() {
 # built either way, against the latest release (up) or this checkout (up-local).
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/plain-kotlin-app:local)
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
-# The newest release that lacks something the demo shows (fromEnvironment(), source(path, registry),
-# agentMetricsAt(), and startIfConfigured()). up runs the release the docs give (make site-version) once it's later
-# than this and its proxy image is on Docker Hub, and otherwise builds everything from this checkout, as up-local
-# does, so nothing here changes with a release. When the demo comes to use something no release has yet, set this
-# to the latest release on Docker Hub.
-NEEDS_RELEASE_AFTER=4.6.0
+# The newest release that lacks something the demo shows (the proxy's screens page, which 4.7.1 brings). up runs the
+# release the docs give (make site-version) once it's later than this and its proxy image is on Docker Hub, and
+# otherwise builds everything from this checkout, as up-local does, so nothing here changes with a release. When the
+# demo comes to use something no release has yet, set this to the latest release on Docker Hub.
+NEEDS_RELEASE_AFTER=4.7.0
 # The services only a scenario starts, so down and status cover them too.
 ON_DEMAND=(--profile misconfigured)
 # The most ovens `scale` runs.
@@ -75,6 +74,12 @@ DASHBOARD_URL="http://localhost:${PLAIN_KOTLIN_DEMO_DASHBOARD_PORT:-8694}/dashbo
 GRAFANA_URL="http://localhost:${PLAIN_KOTLIN_DEMO_GRAFANA_PORT:-3600}"
 PROMETHEUS_URL="http://localhost:${PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT:-9690}"
 PROXY_URL="http://localhost:${PLAIN_KOTLIN_DEMO_PROXY_PORT:-8680}"
+# The proxy's screens page, which holds the proxy's dashboard, Grafana, and Prometheus in one browser tab (proxy.conf's
+# screens). The tour links into it: ${SCREENS_URL}#<screen>, #<screen>/<view>, or #<screen>+<screen> for two side by
+# side. No part of the tour stops the proxy.
+SCREENS_URL="http://localhost:${PLAIN_KOTLIN_DEMO_DASHBOARD_PORT:-8694}/screens"
+# The proxy's dashboard port's root, which leads to the screens page: the short address make up prints.
+SCREENS_HOME_URL="http://localhost:${PLAIN_KOTLIN_DEMO_DASHBOARD_PORT:-8694}/"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -132,7 +137,7 @@ Lifecycle:
                      later)
   down               Stop the demo and remove its containers and network
   status             Show the containers, the ovens and their paths, the queue, and the URLs
-  open               Open the proxy's dashboard, Grafana, and Prometheus's targets in the browser
+  open               Open the proxy's screens page, which holds its dashboard, Grafana, and Prometheus
   logs [service]     Follow the logs (oven, redis, counter, proxy, prometheus, grafana)
   tour [part]        Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
@@ -150,9 +155,7 @@ EOF
 print_urls() {
   echo
   bold "Prometheus Proxy plain Kotlin demo"
-  echo "  Proxy dashboard:        $DASHBOARD_URL"
-  echo "  Grafana:                $GRAFANA_URL"
-  echo "  Prometheus's targets:   $PROMETHEUS_URL/targets"
+  echo "  All screens:            $SCREENS_HOME_URL"
   echo "  The proxy's discovery:  $PROXY_URL/discovery"
   echo
   wrap "" "" "Demo overview: ${PAGE_URL}#what-this-demo-shows"
@@ -374,6 +377,7 @@ start_demo() {
   wait_for "$DASHBOARD_URL" "The proxy dashboard"
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   wait_for "$GRAFANA_URL/api/health" "Grafana"
+  wait_for "$SCREENS_URL" "The proxy's screens page"
   wait_until 60 has_count 1 discovered_ovens ||
     die "the oven's agent didn't register its paths with the proxy within 60s; see '$0 logs oven'"
   print_urls
@@ -403,18 +407,13 @@ cmd_status() {
 }
 
 cmd_open() {
-  local opener url
   if command -v open >/dev/null 2>&1; then
-    opener=open
+    open "$SCREENS_HOME_URL"
   elif command -v xdg-open >/dev/null 2>&1; then
-    opener=xdg-open
+    xdg-open "$SCREENS_HOME_URL"
   else
     print_urls
-    return
   fi
-  for url in "$DASHBOARD_URL" "$GRAFANA_URL" "$PROMETHEUS_URL/targets"; do
-    "$opener" "$url"
-  done
 }
 
 # The sockets scenario: what the oven publishes, what its JVM has open, and Prometheus's targets for it.
@@ -469,7 +468,7 @@ cmd_sockets() {
       "container on a compose network, and which isn't the oven's."
   fi
   echo
-  bold "Prometheus scrapes it anyway, through the proxy: $PROMETHEUS_URL/targets"
+  bold "Prometheus scrapes it anyway, through the proxy"
   print_targets
   how_it_works "The oven is a plain Kotlin program with no HTTP server, and compose publishes no port for it. Its" \
     "agent connects out to the proxy, over gRPC, and registers two paths named after the container," \
@@ -479,7 +478,7 @@ cmd_sockets() {
   watch_for
   point "Nothing listens: the oven's only connections are the ones it opened, to the proxy and to Redis."
   point "Prometheus's targets page lists the oven's path under the oven job, and its agent's under oven-agent," \
-    "each with the proxy's address, proxy:8080, as the host: $PROMETHEUS_URL/targets"
+    "each with the proxy's address, proxy:8080, as the host: ${SCREENS_URL}#prometheus/targets"
 }
 
 # Shows what the proxy serves at a path: a few of its lines, an extended regex, and how many samples it has with each
@@ -509,7 +508,7 @@ cmd_metrics() {
   watch_for
   point "The oven's path has no agent_ series, and the agent's no bakery_ series."
   point "Prometheus scrapes them as two jobs, oven and oven-agent. Grafana's Bakery dashboard reads the first, and" \
-    "the Prometheus Agents dashboard, linked from its top bar, the second: $GRAFANA_URL"
+    "the Prometheus Agents dashboard, linked from its top bar, the second: ${SCREENS_URL}#grafana"
 }
 
 cmd_rush() {
@@ -521,7 +520,7 @@ cmd_rush() {
     "the orders pile up."
   watch_for
   point "In Grafana's 'Waiting orders, and ovens', the backlog climbs, by about nine a second while the rush lasts:" \
-    "$GRAFANA_URL"
+    "${SCREENS_URL}#grafana"
   point "One oven, at about two a second against the counter's one and a half, would take a quarter of an hour to" \
     "clear what's left once the rush ends. 'Time each oven spends baking' sits at 100%."
   follow_up "To add two ovens, run" "$0 scale 3"
@@ -543,10 +542,10 @@ scale_up() {
     "whose service discovery lists them at once. Prometheus reads it every 5 seconds, at $PROXY_URL/discovery"
   watch_for
   point "Prometheus's targets page lists each oven under the oven job, with no change to its config:" \
-    "$PROMETHEUS_URL/targets"
+    "${SCREENS_URL}#prometheus/targets"
   point "In Grafana, 'Orders baked / sec, by oven' gains a series for each new oven, and the backlog in 'Waiting" \
     "orders, and ovens' drains: three ovens bake about six orders a second, against the counter's one and a half."
-  point "The proxy dashboard's Agents view lists an oven-<id> agent for each: $DASHBOARD_URL"
+  point "The proxy dashboard's Agents view lists an oven-<id> agent for each: ${SCREENS_URL}#proxy"
 }
 
 # Stops the ovens past the count given, one SIGTERM each, as a scale-in does, and shows how they went:
@@ -595,7 +594,7 @@ scale_down() {
     "disconnecting and stopping. No order taken from the queue is lost."
   point "The proxy's service discovery, which Prometheus follows, lists only $remaining: $PROXY_URL/discovery"
   point "The proxy dashboard's Paths view lists the stopped ovens' paths as 'gone', and keeps them for an hour" \
-    "(proxy.dashboard.departedPathRetentionSecs), so it's clear what left: $DASHBOARD_URL/paths"
+    "(proxy.dashboard.departedPathRetentionSecs), so it's clear what left: ${SCREENS_URL}#proxy/paths"
   point "In Grafana, 'Scrape up, by oven' can show that one 0 for a stopped oven, then its series ends."
 }
 
@@ -699,7 +698,7 @@ cmd_wrong_token() {
     "background, should the proxy's token change. The oven bakes throughout."
   watch_for
   point "The proxy dashboard's Activity view counts the refusals on one line, bad token, an unknown agent token" \
-    "from the oven's address: $DASHBOARD_URL/activity"
+    "from the oven's address: ${SCREENS_URL}#proxy/activity"
 }
 
 # The tour: the demo's guided tour (README.md), one part at a time. It numbers each part's steps, and waits for Enter
@@ -896,12 +895,14 @@ cmd_tour() {
 
   if part 2 "Prometheus scrapes the proxy at the paths the oven's agent registered, and Grafana shows what it" \
     "collected."; then
-    instruct "Open Grafana: $GRAFANA_URL" \
-      "It opens on the Bakery dashboard, with no sign-in needed. Its top row is the bakery now: ovens scraped," \
-      "agents connected, waiting orders, orders baked a minute, and the bake time. Below it are each oven's orders," \
-      "the backlog against the number of ovens, bake times, and how much of its time each oven spends baking. The" \
-      "'Prometheus Agents' link at the top opens the dashboard the project ships for its agents, which shows the" \
-      "ovens' embedded agents, the oven-agent job, like any other, so they need no tooling of their own."
+    instruct "Open the demo's screens, on Grafana: ${SCREENS_URL}#grafana" \
+      "This is the proxy's screens page, one browser tab that holds every screen in the demo: the proxy's" \
+      "dashboard, Grafana, and Prometheus. The steps from here link into this page, so keep it open, and each link" \
+      "opens in it. Grafana opens on the Bakery dashboard, with no sign-in needed. Its top row is the bakery now:" \
+      "ovens scraped, agents connected, waiting orders, orders baked a minute, and the bake time. Below it are each" \
+      "oven's orders, the backlog against the number of ovens, bake times, and how much of its time each oven spends" \
+      "baking. The 'Prometheus Agents' link at the top opens the dashboard the project ships for its agents, which" \
+      "shows the ovens' embedded agents, the oven-agent job, like any other, so they need no tooling of their own."
     step "Read the oven's metrics and its agent's through the proxy, each at its own path." -- metrics
   fi
 
@@ -909,9 +910,11 @@ cmd_tour() {
     "rush of 500 orders comes in over 50 seconds, and you watch the backlog climb, then add two ovens and watch" \
     "them clear it."; then
     step "Keep Grafana's Bakery dashboard open, to watch 'Waiting orders, and ovens' and 'Orders baked / sec, by" \
-      "oven', and start a rush." -- rush
-    step "Once the backlog has passed 200, add two ovens." -- scale 3
-    instruct "Open Prometheus's targets: $PROMETHEUS_URL/targets" \
+      "oven', and start a rush: ${SCREENS_URL}#grafana" -- rush
+    step "Once the backlog has passed 200, add two ovens, and watch their paths join the proxy dashboard's Paths view" \
+      "while the backlog drains in Grafana. Open the two side by side before you press Enter:" \
+      "${SCREENS_URL}#proxy/paths+grafana" -- scale 3
+    instruct "Open Prometheus's targets: ${SCREENS_URL}#prometheus/targets" \
       "The oven job lists three ovens now, each a target of its own, found through the proxy's service discovery," \
       "with no change to Prometheus's config. In about two minutes, the backlog in Grafana is gone."
   fi
@@ -921,10 +924,10 @@ cmd_tour() {
     step "Once the backlog has cleared, go back to one oven." -- scale 1
     instruct "Open the proxy's service discovery: $PROXY_URL/discovery" \
       "It lists only the remaining oven's two paths, so Prometheus, which follows it, scrapes that oven alone now."
-    instruct "Open the proxy dashboard's Paths view: $DASHBOARD_URL/paths" \
+    instruct "Open the proxy dashboard's Paths view: ${SCREENS_URL}#proxy/paths" \
       "It still lists the stopped ovens' four paths, marked 'gone', and its status bar counts them as departed: the" \
       "view keeps a departed path for an hour, so it's clear what left."
-    instruct "Open the dashboard's Activity view: $DASHBOARD_URL/activity" \
+    instruct "Open the dashboard's Activity view: ${SCREENS_URL}#proxy/activity" \
       "It lists each stopped oven's agent as disconnected: Connection closed; released 2 paths."
   fi
 

@@ -65,7 +65,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/nginx
-make up      # pulls the images, starts everything, prints the URLs
+make up      # pulls the images, starts everything, prints the screens page's URL
 make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
@@ -73,8 +73,15 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the proxy, agent, nginx, Prometheus, and Python images, which takes a few minutes. After that
 it starts in under a minute, and runs without a network connection.
 
+Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8594/>, one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, the same dashboard through nginx,
+agent-current's dashboard, and Prometheus. `make open` opens it, and the tour's links open in it.
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8594/> | `NGINX_DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8594/dashboard> (its history at `/activity`) | `NGINX_DEMO_DASHBOARD_PORT` |
 | The proxy dashboard, through nginx | <http://localhost:8590/dashboard> | `NGINX_DEMO_NGINX_PORT` |
 | agent-current's dashboard | <http://localhost:8595/dashboard> (its connection at `/connection`, its history at `/activity`) | `NGINX_DEMO_AGENT_DASHBOARD_PORT` |
@@ -169,7 +176,8 @@ Prometheus scrapes the agent every 5 seconds.
 agent-current and the proxy send a keepalive on each stream after 30 seconds of quiet. agent-legacy predates them, and
 the proxy, seeing it doesn't take them, sends it none, so nginx cuts it off every minute, and a scrape that lands while
 it reconnects fails: `up{job="warehouse"}` dips to 0 now and then, and
-`increase(proxy_agent_disconnects_total{reason="stream_terminated"}[1m])` climbs to about 1.
+`increase(proxy_agent_disconnects_total{reason="stream_terminated"}[1m])` climbs to about 1. The screens page shows
+the proxy's Activity view beside that graph: <http://localhost:8594/screens#proxy/activity+prometheus>
 
 ```bash
 ./demo.sh nginx-long-timeouts   # raises both timeouts to a day, and reloads nginx
@@ -206,7 +214,8 @@ reload reaches every agent within 10 seconds, at the cost of one reconnect each.
 Under the 20-second timeouts, agent-current is cut off about every 20 seconds. Two of its streams go quiet for 20
 seconds before their keepalives come, at 30: its stream for results in chunks, which nginx ends with 408, from
 `client_body_timeout`, and the proxy's stream of path notices to it, which nginx ends with 504, from
-`grpc_read_timeout`, the reason its Activity view shows.
+`grpc_read_timeout`, the reason its Activity view shows:
+<http://localhost:8594/screens#agent-current/activity>
 
 ```bash
 ./demo.sh keepalive 10   # the proxy recreated with a keepalive interval of 10 seconds
@@ -215,12 +224,22 @@ seconds before their keepalives come, at 30: its stream for results in chunks, w
 
 The proxy sets the interval for both directions, `proxy.internal.streamKeepAliveSecs`: it uses it on the streams it
 sends on, and gives it to each agent as it registers. At 10 seconds, agent-current logs `Sending stream keepalives to
-proxy nginx.test.google.fr after 10s without a result`, and stays connected. Keep the interval under the shortest idle
-timeout between the agents and the proxy.
+proxy nginx.test.google.fr after 10s without a result`, and stays connected, while agent-legacy, which sends none, is
+still cut off. The screens page shows agent-current's Activity view beside the proxy's:
+<http://localhost:8594/screens#agent-current/activity+proxy/activity>
+
+<figure markdown="span">
+  ![agent-current's Activity view beside the proxy's, after the proxy's recreate with a 10-second keepalive](images/nginx-demo/screens.webp#only-dark){ loading=lazy }
+  ![agent-current's Activity view beside the proxy's, after the proxy's recreate with a 10-second keepalive](images/nginx-demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The proxy's screens page: agent-current stays connected to the new proxy, which still sees agent-legacy cut off</figcaption>
+</figure>
+
+Keep the interval under the shortest idle timeout between the agents and the proxy.
 
 ### The Dashboard behind nginx
 
-The proxy's dashboard updates live over a WebSocket, which a reverse proxy has to pass on.
+The proxy's dashboard updates live over a WebSocket, which a reverse proxy has to pass on. Open the dashboard through
+nginx beside the one reached directly: <http://localhost:8594/screens#through-nginx+proxy>
 
 <figure markdown="span">
   ![The dashboard through nginx, with its live indicator reading reconnecting](images/nginx-demo/dashboard-reconnecting.webp#only-dark){ loading=lazy }
@@ -267,7 +286,7 @@ it to proxy.dashboard.allowedOrigins if expected`. Passing the browser's `Host` 
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, nginx's configs in use, its old workers, the proxy's keepalive, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the proxy dashboard, directly and through nginx, agent-current's dashboard, and a Prometheus graph of whether each agent's path answered |  |
+| `make open` | Opens the proxy's screens page, which holds the proxy's dashboard, directly and through nginx, agent-current's, and Prometheus, in the browser |  |
 
 `reset` undoes every scenario. For a clean slate, `make down && make up`.
 

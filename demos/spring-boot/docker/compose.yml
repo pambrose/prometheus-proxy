@@ -53,6 +53,11 @@ services:
       AGENT_TOKEN: ${AGENT_TOKEN:-}
       CERT_CHAIN_PEM: ${CERT_CHAIN_PEM:-}
       PRIVATE_KEY_PEM: ${PRIVATE_KEY_PEM:-}
+      # Where a browser on this machine reaches each screen of the proxy's screens page (proxy.conf), at the ports this
+      # file publishes them on.
+      SPRING_BOOT_DEMO_APP_URL: http://localhost:${SPRING_BOOT_DEMO_APP_PORT:-8490}
+      SPRING_BOOT_DEMO_AGENT_URL: http://localhost:${SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT:-8495}/dashboard
+      SPRING_BOOT_DEMO_PROMETHEUS_URL: http://localhost:${SPRING_BOOT_DEMO_PROMETHEUS_PORT:-9490}
     volumes:
       - ../config/proxy.conf:/app/proxy.conf:ro
     ports:

@@ -59,7 +59,7 @@ From a clone of the release, so the scripts match the images:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/spring-boot
-make up      # builds the roastery, starts everything, prints the URLs
+make up      # builds the roastery, starts everything, and prints the screens page's URL
 make tour    # the guided tour, about 11 minutes
 make down    # stops it and removes its containers and network
 ```
@@ -68,8 +68,15 @@ make down    # stops it and removes its containers and network
 release's library, from Maven Central, so it needs only Docker. The first build downloads Maven's dependencies, which
 takes a few minutes. `make up-local` builds the library, the proxy, and the roastery from this checkout instead.
 
+Then open the proxy's [screens page](https://prometheus-proxy.com/web-dashboard/#screens), one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, the roastery's status page, its agent's
+dashboard, and Prometheus. `make open` opens it, and the guided tour's links open in it: <http://localhost:8494/>
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8494/> | `SPRING_BOOT_DEMO_DASHBOARD_PORT` |
 | The roastery's status page | <http://localhost:8490> | `SPRING_BOOT_DEMO_APP_PORT` |
 | Proxy dashboard | <http://localhost:8494/dashboard> | `SPRING_BOOT_DEMO_DASHBOARD_PORT` |
 | The roastery agent's dashboard | <http://localhost:8495/dashboard> | `SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT` |
@@ -116,17 +123,20 @@ Tour](#guided-tour).
 
 ### 1. A Spring Boot App with the Agent Embedded
 
-Open the roastery's status page, then run `./demo.sh settings`. It shows the settings the starter bound, with the
-token and the certificate shown only as set, and the agent starting and registering
-`/roastery_metrics`. The proxy dashboard's Agents view lists `roastery-1.0`, named after the version in the app's
-Spring Boot build info. `./demo.sh health` shows the agent in Actuator's `/actuator/health`: UP, with the proxy's
-address, while it's connected, and UNKNOWN, while the app's own health stays UP, when it isn't.
+Open the roastery's status page in the screens page, <http://localhost:8494/screens#roastery>, then run
+`./demo.sh settings`. It shows the settings the starter bound, with the token and the certificate shown only as set, and
+the agent starting and registering `/roastery_metrics`. The proxy dashboard's Agents view,
+<http://localhost:8494/screens#proxy>, lists `roastery-1.0`, named after the version in the app's Spring Boot build
+info. `./demo.sh health` shows the agent in Actuator's `/actuator/health`: UP, with the proxy's address, while it's
+connected, and UNKNOWN, while the app's own health stays UP, when it isn't.
 
 ### 2. The App's Metrics, Read In-Process, through the Proxy
 
 `./demo.sh peek` tries `/actuator/prometheus`, which answers 404, since the roastery exposes only Actuator's health,
 then reads the roastery's metrics through the proxy. For each scrape, the agent reads the app's `PrometheusRegistry`
 bean, where Micrometer keeps the meters, so there's no metrics endpoint, password, or Spring Security to set up.
+Prometheus scrapes them through the proxy, and graphs the batches roasted in the last minute, by origin:
+<http://localhost:8494/screens#prometheus>
 
 ### 3. What Spring Boot's Dependency Management Picked
 
@@ -150,7 +160,7 @@ with each native's classifier, in its own `dependencyManagement`.
 A platform takes an app out of service, or restarts it, when its health check fails. The starter's health indicator
 reports the agent UNKNOWN, not DOWN, when it loses the proxy, so a proxy outage never fails the roastery's health.
 
-The agent serves a dashboard of its own, from inside the roastery: <http://localhost:8495/dashboard>
+The agent serves a dashboard of its own, from inside the roastery: <http://localhost:8494/screens#agent>
 
 Compose turns it on with `PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`, which Spring Boot binds to the starter's
 `prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change. Its Paths view lists `/roastery_metrics`,
@@ -158,8 +168,9 @@ registered, with its recent scrapes. Select it, and press Scrape now, the circul
 the agent read the roastery's registry at once. The Connection view shows its proxy endpoint, the Activity view what has
 happened to the agent, newest first, and the Settings view its settings.
 
-`./demo.sh proxy-stop` stops the proxy, and its dashboard with it. The agent's still answers: its Connection view turns
-failing, with the error the agent got connecting to the proxy, and its Activity view adds disconnected and connect
+`./demo.sh proxy-stop` stops the proxy, and its dashboard and screens page with it. The agent's dashboard still answers,
+in a screens page you have open or at its own address, <http://localhost:8495/dashboard/connection>: its Connection view
+turns failing, with the error the agent got connecting to the proxy, and its Activity view adds disconnected and connect
 failed. Scrape now still reads the roastery's metrics, since it doesn't need the proxy. `./demo.sh health` then shows
 the agent's component UNKNOWN and the roastery's own health UP, so a platform that checks it keeps the roastery in
 service. `./demo.sh proxy-start` brings the proxy back: the agent connects within a few seconds and registers its path
@@ -170,7 +181,8 @@ again, and its component is UP again.
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. Spring Boot stops
 its lifecycle beans from the last phase down, so the agent stops first: it disconnects from the proxy, which drops
 the roastery's path and stops sending scrapes before Spring Boot starts shutting down the rest of the app. The
-roastery's log shows the order.
+roastery's log shows the order. With the proxy dashboard beside the agent's, the agent leaves the Agents view as its
+own dashboard stops: <http://localhost:8494/screens#proxy+agent>
 `./demo.sh start-app` starts it again.
 
 ## Scenario Reference
@@ -186,7 +198,7 @@ roastery's log shows the order.
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the roastery's state, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the roastery, the proxy's and the agent's dashboards, and Prometheus's graph of the batches roasted in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds the roastery, the proxy's and the agent's dashboards, and Prometheus's graph of the batches roasted, in the browser |  |
 
 ## Files
 
@@ -196,11 +208,12 @@ roastery's log shows the order.
 | `app/src/main/java/roastery/` | The roastery itself: its meters and schedule (`Roastery`), its status page, and its main class. It has no code for the agent, which the starter runs. |
 | `app/src/main/resources/application.yml` | The starter's `prometheus-proxy.agent` properties, read from the environment, and the details Actuator's health shows. |
 | `app/src/test/java/roastery/RoasteryAgentTest.java` | Starts the roastery and a proxy in one JVM, and scrapes through the proxy: the agent at the versions Spring Boot picks, which `make spring-boot-demo-check` runs on every pull request. |
-| `config/proxy.conf` | The proxy's settings: its metrics and its dashboard. Its TLS material and token come from the environment. |
-| `docker/compose.yml` | The services above, with the agent's dashboard turned on in the roastery's environment. |
+| `config/proxy.conf` | The proxy's settings: its metrics, its dashboard, and the screens its screens page holds. Its TLS material and token come from the environment. |
+| `docker/compose.yml` | The services above, with the agent's dashboard turned on in the roastery's environment, and each screen's address in the proxy's. |
 | `prometheus/prometheus.yml` | Prometheus's scrape config. |
 | `demo.sh` | Starts and stops the demo, runs its scenarios, and the tour. |
-| `Makefile` | `make up`, `up-local`, `down`, `status`, `open`, `logs`, and `tour`, which run `demo.sh`. |
+| `Makefile` | `make up`, `up-local`, `down`, `status`, `open`, `logs`, and `tour`, which run `demo.sh`, and `screenshots`, which runs `bin/screenshots.sh`. |
+| `bin/screenshots.sh` | The Spring Boot Demo page's screenshot of the proxy's screens page, the proxy's dashboard beside the agent's, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agent's uptime reads in minutes, and writes it to `website/prometheus-proxy/docs/images/spring-boot-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). It's for maintaining the site, so `make help` leaves it out. While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, and `WAIT_SECS` sets how long each wait for the scene may take before the script fails (default 150). |
 
 ## The Other Demos
 

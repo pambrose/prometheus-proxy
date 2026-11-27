@@ -43,7 +43,7 @@ down:  ## Delete both kind clusters
 status:  ## Show both clusters' pods and Services, the Helm releases, and the URLs
 	@$(DEMO) status
 
-open:  ## Open the proxy dashboard and Prometheus's targets in the browser
+open:  ## Open the proxy's screens page, which holds its dashboard, the agent's, and Prometheus, in the browser
 	@$(DEMO) open
 
 tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)

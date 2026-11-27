@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's nginx Demo page (website/prometheus-proxy/docs/nginx-demo.md) from the
-# running demo: it plays the page's scenarios, captures the dashboards in headless Chrome at three times the pixel
-# density, each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/nginx-demo/:
+# running demo: it plays the page's scenarios, captures the dashboards and the proxy's screens page in headless Chrome
+# at three times the pixel density, each a whole window, and writes lossless WebP to
+# website/prometheus-proxy/docs/images/nginx-demo/:
 # <name>.webp in the dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It
 # puts the demo back as `make up` starts it when it finishes, or when it fails.
 #
@@ -39,6 +40,7 @@ DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 NGINX_DASHBOARD_URL="http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard"
 AGENT_DASHBOARD_URL="http://localhost:${NGINX_DEMO_AGENT_DASHBOARD_PORT:-8595}/dashboard"
 PROMETHEUS_URL="http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9590}"
+SCREENS_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/screens"
 
 WAIT_SECS="${WAIT_SECS:-150}"
 
@@ -47,12 +49,16 @@ WAIT_SECS="${WAIT_SECS:-150}"
 # the themes each is taken in.
 WIDTH=1280
 HEIGHT=800
+# The screens page is taken in a wider window of the same shape, so each of Split's two panes is about as wide as a
+# dashboard needs.
+SCREENS_WIDTH=1680
+SCREENS_HEIGHT=1050
 THEMES=(dark light)
 # SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
 # opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
 # (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
 SCALE=3
-SHOTS=(agents legacy-cut short-timeouts dashboard-reconnecting dashboard-live)
+SHOTS=(agents legacy-cut short-timeouts screens dashboard-reconnecting dashboard-live)
 
 # A screenshot's file name in a theme: the dark one keeps the plain name.
 named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
@@ -133,29 +139,32 @@ at_least() {
   [[ -n "$count" ]] && ((count >= $2))
 }
 
-# How many disconnects agent-current's Activity view lists, or nothing. A notice's event, a disconnect's among them,
-# is a tag (ActivityTable.kt) that reads disconnected.
+# How many disconnects a dashboard's Activity view lists, agent-current's unless another dashboard is given, or
+# nothing. A row's event cell (ActivityTable.kt) reads disconnected: in a tag on an agent's dashboard, where it's a
+# notice, and as plain text on the proxy's. disconnects [dashboard url]
 disconnects() {
   local body
-  body="$(curl -fsS "$AGENT_DASHBOARD_URL/activity" 2>/dev/null)" || return 0
-  { grep -o '>disconnected</span>' <<<"$body" || true; } | wc -l | tr -d ' '
+  body="$(curl -fsS "${1:-$AGENT_DASHBOARD_URL}/activity" 2>/dev/null)" || return 0
+  { grep -o '>disconnected<' <<<"$body" || true; } | wc -l | tr -d ' '
 }
 
+# How many disconnects the proxy's Activity view lists, or nothing.
+proxy_disconnects() { disconnects "$DASHBOARD_URL"; }
 
 # Whether both agents are connected to the proxy.
 both_connected() { [[ -n "$(agent_id agent-current)" && -n "$(agent_id agent-legacy)" ]]; }
 
-# Captures a page at WIDTH x HEIGHT, at SCALE, in a theme: the dashboard follows the browser's preferred color scheme.
-# The timing is Chrome's: --virtual-time-budget=<ms>, the virtual time the page gets to load and run, or
-# --timeout=<ms>, real time, for a page waiting on something virtual time skips past, such as a WebSocket's answer.
-# capture <url> <png> <theme> <timing>
+# Captures a page at WIDTH x HEIGHT, or the size given, at SCALE, in a theme: the dashboard follows the browser's
+# preferred color scheme. The timing is Chrome's: --virtual-time-budget=<ms>, the virtual time the page gets to load
+# and run, or --timeout=<ms>, real time, for a page waiting on something virtual time skips past, such as a
+# WebSocket's answer. capture <url> <png> <theme> <timing> [width height]
 capture() {
-  local url="$1" png="$2" theme="$3" timing="$4" scheme=0 profile
+  local url="$1" png="$2" theme="$3" timing="$4" width="${5:-$WIDTH}" height="${6:-$HEIGHT}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
     --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$WIDTH,$HEIGHT" "$timing" --screenshot="$png" "$url" >/dev/null 2>&1
+    --window-size="$width,$height" "$timing" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
@@ -165,6 +174,18 @@ shoot() {
   local theme
   for theme in "${THEMES[@]}"; do
     capture "$2" "$WORK/$(named "$1" "$theme").png" "$theme" "${3:---virtual-time-budget=3000}"
+  done
+}
+
+# The proxy's screens page in each theme, opened on a link (its part after the #), a whole SCREENS_WIDTH x
+# SCREENS_HEIGHT window. Its panes are dashboards: Prometheus draws no graph in virtual time, and the page doesn't get
+# past its first render in real time, since Chrome takes the shot once the page has loaded.
+# shoot_screens <name> <link>
+shoot_screens() {
+  local theme
+  for theme in "${THEMES[@]}"; do
+    capture "$SCREENS_URL#$2" "$WORK/$(named "$1" "$theme").png" "$theme" --virtual-time-budget=5000 \
+      "$SCREENS_WIDTH" "$SCREENS_HEIGHT"
   done
 }
 
@@ -219,6 +240,14 @@ before="$(disconnects)"
 # view shows the pattern.
 wait_until "nginx to cut agent-current off three times" at_least disconnects $((before + 4))
 shoot short-timeouts "$AGENT_DASHBOARD_URL/activity"
+# A proxy with a keepalive every 10 seconds, under nginx's 20: agent-current reconnects to it once and stays, while
+# agent-legacy, which sends none, is still cut off. The recreated proxy's Activity view starts empty, so two of its
+# disconnects are agent-legacy's cuts.
+"$DEMO" keepalive 10 >/dev/null
+wait_until "both agents connected to the new proxy" both_connected
+wait_until "nginx to cut agent-legacy off twice" at_least proxy_disconnects 2
+# The screens page as part 3 of the tour opens it: agent-current's Activity view beside the proxy's.
+shoot_screens screens "agent-current/activity+proxy/activity"
 
 step "Part 4: The dashboard behind nginx"
 "$DEMO" reset >/dev/null
