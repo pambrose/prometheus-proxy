@@ -74,13 +74,15 @@ An agent that can't start stays off while the app runs on, and the plugin logs w
 `onFailure { reason, cause -> }` is told too, with the reason the log gives, which holds no token, password, or PEM,
 and what was thrown, so the app can send it wherever someone will see it, such as a chat channel. That includes a
 failure before the agent's start, such as a value in the file the plugin can't read, or an `agent { }` block that
-throws: the plugin runs every block whatever failed, so each one's handler is added, then tells them. It isn't told of
+throws: the plugin runs every block whatever failed, so each one's handler is added, then tells them. Only an `enabled`
+or `required` it can't read fails the app's start instead, since they decide whether the agent starts. It isn't told of
 a `required` agent's failure, which fails the app's start, nor of an agent left off on purpose, not `enabled` or without
 a proxy. A handler that throws is logged, without failing the app's start.
 
 `stopTimeout` is how long the app's shutdown waits for the agent's stop, 30 seconds unless the file's `stop-timeout` or
 the block sets another: set it inside the shutdown window the app's platform gives, such as Cloud Run's 10 seconds
-after `SIGTERM`. Once it's up, the app stops anyway, with a warning, and the agent goes on stopping on its own.
+after `SIGTERM`. Once it's up, the app stops anyway, with a warning, and the agent goes on stopping on its own. An app
+that stops while its agent is still starting stops the agent as soon as it has started.
 
 ```kotlin
 --8<-- "ktor-plugin/src/test/kotlin/website/KtorPluginExample.kt:on-failure"
@@ -118,7 +120,7 @@ environment variable gives:
 | `name`                     | `Unnamed-` and the host    | The agent's name, as the proxy's dashboard and logs show it                                                                                                                   |
 | `path`                     |                            | The proxy's path the registry is served at; required with a registry                                                                                                          |
 | `labels.<name>`            |                            | The labels of the registry's path, in the proxy's [service discovery](service-discovery.md)                                                                                   |
-| `paths`                    |                            | Other targets the agent scrapes over HTTP, a list, each served at a `path` of its own from its `url`, with `username`, `password`, and `labels`                                |
+| `paths`                    |                            | Other targets the agent scrapes over HTTP, a list, each served at a `path` of its own from its `url`, with `username`, `password`, and `labels`; an entry without a `path` or a `url` fails the agent's start |
 | `consolidated`             | `false`                    | Whether the agent registers its paths in [consolidated mode](advanced.md#consolidated-mode), alongside other agents serving them                                               |
 | `metrics-port`             |                            | The port of the agent's own metrics, which are off without one, for a scraper on the app's own network ([Port or Proxy Path](monitoring.md#port-or-proxy-path)) |
 | `metrics-proxy-path`       |                            | The proxy's path the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) are served at, read in-process, with no port; off without one. They stay apart from the app's path, whose JVM metrics they'd repeat |

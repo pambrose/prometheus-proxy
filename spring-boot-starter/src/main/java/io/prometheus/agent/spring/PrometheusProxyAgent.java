@@ -274,16 +274,48 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     return build == null || isBlank(build.getVersion()) ? app : app + "-" + build.getVersion();
   }
 
+  // The path given, or one made from the app's name, as a path the proxy takes
   private String metricsPath() {
     if (!isBlank(properties.getPath())) {
       return properties.getPath();
     }
-    String app = appName();
-    return (app == null ? "application" : app) + "_metrics";
+    String segment = pathSegment(appName());
+    return (segment.isEmpty() ? "application" : segment) + "_metrics";
   }
 
+  // The app's name, trimmed, or null without one
   private String appName() {
-    return blankToNull(context.getEnvironment().getProperty("spring.application.name"));
+    String app = context.getEnvironment().getProperty("spring.application.name");
+    return isBlank(app) ? null : app.strip();
+  }
+
+  // The app's name as one segment of a path the proxy takes, or empty without one: each run of the characters the
+  // proxy refuses in a path, whitespace, a control character, '?', '#', or '/', made one '_', and those at its ends
+  // left out. A default path of a name such as "Order Service" failed the agent's start, blaming source() (November 26
+  // review, #26). A path given is the app's own, so it's kept as it is.
+  private static String pathSegment(String name) {
+    StringBuilder segment = new StringBuilder();
+    boolean refused = false;
+    for (int i = 0; name != null && i < name.length(); i++) {
+      char c = name.charAt(i);
+      if (refusedInPath(c)) {
+        refused = true;
+      } else {
+        if (refused && !segment.isEmpty()) {
+          segment.append('_');
+        }
+        refused = false;
+        segment.append(c);
+      }
+    }
+    return segment.toString();
+  }
+
+  // As the agent's AgentValues.pathCharacterProblem and segmentProblem refuse a character: Kotlin's isWhitespace is
+  // Java's isWhitespace or isSpaceChar
+  private static boolean refusedInPath(char c) {
+    return Character.isISOControl(c) || Character.isWhitespace(c) || Character.isSpaceChar(c)
+        || c == '?' || c == '#' || c == '/';
   }
 
   private static boolean isBlank(String value) {

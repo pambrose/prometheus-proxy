@@ -379,8 +379,8 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own, as the agent's
   parser reads it; labels become JSON; `setting()` takes precedence over a method; `toString()` shows what `setting()`
   sets but not the token, a password, a PEM, or a path's credentials, whatever their keys' case, as Spring Boot
-  lowercases a key from an environment variable; and a blank path, an out-of-range port, or a URL
-  with no scheme throws `ConfigLoadException`; `source()` adds an in-process path, with or without labels, that
+  lowercases a key from an environment variable; and a blank path, `/` alone, an out-of-range port, a blank URL, or a
+  URL with no scheme throws `ConfigLoadException`; `source()` adds an in-process path, with or without labels, that
   reaches the agent's options but not the config tree, shows in `toString()` as `in-process`, and fails `start()` when
   another path or the proxy's rules forbid its path, with a message that names it as `source()`'s, not a
   `pathConfigs` entry; `source()` with a `PrometheusRegistry` serves it through `MetricsSource.of`, with or without
@@ -422,11 +422,13 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   can't parse names `PROMETHEUS_PROXY` and `agent.proxy.endpoints`, and a certificate that isn't PEM, or PEM with no
   certificate in it, names `PROMETHEUS_PROXY_CERT` and `agent.tls.trustCertCollectionPem`, with the agent's reason and
   never the certificate, as `start()` throws it and `startIfConfigured()` logs it; no token or authority refused as the agent
-  starts; a setting the agent's own variable sets not checked; and one set from code after `fromEnvironment()`, by a
-  builder method or `setting()`, keeping the agent's own message
+  starts; a setting the agent's own variable sets not checked; one set from code after `fromEnvironment()`, by a
+  builder method or `setting()`, keeping the agent's own message; and a `setting()` before it, of the variable's key or
+  its section, shadowing the variable, which then isn't checked
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
-  `isConnected` and `proxyEndpoint`, read live from the agent; and `use` stopping the agent after its block, and
-  running the block on a null handle
+  `isConnected` and `proxyEndpoint`, read live from the agent; `shutdown()` with a stop timeout, and without one, whose
+  stop past the agent's 30 seconds throws an unchecked `IllegalStateException`, not Guava's checked `TimeoutException`;
+  `use` stopping the agent after its block, and running the block on a null handle; and no public fields
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **RuntimeLibrariesTest** — the libraries an embedded agent checks before it starts: the versions this JVM has are
   read, and pass; Spring Boot 4.2's pass, and 4.1.1's kotlinx-coroutines, 4.1.0's Prometheus client, and both of 4.0's
@@ -1437,7 +1439,9 @@ support file that isn't named in this document.
   property becomes its `EmbeddedAgentConfig` setting, `metrics-proxy-path` and its labels included, with the secrets
   out of `toString`, and a target URL's user info and query values masked in the properties' own, and labels without a
   path are warned of; the default name (the app's,
-  with its build's version) and path (`<app>_metrics`, or `application_metrics`); the registry served, or not with
+  with its build's version) and path (`<app>_metrics`, the name's characters a path can't hold made `_`, so an app
+  named with a space starts its agent, or `application_metrics`); a `paths` entry without a URL failing the settings;
+  the registry served, or not with
   `source=none` or no `PrometheusRegistry` bean; `settings` keys keeping their case from a properties file, and losing
   it from an environment variable; customizers running after the properties in their order, a builder method of one
   replacing a property but not a `settings` entry, which only its `setting()` replaces; a customizer's proxy, or a
@@ -1479,17 +1483,22 @@ in this document.
   the exception, a checked one wrapped, and a start that returns none, as `startIfConfigured()` does for a failure,
   leaves it off; `ApplicationStopPreparing` begins the stop without waiting for it, and `ApplicationStopping` waits for
   that stop, its agent's `shutdown()` held until the disposal is in its join, stops an agent the engine didn't, and
-  gives up waiting at its timeout, once whichever come; an agent that fails to stop doesn't fail the app's; and the
-  handlers are gone once the app stops.
+  gives up waiting at its timeout, once whichever come, waits through an interrupt, which the thread keeps, and waits
+  for a stop the engine's stop is still beginning; an agent whose start ends after the app's stop began is stopped,
+  and waited for when the disposal comes after; a second start event, or one after the stop began, starts nothing; an
+  agent that fails to stop doesn't fail the app's; and the handlers are gone once the app stops.
 - **PrometheusProxyAgentConfigTest** — `prometheus-proxy.agent` in HOCON, YAML (`full-section.yaml`), and a
   `MapApplicationConfig` builds the tree the same builder calls do, `metrics-proxy-path` and its labels included; a blank
   value, such as YAML's empty default for an unset environment variable (`unset-proxy.yaml`), counts as unset; the
   dashboard login's default username; a value that isn't a boolean or a number; metrics proxy path labels without a
-  path warned of; the registry served at its path, and refused without one; the install block's settings taking
+  path warned of; a `paths` entry without a `url`; a `path` or `labels` the plugin can't read failing the settings, not
+  the install; the registry served at its path, and refused without one; the install block's settings taking
   precedence, and every `agent { }` block running in turn.
 - **PrometheusProxyAgentPluginTest** — the plugin in a `testApplication`, with a real agent pointed at a port nothing
   listens on (`closedPort()`, in **TestSupport.kt**): started by the file's proxy or the install block's, and stopped
-  with the app; off when the file disables it; off on a setting it rejects, which fails the app's start when required.
+  with the app; off when the file disables it; off on a setting it rejects, which fails the app's start when required;
+  and labels in the file it can't read leaving a disabled agent off and the app running, and telling an enabled one's
+  `onFailure`.
 - **PrometheusProxyAgentIntegrationTest** — a `testApplication` with Micrometer and the plugin, its agent pointed at a
   proxy in the same JVM on fixed ports that the root project's `TestPorts` lists (`KTOR_PLUGIN_PROXY_*`): the proxy
   serves the app's meter and Micrometer's JVM metrics at `/ktor_app_metrics`, its service discovery has the path's

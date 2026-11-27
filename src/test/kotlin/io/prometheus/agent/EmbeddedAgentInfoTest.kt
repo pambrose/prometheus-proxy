@@ -22,7 +22,9 @@ import ch.qos.logback.classic.Level
 import com.google.common.util.concurrent.Service
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -31,6 +33,7 @@ import io.prometheus.common.captureLogs
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -76,6 +79,21 @@ class EmbeddedAgentInfoTest : StringSpec() {
       info.shutdown()
 
       verify { agent.stop() }
+    }
+
+    // Guava's stopSync() throws a checked TimeoutException, which Kotlin doesn't declare, so a Java caller couldn't
+    // catch it, and a catch of RuntimeException missed it (November 26 review, #21). Unchecked, as a start that times
+    // out is, with the timeout as its cause.
+    "shutdown without a stop timeout throws an unchecked exception for a stop that outlasts the agent's 30 seconds" {
+      val agent = mockk<Agent>()
+      every { agent.state() } returns Service.State.RUNNING
+      every { agent.stopSync(any<Duration>()) } throws TimeoutException("Timed out waiting for Agent [STOPPING]")
+      every { agent.stop() } answers { callOriginal() }
+
+      val thrown = shouldThrow<IllegalStateException> { EmbeddedAgentInfo(agent).shutdown() }
+
+      thrown.message shouldBe "The agent didn't stop within 30 seconds; it goes on stopping"
+      thrown.cause.shouldBeInstanceOf<TimeoutException>()
     }
 
     // So an app's shutdown fits its platform's window: the agent goes on stopping on a thread of its own
@@ -203,6 +221,12 @@ class EmbeddedAgentInfoTest : StringSpec() {
             "The Prometheus agent test-agent was still stopping after 50ms, and goes on stopping on its own",
           Level.WARN to "The Prometheus agent test-agent failed as it went on stopping: stuck",
         )
+    }
+
+    // A const in a companion object compiles to a field of the class, public unless the const is private (November 26
+    // review, #27)
+    "the handle has no public fields, its stop thread's name included" {
+      EmbeddedAgentInfo::class.java.fields.shouldBeEmpty()
     }
 
     // AutoCloseable, so Kotlin's use and Java's try-with-resources stop the agent after their block

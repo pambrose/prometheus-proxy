@@ -17,6 +17,7 @@
 package io.prometheus.agent.spring;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.core.env.StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME;
 
 import ch.qos.logback.classic.Level;
@@ -180,6 +181,45 @@ class PrometheusProxyAgentAutoConfigurationTest {
         .withBean(PrometheusRegistry.class, PrometheusRegistry::new)
         .run(context ->
             assertThat(config(context)).doesNotContain("name=").contains("sources={application_metrics=in-process}"));
+  }
+
+  // The proxy refuses a path with whitespace, a control character, '?', '#', or a '/' after its leading one, so a
+  // default path made from such a name failed the agent's start, blaming source() (November 26 review, #26). Each run
+  // of such characters becomes one '_', around the name trimmed.
+  @Test
+  void anAppNameWithCharactersAPathCantHoldGivesADefaultPathWithout() {
+    new ApplicationContextRunner()
+        .withConfiguration(STARTER)
+        .withBean(PrometheusRegistry.class, PrometheusRegistry::new)
+        .withPropertyValues("spring.application.name= Order Service / east?#1 ")
+        .run(context ->
+            assertThat(config(context))
+                .contains("name=Order Service / east?#1", "sources={Order_Service_east_1_metrics=in-process}"));
+  }
+
+  @Test
+  void anAgentWhoseAppNameHasSpacesStarts() throws IOException {
+    int closedPort = freePort();
+    runner
+        .withPropertyValues(
+            "spring.application.name=Order Service", "prometheus-proxy.agent.proxy=localhost:" + closedPort)
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PrometheusProxyAgent.class).isRunning()).isTrue();
+        });
+  }
+
+  // A paths entry is handed to the builder's path(), which refuses a blank path, and now a blank URL too, where the
+  // agent dropped the target at startup with a warning, so a required agent's app started without it, and no
+  // customizer's onFailure heard of it (November 26 review, #22)
+  @Test
+  void aPathsEntryWithoutAUrlFailsTheSettings() {
+    runner
+        .withPropertyValues("prometheus-proxy.agent.paths[0].path=grinder_metrics")
+        .run(context ->
+            assertThatThrownBy(() -> config(context))
+                .isInstanceOf(ConfigLoadException.class)
+                .hasMessage("A URL is required for path grinder_metrics"));
   }
 
   @Test

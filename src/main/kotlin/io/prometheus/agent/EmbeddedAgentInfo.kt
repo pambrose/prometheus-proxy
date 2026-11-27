@@ -112,10 +112,14 @@ data class EmbeddedAgentInfo(
    * [stopTimeout][EmbeddedAgentConfig.Builder.stopTimeout], until that's up: the agent then goes on stopping on a
    * daemon thread of its own, with a warning in the log, so a host's shutdown fits the window its platform gives it. A
    * stop that fails within the timeout throws here, as one without a timeout does. Without one, it waits 30 seconds at
-   * most, then throws a `java.util.concurrent.TimeoutException`, and the agent goes on stopping. Either way, an
-   * interrupt doesn't end the wait; the calling thread keeps it. An embedded Agent registers no JVM
-   * shutdown hook of its own, so call this where the host stops its own services, or from a shutdown hook of the
-   * host's, to avoid leaking the gRPC connection and background scrape coroutines past process exit.
+   * most, then throws an [IllegalStateException], whose cause is the `java.util.concurrent.TimeoutException`, and the
+   * agent goes on stopping. Either way, an interrupt doesn't end the wait; the calling thread keeps it. An embedded
+   * Agent registers no JVM shutdown hook of its own, so call this where the host stops its own services, or from a
+   * shutdown hook of the host's, to avoid leaking the gRPC connection and background scrape coroutines past process
+   * exit.
+   *
+   * @throws IllegalStateException when the agent doesn't stop within 30 seconds, without a stop timeout, or when its
+   *   stop fails.
    */
   fun shutdown() {
     val timeout = stopTimeout
@@ -124,7 +128,7 @@ data class EmbeddedAgentInfo(
 
   // Stops the agent on a thread of its own, waiting for it at most [timeout], through an interrupt, as stop() waits, so
   // a caller that's been interrupted keeps the flag, not an InterruptedException. The thread stops the agent without
-  // stop()'s 30-second limit, which would otherwise end a longer wait with a TimeoutException. A failure that comes
+  // stop()'s 30-second limit, which would otherwise end a longer wait by throwing. A failure that comes
   // before this stops waiting is thrown here, as the stop's own would be, Error included; one that comes after is
   // logged, since nothing else can be told. The lock decides which, so none is lost between the two, and whether the
   // stop finished, which the thread's being alive can't tell: it's alive for a moment after the stop returns.
@@ -192,7 +196,8 @@ data class EmbeddedAgentInfo(
   private companion object {
     private val logger = logger {}
 
-    // The handle's stop thread, named apart from the Ktor plugin's, which calls shutdown on a thread of its own
-    const val STOP_THREAD_NAME = "prometheus-agent-shutdown"
+    // The handle's stop thread, named apart from the Ktor plugin's, which calls shutdown on a thread of its own.
+    // Private, or the const compiles to a public field of EmbeddedAgentInfo (November 26 review, #27).
+    private const val STOP_THREAD_NAME = "prometheus-agent-shutdown"
   }
 }

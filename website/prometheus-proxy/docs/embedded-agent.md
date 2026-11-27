@@ -191,7 +191,8 @@ the agent's own, which the [Ktor Demo](ktor-demo.md), the [Spring Boot Demo](spr
   makes is issued to. To check the proxy's certificate against the host the agent connects to, as for a certificate
   from a public CA, set `PROMETHEUS_PROXY_AUTHORITY` to that host.
 - **A variable that's unset, or blank, leaves its setting alone,** so a builder method called after `fromEnvironment()`
-  takes precedence, and one called before it holds where the variable isn't set.
+  takes precedence, and one called before it holds where the variable isn't set. A `setting()` of the same key takes
+  precedence whatever its order, as it does over any builder method, and the variable's value then isn't checked.
 - **Only `fromEnvironment()` reads these:** the agent doesn't, so an app that never calls it can use the names for
   anything.
 - **A value the agent refuses names its variable.** A `PROMETHEUS_PROXY` endpoint the agent can't parse, or a
@@ -478,7 +479,9 @@ out. Java sees only the methods.
 
 A username and password are percent-encoded into the URL and sent as Basic Auth; both empty, as unset environment
 variables give, means none. Labels are a map of names to values. A value the builder can tell is wrong, such as a blank
-path or a port out of range, throws `ConfigLoadException`, as `start()` does for a setting the agent rejects.
+path, `/` alone, a blank URL, or a port out of range, throws `ConfigLoadException`, as `start()` does for a setting the
+agent rejects; through 4.7.0, `/` alone and a blank URL passed, and the agent dropped the target at startup with a
+warning, as it does a config file's placeholder.
 
 | `EmbeddedAgentConfig` member         | Type                 | Description                                                                                            |
 |:-------------------------------------|:---------------------|:-------------------------------------------------------------------------------------------------------|
@@ -501,7 +504,7 @@ The handle `startAsyncAgent()` and `EmbeddedAgentConfig.start()` return.
 | `agentName`     | `String`  | Name of the agent: `agent.name`, or `Unnamed-<hostname>` when none is set                                                                         |
 | `isConnected`   | `Boolean` | Whether the agent is connected to a proxy and has registered its paths there, so Prometheus can scrape through it now; read live, for a health check |
 | `proxyEndpoint` | `String?` | The proxy it's connected to, as `host:port`, or `null` when it isn't                                                                             |
-| `shutdown()`    | `Unit`    | Stops the agent and blocks until it has stopped, up to the builder's `stopTimeout`, or, without one, 30 seconds, after which it throws a `TimeoutException`; calling it again, or on a failed agent, does nothing |
+| `shutdown()`    | `Unit`    | Stops the agent and blocks until it has stopped, up to the builder's `stopTimeout`, or, without one, 30 seconds, after which it throws an `IllegalStateException`, with the `TimeoutException` as its cause; calling it again, or on a failed agent, does nothing |
 | `close()`       | `Unit`    | Since 4.7.0, does what `shutdown()` does: the handle is `AutoCloseable`, for Kotlin's `use` and Java's try-with-resources                         |
 
 `isConnected` is false before the agent's first connection, while it reconnects after losing one, and once it has
@@ -514,8 +517,9 @@ agent's connection and background work don't outlive your application. It waits 
 4.7.1): once that's up, `shutdown()` returns, with a warning in the log, and the agent goes on stopping on a daemon
 thread of its own, so your application's shutdown fits the window its platform gives it, such as the 30 seconds
 Kubernetes gives a pod, or Cloud Run's 10. A stop that fails within it throws. Without a `stopTimeout`, it waits 30
-seconds at most, then throws a `java.util.concurrent.TimeoutException`, and the agent goes on stopping. An interrupt
-ends neither wait. Since 4.7.0, the agent registers no JVM shutdown hook, so it stops when your application stops it,
+seconds at most, then throws an `IllegalStateException`, whose cause is a `java.util.concurrent.TimeoutException`, and
+the agent goes on stopping; through 4.7.0, it threw the `TimeoutException` itself, which Java code couldn't catch. An
+interrupt ends neither wait. Since 4.7.0, the agent registers no JVM shutdown hook, so it stops when your application stops it,
 after the work that needs it, not at the same time as your application's own hooks; the [Ktor Plugin](ktor-plugin.md)
 and the [Spring Boot Starter](spring-boot-starter.md) stop it with the app.
 

@@ -131,6 +131,36 @@ class EnvironmentSettingTest : StringSpec() {
       }.refused().message shouldBe
         "Invalid configuration: trustCertCollectionPem is neither PEM text nor the base64 of PEM text"
     }
+
+    // setting() comes last in the tree, so it takes precedence over fromEnvironment() whatever their order: a variable
+    // a setting() called before it shadows isn't the agent's to use, so it isn't checked either. It was, so the Ktor
+    // plugin's and the Spring Boot starter's settings keys, which they apply before the app's code calls
+    // fromEnvironment(), failed the start for a variable the agent would never have read (November 26 review, #23).
+    // The agent's own message here is about the setting's value, so the variable's wasn't checked.
+    "a setting set from code before fromEnvironment shadows the variable, which isn't checked" {
+      embeddedAgent {
+        setting("proxy.endpoints", listOf("proxy:xyz"))
+        fromEnvironment(mapOf("PROMETHEUS_PROXY" to "proxy:abc")::get)
+      }.refused().message shouldBe "Invalid configuration: Invalid port in 'proxy:xyz': 'xyz' is not a valid integer"
+
+      val env = mapOf("PROMETHEUS_PROXY" to "proxy:abc", "PROMETHEUS_PROXY_CERT" to "env not PEM")
+      embeddedAgent {
+        setting("proxy.endpoints", listOf("proxy:50051"))
+        setting("tls.trustCertCollectionPem", "setting not PEM")
+        fromEnvironment(env::get)
+      }.refused().message shouldBe
+        "Invalid configuration: trustCertCollectionPem is neither PEM text nor the base64 of PEM text"
+    }
+
+    // A setting of a section, such as tls, replaces the whole section in the tree, the variable's key with it
+    "a setting of the variable's key, or of the section it's in, shadows the variable" {
+      EnvironmentSetting.CERT.shadowedBy("tls.trustCertCollectionPem") shouldBe true
+      EnvironmentSetting.CERT.shadowedBy("tls") shouldBe true
+      EnvironmentSetting.CERT.shadowedBy("tl") shouldBe false
+      EnvironmentSetting.CERT.shadowedBy("tls.overrideAuthority") shouldBe false
+      EnvironmentSetting.PROXY.shadowedBy("proxy") shouldBe true
+      EnvironmentSetting.PROXY.shadowedBy("proxy.hostname") shouldBe false
+    }
   }
 
   private companion object {

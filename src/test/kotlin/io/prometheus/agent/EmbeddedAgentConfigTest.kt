@@ -637,6 +637,30 @@ class EmbeddedAgentConfigTest : StringSpec() {
       shouldThrow<ConfigLoadException> { embeddedAgent { agentMetrics(70000) }.options() }
     }
 
+    // A path of only a slash is blank once the slash is dropped, and a blank URL can't be scraped: the agent dropped
+    // either target at startup with a warning, as a config's placeholder, so the app's start, a required one's
+    // included, and its onFailure handlers never heard of it (November 26 review, #22)
+    "a path of only a slash, or a blank URL, throws ConfigLoadException" {
+      for (path in ["/", " / "]) {
+        withClue(path) {
+          shouldThrow<ConfigLoadException> { embeddedAgent { path(path, "http://host/metrics") } }
+            .message shouldBe "A path is required"
+          shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf(path, 8080) } }
+            .message shouldBe "A path is required"
+          shouldThrow<ConfigLoadException> { embeddedAgent { source(path) { _, _, _ -> "" } } }
+            .message shouldBe "A path is required"
+        }
+      }
+      for (url in ["", "  "]) {
+        withClue("'$url'") {
+          shouldThrow<ConfigLoadException> { embeddedAgent { path("app", url) } }
+            .message shouldBe "A URL is required for path app"
+          shouldThrow<ConfigLoadException> { embeddedAgent { path("app", url, "user", "pw") } }
+            .message shouldBe "A URL is required for path app"
+        }
+      }
+    }
+
     // The builder drops a leading slash and the agent another, so "//foo" served "foo", where a config's "//foo" fails
     // at startup (November 26 #11).
     "a path of more than one segment throws ConfigLoadException" {

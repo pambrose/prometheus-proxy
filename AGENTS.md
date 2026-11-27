@@ -114,7 +114,10 @@ agent with a Ktor app and serves the `PrometheusRegistry` it's given in-process.
 property names (`FileSettings`), then the install block's. `AgentLifecycle` starts the agent on `ApplicationStarted`,
 begins its stop on `ApplicationStopPreparing` on a thread of its own, so the engine's grace period stays the app's, and
 waits for it on `ApplicationStopping`, as long as the settings' `stopTimeout` lets the handle's `shutdown()` (30
-seconds unless the file's `stop-timeout` or an agent block sets another), and a second more; keep that split. Ktor raises `ApplicationStarted` before the engine binds, and an
+seconds unless the file's `stop-timeout` or an agent block sets another), and a second more, through an interrupt
+(Guava's `joinUninterruptibly`); keep that split. Its state changes under a lock, so the stop's thread is published with
+the agent taken, a second `ApplicationStarted` starts nothing, and an agent whose start ends after the stop began is
+stopped at once. Ktor raises `ApplicationStarted` before the engine binds, and an
 engine that can't bind throws without disposing the app, so no stop event comes: the embedded agent's daemon thread is
 what lets that app's JVM exit (`ServerBindFailureTest`). Once the file and the install block have made the settings, it
 starts the agent only where `EmbeddedAgentConfig.namesProxy()` says they name a proxy, a required agent with `start()`,
@@ -171,13 +174,15 @@ Only these types are part of the supported, documented public API. Everything el
     so it isn't in the tree either: `start()` gives it to the `EmbeddedAgentInfo` (`withStopTimeout`), whose
     `shutdown()` then stops the agent on a daemon thread, with `stopAsync()` and `awaitTerminated()`, since `stop()`'s
     `stopSync()` gives up at 30 seconds, throwing, and waits at most that long, through an interrupt. Unset, `shutdown()` is
-    `stop()`, which waits those 30 seconds, then throws `TimeoutException`. The Ktor plugin sets 30 seconds before the
+    `stop()`, which waits those 30 seconds, then throws an `IllegalStateException` whose cause is Guava's checked
+    `TimeoutException`, which Kotlin wouldn't declare, so Java callers can catch it. The Ktor plugin sets 30 seconds before the
     file's `stop-timeout` and the agent blocks, and the starter sets its `stop-timeout` property's, 30 seconds by
     default; both read a number alone as seconds.
   - `fromEnvironment()` reads `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and
     `PROMETHEUS_PROXY_AUTHORITY`, which nothing else reads. Its `internal` overload takes the lookup function, so
     tests can call it, as with `EnvVars`' parsing. The builder remembers which values it read, until code sets the same
-    key, and `start()` checks them first with the agent's own parsers (`EnvironmentSetting`), so a value the agent
+    key, less those a `setting()` of the key or its section shadows whatever the order (`EnvironmentSetting.shadowedBy`,
+    in `build()`), and `start()` checks them first with the agent's own parsers (`EnvironmentSetting`), so a value the agent
     refuses names its variable as well as its setting, and never a certificate (an endpoint it can't parse is quoted).
   - `agentMetricsAt(path, labels)` sets `agent.metrics.proxyPath` and `agent.metrics.proxyPathLabels`, which a
     standalone agent sets in its config, or with `--metrics_proxy_path` / `METRICS_PROXY_PATH`

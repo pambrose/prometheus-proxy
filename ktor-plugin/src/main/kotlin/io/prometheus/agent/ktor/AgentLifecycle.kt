@@ -16,6 +16,7 @@
 
 package io.prometheus.agent.ktor
 
+import com.google.common.util.concurrent.Uninterruptibles
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStarted
@@ -27,7 +28,7 @@ import io.prometheus.agent.EmbeddedAgentInfo
 import kotlinx.coroutines.DisposableHandle
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 // The agent of one Application, started and stopped by the app's lifecycle events:
@@ -45,11 +46,18 @@ import kotlin.concurrent.thread
 //    stops the agent itself when the app is disposed without the engine stopping. The agent's handle stops waiting for
 //    its stop once the settings' stopTimeout is up, which the plugin sets to 30 seconds unless the file or an agent
 //    block sets another, and this waits a second more, for the handle to return. A block that sets none leaves the
-//    wait to the handle, which gives up after the agent's own 30 seconds.
+//    wait to the handle, which gives up after the agent's own 30 seconds. An interrupt doesn't end the wait, as it
+//    doesn't end the handle's: the thread keeps it.
 //
 // The handlers are the app's, not the plugin's: in development mode, a reload disposes the app and creates another on
 // the same monitor, so each handler checks that the event is its app's, but for ApplicationStopPreparing's, which
 // carries the environment rather than the app, and they're all removed once the app stops.
+//
+// The events can come on different threads, so the lifecycle's state is changed under a lock: a second
+// ApplicationStarted, or one after the stop began, starts nothing, and the stop's thread is published with the agent
+// taken, so a disposal that comes as the engine's stop begins waits for it. A stop that comes while the agent starts,
+// which takes up to the start's own 30 seconds, finds no agent; the start then stops the agent once it has started,
+// and the disposal waits for that stop when it hasn't come yet (November 26 review, #25).
 internal class AgentLifecycle(
   private val application: Application,
   private val config: PrometheusProxyAgentConfig,
@@ -60,12 +68,21 @@ internal class AgentLifecycle(
     if (config.required) settings.start(logBanner = false) else settings.startIfConfigured(logBanner = false)
   },
 ) {
-  private val agent = AtomicReference<EmbeddedAgentInfo?>()
-  private val stopping = AtomicReference<Thread?>()
+  // Guards the state below, which the lifecycle's events change, on whichever threads they come
+  private val lock = Any()
+
+  // Whether the app's start has come, which starts the agent once, and whether its stop has begun, after which nothing
+  // starts it
+  private var started = false
+  private var stopBegun = false
+
+  // The running agent, and the thread of its stop, once begun, for the app's disposal to wait for
+  private var agent: EmbeddedAgentInfo? = null
+  private var stopping: Thread? = null
 
   // The started agent's settings' stopTimeout, which its handle's shutdown waits for at most; null, as long as the
   // handle's shutdown takes, which gives up after the agent's own 30 seconds
-  private val stopTimeout = AtomicReference<Duration?>()
+  private var stopTimeout: Duration? = null
 
   fun subscribe() {
     val monitor = application.monitor
@@ -79,6 +96,12 @@ internal class AgentLifecycle(
 
   @Suppress("TooGenericExceptionCaught")
   fun start() {
+    synchronized(lock) {
+      // A second start event, or one after the app's stop began, starts nothing
+      if (started || stopBegun)
+        return
+      started = true
+    }
     if (!config.enabled) {
       logger.info { "prometheus-proxy.agent.enabled is false, so the Prometheus agent stays off" }
       return
@@ -108,13 +131,25 @@ internal class AgentLifecycle(
         "prometheus-proxy.agent.path is ${config.path}, but no registry is set, so the agent serves none there"
       }
     logger.info { "Starting the Prometheus agent with $settings" }
-    val started = launch(settings) ?: return
-    stopTimeout.set(settings.stopTimeout)
-    agent.set(started)
-    application.attributes.put(AgentKey, started)
+    val launched = launch(settings) ?: return
+    val stopNow =
+      synchronized(lock) {
+        agent = launched
+        stopTimeout = settings.stopTimeout
+        if (!stopBegun)
+          application.attributes.put(AgentKey, launched)
+        stopBegun
+      }
+    if (stopNow) {
+      // The app began to stop while the agent started, so its stop found no agent to stop: stopped here instead, on a
+      // thread of its own, as the engine's stop begins it, for the app's disposal to wait for when it hasn't come yet
+      logger.info { "The app began to stop as the Prometheus agent ${launched.agentName} started" }
+      beginStop()
+      return
+    }
     // No proxy named: the agent's own PROXY_HOSTNAME can override the setting's. The line above gives the settings, and
     // the agent logs the proxy it connects to.
-    logger.info { "Prometheus agent ${started.agentName} started" }
+    logger.info { "Prometheus agent ${launched.agentName} started" }
   }
 
   // No proxy: the agent stays off, as on a developer's machine, unless it's required
@@ -135,30 +170,42 @@ internal class AgentLifecycle(
     builder.reportFailure(e)
   }
 
+  // Takes the agent and publishes its stop's thread at once, under the lock, so a disposal that comes meanwhile finds
+  // the thread to wait for
   fun beginStop() {
-    val started = agent.getAndSet(null) ?: return
-    application.attributes.remove(AgentKey)
-    logger.info { "Stopping the Prometheus agent ${started.agentName}" }
-    stopping.set(
-      thread(name = "prometheus-agent-stop", isDaemon = true) {
-        runCatching { started.shutdown() }
-          .onFailure { logger.warn(it) { "The Prometheus agent ${started.agentName} did not stop cleanly" } }
-      },
-    )
+    synchronized(lock) {
+      stopBegun = true
+      val running = agent ?: return
+      agent = null
+      application.attributes.remove(AgentKey)
+      logger.info { "Stopping the Prometheus agent ${running.agentName}" }
+      stopping =
+        thread(name = "prometheus-agent-stop", isDaemon = true) {
+          runCatching { running.shutdown() }
+            .onFailure { logger.warn(it) { "The Prometheus agent ${running.agentName} did not stop cleanly" } }
+        }
+    }
   }
 
   fun finishStop() {
     // Begins the stop here when the engine didn't
     beginStop()
-    val thread = stopping.getAndSet(null) ?: return
-    val timeout = stopTimeout.get()
+    val thread: Thread
+    val timeout: Duration?
+    synchronized(lock) {
+      thread = stopping ?: return
+      stopping = null
+      timeout = stopTimeout
+    }
     if (timeout == null) {
-      thread.join()
+      Uninterruptibles.joinUninterruptibly(thread)
       return
     }
     // The handle's shutdown returns once its stop timeout is up; a second more lets it, before the app stops anyway.
-    // Added as durations, which saturate, so an infinite timeout waits for as long as the stop takes.
-    thread.join((timeout + HANDLE_RETURN_MARGIN_MILLIS.milliseconds).inWholeMilliseconds)
+    // Added as durations, which saturate, so an infinite timeout waits for as long as the stop takes: Long.MAX_VALUE
+    // nanoseconds, which Guava's join takes, as its deadline wraps, as System.nanoTime() does.
+    val wait = timeout + HANDLE_RETURN_MARGIN_MILLIS.milliseconds
+    Uninterruptibles.joinUninterruptibly(thread, wait.inWholeNanoseconds, TimeUnit.NANOSECONDS)
     if (thread.isAlive)
       logger.warn { "The Prometheus agent was still stopping after $timeout; the app stops anyway" }
   }

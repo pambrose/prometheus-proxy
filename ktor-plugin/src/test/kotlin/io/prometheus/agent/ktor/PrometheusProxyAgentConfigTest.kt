@@ -28,6 +28,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.server.config.ApplicationConfig
+import io.ktor.server.config.ApplicationConfigurationException
 import io.ktor.server.config.HoconApplicationConfig
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.config.yaml.YamlConfig
@@ -197,6 +198,31 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
 
       shouldThrow<ConfigLoadException> { config.builder() }.message shouldBe
         "prometheus-proxy.agent.metrics-port must be a number: ninety"
+    }
+
+    // A paths entry is handed to the builder's path(), which refuses a blank path, and now a blank URL too, where the
+    // agent dropped the target at startup with a warning (November 26 review, #22)
+    "a paths entry without a url, or with a blank one, fails the settings" {
+      for (file in listOf(
+        MapApplicationConfig("paths.size" to "1", "paths.0.path" to "jobs_metrics"),
+        MapApplicationConfig("paths.size" to "1", "paths.0.path" to "jobs_metrics", "paths.0.url" to " "),
+      )) {
+        shouldThrow<ConfigLoadException> { PrometheusProxyAgentConfig(file).builder() }.message shouldBe
+          "A URL is required for path jobs_metrics"
+      }
+    }
+
+    // Read as the plugin is installed, these threw out of install(), before the install block ran, whether or not the
+    // agent was enabled or required, and told no onFailure handler. A value the plugin can't read now fails the agent's
+    // start, as any other value in the file does (November 26 review, #24).
+    "a path or labels the plugin can't read fail the settings, not the install" {
+      for (section in listOf("path { a = b }", "labels = \"team=web\"")) {
+        val config = PrometheusProxyAgentConfig(hocon(section))
+
+        config.path.shouldBeNull()
+        config.labels.shouldBeEmpty()
+        shouldThrow<ApplicationConfigurationException> { config.builder() }
+      }
     }
 
     "the registry is served in-process at the path" {
