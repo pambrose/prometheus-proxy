@@ -457,10 +457,11 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardHtml.detailFragment(snapshot(), selectedId = "1") shouldNotContain "identity"
     }
 
-    // ==================== The demo's screenshot script ====================
+    // ==================== The demos' screenshot scripts ====================
 
-    // demos/basics/bin/screenshots.sh finds an agent's row by its name and reads its id and path count from these,
-    // not from the row's text, which every change to the row's look broke. The page and every push render the row.
+    // The demos' screenshot scripts find an agent's row by its name and read its id and path count from these
+    // (agent_row in bin/screenshots-lib.sh), not from the row's text, which every change to the row's look broke. The
+    // page and every push render the row.
     "an agent row should carry its id, name, and path count as data" {
       val agents = [agent(id = "7", name = "agent-east", paths = [path("a_metrics"), path("b_metrics")])]
       val page = renderFullPage(snapshot(agents = agents))

@@ -1,0 +1,3 @@
+# Follow a script's source commands, as from the demos' screenshot scripts to bin/screenshots-lib.sh, so a plain
+# shellcheck checks each with what it sources, as -x does.
+external-sources=true

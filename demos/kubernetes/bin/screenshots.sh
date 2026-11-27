@@ -18,9 +18,11 @@
 #                       minutes; the shots then show it in seconds, so they're for checking a change, not for the site
 set -euo pipefail
 
-# This script is in the demo's bin/, and the demo two levels below the repository root.
+# This script is in the demo's bin/, and the demo two levels below the repository root, whose bin/ holds the code the
+# demos' screenshot scripts share.
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
+# shellcheck source-path=SCRIPTDIR/../../.. source=bin/screenshots-lib.sh
+source "$DEMO_DIR/../../bin/screenshots-lib.sh"
 DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/kubernetes-demo"
 
@@ -41,55 +43,14 @@ SCREENS_URL="${DASHBOARD_URL%/dashboard}/screens"
 AGENT_DASHBOARD_PORT="${KUBERNETES_DEMO_AGENT_DASHBOARD_PORT:-8295}"
 TK=(kubectl --context kind-pp-target)
 
-# The settings in the header. SKIP_UPTIME_WAIT takes exactly 1; any other value leaves the wait in.
-WAIT_SECS="${WAIT_SECS:-150}"
+# The setting in the header beside WAIT_SECS, which the shared code reads. SKIP_UPTIME_WAIT takes exactly 1; any other
+# value leaves the wait in.
 SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 
-# Every screenshot is a whole browser window, 16:10, WIDTH x HEIGHT in CSS pixels, rather than a strip cut to its
-# content, so each fills the same space on the website's page and in the lightbox that opens it full size. The Paths and
-# Activity views are taken in a wider window of the same shape, as in the basics demo: with the services' cluster-local
-# target URLs, the History and Links columns, and the activity's details, their tables are wider than 1280, which would
-# scroll and cut off their right edge. THEMES are the themes each is taken in.
-WIDTH=1280
-HEIGHT=800
-TABLE_WIDTH=1680
-TABLE_HEIGHT=1050
-THEMES=(dark light)
-# SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
-# opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
-# (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
-SCALE=3
+# An agent's row that lists no paths is passed over, so the agent is on the dashboard, for normal below, once it has
+# registered them.
+SKIP_PATHLESS_ROWS=1
 
-# A screenshot's file name in a theme: the dark one keeps the plain name.
-named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
-
-die() {
-  echo "Error: $*" >&2
-  exit 1
-}
-step() { printf '\033[1m%s\033[0m\n' "$*"; }
-
-find_chrome() {
-  local candidate
-  for candidate in "${CHROME:-}" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    google-chrome google-chrome-stable chromium chromium-browser; do
-    [[ -n "$candidate" ]] || continue
-    if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
-      echo "$candidate"
-      return
-    fi
-  done
-  die "Chrome or Chromium not found; set CHROME to its path"
-}
-
-[[ "$WAIT_SECS" =~ ^[1-9][0-9]*$ ]] || die "WAIT_SECS must be a whole number of seconds above 0, not '$WAIT_SECS'"
-CHROME_BIN="$(find_chrome)"
-command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
-command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
-curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/kubernetes"
-
-WORK="$(mktemp -d)"
 FORWARD_PID=""
 
 # Stops the port-forward to the agent's dashboard, if it runs.
@@ -107,56 +68,14 @@ restore() {
   stop_forward
   "$DEMO" remove-service >/dev/null 2>&1 || true
   "$DEMO" restore-config >/dev/null 2>&1 || true
-  rm -rf "$WORK"
 }
-trap restore EXIT
-
-# Waits until a command succeeds, checking every 2 seconds, or fails after WAIT_SECS with what it was waiting for.
-wait_until() {
-  local what="$1" deadline=$((SECONDS + WAIT_SECS))
-  shift
-  until "$@"; do
-    ((SECONDS < deadline)) || die "timed out after ${WAIT_SECS}s waiting for $what; WAIT_SECS raises the limit"
-    sleep 2
-  done
-}
-
-# Waits this many seconds: wait_until with a check that passes once they're up.
-elapsed_since() { ((SECONDS >= $1)); }
-wait_secs() {
-  local until=$((SECONDS + $1))
-  wait_until "$1 seconds to pass" elapsed_since "$until"
-}
+start_shots "$DASHBOARD_URL"
 
 # The agent's pod, the one not on its way out.
 agent_pod() {
   "${TK[@]}" -n monitoring get pods -l app.kubernetes.io/instance=prometheus-agent \
     -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' |
     head -1
-}
-
-# The agent list's row for the connected agent with this name: its start tag, or nothing. The row carries the agent's
-# id, name, and path count as data attributes (agentListInner in ProxyDashboardHtml.kt), and the name's closing quote
-# keeps one name from matching another that starts with it. A row with no paths is passed over.
-agent_row() {
-  local html
-  html="$(curl -fsS "$DASHBOARD_URL" 2>/dev/null)" || return 0
-  grep -Eo '<[a-z]+ [^>]*data-agent-name="[^"]*"[^>]*>' <<<"$html" | grep -F "data-agent-name=\"$1\"" |
-    grep -vF 'data-path-count="0"' | head -1 || true
-}
-
-# An attribute's value in a start tag, or nothing.
-attr() { sed -nE "s/.* $1=\"([^\"]*)\".*/\1/p" <<<"$2"; }
-
-# The id of the connected agent with this name, or nothing.
-agent_id() { attr data-agent "$(agent_row "$1")"; }
-
-# Whether a page, by URL, matches an extended regex. The page is taken whole before grep reads it: grep -q stops at its
-# match, and under pipefail a curl it cut off would fail the check.
-page_has() {
-  local body
-  body="$(curl -fsS "$1" 2>/dev/null)" || return 1
-  grep -Eq "$2" <<<"$body"
 }
 
 # Whether the agent has been connected a minute, which its detail shows as "up 1m" rather than in seconds.
@@ -166,58 +85,16 @@ agent_up_a_minute() {
   [[ -n "$id" ]] && page_has "$DASHBOARD_URL/agents/$id" 'up [0-9]+[mhd]'
 }
 
-# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill the window.
-# The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
-has_scrapes() {
-  local count
-  count="$(curl -fsS "$1" 2>/dev/null | grep -Eo 'data-scrape-count="[0-9]+"' | grep -Eo '[0-9]+' | head -1)"
-  [[ -n "$count" ]] && ((count >= $2))
-}
-
-# Whether a PromQL query returns a result.
-prometheus_has() {
-  local body
-  body="$(curl -fsS -G "$PROMETHEUS_URL/api/v1/query" --data-urlencode "query=$1" 2>/dev/null)" || return 1
-  grep -q '"value"' <<<"$body"
-}
-
 # The agent on the dashboard with its paths, and its four targets, the three services and its own metrics, up in
 # Prometheus: the demo as it starts.
 normal() {
   [[ -n "$(agent_id "$(agent_pod)")" ]] && prometheus_has 'count(up == 1) == 4'
 }
 
-# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at SCALE, in a theme: the
-# dashboard and Prometheus follow the browser's preferred color scheme. Prometheus renders after loading its data, so
-# its capture gets a longer virtual-time budget.
-capture() {
-  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
-  [[ "$theme" == dark ]] || scheme=1
-  profile="$(mktemp -d)"
-  "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$width,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
-  rm -rf "$profile"
-  [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
-}
-
-# A dashboard table in each theme, at a dashboard path, a whole TABLE_WIDTH x TABLE_HEIGHT window.
-shoot_table() {
-  local name="$1" path="$2" theme
-  for theme in "${THEMES[@]}"; do
-    capture "$DASHBOARD_URL$path" "$WORK/$(named "$name" "$theme").png" "$TABLE_HEIGHT" "$theme" "" "$TABLE_WIDTH"
-  done
-}
-
-# The screens page at a link, such as two views side by side, in each theme, a whole TABLE_WIDTH x TABLE_HEIGHT
-# window, so each pane is as wide as a dashboard window. Prometheus renders after loading its data, so the capture gets
-# its longer virtual-time budget: shoot_screens <name> <link>
-shoot_screens() {
-  local name="$1" link="$2" theme
-  for theme in "${THEMES[@]}"; do
-    capture "$SCREENS_URL#$link" "$WORK/$(named "$name" "$theme").png" "$TABLE_HEIGHT" "$theme" 8000 "$TABLE_WIDTH"
-  done
-}
+# A dashboard table in each theme, at a dashboard path, in the wide window, as in the basics demo: with the services'
+# cluster-local target URLs, the History and Links columns, and the activity's details, the Paths and Activity tables
+# are wider than WIDTH.
+shoot_table() { shoot_wide "$1" "$DASHBOARD_URL$2"; }
 
 # Forwards AGENT_DASHBOARD_PORT to the agent's dashboard, in the background, as demo.sh agent-dashboard does, so the
 # screens page's agent tab answers, and waits until it does.
@@ -233,14 +110,6 @@ start_forward() {
 
 # Whether the port-forward reaches the agent's dashboard yet.
 forwarded() { curl -fsS -o /dev/null "http://localhost:$AGENT_DASHBOARD_PORT/dashboard" 2>/dev/null; }
-
-# A page in each theme, a whole WIDTH x HEIGHT window: shoot_fixed <name> <url> [budget]
-shoot_fixed() {
-  local name="$1" url="$2" budget="${3:-3000}" theme
-  for theme in "${THEMES[@]}"; do
-    capture "$url" "$WORK/$(named "$name" "$theme").png" "$HEIGHT" "$theme" "$budget"
-  done
-}
 
 step "Waiting for the demo to be at its start"
 "$DEMO" remove-service >/dev/null
@@ -264,16 +133,18 @@ pod="$(agent_pod)"
 id="$(agent_id "$pod")"
 [[ -n "$id" ]] || die "the agent $pod isn't on the dashboard"
 wait_until "the agent's recent scrapes" has_scrapes "$DASHBOARD_URL/agents/$id" 12
-shoot_fixed agent "$DASHBOARD_URL/agents/$id"
-shoot_fixed targets "$PROMETHEUS_URL/targets" 8000
+shoot agent "$DASHBOARD_URL/agents/$id"
+# Prometheus renders after loading its data, so it gets a longer virtual-time budget.
+shoot targets "$PROMETHEUS_URL/targets" 8000
 
 step "Part 3: annotate a Service, and Prometheus scrapes it"
 "$DEMO" add-service >/dev/null
 wait_until "search up in Prometheus" prometheus_has 'up{job="search"} == 1'
 shoot_table discovered /paths
-# The proxy's Paths view beside Prometheus's targets, with the agent's tab answering, as the tour has it.
+# The proxy's Paths view beside Prometheus's targets, with the agent's tab answering, as the tour has it, with
+# Prometheus's budget.
 start_forward
-shoot_screens screens "proxy/paths+prometheus/targets"
+shoot_screens screens "proxy/paths+prometheus/targets" 8000
 stop_forward
 "$DEMO" remove-service >/dev/null
 
@@ -283,13 +154,5 @@ step "Part 4: Kubernetes replaces a deleted agent pod in about a second"
 wait_until "the new agent's scrapes" normal
 shoot_table replaced /activity
 
-step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
-mkdir -p "$OUT_DIR"
-for name in agent targets discovered screens replaced; do
-  for theme in "${THEMES[@]}"; do
-    file="$(named "$name" "$theme")"
-    cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
-    printf '  %-22s %s\n' "$file.webp" "$(magick identify -format '%wx%h' "$WORK/$file.png")"
-  done
-done
+write_webp agent targets discovered screens replaced
 step "Done; the demo is back to its start"

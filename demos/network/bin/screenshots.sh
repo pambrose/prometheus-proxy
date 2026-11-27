@@ -18,27 +18,15 @@
 #                       site
 set -euo pipefail
 
-# This script is in the demo's bin/, and the demo two levels below the repository root.
+# This script is in the demo's bin/, and the demo two levels below the repository root, whose bin/ holds the code the
+# demos' screenshot scripts share.
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
+# shellcheck source-path=SCRIPTDIR/../../.. source=bin/screenshots-lib.sh
+source "$DEMO_DIR/../../bin/screenshots-lib.sh"
 DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/network-demo"
-# Where make up keeps the host ports moved with the *_PORT variables (demo.sh's PORTS_FILE).
-PORTS_FILE="$DEMO_DIR/docker/.env"
 
-# Takes each port saved in docker/.env that the environment doesn't set, as demo.sh does, so the URLs below match what
-# compose publishes.
-load_saved_ports() {
-  local name value
-  [[ -f "$PORTS_FILE" ]] || return 0
-  while IFS='=' read -r name value || [[ -n "$name" ]]; do
-    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
-      export "$name=$value"
-    fi
-  done <"$PORTS_FILE"
-}
 load_saved_ports
-
 DASHBOARD_URL="http://localhost:${NETWORK_DEMO_DASHBOARD_PORT:-8194}/dashboard"
 STANDBY_DASHBOARD_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/dashboard"
 SCREENS_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/screens"
@@ -46,137 +34,36 @@ GRAFANA_URL="http://localhost:${NETWORK_DEMO_GRAFANA_PORT:-3100}"
 PROMETHEUS_URL="http://localhost:${NETWORK_DEMO_PROMETHEUS_PORT:-9190}"
 ZIPKIN_URL="http://localhost:${NETWORK_DEMO_ZIPKIN_PORT:-9511}"
 
-# The settings in the header. SKIP_UPTIME_WAIT takes exactly 1; any other value leaves the wait in.
-WAIT_SECS="${WAIT_SECS:-150}"
+# The setting in the header beside WAIT_SECS, which the shared code reads. SKIP_UPTIME_WAIT takes exactly 1; any other
+# value leaves the wait in.
 SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 
-# Every screenshot is a whole browser window, 16:10, WIDTH x HEIGHT in CSS pixels, rather than a strip cut to its
-# content, so each fills the same space on the website's page and in the lightbox that opens it full size. THEMES are
-# the themes each is taken in.
-WIDTH=1280
-HEIGHT=800
-# The screens page is taken in a wider window of the same shape, so each of Split's two panes is about as wide as a
-# dashboard needs.
-SCREENS_WIDTH=1680
-SCREENS_HEIGHT=1050
-THEMES=(dark light)
-# SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
-# opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
-# (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
-SCALE=3
 # The recent scrapes an agent's detail shows in the window, about, which a shot of one waits for.
 DETAIL_ROWS=13
+# An agent's row with no paths is passed over: after `demo.sh filter` restarts agent-branch on the thin link, its old
+# connection stays listed, with none, until what it had queued drains through the link.
+SKIP_PATHLESS_ROWS=1
 
 # The demo's Grafana dashboard in kiosk mode, over a window each scene gives. A {theme} becomes the theme's name:
 # Grafana doesn't follow the browser's scheme.
 GRAFANA_DASHBOARD="$GRAFANA_URL/d/prometheus-proxy-network-demo?orgId=1&kiosk&to=now&theme={theme}&from=now-"
-
-# A screenshot's file name in a theme: the dark one keeps the plain name.
-named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
-
-die() {
-  echo "Error: $*" >&2
-  exit 1
-}
-step() { printf '\033[1m%s\033[0m\n' "$*"; }
-
-find_chrome() {
-  local candidate
-  for candidate in "${CHROME:-}" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    google-chrome google-chrome-stable chromium chromium-browser; do
-    [[ -n "$candidate" ]] || continue
-    if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
-      echo "$candidate"
-      return
-    fi
-  done
-  die "Chrome or Chromium not found; set CHROME to its path"
-}
-
-[[ "$WAIT_SECS" =~ ^[1-9][0-9]*$ ]] || die "WAIT_SECS must be a whole number of seconds above 0, not '$WAIT_SECS'"
-CHROME_BIN="$(find_chrome)"
-command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
-command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
-curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/network"
-
-WORK="$(mktemp -d)"
 
 # Undoes every scenario, whatever state a failure left the demo in: heal brings back every link and proxy and removes
 # every toxic, and unfilter restarts agent-branch on its own config.
 restore() {
   "$DEMO" heal >/dev/null 2>&1 || true
   "$DEMO" unfilter >/dev/null 2>&1 || true
-  rm -rf "$WORK"
 }
-trap restore EXIT
-
-# Waits until a command succeeds, checking every 2 seconds, or fails after WAIT_SECS with what it was waiting for.
-wait_until() {
-  local what="$1" deadline=$((SECONDS + WAIT_SECS))
-  shift
-  until "$@"; do
-    ((SECONDS < deadline)) || die "timed out after ${WAIT_SECS}s waiting for $what; WAIT_SECS raises the limit"
-    sleep 2
-  done
-}
-
-# Waits this many seconds, so a graph or a countdown can move: wait_until with a check that passes once they're up.
-elapsed_since() { ((SECONDS >= $1)); }
-wait_secs() {
-  local until=$((SECONDS + $1))
-  wait_until "$1 seconds to pass" elapsed_since "$until"
-}
-
-# The agent list's row for the connected agent with this name, at a dashboard's base URL (DASHBOARD_URL unless given):
-# its start tag, or nothing. The row carries the agent's id, name, and path count as data attributes (agentListInner
-# in ProxyDashboardHtml.kt), and the name's closing quote keeps one name from matching another that starts with it. A
-# row with no paths is passed over: after `demo.sh filter` restarts agent-branch on the thin link, its old connection
-# stays listed, with none, until what it had queued drains through the link.
-agent_row() {
-  local html
-  html="$(curl -fsS "${2:-$DASHBOARD_URL}" 2>/dev/null)" || return 0
-  grep -Eo '<[a-z]+ [^>]*data-agent-name="[^"]*"[^>]*>' <<<"$html" | grep -F "data-agent-name=\"$1\"" |
-    grep -vF 'data-path-count="0"' | head -1 || true
-}
-
-# An attribute's value in a start tag, or nothing.
-attr() { sed -nE "s/.* $1=\"([^\"]*)\".*/\1/p" <<<"$2"; }
-
-# The id of the connected agent with this name, at a dashboard's base URL (DASHBOARD_URL unless given), or nothing.
-agent_id() { attr data-agent "$(agent_row "$@")"; }
+start_shots "$DASHBOARD_URL"
 
 # Whether the dashboard at a base URL lists both agents.
 has_both_agents() { [[ -n "$(agent_row agent-hq "$1")" && -n "$(agent_row agent-branch "$1")" ]]; }
-
-# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill the window.
-# The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
-has_scrapes() {
-  local count
-  count="$(curl -fsS "$1" 2>/dev/null | grep -Eo 'data-scrape-count="[0-9]+"' | grep -Eo '[0-9]+' | head -1)"
-  [[ -n "$count" ]] && ((count >= $2))
-}
-
-# Whether a page, by URL, matches an extended regex. The page is taken whole before grep reads it: grep -q stops at its
-# match, and under pipefail a curl it cut off would fail the check.
-page_has() {
-  local body
-  body="$(curl -fsS "$1" 2>/dev/null)" || return 1
-  grep -Eq "$2" <<<"$body"
-}
 
 # Whether agent-branch has been connected a minute, which its detail shows as "up 1m" rather than in seconds.
 branch_up_a_minute() {
   local id
   id="$(agent_id agent-branch)"
   [[ -n "$id" ]] && page_has "$DASHBOARD_URL/agents/$id" 'up [0-9]+[mhd]'
-}
-
-# Whether a PromQL query returns a result.
-prometheus_has() {
-  local body
-  body="$(curl -fsS -G "$PROMETHEUS_URL/api/v1/query" --data-urlencode "query=$1" 2>/dev/null)" || return 1
-  grep -q '"value"' <<<"$body"
 }
 
 # Every agent connected to the primary, none to the standby, and every path's job up: the demo as it starts.
@@ -236,44 +123,10 @@ connect_traces() {
 # Whether Zipkin has at least this many of them: one for each reconnect.
 has_connect_traces() { (($(connect_traces | wc -l) >= $1)); }
 
-# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at SCALE, in a theme: the
-# dashboard follows the browser's preferred color scheme. Grafana and Zipkin render after loading their data, so their captures get a longer virtual-time budget.
-capture() {
-  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
-  [[ "$theme" == dark ]] || scheme=1
-  profile="$(mktemp -d)"
-  "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$width,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
-  rm -rf "$profile"
-  [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
-}
-
-# A page in each theme, a whole WIDTH x HEIGHT window. A page whose viewport ends in a fixed footer, Grafana's, is
-# captured this much taller and cut to HEIGHT, which leaves the footer out. A {theme} in the URL becomes the theme's
-# name, for Grafana. shoot_fixed <name> <url> [capture height] [budget]
-shoot_fixed() {
-  local name="$1" url="$2" capture_height="${3:-$HEIGHT}" budget="${4:-3000}" theme png
-  for theme in "${THEMES[@]}"; do
-    png="$WORK/$(named "$name" "$theme").png"
-    capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
-    magick "$png" -crop "$((WIDTH * SCALE))x$((HEIGHT * SCALE))+0+0" +repage "$png"
-  done
-}
-
-# The standby's screens page in each theme, opened on a link (its part after the #), a whole SCREENS_WIDTH x
-# SCREENS_HEIGHT window. Its budget is Grafana's, in case a pane shows Grafana. shoot_screens <name> <link>
-shoot_screens() {
-  local name="$1" link="$2" theme
-  for theme in "${THEMES[@]}"; do
-    capture "$SCREENS_URL#$link" "$WORK/$(named "$name" "$theme").png" "$SCREENS_HEIGHT" "$theme" 15000 "$SCREENS_WIDTH"
-  done
-}
-
 # Grafana's dashboard in each theme, over the last this many seconds: captured taller than kept, since the bottom of
 # its viewport carries a fixed "Powered by" footer. The window is short, so a scene's graphs show it and the minute or
 # so of normal before it, not the scenes before that.
-shoot_grafana() { shoot_fixed "$1" "${GRAFANA_DASHBOARD}${2}s" "$((HEIGHT + 100))" 15000; }
+shoot_grafana() { shoot "$1" "${GRAFANA_DASHBOARD}${2}s" 15000 "$((HEIGHT + 100))"; }
 
 step "Waiting for the demo to be back to normal"
 back_to_normal
@@ -309,12 +162,12 @@ branch="$(agent_id agent-branch)"
 wait_secs 50
 wait_until "agent-branch's last nine scrapes to be too late for Prometheus" all_too_late "$DASHBOARD_URL/agents/$branch"
 [[ "$(agent_id agent-branch)" == "$branch" ]] || die "agent-branch reconnected on the thin link"
-shoot_fixed thin "$DASHBOARD_URL/agents/$branch"
+shoot thin "$DASHBOARD_URL/agents/$branch"
 "$DEMO" filter >/dev/null 2>&1
 wait_until "agent-branch's filtered inventory scrapes through the thin link" filtered_inventory
 branch="$(agent_id agent-branch)"
 wait_until "agent-branch's scrapes since the restart" has_scrapes "$DASHBOARD_URL/agents/$branch" "$DETAIL_ROWS"
-shoot_fixed filtered "$DASHBOARD_URL/agents/$branch"
+shoot filtered "$DASHBOARD_URL/agents/$branch"
 "$DEMO" unfilter >/dev/null 2>&1
 back_to_normal
 
@@ -325,9 +178,9 @@ branch="$(agent_id agent-branch "$STANDBY_DASHBOARD_URL")"
 [[ -n "$branch" ]] || die "agent-branch isn't on the standby"
 wait_until "agent-branch's scrapes through the standby" has_scrapes "$STANDBY_DASHBOARD_URL/agents/$branch" \
   "$DETAIL_ROWS"
-shoot_fixed failover "$STANDBY_DASHBOARD_URL/agents/$branch"
+shoot failover "$STANDBY_DASHBOARD_URL/agents/$branch"
 # The screens page as part 4 of the tour opens it: agent-branch's Connection view beside the standby, which serves the
-# page, while the primary is stopped and its tab is red.
+# page, while the primary is stopped and its tab is red. Its timing is Grafana's, in case a pane shows Grafana.
 shoot_screens screens "agent-branch/connection+proxy"
 "$DEMO" proxy-up >/dev/null 2>&1
 back_to_normal
@@ -337,7 +190,7 @@ branch="$(agent_id agent-branch)"
 [[ -n "$branch" ]] || die "agent-branch isn't connected"
 "$DEMO" cut >/dev/null
 wait_until "the primary to hear nothing from agent-branch for 16 seconds" branch_idle
-shoot_fixed cut "$DASHBOARD_URL/agents/$branch"
+shoot cut "$DASHBOARD_URL/agents/$branch"
 wait_until "agent-branch on its standby link" branch_on_standby
 back_to_normal
 
@@ -348,7 +201,7 @@ wait_until "three reconnects of agent-branch's in Zipkin" has_connect_traces 3
 # The newest reconnect's connectagent call, as the scene's tour has the presenter open one. Zipkin's search page
 # doesn't run a query from its URL in headless Chrome, so the shot is of the trace itself. Zipkin's UI has one theme,
 # so this is taken once and serves both of the site's.
-capture "$ZIPKIN_URL/zipkin/traces/$(connect_traces | head -1)" "$WORK/tracing.png" "$HEIGHT" light 8000
+capture "$ZIPKIN_URL/zipkin/traces/$(connect_traces | head -1)" "$WORK/tracing.png" light 8000
 back_to_normal
 
 step "Part 7: The whole WAN goes down: an alert fires, and the agents reconnect"
@@ -362,15 +215,6 @@ shoot_grafana wan-down 90
 "$DEMO" wan-up >/dev/null
 back_to_normal
 
-step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
-mkdir -p "$OUT_DIR"
-for name in far thin filtered failover screens cut wan-down; do
-  for theme in "${THEMES[@]}"; do
-    file="$(named "$name" "$theme")"
-    cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
-    printf '  %-22s %s\n' "$file.webp" "$(magick identify -format '%wx%h' "$WORK/$file.png")"
-  done
-done
-cwebp -quiet -lossless -z 9 "$WORK/tracing.png" -o "$OUT_DIR/tracing.webp"
-printf '  %-22s %s\n' "tracing.webp" "$(magick identify -format '%wx%h' "$WORK/tracing.png")"
+write_webp far thin filtered failover screens cut wan-down
+webp tracing
 step "Done; the demo is back to normal"
