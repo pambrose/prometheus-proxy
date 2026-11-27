@@ -51,6 +51,9 @@ import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
 import io.prometheus.common.deadlineExceeded
+import io.kotest.matchers.ints.shouldBeLessThan
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1113,9 +1116,15 @@ class AgentPathManagerTest : StringSpec() {
     }
 
     // November #16: the proxy refuses a path with a character no scrape's request path can carry. Refused here too, a
-    // pathConfigs entry with one fails at startup, naming it, rather than being refused at every connect.
-    "construction should reject a pathConfigs entry whose path no scrape can carry, naming it" {
-      for (path in ["app metrics", "metrics?format=x", "a#b", """a\tb""", """a\nb"""]) {
+    // pathConfigs entry with one fails at startup, naming it, rather than being refused at every connect. So does one
+    // of more than one segment, which the proxy refuses too: "//foo" lost one slash here and one at the proxy, which
+    // took it as "foo", while the agent kept it as "/foo", so every scrape of it 404ed (November 26 #11).
+    "construction should reject a pathConfigs entry whose path the proxy refuses, naming it" {
+      val character = "can't appear in a scrape's request path"
+      val refusals =
+        ["app metrics", "metrics?format=x", "a#b", """a\tb""", """a\nb"""].map { it to character } +
+          ["//foo", "app/metrics", "/app/metrics", "//"].map { it to "one segment" }
+      for ((path, reason) in refusals) {
         val agent =
           createMockAgent(
             pathConfigsHocon =
@@ -1129,7 +1138,7 @@ class AgentPathManagerTest : StringSpec() {
 
         withClue(path) {
           message shouldContain "\"bad\""
-          message shouldContain "can't appear in a scrape's request path"
+          message shouldContain reason
           message.none { it == '\n' || it == '\t' }.shouldBeTrue()
         }
       }
@@ -1146,6 +1155,29 @@ class AgentPathManagerTest : StringSpec() {
         )
 
       AgentPathManager(agent).toPlainText() shouldContain "team-a.metrics~1"
+    }
+
+    // A discovered "//metrics" was keyed as "/metrics" and registered as "metrics", so each reconcile found the path it
+    // had registered stale, unregistered it, and registered it again, and it took a static "metrics" over as it did
+    // (November 26 #11). A discovery source drops such an entry (DiscoveredPath.usable); one that passes it on still
+    // never reaches the proxy with it.
+    "reconcile should neither register nor unregister a discovered path with a second leading slash" {
+      val agent =
+        createMockAgent(
+          pathConfigsHocon = """{ name = "static", path = "metrics", url = "$METRICS_URL", labels = "{}" }""",
+          agentHocon = "discovery.enabled = true",
+        )
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.registerPaths()
+
+      repeat(2) {
+        manager.reconcileDiscoveredPaths([DiscoveredPath("d", "//metrics", "http://other/metrics", "{}")])
+      }
+
+      coVerify(exactly = 1) { grpc.registerPathOnProxy(any(), any(), any(), any()) }
+      coVerify(exactly = 0) { grpc.unregisterPathOnProxy(any()) }
+      manager["metrics"].shouldNotBeNull().source shouldBe PathSource.STATIC
     }
 
     // The proxy leaves labels it can't serve out of service discovery, so a pathConfigs entry with them is reported at
@@ -2201,6 +2233,87 @@ class AgentPathManagerTest : StringSpec() {
       clock.tick(times = 2, step = 10.seconds) { manager.reclaimTakenOverPaths() }
 
       coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+    }
+
+    // The proxy's notice after each refused reclaim wakes the reclaim task at once, and a pass then tried every path
+    // due within the window: one just refused with a backoff no longer than the window, as every one is with
+    // rejectedPathRetryMaxSecs = 1, was tried again at once, as fast as the proxy could refuse it (November 26 #12).
+    "a reclaim pass should try no path until one is due" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws heldRefusal()
+
+      // Due at 10s (rejectedPathRetrySecs), so not yet at 9.5s, though within the window.
+      clock += 9500.milliseconds
+      manager.reclaimTakenOverPaths()
+      coVerify(exactly = 0) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      clock += 500.milliseconds
+      manager.reclaimTakenOverPaths()
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+    }
+
+    // The window gathers the paths due soon after one that's due into its pass, so the reclaim task wakes once for
+    // them.
+    "a reclaim pass should take, with a path that's due, the paths due within a second of it" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("first", METRICS_URL)
+      manager.registerPath("second", METRICS_URL)
+      manager.notePathNotice(takenNotice("first", "agent-east-copy"))
+      clock += 500.milliseconds
+      manager.notePathNotice(takenNotice("second", "agent-east-copy"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws heldRefusal()
+
+      // "first" is due at 10s, and "second" half a second later.
+      clock += 9500.milliseconds
+      manager.reclaimTakenOverPaths()
+
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("first", any(), any(), any()) }
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("second", any(), any(), any()) }
+    }
+
+    // The loop slept until a second before the next try was due, which with rejectedPathRetryMaxSecs = 1 was never, so
+    // it sent reclaims as fast as the proxy refused them, and otherwise tried each a second early (November 26 #12).
+    "the reclaim loop should wait out a one-second backoff between refused reclaims" {
+      val agent = createMockAgent(agentHocon = "internal { rejectedPathRetrySecs = 1, rejectedPathRetryMaxSecs = 1 }")
+      val grpc = agent.grpcService
+      // Never advanced, so the next try stays a second away however long the test takes.
+      val manager = AgentPathManager(agent, TestTimeSource())
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      // As after a reconnect: the reclaim is due at once.
+      manager.clear()
+      // The proxy names the holder again with each refusal, which wakes the loop.
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } answers {
+        manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+        throw heldRefusal()
+      }
+      val passes = AtomicInt(0)
+      val active = AtomicBoolean(true)
+
+      coroutineScope {
+        // On a dispatcher of its own, so a loop that never suspends can't hold up this test's.
+        val loop =
+          launch(Dispatchers.Default) {
+            manager.reclaimTakenOverPathsWhile {
+              passes.incrementAndFetch()
+              active.load()
+            }
+          }
+        delay(100.milliseconds)
+        active.store(false)
+        val passesSeen = passes.load()
+        loop.cancelAndJoin()
+
+        withClue("loop passes in a tenth of a second") { passesSeen shouldBeLessThan 10 }
+        coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      }
     }
 
     // Freed, the path can go to an agent of another identity, which the proxy names as the reason, not a takeover.

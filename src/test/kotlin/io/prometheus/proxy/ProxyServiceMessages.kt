@@ -87,22 +87,24 @@ internal fun chunkFor(
   }
 }
 
+/** The summary of a transfer for [scrapeId] whose one chunk was [data]. */
+internal fun summaryFor(
+  scrapeId: Long,
+  data: ByteArray,
+) = chunkedScrapeResponse {
+  summary = summaryData {
+    summaryScrapeId = scrapeId
+    summaryChunkCount = 1
+    summaryByteCount = data.size
+    summaryChecksum = CRC32().apply { update(data) }.value
+  }
+}
+
 /** A whole chunked transfer for [id] from [sender]: its header, one chunk, and its summary. */
 internal fun transferFrom(
   sender: String,
   id: Long,
 ): List<ChunkedScrapeResponse> {
   val data = "metric 1".toByteArray()
-  return listOf(
-    chunkedHeaderFrom(sender, id),
-    chunkFor(id, data),
-    chunkedScrapeResponse {
-      summary = summaryData {
-        summaryScrapeId = id
-        summaryChunkCount = 1
-        summaryByteCount = data.size
-        summaryChecksum = CRC32().apply { update(data) }.value
-      }
-    },
-  )
+  return listOf(chunkedHeaderFrom(sender, id), chunkFor(id, data), summaryFor(id, data))
 }

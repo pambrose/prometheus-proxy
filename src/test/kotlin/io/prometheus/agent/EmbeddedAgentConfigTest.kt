@@ -636,6 +636,20 @@ class EmbeddedAgentConfigTest : StringSpec() {
       shouldThrow<ConfigLoadException> { embeddedAgent { path("app", "sidecar:9100/metrics", "user", "pw") } }
       shouldThrow<ConfigLoadException> { embeddedAgent { agentMetrics(70000) }.options() }
     }
+
+    // The builder drops a leading slash and the agent another, so "//foo" served "foo", where a config's "//foo" fails
+    // at startup (November 26 #11).
+    "a path of more than one segment throws ConfigLoadException" {
+      for (path in ["//foo", "app/metrics"]) {
+        withClue(path) {
+          shouldThrow<ConfigLoadException> { embeddedAgent { path(path, "http://host/metrics") } }
+            .message shouldContain "one segment"
+          shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf(path, 8080) } }
+          shouldThrow<ConfigLoadException> { embeddedAgent { source(path) { _, _, _ -> "" } } }
+          shouldThrow<ConfigLoadException> { embeddedAgent { agentMetricsAt(path) } }
+        }
+      }
+    }
   }
 
   companion object {

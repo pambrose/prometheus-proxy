@@ -19,6 +19,10 @@ its own that holds them all, with Prometheus and Grafana.
   `agent.dashboard.framingEnabled = false` on an agent whose dashboard is on: an embedded agent's is
   `setting("dashboard.framingEnabled", false)`, or the Spring Boot starter's or the Ktor plugin's
   `settings.dashboard.framingEnabled`.
+- **An agent with a path of more than one segment no longer starts.** A configured path such as `app/metrics` or
+  `//metrics`, which no scrape can reach and the proxy refuses, now stops the agent at startup, naming it, where 4.7.0
+  ran without it; a discovered one is skipped when the agent reads its discovery file. Use one segment, such as
+  `app_metrics`.
 
 ### New Features
 
@@ -62,6 +66,18 @@ its own that holds them all, with Prometheus and Grafana.
 - **The dashboards' top bar no longer draws over its tabs.** In a window about 720 to 900 pixels wide, as a screens
   page's Split pane often is, the status's last line was drawn over the tabs. The status and the buttons after it now
   move to a row of their own above the tabs when they don't fit beside them.
+- **A path with a second leading slash is refused, not lost.** A configured path such as `//metrics` registered, but
+  every scrape of it got a 404; a discovered one was registered again on every reconcile, and could take over a
+  configured path of the same name. The agent now refuses such a path (see Before you upgrade).
+- **A one-second reclaim backoff no longer floods the proxy.** With `agent.internal.rejectedPathRetryMaxSecs = 1`, an
+  agent whose path another agent took over asked for it back as fast as the proxy could refuse it. It now waits out
+  each retry, and no longer tries one a second early.
+- **One agent stream can't disturb another's large scrape result.** A second stream an agent opened could add to or
+  finish a result the first was sending in chunks, which could corrupt it or let it past the proxy's size limit. The
+  proxy now ignores such data.
+- **The Helm charts upgrade from 4.6.0 with `--reuse-values`.** `helm upgrade --reuse-values` from a 4.6.0 release,
+  as the agent chart's README shows for turning its dashboard on, failed with a nil pointer; the charts now take each
+  dashboard value the old release lacks from its default.
 
 ### Behavior Changes
 

@@ -174,7 +174,7 @@ dropped and came back while nobody was watching.
 | unregistered        | plain    | A path was removed, such as one that left the discovery file                                   |
 | discovery failed    | red      | The discovery file couldn't be read, so the agent keeps the paths it last read                 |
 | discovery recovered | plain    | The discovery file was read again after it failed, with how many entries it has                |
-| entries skipped     | red      | The discovery file listed entries without a path or a URL                                      |
+| entries skipped     | red      | The discovery file listed entries without a single-segment path or a URL                       |
 | not filtered        | red      | A path's metric filter let a scrape through unfiltered, with why                               |
 
 Like events in a burst share a line, such as the agent registering its paths as it connects, counted and naming the

@@ -50,8 +50,18 @@ class FileDiscoverySourceTest : StringSpec() {
       log.snapshot().entries.single().apply {
         kind shouldBe AgentActivityKind.DISCOVERY_SKIPPED
         count shouldBe 1
-        detail shouldContain "2 entries need a path and a url"
+        detail shouldContain "2 entries need a single-segment path and a url"
       }
+    }
+
+    // November 26 #11: registered, "//metrics" was taken as "metrics" under a key the agent never looked it up by.
+    "an entry whose path has more than one segment should be skipped" {
+      val entries = """{ path = "//metrics", url = "http://a/m" }, { path = "ok_metrics", url = "http://b/m" }"""
+      val path = writeTemp("paths = [$entries]")
+      val source = FileDiscoverySource(path)
+
+      source.read().map { it.path } shouldBe listOf("ok_metrics")
+      source.skippedEntries.map { it.path } shouldBe listOf("//metrics")
     }
 
     "parses a valid HOCON discovery file (labels/name defaulted)" {

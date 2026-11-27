@@ -8,7 +8,8 @@ Agents connect to its gRPC port:
 
 Prometheus scrapes each path an agent registers through the HTTP port:
   http://{{ include "prometheus-proxy.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.httpPort }}/<path>
-{{- if .Values.dashboard.enabled }}
+{{- $dashboard := include "prometheus-proxy.dashboard" . | fromYaml }}
+{{- if $dashboard.enabled }}
 {{- if include "prometheus-proxy.dashboardIsLocal" . }}
 
 The dashboard listens on the pod's loopback only (dashboard.host), so nothing but kubectl port-forward reaches it.
@@ -16,15 +17,15 @@ The dashboard listens on the pod's loopback only (dashboard.host), so nothing bu
 
 The dashboard is not on the Service.
 {{- end }}
-{{- if .Values.dashboard.login.existingSecret }}
-It asks for the login ({{ .Values.dashboard.login.username }}, with the password in the
-{{ .Values.dashboard.login.existingSecret }} Secret). Reach it with:
+{{- if $dashboard.login.existingSecret }}
+It asks for the login ({{ $dashboard.login.username }}, with the password in the
+{{ $dashboard.login.existingSecret }} Secret). Reach it with:
 {{- else }}
 It is unauthenticated (set dashboard.login.existingSecret to require a login). Reach it with:
 {{- end }}
-  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-proxy.fullname" . }} {{ .Values.dashboard.port }}
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-proxy.fullname" . }} {{ $dashboard.port }}
 {{- if not (include "prometheus-proxy.dashboardIsLocal" .) }}
-{{- with include "prometheus-proxy.dashboardHost" . }}
+{{- with $dashboard.host }}
 
 WARNING: dashboard.host is {{ . }}, not the pod's loopback, so any pod in the cluster can open
 the dashboard at the pod's address. Set dashboard.host to 127.0.0.1 unless a Service or an Ingress of your own

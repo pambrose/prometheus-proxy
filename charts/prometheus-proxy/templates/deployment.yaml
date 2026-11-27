@@ -1,3 +1,4 @@
+{{- $dashboard := include "prometheus-proxy.dashboard" . | fromYaml -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -58,9 +59,9 @@ spec:
             - name: admin
               containerPort: {{ .Values.admin.port }}
             {{- end }}
-            {{- if .Values.dashboard.enabled }}
+            {{- if $dashboard.enabled }}
             - name: dashboard
-              containerPort: {{ .Values.dashboard.port }}
+              containerPort: {{ $dashboard.port }}
             {{- end }}
           env:
             - name: PROXY_PORT
@@ -76,21 +77,21 @@ spec:
             - name: METRICS_PORT
               value: {{ .Values.metrics.port | quote }}
             - name: DASHBOARD_ENABLED
-              value: {{ .Values.dashboard.enabled | quote }}
+              value: {{ $dashboard.enabled | quote }}
             - name: DASHBOARD_PORT
-              value: {{ .Values.dashboard.port | quote }}
-            {{- with include "prometheus-proxy.dashboardHost" . }}
+              value: {{ $dashboard.port | quote }}
+            {{- with $dashboard.host }}
             - name: DASHBOARD_HOST
               value: {{ . | quote }}
             {{- end }}
-            {{- with .Values.dashboard.login.existingSecret }}
+            {{- with $dashboard.login.existingSecret }}
             - name: DASHBOARD_USERNAME
-              value: {{ $.Values.dashboard.login.username | quote }}
+              value: {{ $dashboard.login.username | quote }}
             - name: DASHBOARD_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ . }}
-                  key: {{ $.Values.dashboard.login.key }}
+                  key: {{ $dashboard.login.key }}
             {{- end }}
             {{- if include "prometheus-proxy.hasConfig" . }}
             - name: PROXY_CONFIG

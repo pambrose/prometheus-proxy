@@ -116,7 +116,9 @@ The proxy has no usable mapping for that path, or the target answered 404.
   '/app1_metrics'` in Prometheus.
 - **Multi-segment path** — a registered `path` containing an embedded `/` is rejected at
   registration with `Multi-segment path not supported (use a single path segment)`, and
-  scrapes 404. Use a single segment (e.g. `app_metrics`, not `app/metrics`).
+  scrapes 404. Use a single segment (e.g. `app_metrics`, not `app/metrics`). The agent refuses
+  such a path itself, as it does one with a second leading slash (`//app_metrics`): a
+  `pathConfigs` entry at startup, and a discovery entry when it reads the file.
 - **Agent not registered** (`invalid_path`) — confirm the agent started cleanly and registered the path
   (check `proxy_path_map_size` and the agent logs).
 - **Agent gone** (`invalid_agent_context`) — every agent on the path has disconnected, and the

@@ -263,7 +263,7 @@ In rough priority order:
   lasted until its stream ended or it was evicted, with no limit. `proxy.internal.maxAgentsPerIdentity` (10,000)
   now bounds the contexts each identity holds, and a connect past it is refused with `RESOURCE_EXHAUSTED`, which the
   agent retries.
-- **Labels bounded, and paths per identity** (finding #20 of `docs/CODE_REVIEW_NOVEMBER_23_2026.md`) — within
+- **Labels bounded, and paths per identity** (finding #20 of `docs/archive/CODE_REVIEW_NOVEMBER_23_2026.md`) — within
   `maxLabelsSizeBytes`, 8 KiB of one-character labels kept about 130 KiB a path once parsed, beside the labels as
   sent, so a few thousand registrations on one connection, a fraction of its quota, could exhaust the Helm chart's
   proxy heap. A path's labels are now parsed once, and kept only parsed, and `proxy.internal.maxLabelsPerPath` (64)

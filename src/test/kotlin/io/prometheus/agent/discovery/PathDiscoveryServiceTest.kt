@@ -24,6 +24,7 @@ import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.string.shouldNotContain
@@ -177,6 +178,14 @@ class PathDiscoveryServiceTest : StringSpec() {
     "a discovered path of just a slash should not be usable" {
       DiscoveredPath("root", "/", "http://root.local/metrics", "{}").usable shouldBe false
       DiscoveredPath("ok", "/ok", "http://ok.local/metrics", "{}").usable shouldBe true
+    }
+
+    // The proxy serves a path as one segment, and drops one leading slash, as the agent does, so "//ok" was taken as
+    // "ok" under a key the agent never looked it up by (November 26 #11).
+    "a discovered path of more than one segment should not be usable" {
+      for (path in ["//ok", "/app/metrics", "app/metrics", "//"]) {
+        withClue(path) { DiscoveredPath("bad", path, "http://bad.local/metrics", "{}").usable shouldBe false }
+      }
     }
 
     "skippedEntries should come from the source" {

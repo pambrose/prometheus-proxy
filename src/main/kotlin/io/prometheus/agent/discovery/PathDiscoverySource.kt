@@ -16,6 +16,8 @@
 
 package io.prometheus.agent.discovery
 
+import io.prometheus.common.AgentValues.segmentProblem
+
 /**
  * A single target path discovered from a dynamic source, mirroring the shape of a static
  * `agent.pathConfigs` entry.
@@ -28,8 +30,12 @@ internal data class DiscoveredPath(
 ) {
   // An entry missing either could never register -- AgentPathManager.doRegisterPath requires both -- so a source
   // drops it rather than letting it fail on every reconcile.
-  // A path of just "/" normalizes to "", so it is as unusable as a blank one.
-  val usable: Boolean get() = path.removePrefix("/").isNotBlank() && url.isNotBlank()
+  // A path of just "/" normalizes to "", so it is as unusable as a blank one. One with a slash left once its leading
+  // one is dropped is more than one segment, which the proxy refuses (AgentValues.segmentProblem): "//foo", dropped to
+  // "/foo" here and to "foo" when registered, was registered on every reconcile, and took a static "foo" over
+  // (November 26 #11).
+  val usable: Boolean
+    get() = path.removePrefix("/").let { it.isNotBlank() && segmentProblem(it) == null } && url.isNotBlank()
 }
 
 /**
