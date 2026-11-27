@@ -15,115 +15,24 @@
 #                       (default 150)
 set -euo pipefail
 
-# This script is in the demo's bin/, and the demo two levels below the repository root.
+# This script is in the demo's bin/, and the demo two levels below the repository root, whose bin/ holds the code the
+# demos' screenshot scripts share.
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
+# shellcheck source-path=SCRIPTDIR/../../.. source=bin/screenshots-lib.sh
+source "$DEMO_DIR/../../bin/screenshots-lib.sh"
 DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/nginx-demo"
-# Where `make up` keeps the host ports moved with the *_PORT variables, as demo.sh reads them.
-PORTS_FILE="$DEMO_DIR/docker/.env"
 
-# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
-# publishes. A variable set on the command line wins, and up saves it in turn.
-load_saved_ports() {
-  local name value
-  [[ -f "$PORTS_FILE" ]] || return 0
-  while IFS='=' read -r name value || [[ -n "$name" ]]; do
-    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
-      export "$name=$value"
-    fi
-  done <"$PORTS_FILE"
-}
 load_saved_ports
-
 DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 NGINX_DASHBOARD_URL="http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard"
 AGENT_DASHBOARD_URL="http://localhost:${NGINX_DEMO_AGENT_DASHBOARD_PORT:-8595}/dashboard"
 PROMETHEUS_URL="http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9590}"
 SCREENS_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/screens"
 
-WAIT_SECS="${WAIT_SECS:-150}"
-
-# Every screenshot is a whole browser window, 16:10, WIDTH x HEIGHT in CSS pixels, rather than a strip cut to its
-# content, so each fills the same space on the website's page and in the lightbox that opens it full size. THEMES are
-# the themes each is taken in.
-WIDTH=1280
-HEIGHT=800
-# The screens page is taken in a wider window of the same shape, so each of Split's two panes is about as wide as a
-# dashboard needs.
-SCREENS_WIDTH=1680
-SCREENS_HEIGHT=1050
-THEMES=(dark light)
-# SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
-# opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
-# (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
-SCALE=3
-SHOTS=(agents legacy-cut short-timeouts screens dashboard-reconnecting dashboard-live)
-
-# A screenshot's file name in a theme: the dark one keeps the plain name.
-named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
-
-die() {
-  echo "Error: $*" >&2
-  exit 1
-}
-step() { printf '\033[1m%s\033[0m\n' "$*"; }
-
-find_chrome() {
-  local candidate
-  for candidate in "${CHROME:-}" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    google-chrome google-chrome-stable chromium chromium-browser; do
-    [[ -n "$candidate" ]] || continue
-    if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
-      echo "$candidate"
-      return
-    fi
-  done
-  die "Chrome or Chromium not found; set CHROME to its path"
-}
-
-[[ "$WAIT_SECS" =~ ^[1-9][0-9]*$ ]] || die "WAIT_SECS must be a whole number of seconds above 0, not '$WAIT_SECS'"
-CHROME_BIN="$(find_chrome)"
-command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
-command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
-curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/nginx"
-
-WORK="$(mktemp -d)"
-
 # Puts the demo back as `make up` starts it, whatever state a failure left it in.
-restore() {
-  "$DEMO" reset >/dev/null 2>&1 || true
-  rm -rf "$WORK"
-}
-trap restore EXIT
-
-# Waits until a command succeeds, checking every 2 seconds, or fails after WAIT_SECS with what it was waiting for.
-wait_until() {
-  local what="$1" deadline=$((SECONDS + WAIT_SECS))
-  shift
-  until "$@"; do
-    ((SECONDS < deadline)) || die "timed out after ${WAIT_SECS}s waiting for $what; WAIT_SECS raises the limit"
-    sleep 2
-  done
-}
-
-# Whether a page, by URL, matches an extended regex. The page is taken whole before grep reads it: grep -q stops at its
-# match, and under pipefail a curl it cut off would fail the check.
-page_has() {
-  local body
-  body="$(curl -fsS "$1" 2>/dev/null)" || return 1
-  grep -Eq "$2" <<<"$body"
-}
-
-# The id of the connected agent with this name on the proxy dashboard, or nothing. Each agent's row carries its id and
-# name as data attributes (agentListInner in ProxyDashboardHtml.kt).
-agent_id() {
-  local html
-  html="$(curl -fsS "$DASHBOARD_URL" 2>/dev/null)" || return 0
-  grep -Eo '<[a-z]+ [^>]*data-agent-name="[^"]*"[^>]*>' <<<"$html" | grep -F "data-agent-name=\"$1\"" |
-    sed -nE 's/.* data-agent="([^"]*)".*/\1/p' | head -1 || true
-}
+restore() { "$DEMO" reset >/dev/null 2>&1 || true; }
+start_shots "$DASHBOARD_URL"
 
 # How many times the proxy has seen an agent's stream end since it started, as Prometheus last scraped it, or nothing.
 streams_closed() {
@@ -153,41 +62,6 @@ proxy_disconnects() { disconnects "$DASHBOARD_URL"; }
 
 # Whether both agents are connected to the proxy.
 both_connected() { [[ -n "$(agent_id agent-current)" && -n "$(agent_id agent-legacy)" ]]; }
-
-# Captures a page at WIDTH x HEIGHT, or the size given, at SCALE, in a theme: the dashboard follows the browser's
-# preferred color scheme. The timing is Chrome's: --virtual-time-budget=<ms>, the virtual time the page gets to load
-# and run, or --timeout=<ms>, real time, for a page waiting on something virtual time skips past, such as a
-# WebSocket's answer. capture <url> <png> <theme> <timing> [width height]
-capture() {
-  local url="$1" png="$2" theme="$3" timing="$4" width="${5:-$WIDTH}" height="${6:-$HEIGHT}" scheme=0 profile
-  [[ "$theme" == dark ]] || scheme=1
-  profile="$(mktemp -d)"
-  "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$width,$height" "$timing" --screenshot="$png" "$url" >/dev/null 2>&1
-  rm -rf "$profile"
-  [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
-}
-
-# A page in each theme: shoot <name> <url> [timing]
-shoot() {
-  local theme
-  for theme in "${THEMES[@]}"; do
-    capture "$2" "$WORK/$(named "$1" "$theme").png" "$theme" "${3:---virtual-time-budget=3000}"
-  done
-}
-
-# The proxy's screens page in each theme, opened on a link (its part after the #), a whole SCREENS_WIDTH x
-# SCREENS_HEIGHT window. Its panes are dashboards: Prometheus draws no graph in virtual time, and the page doesn't get
-# past its first render in real time, since Chrome takes the shot once the page has loaded.
-# shoot_screens <name> <link>
-shoot_screens() {
-  local theme
-  for theme in "${THEMES[@]}"; do
-    capture "$SCREENS_URL#$2" "$WORK/$(named "$1" "$theme").png" "$theme" --virtual-time-budget=5000 \
-      "$SCREENS_WIDTH" "$SCREENS_HEIGHT"
-  done
-}
 
 # Whether a dashboard shot's live indicator reads reconnecting...: red, where the status bar's indicator starts when it
 # does (65 x 15 CSS pixels at 722,17, right of the tabs), and where "live", which is shorter, leaves the bar empty. The
@@ -246,8 +120,10 @@ shoot short-timeouts "$AGENT_DASHBOARD_URL/activity"
 "$DEMO" keepalive 10 >/dev/null
 wait_until "both agents connected to the new proxy" both_connected
 wait_until "nginx to cut agent-legacy off twice" at_least proxy_disconnects 2
-# The screens page as part 3 of the tour opens it: agent-current's Activity view beside the proxy's.
-shoot_screens screens "agent-current/activity+proxy/activity"
+# The screens page as part 3 of the tour opens it: agent-current's Activity view beside the proxy's. Its panes are
+# dashboards, so it takes their timing, not Grafana's: Prometheus draws no graph in virtual time, and the page doesn't
+# get past its first render in real time, since Chrome takes the shot once the page has loaded.
+shoot_screens screens "agent-current/activity+proxy/activity" 5000
 
 step "Part 4: The dashboard behind nginx"
 "$DEMO" reset >/dev/null
@@ -257,13 +133,5 @@ shoot_reconnecting dashboard-reconnecting "$NGINX_DASHBOARD_URL"
 "$DEMO" dashboard-host >/dev/null
 shoot dashboard-live "$NGINX_DASHBOARD_URL" --timeout=4000
 
-step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
-mkdir -p "$OUT_DIR"
-for name in "${SHOTS[@]}"; do
-  for theme in "${THEMES[@]}"; do
-    file="$(named "$name" "$theme")"
-    cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
-    printf '  %-34s %s\n' "$file.webp" "$(magick identify -format '%wx%h' "$WORK/$file.png")"
-  done
-done
+write_webp agents legacy-cut short-timeouts screens dashboard-reconnecting dashboard-live
 step "Done; the demo is as make up starts it"

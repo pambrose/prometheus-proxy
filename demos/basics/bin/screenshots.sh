@@ -18,28 +18,16 @@
 #                       site
 set -euo pipefail
 
-# This script is in the demo's bin/, and the demo two levels below the repository root.
+# This script is in the demo's bin/, and the demo two levels below the repository root, whose bin/ holds the code the
+# demos' screenshot scripts share.
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
+# shellcheck source-path=SCRIPTDIR/../../.. source=bin/screenshots-lib.sh
+source "$DEMO_DIR/../../bin/screenshots-lib.sh"
 DEMO="$DEMO_DIR/demo.sh"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/demo"
-# Where demo.sh's up keeps the host ports moved with the *_PORT variables, as demo.sh reads it.
-PORTS_FILE="$DEMO_DIR/docker/.env"
 
-# Takes each port saved in docker/.env that the environment doesn't set, as demo.sh does, so the URLs below match what
-# compose publishes.
-load_saved_ports() {
-  local name value
-  [[ -f "$PORTS_FILE" ]] || return 0
-  while IFS='=' read -r name value || [[ -n "$name" ]]; do
-    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
-      export "$name=$value"
-    fi
-  done <"$PORTS_FILE"
-}
 load_saved_ports
-
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
 SCREENS_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/screens"
 EAST_DASHBOARD_URL="http://localhost:${DEMO_AGENT_EAST_DASHBOARD_PORT:-8095}/dashboard"
@@ -47,55 +35,9 @@ ROGUE_DASHBOARD_URL="http://localhost:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}/d
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 
-# The settings in the header. SKIP_UPTIME_WAIT takes exactly 1; any other value leaves the wait in.
-WAIT_SECS="${WAIT_SECS:-150}"
+# The setting in the header beside WAIT_SECS, which the shared code reads. SKIP_UPTIME_WAIT takes exactly 1; any other
+# value leaves the wait in.
 SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
-
-# Every screenshot is a whole browser window, 16:10, WIDTH x HEIGHT in CSS pixels, rather than a strip cut to its
-# content, so each fills the same space on the website's page and in the lightbox that opens it full size. The Paths
-# views are taken in a wider window of the same shape: with the Identity, History, and Links columns, and the
-# discovered services' longer paths and a gone row's tag, the table is about 1,600px wide in the eviction scene, so at
-# 1280 it scrolls and its right edge is cut off. THEMES are the themes each is taken in.
-WIDTH=1280
-HEIGHT=800
-PATHS_WIDTH=1680
-PATHS_HEIGHT=1050
-THEMES=(dark light)
-# SCALE is the pixel density each is taken at, device pixels to the CSS pixel: at 3, the website's lightbox, which
-# opens a screenshot at up to one and a half times its window's size, has a pixel for each of a Retina screen's
-# (website/prometheus-proxy/docs/javascripts/screenshots.js), so its text stays sharp.
-SCALE=3
-
-# A screenshot's file name in a theme: the dark one keeps the plain name.
-named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
-
-die() {
-  echo "Error: $*" >&2
-  exit 1
-}
-step() { printf '\033[1m%s\033[0m\n' "$*"; }
-
-find_chrome() {
-  local candidate
-  for candidate in "${CHROME:-}" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    google-chrome google-chrome-stable chromium chromium-browser; do
-    [[ -n "$candidate" ]] || continue
-    if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
-      echo "$candidate"
-      return
-    fi
-  done
-  die "Chrome or Chromium not found; set CHROME to its path"
-}
-
-[[ "$WAIT_SECS" =~ ^[1-9][0-9]*$ ]] || die "WAIT_SECS must be a whole number of seconds above 0, not '$WAIT_SECS'"
-CHROME_BIN="$(find_chrome)"
-command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
-command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
-curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/basics"
-
-WORK="$(mktemp -d)"
 
 # Undoes every scenario, whatever state a failure left the demo in. login-off leaves a proxy whose login is already off
 # as it is, since Compose recreates a container only for a changed environment.
@@ -106,52 +48,13 @@ restore() {
   "$DEMO" recover >/dev/null 2>&1 || true
   "$DEMO" rogue-agent-stop >/dev/null 2>&1 || true
   "$DEMO" duplicate-agent-stop >/dev/null 2>&1 || true
-  rm -rf "$WORK"
 }
-trap restore EXIT
-
-# Waits until a command succeeds, checking every 2 seconds, or fails after WAIT_SECS with what it was waiting for. A
-# check may set UNMET to what it last found missing, which the failure adds.
-wait_until() {
-  local what="$1" deadline=$((SECONDS + WAIT_SECS))
-  shift
-  UNMET=""
-  until "$@"; do
-    ((SECONDS < deadline)) ||
-      die "timed out after ${WAIT_SECS}s waiting for $what${UNMET:+: $UNMET}; WAIT_SECS raises the limit"
-    sleep 2
-  done
-}
+start_shots "$DASHBOARD_URL"
 
 page() { curl -fsS "$DASHBOARD_URL$1"; }
 
 # Counts the matches of an extended regex in a dashboard page.
 count_in() { page "$1" | grep -Eo "$2" | wc -l | tr -d ' '; }
-
-# The agent list's row for the connected agent with this name: its start tag, or nothing. The row carries the agent's
-# id, name, and path count as data attributes (agentListInner in ProxyDashboardHtml.kt), which the checks below read:
-# they matched the row's text before, and every change to how the row looks, a tag, an LED, or a word, broke one. The
-# name's closing quote keeps agent-east from matching agent-east-copy, and the proxy escapes every value, so no ">" ends
-# a tag early.
-agent_row() {
-  local html
-  html="$(curl -fsS "$DASHBOARD_URL" 2>/dev/null)" || return 0
-  grep -Eo '<[a-z]+ [^>]*data-agent-name="[^"]*"[^>]*>' <<<"$html" | grep -F "data-agent-name=\"$1\"" | head -1 || true
-}
-
-# An attribute's value in a start tag, or nothing.
-attr() { sed -nE "s/.* $1=\"([^\"]*)\".*/\1/p" <<<"$2"; }
-
-# The id of the connected agent with this name, or nothing.
-agent_id() { attr data-agent "$(agent_row "$1")"; }
-
-# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill the window.
-# The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
-has_scrapes() {
-  local count
-  count="$(curl -fsS "$1" 2>/dev/null | grep -Eo 'data-scrape-count="[0-9]+"' | grep -Eo '[0-9]+' | head -1)"
-  [[ -n "$count" ]] && ((count >= $2))
-}
 
 # The state agent-rogue's own dashboard gives one of its paths, or nothing. Each row of its Paths view carries its path
 # and its state as data attributes (pathListInner in AgentDashboardHtml.kt), which this reads rather than the row's
@@ -185,15 +88,11 @@ has_discovered_sources() { (($(count_in "/paths" '>disc<') >= $1)); }
 east_up_a_minute() {
   local id
   id="$(agent_id agent-east)"
-  [[ -n "$id" ]] && page "/agents/$id" | grep -Eq 'up [0-9]+[mhd]'
+  [[ -n "$id" ]] && page_has "$DASHBOARD_URL/agents/$id" 'up [0-9]+[mhd]'
 }
 
 # Whether Prometheus has DemoTargetDown firing for at least this many targets.
-alerts_firing() {
-  curl -fsS -G "$PROMETHEUS_URL/api/v1/query" \
-    --data-urlencode "query=count(ALERTS{alertname=\"DemoTargetDown\",alertstate=\"firing\"}) >= $1" |
-    grep -q '"value"'
-}
+alerts_firing() { prometheus_has "count(ALERTS{alertname=\"DemoTargetDown\",alertstate=\"firing\"}) >= $1"; }
 
 # The Last scrape times in a Paths view's HTML, one a line. Each is a <time datetime="…Z">, the view's only <time>, in
 # UTC to the second, so every one has the same width and they order as strings (ProxyDashboardHtmlTest pins this): no
@@ -245,56 +144,10 @@ wait_healthy() {
   wait_until "$what, each scraped after ${since:-the wait began}" healthy "$count" "$since"
 }
 
-# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at SCALE, in a theme: the
-# dashboard follows the browser's preferred color scheme. Grafana renders after loading its data, so its captures get a
-# longer virtual-time budget.
-capture() {
-  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
-  [[ "$theme" == dark ]] || scheme=1
-  profile="$(mktemp -d)"
-  "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor="$SCALE" --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$width,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
-  rm -rf "$profile"
-  [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
-}
-
-# A dashboard view in each theme, at a dashboard path, a whole window (WIDTH x HEIGHT unless given).
-shoot_table() {
-  local name="$1" path="$2" width="${3:-$WIDTH}" height="${4:-$HEIGHT}" theme
-  for theme in "${THEMES[@]}"; do
-    capture "$DASHBOARD_URL$path" "$WORK/$(named "$name" "$theme").png" "$height" "$theme" "" "$width"
-  done
-}
-
-# A Paths view in each theme, a whole PATHS_WIDTH x PATHS_HEIGHT window.
-shoot_paths() {
-  shoot_table "$1" /paths "$PATHS_WIDTH" "$PATHS_HEIGHT"
-}
-
-# A page in each theme, a whole WIDTH x HEIGHT window. A page whose viewport ends in a fixed footer, Grafana's, is
-# captured this much taller and cut to HEIGHT, which leaves the footer out. A {theme} in the URL becomes the theme's
-# name, for Grafana, which doesn't follow the browser's scheme. shoot_fixed <name> <url> [capture height] [budget]
-shoot_fixed() {
-  local name="$1" url="$2" capture_height="${3:-$HEIGHT}" budget="${4:-3000}" theme png
-  for theme in "${THEMES[@]}"; do
-    png="$WORK/$(named "$name" "$theme").png"
-    capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
-    magick "$png" -crop "$((WIDTH * SCALE))x$((HEIGHT * SCALE))+0+0" +repage "$png"
-  done
-}
-
-# The screens page in each theme, opened on a link (its part after the #), a whole PATHS_WIDTH x PATHS_HEIGHT window:
-# in Split each pane gets half the window, and at WIDTH the proxy's Paths table would show little more than its paths.
-# A {theme} in the link becomes the theme's name, for a Grafana pane, which doesn't follow the browser's scheme. Its
-# budget is Grafana's, which renders after loading its data. shoot_screens <name> <link>
-shoot_screens() {
-  local name="$1" link="$2" theme
-  for theme in "${THEMES[@]}"; do
-    capture "$SCREENS_URL#${link//\{theme\}/$theme}" "$WORK/$(named "$name" "$theme").png" "$PATHS_HEIGHT" "$theme" \
-      15000 "$PATHS_WIDTH"
-  done
-}
+# A Paths view in each theme, in the wide window: with the Identity, History, and Links columns, and the discovered
+# services' longer paths and a gone row's tag, the table is about 1,600px wide in the eviction scene, so at WIDTH it
+# scrolls and its right edge is cut off.
+shoot_paths() { shoot_wide "$1" "$DASHBOARD_URL/paths"; }
 
 step "Waiting for every path to answer 200"
 # Every agent running and unfrozen, whatever the scenarios run before left, so each registers its paths again: a
@@ -332,7 +185,7 @@ east="$(agent_id agent-east)"
 # Enough of agent-east's Recent scrapes to fill the shot, which the minute's wait gives but SKIP_UPTIME_WAIT doesn't.
 wait_until "agent-east's scrapes" has_scrapes "$DASHBOARD_URL/agents/$east" 12
 step "The Agents and Paths views"
-shoot_fixed agents "$DASHBOARD_URL/agents/$east"
+shoot agents "$DASHBOARD_URL/agents/$east"
 shoot_paths paths
 
 step "A failing service and a hung one"
@@ -341,9 +194,10 @@ step "A failing service and a hung one"
 wait_until "DemoTargetDown to fire for payments and inventory" alerts_firing 2
 shoot_paths outage
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
-shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" \
-  "$((HEIGHT + 100))" 15000
-# The screens page as part 4 of the tour opens it: the proxy's failing paths beside Grafana.
+shoot grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" 15000 \
+  "$((HEIGHT + 100))"
+# The screens page as part 4 of the tour opens it: the proxy's failing paths beside Grafana. In Split each pane gets
+# half the window, and at WIDTH the proxy's Paths table would show little more than its paths.
 shoot_screens screens \
   "proxy/paths?problems=1+grafana/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}"
 "$DEMO" recover >/dev/null
@@ -358,7 +212,7 @@ east="$(agent_id agent-east)"
 [[ -n "$east" ]] || die "agent-east isn't connected"
 "$DEMO" duplicate-agent >/dev/null 2>&1
 wait_until "agent-east-copy to take agent-east's paths" east_has_no_paths
-shoot_fixed duplicate "$DASHBOARD_URL/agents/$east"
+shoot duplicate "$DASHBOARD_URL/agents/$east"
 "$DEMO" duplicate-agent-stop >/dev/null 2>&1
 wait_healthy "nine healthy paths" 9
 
@@ -372,38 +226,28 @@ step "An agent that goes silent, and its eviction"
 west2="$(agent_id agent-west-2)"
 [[ -n "$west2" ]] || die "agent-west-2 isn't connected"
 "$DEMO" agent-freeze >/dev/null 2>&1
-wait_until "agent-west-2 to be idle for 16 seconds" \
-  bash -c "curl -fsS '$DASHBOARD_URL/agents/$west2' | grep -Eq 'idle (1[6-9]|2[0-9])s'"
-shoot_fixed evicting "$DASHBOARD_URL/agents/$west2"
-wait_until "the proxy to evict agent-west-2" \
-  bash -c "curl -fsS '$DASHBOARD_URL/paths' | grep -Eq '<span class=\"crit\">[0-9]+ departed</span>'"
+wait_until "agent-west-2 to be idle for 16 seconds" page_has "$DASHBOARD_URL/agents/$west2" 'idle (1[6-9]|2[0-9])s'
+shoot evicting "$DASHBOARD_URL/agents/$west2"
+wait_until "the proxy to evict agent-west-2" page_has "$DASHBOARD_URL/paths" '<span class="crit">[0-9]+ departed</span>'
 sleep 4
 shoot_paths evicted
 
 step "A contractor's agent refused another team's path"
 "$DEMO" rogue-agent >/dev/null 2>&1
 wait_until "the proxy to refuse agent-rogue's payments path" \
-  bash -c "curl -fsS '$DASHBOARD_URL/activity?q=agent-rogue' | grep -q 'not authorized to register path /payments_metrics'"
-shoot_table activity "/activity?q=agent-rogue"
+  page_has "$DASHBOARD_URL/activity?q=agent-rogue" 'not authorized to register path /payments_metrics'
+shoot activity "$DASHBOARD_URL/activity?q=agent-rogue"
 # The same refusal on agent-rogue's own dashboard, with the path selected, so the shot shows the proxy's reason.
 wait_until "agent-rogue's dashboard to show its payments path refused" rogue_payments_refused
-shoot_fixed agent "$ROGUE_DASHBOARD_URL/paths/payments_metrics"
+shoot agent "$ROGUE_DASHBOARD_URL/paths/payments_metrics"
 "$DEMO" rogue-agent-stop >/dev/null 2>&1
 
 # Last, since turning the login on and off restarts the proxy, which starts the dashboard's histories over. The login
 # page needs no session, and loads nothing, so it's captured as any other page is.
 step "The dashboard's login page"
 "$DEMO" login >/dev/null 2>&1
-shoot_fixed login "$DASHBOARD_URL/login"
+shoot login "$DASHBOARD_URL/login"
 "$DEMO" login-off >/dev/null 2>&1
 
-step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
-mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana screens duplicate discovered evicting evicted activity agent login; do
-  for theme in "${THEMES[@]}"; do
-    file="$(named "$name" "$theme")"
-    cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
-    printf '  %-22s %s\n' "$file.webp" "$(magick identify -format '%wx%h' "$WORK/$file.png")"
-  done
-done
+write_webp agents paths outage grafana screens duplicate discovered evicting evicted activity agent login
 step "Done; the demo is back to normal"

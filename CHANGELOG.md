@@ -105,6 +105,8 @@ All notable changes to this project are documented in this file.
   the releaser to do steps it had already done
 - The build compiles without warnings: the embedded agent's thread, a deprecated Prometheus client getter in a test,
   and the Spring Boot starter's tests, which lacked the Jackson annotations on Spring's `Health`
+- The demos' screenshot scripts share one `bin/screenshots-lib.sh` for finding Chrome, capturing pages, waiting, and
+  writing WebP, where each had drifted from its own copy
 
 ### Documentation
 

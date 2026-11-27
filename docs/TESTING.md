@@ -672,11 +672,12 @@ Three support helpers also live here (not test classes themselves):
   header counts), the pushes (top-level out-of-band regions, only those of the session's layout, the status bar alone
   for a session with no known layout, and the view stamp on the frame's first tag, which an agent-supplied value can't
   stand in for), tolerant selection, layout, and view count parsing, the status bar's departed count, an agent's
-  identity in its row and detail, the data `demos/basics/bin/screenshots.sh` reads (an agent row's id, name, and
-  path count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape
-  time it orders as text, links at a root mount, the nav (every layout linked, the current one marked, each tab with
-  its layout's icon, a different one for each, and the tabs borderless, a rounded ground on hover, and the current
-  one over the accent line), the Settings view (its groups, escaped, on no other layout,
+  identity in its row and detail, the data the demos' screenshot scripts read through `bin/screenshots-lib.sh` (an
+  agent row's id, name, and path count, the name escaped and through `agentLabel`, and the detail's scrape count) and
+  the one width of a scrape time the basics demo's orders as text, links at a root mount, the nav (every layout
+  linked, the current one marked, each tab with its layout's icon, a different one for each, and the tabs borderless,
+  a rounded ground on hover, and the current one over the accent line), the Settings view (its groups, escaped, on no
+  other layout,
   and its push carrying them out of band, or the status bar alone when told), accessibility (the connection live
   region, outside every push, and the page's language and main region), and the link icons' stylesheet (in the head
   only while a link shows an icon, with each mark's URL under the route base, at a root mount too, and each colour per

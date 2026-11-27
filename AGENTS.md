@@ -50,6 +50,10 @@ Run `make help` for the current target list with descriptions (auto-extracted fr
 Each demo under `demos/` is self-contained, with its own Makefile run from its directory (`make -C demos/<name> help`
 lists its targets). The root `Makefile`'s only demo targets, `demos-up`, `demos-up-local`, and `demos-down`, run every
 demo's `up`, `up-local`, or `down` in turn (its `DEMOS` list), and keep going past a demo that fails.
+Each demo's `make screenshots`, which `make help` leaves out, retakes its website page's screenshots with its
+`bin/screenshots.sh`; those scripts source the repository's `bin/screenshots-lib.sh`, which holds what they share
+(finding Chrome, the captures and their window sizes, the waits, the agent-row reads, the WebP), so change a shared
+step there, not in one demo's script.
 The nginx demo's `agent-legacy` runs release 4.6.0's agent image on purpose, as an agent from before the stream
 keepalives, so keep it pinned there (Dependabot ignores it).
 
