@@ -72,7 +72,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/spring-boot
-make up      # builds the roastery, starts everything, prints the URLs
+make up      # builds the roastery, starts everything, prints the screens page's URL
 make tour    # walks through the parts below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
@@ -80,8 +80,15 @@ make down    # stops it and removes its containers and network
 The first `make up` pulls the images and builds the roastery, which takes a few minutes. After that it starts in under
 a minute.
 
+Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8494/>, one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, the roastery's status page, its agent's
+dashboard, and Prometheus. `make open` opens it, and the tour's links open in it.
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8494/> | `SPRING_BOOT_DEMO_DASHBOARD_PORT` |
 | The roastery's status page | <http://localhost:8490> | `SPRING_BOOT_DEMO_APP_PORT` |
 | Proxy dashboard | <http://localhost:8494/dashboard> | `SPRING_BOOT_DEMO_DASHBOARD_PORT` |
 | The roastery agent's dashboard | <http://localhost:8495/dashboard> | `SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT` |
@@ -162,7 +169,7 @@ library it manages. An app on Spring Boot 4.0 or 4.1 sets two of them, as
 ## The Agent's Dashboard
 
 The agent serves a [dashboard](agent-dashboard.md) of its own, from inside the roastery:
-<http://localhost:8495/dashboard>
+<http://localhost:8494/screens#agent>
 
 The demo's compose file turns it on with an environment variable, which Spring Boot binds to the starter's
 `prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change:
@@ -183,12 +190,13 @@ Activity view lists what has happened to the agent, newest first, the Connection
 Settings view the settings it resolved.
 
 A platform takes an app out of service, or restarts it, when its health check fails, so a proxy outage mustn't fail the
-roastery's. `./demo.sh proxy-stop` stops the proxy, and the proxy's dashboard with it, but the agent's still answers.
-Its Connection view turns failing, with the error the agent got connecting to the proxy, and its Activity view adds
-disconnected and connect failed. Scrape now still reads the roastery's metrics, since it doesn't need the proxy.
-`./demo.sh health` then shows the agent's component UNKNOWN, not DOWN, and the roastery's own health UP, so a platform
-that checks it keeps the roastery in service. `./demo.sh proxy-start` brings the proxy back: the agent connects within a
-few seconds and registers its path again, and its component is UP again.
+roastery's. `./demo.sh proxy-stop` stops the proxy, and the proxy's dashboard and screens page with it, but the agent's
+dashboard still answers, in a screens page you have open or at its own address,
+<http://localhost:8495/dashboard/connection>. Its Connection view turns failing, with the error the agent got connecting
+to the proxy, and its Activity view adds disconnected and connect failed. Scrape now still reads the roastery's metrics,
+since it doesn't need the proxy. `./demo.sh health` then shows the agent's component UNKNOWN, not DOWN, and the
+roastery's own health UP, so a platform that checks it keeps the roastery in service. `./demo.sh proxy-start` brings the
+proxy back: the agent connects within a few seconds and registers its path again, and its component is UP again.
 
 ## A Graceful Shutdown
 
@@ -202,6 +210,9 @@ Stopping the Prometheus agent roastery-1.0
 Commencing graceful shutdown. Waiting for active requests to complete
 Graceful shutdown complete
 ```
+
+With the proxy dashboard beside the agent's, the agent leaves the Agents view as its own dashboard stops:
+<http://localhost:8494/screens#proxy+agent>
 
 `./demo.sh start-app` starts it again, and the agent registers its path once more.
 
@@ -222,7 +233,7 @@ down, so its agent serves the oven's metrics until its work is done.
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the roastery's state, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
-| `make open` | Opens the roastery, the proxy's and the agent's dashboards, and Prometheus's graph of the batches roasted in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds the roastery, the proxy's and the agent's dashboards, and Prometheus's graph of the batches roasted, in the browser |  |
 
 ## Going Further
 

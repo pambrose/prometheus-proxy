@@ -26,6 +26,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.proxy.dashboard.Screen
 import java.io.File
 
@@ -51,12 +52,13 @@ class DemoScreensLinksTest : StringSpec() {
   }
 
   // A stretch of one of a demo's files that runs, or is read, while the page's proxy is stopped: in [file], after each
-  // of [after] in turn, up to [before]. It gives [directUrl], a screen's own address, and no link into the page.
+  // of [after] in turn, up to [before]. It gives no link into the page, and [directUrl], a screen's own address, unless
+  // that's null, for a stretch that gives no address at all.
   private data class ProxyDown(
     val file: String,
     val after: List<String>,
     val before: String,
-    val directUrl: String,
+    val directUrl: String?,
   )
 
   // A demo's screen entries, from its config, read without the environment, as each url is a default overridden by
@@ -244,8 +246,9 @@ class DemoScreensLinksTest : StringSpec() {
                 text.substringAfter(marker, missingDelimiterValue = "")
               }
               .substringBefore(down.before)
+          stretch.shouldNotBeEmpty()
           listOf("SCREENS_URL" in stretch, "/screens#" in stretch) shouldBe listOf(false, false)
-          stretch shouldContain down.directUrl
+          down.directUrl?.let { stretch shouldContain it }
         }
       }
     }
@@ -446,6 +449,45 @@ class DemoScreensLinksTest : StringSpec() {
         proxyService = "proxy",
       )
 
-    val DEMOS = listOf(BASICS, NETWORK, KTOR, NGINX, PLAIN_KOTLIN)
+    // The Spring Boot demo's page is the proxy's, which part 4 of its tour stops. The tour gives no address while
+    // it's down: the agent's dashboard, open in the page from the step before, keeps answering there.
+    val SPRING_BOOT =
+      ScreensDemo(
+        dir = "demos/spring-boot",
+        config = "config/proxy.conf",
+        page = "website/prometheus-proxy/docs/spring-boot-demo.md",
+        pageUrl = "http://localhost:8494/screens",
+        proxyService = "proxy",
+        proxyDown =
+          listOf(
+            ProxyDown(
+              file = "demos/spring-boot/demo.sh",
+              after = listOf("\n  proxy-stop)"),
+              before = "\n    ;;",
+              directUrl = "\$AGENT_DASHBOARD_URL/connection",
+            ),
+            // Part 4 of the tour, from its proxy-stop to its proxy-start.
+            ProxyDown(
+              file = "demos/spring-boot/demo.sh",
+              after = listOf("\n  if part 4 ", "-- proxy-stop"),
+              before = "-- proxy-start",
+              directUrl = null,
+            ),
+            ProxyDown(
+              file = "demos/spring-boot/README.md",
+              after = listOf("### 4. The Proxy Goes Away", "`./demo.sh proxy-stop` stops the proxy"),
+              before = "`./demo.sh proxy-start`",
+              directUrl = "http://localhost:8495/dashboard/connection",
+            ),
+            ProxyDown(
+              file = "website/prometheus-proxy/docs/spring-boot-demo.md",
+              after = listOf("## The Agent's Dashboard", "`./demo.sh proxy-stop` stops the proxy"),
+              before = "`./demo.sh proxy-start`",
+              directUrl = "http://localhost:8495/dashboard/connection",
+            ),
+          ),
+      )
+
+    val DEMOS = listOf(BASICS, NETWORK, KTOR, NGINX, PLAIN_KOTLIN, SPRING_BOOT)
   }
 }
