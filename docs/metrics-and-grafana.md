@@ -326,7 +326,8 @@ Two dashboards are included in `grafana/`:
 `grafana/alerts.yml` holds Prometheus alerting rules for the same metrics: success rate, P99 latency, connected
 agents, backlogs, oversized payloads, evictions, refused agent tokens and paths, agent connect failures and
 disconnects, failing discovery, an agent off its primary proxy, and the proxy itself being down. Add it to Prometheus'
-`rule_files` and tune the thresholds; `make check-rules` validates it with `promtool`.
+`rule_files` and tune the thresholds; `make check-rules` validates it with `promtool` and runs its unit tests,
+`etc/promtool/alerts-test.yml`.
 
 ### Requirements
 
@@ -428,7 +429,7 @@ expects the proxy's job to be named `prometheus-proxy`. Adjust hostnames and por
 **Scrape success rate (last 5 minutes):**
 
 ```promql
-sum(rate(proxy_scrape_requests_total{type="success"}[5m]))
+(sum(rate(proxy_scrape_requests_total{type="success"}[5m])) or vector(0))
   / sum(rate(proxy_scrape_requests_total[5m])) * 100
 ```
 

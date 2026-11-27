@@ -1,9 +1,10 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 27 resolved, 43 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 30 resolved, 40 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
-and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598.
+and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
+and #51 in #599.
 
 **Date:** 2026-11-26
 
@@ -61,13 +62,13 @@ and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, a
 | 42 | Unescaped/unsanitized inputs in log output (`ProxyHttpConfig`, `MetricFilter`, and local config parse errors in `BaseOptions`) | Security | low | ⬜ |
 | 43 | Helm charts mount the default Kubernetes ServiceAccount token unnecessarily (`automountServiceAccountToken: false` omitted) | Security | low | ✅ |
 | 44 | Helm charts crash with nil pointer on `helm upgrade --reuse-values` from 4.6.0 (`dashboard` / `dashboard.login`) | CI/build | high | ✅ |
-| 45 | Inverted severity thresholds in `grafana/prometheus-agents.json` (Panels 27 "Not on Primary" and 38 "Since Last Discovery") | CI/build | medium | ⬜ |
-| 46 | `ProxyScrapeSuccessRateLow` alert and Proxy Grafana Panel 4 silently miss 0% success rate when no scrape has succeeded since startup | CI/build | medium | ⬜ |
+| 45 | Inverted severity thresholds in `grafana/prometheus-agents.json` (Panels 27 "Not on Primary" and 38 "Since Last Discovery") | CI/build | medium | ✅ |
+| 46 | `ProxyScrapeSuccessRateLow` alert and Proxy Grafana Panel 4 silently miss 0% success rate when no scrape has succeeded since startup | CI/build | medium | ✅ |
 | 47 | `etc/consumer-check/check.sh` silently skips the last JAR on the Maven classpath | CI/build | medium | ⬜ |
 | 48 | `docs.yml/build` is omitted from `RELEASE_REQUIRED_JOBS` in `Makefile` despite comments and docs stating `make release-check` requires it | CI/build | medium | ⬜ |
 | 49 | `build.gradle.kts` `checkedFiles()` omits `charts/` and `.claude/skills/publishing-release/SKILL.md` (and doesn't exclude `demos/**/__pycache__/**`) | CI/build | medium | ⬜ |
 | 50 | `demos/nginx/bin/screenshots.sh` `shows_reconnecting` uses stale 4.7.0 top-bar pixel coordinates after 4.7.1's 1-button theme switcher | CI/build | low | ⬜ |
-| 51 | Dead color overrides in `demos/network/grafana/dashboards/network-overview.json` (Panels 14 and 18) | CI/build | low | ⬜ |
+| 51 | Dead color overrides in `demos/network/grafana/dashboards/network-overview.json` (Panels 14 and 18) | CI/build | low | ✅ |
 | 52 | Minor build/script drift (`Makefile` `.PHONY`, unused `NEXT_AGENT_DASHBOARD_URL` and stale comment in `demos/ktor/demo.sh`, stale port/binding/URL in `bin/docker-*.sh`) | CI/build | low | ⬜ |
 | 53 | `ProxyPathManagerLincheckTest` externally serializes all `ProxyPathManager` mutations behind `pathLock` and omits `maxPathsPerIdentity` | Tests | medium | ⬜ |
 | 54 | Tautological `Bug #1` test in `AgentTest` tests a local copy-pasted `Semaphore` instead of `Agent.processScrapeRequests` | Tests | medium | ⬜ |
@@ -1222,7 +1223,7 @@ Reproduced directly with `helm template`:
 
 ---
 
-### 45. ⬜ Inverted severity thresholds in `grafana/prometheus-agents.json` (Panels 27 "Not on Primary" and 38 "Since Last Discovery")
+### 45. ✅ Inverted severity thresholds in `grafana/prometheus-agents.json` (Panels 27 "Not on Primary" and 38 "Since Last Discovery")
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1245,9 +1246,11 @@ Both panels carry thresholds copy-pasted from Panel 26 (`"Connected"`):
 
 **Fix:** Invert Panel 27 to `{ "color": "green", "value": null }` and `{ "color": "yellow", "value": 1 }` (or `"red"`). Invert Panel 38 to `{ "color": "green", "value": null }` with warning/critical thresholds appropriate for stale discovery (e.g., `"yellow"` at `120`, `"red"` at `300`, or a single neutral/green step).
 
+**Resolution:** Fixed in #599. Not on Primary starts green and turns yellow from one agent. Since Last Discovery starts green, turns yellow at 120 s and red at 300 s, and its description says discovery reads its file every `agent.discovery.reconcileIntervalSecs` (30 s by default) while the agent is connected.
+
 ---
 
-### 46. ⬜ `ProxyScrapeSuccessRateLow` alert and Proxy Grafana Panel 4 silently miss 0% success rate when no scrape has succeeded since startup
+### 46. ✅ `ProxyScrapeSuccessRateLow` alert and Proxy Grafana Panel 4 silently miss 0% success rate when no scrape has succeeded since startup
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1272,6 +1275,8 @@ If a newly started or restarted proxy fails 100% of scrapes (e.g., after a bad d
   / sum(rate(proxy_scrape_requests_total[5m])) < 0.99
 ```
 (When idle, `sum(rate(proxy_scrape_requests_total[5m]))` is `0`, yielding `NaN`, which does not fire `< 0.99`, or absent, yielding empty vector.) Alternatively, pre-initialize `startingAtZero = listOf("success")` on `SCRAPE_REQUEST_COUNT` in `ProxyMetrics.kt:146`.
+
+**Resolution:** Fixed in #599. `ProxyScrapeSuccessRateLow` and the Proxy dashboard's Scrape Success Rate panel fill in the missing success series with `or vector(0)`, so a proxy whose every scrape since startup has failed shows 0% and alerts; one with no scrapes still gives no result, and an idle one NaN, so neither fires. The Monitoring page's and `docs/metrics-and-grafana.md`'s success-rate queries match. `etc/promtool/alerts-test.yml`, which `make check-rules` runs with promtool, tests the alert in five cases, of which only the all-failed one failed before.
 
 ---
 
@@ -1349,7 +1354,7 @@ Conversely, `fileTree("demos")` at `build.gradle.kts:445` excludes `**/build/**`
 
 ---
 
-### 51. ⬜ Dead color overrides in `demos/network/grafana/dashboards/network-overview.json` (Panels 14 and 18)
+### 51. ✅ Dead color overrides in `demos/network/grafana/dashboards/network-overview.json` (Panels 14 and 18)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1365,6 +1370,8 @@ Both panels carry copy-pasted `byName` overrides for `"prometheus-proxy"` (orang
 **Impact:** Intended consistent proxy/agent color coding silently falls back to Grafana's default palette on both panels.
 
 **Fix:** In Panel 14, switch matchers from `byName` to `byRegexp` (`/^prometheus-proxy:/` and `/^prometheus-proxy-standby:/`) or drop the dead overrides; in Panel 18, match `agent-hq` / `agent-branch` or clear `"overrides": []`.
+
+**Resolution:** Fixed in #599. The never-matching `byName` proxy color overrides on Panels 14 and 18 are removed, as their series are named `<proxy>: <reason>` and after agents; Grafana's palette already gave each series its own color.
 
 ---
 

@@ -185,7 +185,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\", type=\"success\"}[$__rate_interval])) / sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])) * 100",
+          "expr": "(sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\", type=\"success\"}[$__rate_interval])) or vector(0)) / sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])) * 100",
           "legendFormat": "",
           "refId": "A"
         }

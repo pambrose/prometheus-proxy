@@ -14,9 +14,11 @@ groups:
         annotations:
           summary: "Prometheus cannot scrape the proxy at {{ $labels.instance }}"
 
+      # A proxy has no success series until a scrape succeeds, so vector(0) stands in for it, and one whose every scrape
+      # since it started has failed is at 0%. With no scrapes in the window, there's nothing to divide by, and no alert.
       - alert: ProxyScrapeSuccessRateLow
         expr: |
-          sum(rate(proxy_scrape_requests_total{type="success"}[5m]))
+          (sum(rate(proxy_scrape_requests_total{type="success"}[5m])) or vector(0))
             / sum(rate(proxy_scrape_requests_total[5m])) < 0.99
         for: 10m
         labels: { severity: warning }

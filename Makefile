@@ -280,9 +280,12 @@ tla-checks-full: tla-checks  ## The quick TLA+ checks and the slower reconnect c
 
 # Each demo's Prometheus config is checked as the demo's Prometheus sees it, with the rule files the demo mounts where
 # its rule_files glob looks, so promtool also checks the demo's alerting rules and that the config loads them. The
-# nginx, Kubernetes, Spring Boot, and plain Kotlin demos' have no rules.
-check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each demo's Prometheus config and rules, with promtool (needs Docker)
+# nginx, Kubernetes, Spring Boot, and plain Kotlin demos' have no rules. etc/promtool/alerts-test.yml unit-tests
+# grafana/alerts.yml's rules, which it names by their path from it, so both are mounted where the checkout has them.
+check-rules:  ## Validate and unit-test the alerting rules in grafana/alerts.yml, and validate each demo's Prometheus config and rules, with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
+	docker run --rm -v "$(CURDIR)/grafana:/repo/grafana:ro" -v "$(CURDIR)/etc/promtool:/repo/etc/promtool:ro" \
+		--entrypoint promtool $(PROMETHEUS_IMAGE) test rules /repo/etc/promtool/alerts-test.yml
 	docker run --rm -v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		-v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro" \
 		-v "$(CURDIR)/grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro" \

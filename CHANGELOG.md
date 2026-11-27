@@ -162,6 +162,15 @@ All notable changes to this project are documented in this file.
   Every open page on the dashboard's origin now follows a change at once, said aloud only where it was made
 - Ticking Problems only within a quarter second of typing in the search applied the filter twice, sending the server
   the same filter again and saying the row count twice
+- The agents' Grafana dashboard showed Not on Primary red while every agent was on its primary endpoint and green once
+  one failed over, and Since Last Discovery red right after a successful read and green once discovery had been failing
+  for a while, as both had the Connected stat's thresholds. Not on Primary is now green at zero and yellow from one
+  agent, and Since Last Discovery green, yellow from 2 minutes, and red from 5
+- `ProxyScrapeSuccessRateLow` and the proxy dashboard's Scrape Success Rate missed a proxy none of whose scrapes had
+  succeeded since it started: `proxy_scrape_requests_total{type="success"}` has no series until one does, and dividing
+  it gave no result, so the alert never fired and the panel showed No data. Both now take no successes as zero
+  (`or vector(0)`), as do the success-rate queries on the Monitoring page and in `docs/metrics-and-grafana.md`; a proxy
+  with no scrapes still doesn't fire
 
 ### Behavior Changes
 
@@ -198,6 +207,8 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- `make check-rules`, which CI's `rules` job runs, unit-tests `grafana/alerts.yml`'s `ProxyScrapeSuccessRateLow` with
+  promtool (`etc/promtool/alerts-test.yml`), a proxy none of whose scrapes succeeded included
 - `make release` ends by printing the GitHub release's link and the one step left, the Homebrew tap, where it asked
   the releaser to do steps it had already done
 - The build compiles without warnings: the embedded agent's thread, a deprecated Prometheus client getter in a test,
@@ -264,6 +275,9 @@ All notable changes to this project are documented in this file.
   `DropGone` and `RemoveOrphans`, that bring back the old behavior for TLC to catch. The Monitoring page gives the
   `replaced` reason, the Security and Proxy Configuration pages the pattern rule, and Troubleshooting both new startup
   refusals
+- The network demo's Grafana dashboard drops the proxy color overrides on its Disconnects, by proxy and reason, and
+  Agents off their primary panels, which matched no series: the first names each series for its proxy and reason, and
+  the second for its agent
 
 ## [4.7.0] - 2026-11-24
 
