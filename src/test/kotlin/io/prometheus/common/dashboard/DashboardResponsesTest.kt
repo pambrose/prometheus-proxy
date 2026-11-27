@@ -57,6 +57,7 @@ import io.prometheus.common.captureLogs
 import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
 import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
 import io.prometheus.common.dashboard.DashboardServer.Companion.ICON_DIR
+import io.prometheus.common.dashboard.DashboardServer.Companion.UPGRADE_INSECURE_REQUESTS
 import io.prometheus.proxy.dashboard.LinkIcon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -472,6 +473,96 @@ class DashboardResponsesTest : StringSpec() {
       }
     }
 
+    // Signed in from one tab, a viewer who reloads another still on the login page lost the page that tab was for: the
+    // login page sent a browser with a session to the base path, whatever its next said.
+    "the login page should send a browser with a session on to its next, if a login may return there" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_LOGIN_NEXT_PORT, login = true) {
+        val token = signIn(next = "/dashboard").sessionCookies().first().value()
+        val withSession: HttpRequestBuilder.() -> Unit = {
+          header(HttpHeaders.Cookie, "${DashboardServer.cookieName(ROLE, port)}=$token")
+        }
+        val nexts =
+          listOf(
+            "%2Foutside" to OUTSIDE,
+            "%2Fdashboard%2F$FRAGMENT%3Fq%3Da" to "/dashboard/$FRAGMENT?q=a",
+            "%2F%2Fevil.example" to "/dashboard",
+            "https%3A%2F%2Fevil.example%2F" to "/dashboard",
+            "%2Felsewhere" to "/dashboard",
+            "%2Fdashboard%2Flogin" to "/dashboard",
+          )
+
+        val answers = nexts.map { (next, _) -> get("/dashboard/login?${LoginHtml.NEXT_FIELD}=$next", withSession) }
+
+        answers.map { it.seenOther() } shouldBe nexts.map { (_, location) -> HttpStatusCode.SeeOther to location }
+        get("/dashboard/login", withSession).seenOther() shouldBe (HttpStatusCode.SeeOther to "/dashboard")
+      }
+    }
+
+    // A browser that once saved a Basic login sends it with every request, so the dashboard ignores a browser's, or the
+    // login page and Log out would be skipped. It knew a browser by Fetch Metadata's Sec-Fetch-Mode alone, which a
+    // browser sends only to an https or localhost origin: over plain http on any other address, a browser's saved login
+    // let it in. None of these requests carries Sec-Fetch-Mode.
+    "a browser's saved Basic login should be ignored over plain http too, and a script's still read" {
+      withServer(TestPorts.DASHBOARD_RESPONSES_BROWSER_BASIC_PORT, login = true) {
+        val basic: HttpRequestBuilder.() -> Unit = { basicAuth(USERNAME, PASSWORD) }
+        val responses =
+          mapOf(
+            "navigation" to
+              get("/dashboard") {
+                basic()
+                header(HttpHeaders.Accept, BROWSER_ACCEPT)
+                header(UPGRADE_INSECURE_REQUESTS, "1")
+              },
+            "navigation by its Accept alone" to
+              get("/dashboard") {
+                basic()
+                header(HttpHeaders.Accept, BROWSER_ACCEPT)
+              },
+            "the page's fetch" to
+              get("/dashboard/session") {
+                basic()
+                header(HX_REQUEST_HEADER, "true")
+                header(HttpHeaders.Referrer, "$base/dashboard")
+              },
+            "the page's action" to
+              post("/dashboard/$ACTION") {
+                basic()
+                header(HX_REQUEST_HEADER, "true")
+                header(HttpHeaders.Origin, base)
+              },
+            // A browser sends an Origin with every WebSocket handshake; the login check comes before the upgrade.
+            "the page's WebSocket" to
+              get("/dashboard/events") {
+                basic()
+                header(HttpHeaders.Origin, base)
+              },
+            "script" to get("/dashboard", basic),
+            "script's fragment" to
+              get("/dashboard/$FRAGMENT") {
+                basic()
+                header(HX_REQUEST_HEADER, "true")
+              },
+            "script's action" to
+              post("/dashboard/$ACTION") {
+                basic()
+                header(HX_REQUEST_HEADER, "true")
+              },
+          )
+
+        responses.mapValues { it.value.status.value } shouldBe
+          mapOf(
+            "navigation" to 303,
+            "navigation by its Accept alone" to 303,
+            "the page's fetch" to 401,
+            "the page's action" to 401,
+            "the page's WebSocket" to 401,
+            "script" to 200,
+            "script's fragment" to 200,
+            "script's action" to 200,
+          )
+      }
+    }
+
     // The line went out whole, at INFO, for every refused request, before any login: a client could write terminal
     // escape sequences into the log, a request line's worth at a time, at its own request rate.
     "a refused Origin should be logged cut and escaped, and at INFO once a minute for each address" {
@@ -515,6 +606,9 @@ class DashboardResponsesTest : StringSpec() {
     private const val CSP = "Content-Security-Policy"
     private const val X_FRAME_OPTIONS = "X-Frame-Options"
     private val NO_STORE = listOf("no-store")
+
+    // What a browser's navigation accepts.
+    private const val BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     private val ICON = LinkIcon.PROMETHEUS
 
     // The longest line a refusal may log, well under the client's header and with room for any real origin or host.
@@ -546,6 +640,9 @@ class DashboardResponsesTest : StringSpec() {
     // The session cookies a response sets, each whole, in the order it sets them.
     private fun HttpResponse.sessionCookies() =
       headers.getAll(HttpHeaders.SetCookie).orEmpty().filter { it.startsWith("prometheus_${ROLE}_dashboard_") }
+
+    // A redirect's status and where it sends the browser.
+    private fun HttpResponse.seenOther() = status to headers[HttpHeaders.Location]
 
     private fun String.value() = substringAfter('=').substringBefore(';')
 

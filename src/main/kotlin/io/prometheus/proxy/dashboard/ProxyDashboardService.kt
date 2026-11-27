@@ -59,8 +59,11 @@ import io.prometheus.common.dashboard.SettingsShown
  * ProxyDashboardHtml.pushFragment). That closes the race between a row click and the push loop: a tick rendered from
  * the previous selection can reach the browser after the click's own swap, and without the stamp it put the previous
  * agent back in the detail pane until the next frame.
+ *
+ * A data class, as the agent's view is, so a message that repeats what the page shows pushes nothing (see
+ * DashboardServer.readViews).
  */
-internal class ProxyView(
+internal data class ProxyView(
   val layout: DashboardLayout,
   val selectedId: String?,
   val seq: Long,

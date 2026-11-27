@@ -21,6 +21,7 @@ package io.prometheus.common.dashboard
 import ch.qos.logback.classic.Level
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -53,6 +54,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.Collections
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration
@@ -74,8 +76,10 @@ import kotlin.time.TestTimeSource
  */
 class DashboardPushTest : StringSpec() {
   // A site the spec stands in for. Its snapshot is its collect's number, each collect is announced on [attempts], and
-  // the next [failures] collects throw. A page showing BIG is sent one frame larger than every buffer between the
-  // server and the page, and small ones after it, so a page that never reads stalls its socket's writer for good.
+  // the next [failures] collects throw. Each render is announced on [renders] and kept in [rendered], by the view it
+  // was for, and the next [renderFailures] renders throw. A frame names its snapshot, and the view it was for when the
+  // page has said. A page showing BIG is sent one frame larger than every buffer between the server and the page, and
+  // small ones after it, so a page that never reads stalls its socket's writer for good.
   private class CountingSite : DashboardSite<String, Int> {
     val changeFlow = MutableSharedFlow<Unit>()
     override val changes: Flow<Any?> = changeFlow
@@ -90,6 +94,12 @@ class DashboardPushTest : StringSpec() {
     @Volatile
     var failures = 0
 
+    private val renders = Channel<String?>(Channel.UNLIMITED)
+    val rendered: MutableList<String?> = Collections.synchronizedList(mutableListOf())
+
+    @Volatile
+    var renderFailures = 0
+
     // Rendered for a page showing BIG, and queued for it: a push after it knows the send went through.
     val bigRendered = CompletableDeferred<Unit>()
     val bigQueued = CompletableDeferred<Unit>()
@@ -97,6 +107,9 @@ class DashboardPushTest : StringSpec() {
     val collectCount: Int get() = collects.load()
 
     suspend fun nextAttempt(): Int = withTimeout(PATIENCE) { attempts.receive() }
+
+    // The view of the next render, within PATIENCE.
+    suspend fun nextRender(): String? = withTimeout(PATIENCE) { renders.receive() }
 
     override suspend fun collect(): Int {
       val attempt = collects.incrementAndFetch()
@@ -118,11 +131,17 @@ class DashboardPushTest : StringSpec() {
       sent: Any?,
       routeBase: String,
     ): DashboardFrame {
+      rendered += view
+      renders.trySend(view)
+      if (renderFailures > 0) {
+        renderFailures -= 1
+        error("Render of snapshot $snapshot failed")
+      }
       if (view == BIG && sent == null)
         return DashboardFrame(BIG_FRAME, BIG).also { bigRendered.complete(Unit) }
       if (view == BIG)
         bigQueued.complete(Unit)
-      return DashboardFrame("snapshot $snapshot", sent)
+      return DashboardFrame(if (view == null) "snapshot $snapshot" else "snapshot $snapshot for $view", sent)
     }
   }
 
@@ -296,6 +315,63 @@ class DashboardPushTest : StringSpec() {
       }
     }
 
+    // A render that threw was logged at ERROR once for the page, and never again, however long it rendered fine in
+    // between: a later fault, of any kind, went unlogged at every level.
+    "a render that throws should be logged at ERROR once a run of failures, and the rest of the run at DEBUG" {
+      withServer(TestPorts.DASHBOARD_PUSH_RENDER_FAILURE_PORT) {
+        val page = page()
+        page.nextText() shouldBe "snapshot 1"
+        site.nextRender()
+
+        val logged =
+          captureLogs<DashboardServer<*, *>>(Level.DEBUG) {
+            site.renderFailures = 1
+            change()
+            site.nextRender()
+            change()
+            site.nextRender()
+            page.nextText() shouldBe "snapshot 3"
+
+            site.renderFailures = 2
+            repeat(2) {
+              change()
+              site.nextRender()
+            }
+            change()
+            site.nextRender()
+            page.nextText() shouldBe "snapshot 6"
+          }
+
+        logged.filter { it.level == Level.ERROR }.map { it.formattedMessage } shouldBe
+          List(2) { "Failed to render a dashboard push" }
+        logged.filter { it.formattedMessage.startsWith("Dashboard push failed to render again") }.size shouldBe 1
+      }
+    }
+
+    // Each message on a page's socket rendered the page's whole frame and sent it at once, so a client sending tiny
+    // messages in a loop had the process render as fast as it could send them. A message that changes nothing renders
+    // nothing, and a burst renders its first at once and then at most once an interval, its latest last.
+    "a page's message should render nothing when it changes nothing, and a burst at most once an interval" {
+      withServer(TestPorts.DASHBOARD_PUSH_VIEW_BURST_PORT) {
+        val page = page()
+        page.nextText() shouldBe "snapshot 1"
+        page.send(Frame.Text("a"))
+        page.nextText() shouldBe "snapshot 1 for a"
+
+        repeat(MESSAGE_BURST) { page.send(Frame.Text("a")) }
+        page.send(Frame.Text("b"))
+        page.nextText() shouldBe "snapshot 1 for b"
+        site.rendered.count { it == "a" } shouldBe 1
+
+        (1..MESSAGE_BURST).forEach { page.send(Frame.Text("c$it")) }
+        while (page.nextText() != "snapshot 1 for c$MESSAGE_BURST") {
+          // A frame for a view the burst passed through; the latest's comes last.
+        }
+        site.rendered.count { it.orEmpty().startsWith("c") } shouldBeLessThan MESSAGE_BURST / 5
+        site.collectCount shouldBe 1
+      }
+    }
+
     // Log out needs no login. It woke the push loop whatever it named, so anyone who could reach the port could make
     // the dashboard collect a snapshot and push to every page once per request.
     "a Log out naming no session should cost nothing, and one naming a session should close its pages and only its" {
@@ -381,6 +457,7 @@ class DashboardPushTest : StringSpec() {
     private const val ROLE = "proxy"
     private const val BIG = "big"
     private const val LOGOUT_FLOOD = 100
+    private const val MESSAGE_BURST = 50
     private const val STALLED_RECEIVE_BUFFER_BYTES = 1024
     private const val HANDSHAKE_TIMEOUT_MILLIS = 10_000
 

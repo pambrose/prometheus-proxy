@@ -334,9 +334,11 @@ The page loads, but its live indicator never turns green, and Scrape now may say
 the login form says it instead, and the page never loads.
 
 - **Cause:** the reverse proxy doesn't pass the WebSocket handshake's `Upgrade` and `Connection` headers, or passes a
-  `Host` header that doesn't match the browser's `Origin`, which the dashboard refuses.
-- **Fix:** pass both headers, over HTTP/1.1, and the browser's `Host`, or list the dashboard's public address in
-  `proxy.dashboard.allowedOrigins`; see [Behind a reverse proxy](web-dashboard.md#behind-a-reverse-proxy).
+  `Host` header that doesn't match the browser's `Origin`, which the dashboard refuses. Or `allowedOrigins` lists the
+  address with another scheme than the browser's, such as `https://` for a page opened over `http`.
+- **Fix:** pass both headers, over HTTP/1.1, and the browser's `Host`, or list the dashboard's public address, with the
+  scheme the browser uses, in `proxy.dashboard.allowedOrigins`; see
+  [Behind a reverse proxy](web-dashboard.md#behind-a-reverse-proxy).
 
 ## Still Stuck?
 

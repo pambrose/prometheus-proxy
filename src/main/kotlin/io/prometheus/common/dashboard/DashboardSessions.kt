@@ -48,9 +48,11 @@ internal class DashboardSessions(
     var lastRequest: TimeMark,
   )
 
-  // By the SHA-256 of each token. Access-ordered, so the eldest is the session used least recently. Guarded by itself.
+  // By the SHA-256 of each token, the session used least recently first. In insertion order, which a request's check
+  // moves its session to the end of (see isValid): an access-ordered map would move it on any lookup, the push loop's
+  // checks of the pages it keeps open too, which aren't requests. Guarded by itself.
   private val sessions =
-    object : LinkedHashMap<String, Session>(INITIAL_CAPACITY, LOAD_FACTOR, true) {
+    object : LinkedHashMap<String, Session>(INITIAL_CAPACITY, LOAD_FACTOR, false) {
       override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Session>) = size > maxSessions
     }
 
@@ -67,8 +69,9 @@ internal class DashboardSessions(
   }
 
   /**
-   * Whether [token] names a session that hasn't ended. A valid one [counts] as a request, restarting its idle time,
-   * unless the check is the dashboard's own, of a page it keeps open, which isn't a request.
+   * Whether [token] names a session that hasn't ended. A valid one [counts] as a request, restarting its idle time and
+   * making it the session used most recently, unless the check is the dashboard's own, of a page it keeps open, which
+   * isn't a request and changes neither.
    */
   fun isValid(
     token: String?,
@@ -83,8 +86,11 @@ internal class DashboardSessions(
         sessions.remove(key)
         false
       } else {
-        if (counts)
+        if (counts) {
           session.lastRequest = timeSource.markNow()
+          sessions.remove(key)
+          sessions[key] = session
+        }
         true
       }
     }
