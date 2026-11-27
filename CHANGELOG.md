@@ -111,12 +111,12 @@ All notable changes to this project are documented in this file.
   its tour, scenarios, README, and page link into `/screens`, which `make open` opens; `make up` builds from the
   checkout until 4.7.1 is on Docker Hub
 - The plain Kotlin demo's proxy lists Grafana and Prometheus as its screens, and its tour, scenarios, README, and page
-  link into `/screens`, which `make open` opens; its Grafana allows embedding, and `make up` builds from the checkout
-  until 4.7.1 is on Docker Hub
+  link into `/screens`, which `make open` opens; its Grafana allows embedding, a new `make screenshots` takes the
+  page's shot for the website, and `make up` builds from the checkout until 4.7.1 is on Docker Hub
 - The Spring Boot demo's proxy lists the roastery's status page, its agent's dashboard, and Prometheus as its screens,
   and its tour, scenarios, README, and page link into `/screens`, which `make open` opens, but while part 4 has the
-  proxy stopped, when they give the agent dashboard's own address; `make up` builds from the checkout until 4.7.1 is
-  on Docker Hub
+  proxy stopped, when they give the agent dashboard's own address; a new `make screenshots` takes the page's shot for
+  the website, and `make up` builds from the checkout until 4.7.1 is on Docker Hub
 - The Kubernetes demo's proxy lists the agent's dashboard, at the port `./demo.sh agent-dashboard` forwards, and
   Prometheus's targets as its screens, whose addresses `demo.sh` gives it through the proxy chart's `env`, and its tour,
   scenarios, README, and page link into `/screens`, which `make open` opens; `make screenshots` adds a shot of the

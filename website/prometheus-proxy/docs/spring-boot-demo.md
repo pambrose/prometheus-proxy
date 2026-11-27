@@ -214,6 +214,12 @@ Graceful shutdown complete
 With the proxy dashboard beside the agent's, the agent leaves the Agents view as its own dashboard stops:
 <http://localhost:8494/screens#proxy+agent>
 
+<figure markdown="span">
+  ![roastery-1.0's recent scrapes on the proxy's dashboard beside the same scrapes on the agent's own, before the roastery stops](images/spring-boot-demo/screens.webp#only-dark){ loading=lazy }
+  ![roastery-1.0's recent scrapes on the proxy's dashboard beside the same scrapes on the agent's own, before the roastery stops](images/spring-boot-demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The proxy's screens page: the roastery's scrapes on the proxy's dashboard and on its agent's, before the roastery stops</figcaption>
+</figure>
+
 `./demo.sh start-app` starts it again, and the agent registers its path once more.
 
 The [Plain Kotlin Demo](plain-kotlin-demo.md)'s ovens stop the other way round: each finishes the order it's baking,

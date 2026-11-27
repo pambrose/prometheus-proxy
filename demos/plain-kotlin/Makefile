@@ -1,4 +1,4 @@
-.PHONY: default help up up-local down status open tour logs
+.PHONY: default help up up-local down status open tour logs screenshots
 
 # The plain Kotlin demo's own targets (README.md), so the demo is self-contained; the root Makefile has none. Run them
 # from this directory (`make up`), with `make -C demos/plain-kotlin up`, or with `make -f demos/plain-kotlin/Makefile
@@ -9,9 +9,10 @@
 DEMO_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 # demo.sh runs from this directory as ./demo.sh, so the commands it prints with $0 read `./demo.sh rush`, as the
-# README's do. The PLAIN_KOTLIN_DEMO_*_PORT variables reach it both from the environment
-# (`PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`) and from make's command line (`make up
-# PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601`), since make exports a command-line variable to its recipes.
+# README's do. The settings the scripts read, the PLAIN_KOTLIN_DEMO_*_PORT variables and bin/screenshots.sh's WAIT_SECS
+# and SKIP_HISTORY_WAIT, reach them both from the environment (`PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`) and from
+# make's command line (`make up PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601`), since make exports a command-line variable to its
+# recipes.
 DEMO = cd "$(DEMO_DIR)" && ./demo.sh
 
 # demo.sh runs the root Makefile's site-version target with the make that ran this one, so `gmake up` works where GNU
@@ -48,3 +49,9 @@ tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n 
 
 logs:  ## Follow the logs (SERVICE=name for one service: oven, redis, counter, proxy, prometheus, grafana)
 	@$(DEMO) logs $(SERVICE)
+
+# Retakes the website's Plain Kotlin Demo screenshot from a demo built from this checkout, so it shows the current
+# dashboard (needs Docker, Chrome, ImageMagick, cwebp). It's for maintaining the site, not for presenting, so it has no
+# `## ` description and `make help` leaves it out.
+screenshots: up-local
+	@cd "$(DEMO_DIR)" && ./bin/screenshots.sh
