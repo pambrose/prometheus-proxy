@@ -22,8 +22,9 @@ All notable changes to this project are documented in this file.
   `EmbeddedAgentInfo.shutdown()` and `close()` wait for its stop. Once it's up, the call returns, with a warning, and the
   agent goes on stopping on a daemon thread; a stop that fails within it throws, as one without it does, and one that
   fails after it is logged. An interrupt doesn't end the wait. Unset, the default, the wait is the agent's own, as
-  before: 30 seconds, then a `TimeoutException`; `Duration.INFINITE` waits for as long as the stop takes, and zero or
-  less throws `ConfigLoadException`. It's the handle's, so `toConfig()` leaves it out, and `toString()` shows it
+  before: 30 seconds, then an `IllegalStateException`, with the `TimeoutException` as its cause; `Duration.INFINITE`
+  waits for as long as the stop takes, and zero or less throws `ConfigLoadException`. It's the handle's, so
+  `toConfig()` leaves it out, and `toString()` shows it
 - The Ktor plugin's `stop-timeout` key, which sets the agent's `stopTimeout`, a number alone being seconds. The plugin
   sets 30 seconds before the file and the `agent { }` blocks, so its wait for the agent's stop stays as long as it was;
   `AgentLifecycle` waits for the handle's `shutdown()` a second past it, where it waited 30 seconds itself
@@ -206,6 +207,35 @@ All notable changes to this project are documented in this file.
 - A metric filter judged a sample whose quoted name comes after a blank in its braces, such as
   `{ "a.b", job="x" } 1`, by the name `""`, so an allow list dropped it and a deny list kept it. It's now judged by
   `a.b`, as it is without the blank
+- `EmbeddedAgentInfo.shutdown()`, its `close()`, and `Agent.stop()` threw Guava's checked
+  `java.util.concurrent.TimeoutException` for an agent that took over 30 seconds to stop, undeclared, so Java code
+  couldn't catch it and a `catch (RuntimeException e)` missed it. They now throw an `IllegalStateException` with the
+  `TimeoutException` as its cause, as a start that times out does (see Behavior Changes)
+- The embedded builder's `path()`, `scrapeSelf()`, and `source()` took `/` alone as a path, and `path()` a blank URL,
+  which the agent then dropped at startup with a warning, as a config file's placeholder: `start()` didn't throw, a
+  `required` Ktor plugin or Spring Boot starter agent's app started without the target, and no `onFailure` handler was
+  told. They now throw `ConfigLoadException`, so a Ktor plugin `paths` entry or a starter `prometheus-proxy.agent.paths`
+  entry without a `url`, as an unset environment variable leaves it, fails the agent's start, as one without a `path`
+  did (see Behavior Changes)
+- An embedded agent refused to start for a `PROMETHEUS_PROXY` or `PROMETHEUS_PROXY_CERT` the agent can't use even when
+  a `setting()` of `proxy.endpoints` or `tls.trustCertCollectionPem` called before `fromEnvironment()` replaced it, as
+  the Ktor plugin's `settings` keys and the Spring Boot starter's `prometheus-proxy.agent.settings.*` properties do
+  before an `agent { }` block or customizer calls `fromEnvironment()`. A variable that a `setting()` of its key, or of
+  the section it's in, such as `tls`, replaces is no longer checked, whatever their order
+- The Ktor plugin read the file's `path` and `labels` as it was installed, so ones it couldn't read, such as
+  `labels = "team=web"` where a section belongs, failed the app's `install(PrometheusProxyAgent)` with the agent
+  disabled or not `required`, and told no `onFailure` handler. They now fail the agent's start, as any other value in
+  the file the plugin can't read does
+- The Ktor plugin's wait for the agent's stop on `ApplicationStopping` threw `InterruptedException` out of the event
+  when the thread disposing the app was interrupted, and didn't wait; a disposal that came as the engine's stop began
+  could miss the stop and not wait for it; an app that stopped while its agent was starting left the agent running once
+  it started, with nothing to stop it; and a second `ApplicationStarted` started a second agent. The wait now goes on
+  through an interrupt, which the thread keeps, a stop under way is always waited for, an agent whose start ends after
+  the app's stop began is stopped as soon as it has started, and a second start event starts nothing
+- The Spring Boot starter's default path, `spring.application.name` followed by `_metrics`, kept characters the proxy
+  refuses in a path, so an app named `Order Service` failed the agent's start, with an error that blamed `source()`.
+  The default now makes each run of whitespace, control characters, `?`, `#`, or `/` in the name one `_`, leaving out
+  those at its ends, as `Order_Service_metrics`, and the agent's default name, the app's, is trimmed
 
 ### Behavior Changes
 
@@ -245,6 +275,14 @@ All notable changes to this project are documented in this file.
   no host started and failed each connect that reached it, and `[::1]50051` dialed the default port
 - An agent whose response stream the proxy ends without a failure reconnects at once, where it stayed connected
   until it had a result for that stream
+- `EmbeddedAgentInfo.shutdown()`, `close()`, and `Agent.stop()` throw `IllegalStateException`, with the
+  `TimeoutException` as its cause, for an agent without a `stopTimeout` that doesn't stop within 30 seconds: Kotlin code
+  that caught `TimeoutException` there catches `IllegalStateException` instead
+- The embedded builder's `path()` throws `ConfigLoadException` for a blank URL, and `path()`, `scrapeSelf()`, and
+  `source()` for `/` alone as a path, where the agent skipped such a target at startup with a warning. A Ktor plugin
+  `paths` entry, or a Spring Boot starter `prometheus-proxy.agent.paths` entry, without a `url` therefore leaves the
+  agent off, telling the `onFailure` handlers, or fails a `required` agent's app. A standalone agent's
+  `agent.pathConfigs` entry without a path or a URL is still skipped with a warning, as a placeholder
 
 ### Build & Tooling
 

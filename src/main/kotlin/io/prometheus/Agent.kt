@@ -976,7 +976,14 @@ class Agent(
     // whether super.startUp() or the dashboard failed.
     if (state() == Service.State.FAILED)
       return
-    stopSync()
+    // stopSync() gives up after 30 seconds with Guava's checked TimeoutException, which Kotlin doesn't declare, so a
+    // Java caller couldn't catch it, and a catch of RuntimeException missed it (November 26 review, #21): unchecked
+    // instead, as startWithin's, with it as the cause. The agent goes on stopping, as stopAsync() asked it to.
+    try {
+      stopSync()
+    } catch (e: TimeoutException) {
+      throw IllegalStateException("The agent didn't stop within 30 seconds; it goes on stopping", e)
+    }
   }
 
   // Starts the agent and waits up to [timeout] for it to run, as startEmbedded does. Guava leaves a start that takes

@@ -56,7 +56,9 @@ With that, the app gets:
   stops the agent; one that should keep running sets `spring.main.keep-alive: true`.
 - **Its metrics at the proxy's `/roastery_metrics`,** the app's name followed by `_metrics`, read from the app's
   registry for each scrape, in the format Prometheus asks for, and with the agent's limits and the path's filter, as
-  [Metrics Served In-Process](embedded-agent.md#metrics-served-in-process) describes.
+  [Metrics Served In-Process](embedded-agent.md#metrics-served-in-process) describes. A name with characters the proxy
+  refuses in a path, such as `Order Service`, gives `Order_Service_metrics`: each run of whitespace, control
+  characters, `?`, `#`, or `/` is one `_`, and those at its ends are left out.
 - **An agent named for the app,** `roastery`, followed by the build's version when the app has build info
   (`spring-boot-maven-plugin`'s `build-info` goal, or `springBoot { buildInfo() }` in Gradle), such as
   `roastery-1.4.2`, so the proxy's dashboard tells an old deployment from a new one.
@@ -86,10 +88,10 @@ Each is under `prometheus-proxy.agent`, and an IDE completes and describes them 
 | `client-certificate`       |                                  | The agent's certificate chain, as PEM text or its base64, for a proxy that requires mutual TLS                                                                                |
 | `client-key`               |                                  | The private key of `client-certificate`, as PEM text or its base64                                                                                                            |
 | `name`                     | the app's name and build version | The agent's name, as the proxy's dashboard and logs show it; `Unnamed-` and the host without `spring.application.name`                                                        |
-| `path`                     | the app's name, then `_metrics`  | The proxy's path the app's metrics are served at; `application_metrics` without `spring.application.name`                                                                     |
+| `path`                     | the app's name, then `_metrics`  | The proxy's path the app's metrics are served at; `application_metrics` without `spring.application.name`. Since 4.7.1, the name's whitespace, control characters, `?`, `#`, and `/` become `_`, a run of them one, so `Order Service` gives `Order_Service_metrics` |
 | `labels.<name>`            |                                  | The labels of the app's path, in the proxy's [service discovery](service-discovery.md)                                                                                        |
 | `source`                   | `registry`                       | `registry` serves the app's `PrometheusRegistry` bean; `none` serves only `paths` and what a customizer adds                                                                  |
-| `paths[n].path`, `.url`    |                                  | Another target the agent scrapes over HTTP, served at a path of its own, with `.username`, `.password`, and `.labels.<name>`                                                  |
+| `paths[n].path`, `.url`    |                                  | Another target the agent scrapes over HTTP, served at a path of its own, with `.username`, `.password`, and `.labels.<name>`; an entry without a path or a URL fails the agent's start |
 | `consolidated`             | `false`                          | Whether the agent registers its paths in [consolidated mode](advanced.md#consolidated-mode), alongside other agents serving them                                               |
 | `metrics-port`             |                                  | The port of the agent's own metrics, which are off without one, for a scraper on the app's own network ([Port or Proxy Path](monitoring.md#port-or-proxy-path)) |
 | `metrics-proxy-path`       |                                  | The proxy's path the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) are served at, read in-process, with no port; off without one. They stay apart from the app's path, whose JVM metrics they'd repeat |

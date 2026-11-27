@@ -43,6 +43,14 @@ its own that holds them all, with Prometheus and Grafana.
 - **The Helm charts' pods no longer get a Kubernetes API token.** Neither the proxy nor the agent uses one, so their
   pods now set `automountServiceAccountToken: false`. If something added to the pod needs the token, such as an injected
   sidecar that authenticates with it, set the chart's `automountServiceAccountToken` to `true`.
+- **An embedded agent's stop that runs out of time throws `IllegalStateException`.** Without a `stopTimeout`,
+  `shutdown()` and `close()` give up after 30 seconds, as before, but now throw an `IllegalStateException`, with the
+  `TimeoutException` as its cause, which Java code can catch. Kotlin code that caught `TimeoutException` there should
+  catch `IllegalStateException`.
+- **A Ktor plugin or Spring Boot starter `paths` entry needs a `url`.** An entry without one, as an unset environment
+  variable leaves it, now keeps the agent off, telling the `onFailure` handlers, or fails a `required` agent's app,
+  where the agent skipped it with a warning. Give the entry its URL, or leave it out. The embedded builder's `path()`
+  now refuses a blank URL, and `/` alone as a path, in the same way.
 
 ### New Features
 
@@ -201,6 +209,30 @@ its own that holds them all, with Prometheus and Grafana.
 - **A quoted metric name after a blank is filtered by its name.** A metric filter took a sample written as
   `{ "a.b", job="x" } 1`, with a blank before its quoted name, to have no name, so an allow list for `a.b` dropped it
   and a deny list for it kept it.
+- **Java code can catch an embedded agent's slow stop.** `shutdown()` and `close()` threw a checked `TimeoutException`
+  for an agent that took over 30 seconds to stop, without declaring it, so a Java `catch` of it didn't compile, and a
+  catch of `RuntimeException` missed it. They now throw an `IllegalStateException`, with the `TimeoutException` as its
+  cause.
+- **A target without a URL, or a path of `/` alone, is refused, not dropped.** The embedded builder took them, and the
+  agent then skipped the target at startup with only a warning, so a `required` agent's app started without it and no
+  `onFailure` handler heard of it. They now fail the agent's start, as a target without a path did.
+- **A `setting()` that replaces a `PROMETHEUS_` variable keeps a bad one from failing the start.** An embedded agent
+  failed to start for a `PROMETHEUS_PROXY` or `PROMETHEUS_PROXY_CERT` it can't use even when a `setting()` of the same
+  key, called before `fromEnvironment()`, replaced it, as the Ktor plugin's and the Spring Boot starter's `settings`
+  keys do. Only a value the agent uses is checked now.
+- **Labels the Ktor plugin can't read no longer stop the app.** A file `path` or `labels` the plugin couldn't read, such
+  as `labels = "team=web"` where a section belongs, failed `install(PrometheusProxyAgent)` even with the agent off. It
+  now fails only the agent's start, telling the `onFailure` handlers, as any other value in the file the plugin can't
+  read does.
+- **The Ktor plugin always waits for its agent's stop.** An interrupt of the thread disposing the app threw out of the
+  app's stop without waiting for the agent; a disposal that came just as the server began to stop could miss the
+  agent's stop; and an app that stopped while its agent was still starting left that agent running. The plugin now
+  waits through an interrupt, always finds the stop under way, and stops an agent whose start ends after the app began
+  to stop.
+- **A Spring Boot app named with a space gets a path the proxy takes.** The starter's default path,
+  `spring.application.name` followed by `_metrics`, kept a space, `?`, `#`, or `/` in the name, which the proxy refuses,
+  so an app named `Order Service` started without its agent. It's now `Order_Service_metrics`: each run of such
+  characters is one `_`.
 
 ### Behavior Changes
 

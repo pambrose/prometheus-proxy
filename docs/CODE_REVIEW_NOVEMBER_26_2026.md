@@ -1,10 +1,11 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 43 resolved, 27 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 50 resolved, 20 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
-and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16, #17, #18, #19, and #20 in #602.
+and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16, #17, #18, #19, and #20 in #602; #21,
+#22, #23, #24, #25, #26, and #27 in #603.
 
 **Date:** 2026-11-26
 
@@ -38,13 +39,13 @@ and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16,
 | 18 | `MetricFilter.previewBytes` mutates fail-open latches, logs warnings, and records `FILTER_FAILED_OPEN` during dashboard "Scrape now" previews | Agent | low | ✅ |
 | 19 | `Utils.parseHostPort` accepts empty hosts (`":50051"`, `"[]:50051"`, `"[]"`) and silently discards trailing garbage after bracketed IPv6 (`"[::1]50051"`) | Agent | low | ✅ |
 | 20 | `MetricFilter.quotedSampleName` misses Prometheus 3 UTF-8 samples with whitespace after `{` | Agent | low | ✅ |
-| 21 | `EmbeddedAgentInfo.shutdown()` / `close()` and `Agent.stop()` sneaky-throw undeclared checked `TimeoutException` (Java interop hazard) | Embedding | medium | ⬜ |
-| 22 | `EmbeddedAgentConfig.Builder.path()` and `scrapeSelf()` accept `"/"`-only paths and blank URLs, silently dropping targets instead of failing validation | Embedding | medium | ⬜ |
-| 23 | `EnvironmentSetting.check()` validates and fails on `fromEnvironment()` values overridden by an earlier `setting()` call | Embedding | medium | ⬜ |
-| 24 | Ktor plugin `PrometheusProxyAgentConfig` eagerly parses `path` and `labels` in its constructor, crashing `install()` even when `enabled = false` or `required = false` | Embedding | medium | ⬜ |
-| 25 | Ktor plugin `AgentLifecycle` has `beginStop()`/`finishStop()` and `start()`/`beginStop()` races plus unguarded `Thread.join()` throwing checked `InterruptedException` | Embedding | medium | ⬜ |
-| 26 | Spring Boot starter's default `metricsPath()` uses `spring.application.name` verbatim, failing startup when the app name contains spaces or disallowed path characters | Embedding | low | ⬜ |
-| 27 | `EmbeddedAgentInfo` leaks internal `STOP_THREAD_NAME` constant as a `public static final` JVM field | Embedding | low | ⬜ |
+| 21 | `EmbeddedAgentInfo.shutdown()` / `close()` and `Agent.stop()` sneaky-throw undeclared checked `TimeoutException` (Java interop hazard) | Embedding | medium | ✅ |
+| 22 | `EmbeddedAgentConfig.Builder.path()` and `scrapeSelf()` accept `"/"`-only paths and blank URLs, silently dropping targets instead of failing validation | Embedding | medium | ✅ |
+| 23 | `EnvironmentSetting.check()` validates and fails on `fromEnvironment()` values overridden by an earlier `setting()` call | Embedding | medium | ✅ |
+| 24 | Ktor plugin `PrometheusProxyAgentConfig` eagerly parses `path` and `labels` in its constructor, crashing `install()` even when `enabled = false` or `required = false` | Embedding | medium | ✅ |
+| 25 | Ktor plugin `AgentLifecycle` has `beginStop()`/`finishStop()` and `start()`/`beginStop()` races plus unguarded `Thread.join()` throwing checked `InterruptedException` | Embedding | medium | ✅ |
+| 26 | Spring Boot starter's default `metricsPath()` uses `spring.application.name` verbatim, failing startup when the app name contains spaces or disallowed path characters | Embedding | low | ✅ |
+| 27 | `EmbeddedAgentInfo` leaks internal `STOP_THREAD_NAME` constant as a `public static final` JVM field | Embedding | low | ✅ |
 | 28 | `/screens` Split layout ignores `first`/`second` pane ordering at `<= 720px`, breaking pane swaps and `#later+earlier` links | Dashboards | medium | ✅ |
 | 29 | `DashboardScript.scrapeNow` lacks an in-flight guard, leaves `#scrape-result` uncloseable on network/non-panel errors, and writes arbitrary error bodies via `innerHTML` | Dashboards | medium | ✅ |
 | 30 | Theme toggle on `/screens` and its same-origin Proxy Dashboard iframe go out of sync | Dashboards | medium | ✅ |
@@ -663,7 +664,7 @@ Unlike `AgentHttpService.kt:137-148`, which wraps `resolveHttpsTrustManager` fai
 
 ## 🔌 Embedding, Ktor Plugin & Spring Boot Starter
 
-### 21. ⬜ `EmbeddedAgentInfo.shutdown()` / `close()` and `Agent.stop()` sneaky-throw undeclared checked `TimeoutException` (Java interop hazard)
+### 21. ✅ `EmbeddedAgentInfo.shutdown()` / `close()` and `Agent.stop()` sneaky-throw undeclared checked `TimeoutException` (Java interop hazard)
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -683,9 +684,11 @@ In Java, writing `try { agent.shutdown(); } catch (TimeoutException e) { ... }` 
 
 **Fix:** Catch `TimeoutException` in `Agent.stop()` and wrap it in an unchecked `IllegalStateException` (matching `Agent.startWithin()`), then update the KDoc and docs on `EmbeddedAgentInfo.shutdown()` and `EmbeddedAgentConfig.Builder.stopTimeout`. (Adding `@Throws(TimeoutException::class)` instead would be a source-breaking change for existing Java callers.)
 
+**Resolution:** Fixed in #603. `Agent.stop()` catches `stopSync()`'s `TimeoutException` and throws an `IllegalStateException` with it as the cause, as `startWithin()` does, so `shutdown()` and `close()` throw nothing undeclared. The KDoc, `embedded-agent.md`, `AGENTS.md`, and the 4.7.1 `stopTimeout` entry say so; the release notes list it under Before you upgrade.
+
 ---
 
-### 22. ⬜ `EmbeddedAgentConfig.Builder.path()` and `scrapeSelf()` accept `"/"`-only paths and blank URLs, silently dropping targets instead of failing validation
+### 22. ✅ `EmbeddedAgentConfig.Builder.path()` and `scrapeSelf()` accept `"/"`-only paths and blank URLs, silently dropping targets instead of failing validation
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -706,9 +709,11 @@ In Java, writing `try { agent.shutdown(); } catch (TimeoutException e) { ... }` 
 1. Normalize `val normalized = path.trim().removePrefix("/")` and require `normalized.isNotEmpty()` (and use `path.trim().removePrefix("/")` in `Builder.source()`).
 2. Require `url.isNotBlank()` unconditionally before the `if (credentials.isEmpty())` branch (and consider validating `url.indexOf("://") > 0` unconditionally so credential-less URLs fail fast as credentialed ones do).
 
+**Resolution:** Fixed in #603. The builder's `requirePath` refuses a path that is blank, or `/` alone, once trimmed and one leading slash is dropped, in `path()`, `scrapeSelf()`, `source()`, and `agentMetricsAt()`, and `path()` refuses a blank URL. A Ktor plugin or Spring Boot starter `paths` entry without a `url` therefore fails the agent's start, as one without a `path` already did; a standalone agent's `agent.pathConfigs` placeholder is still skipped with a warning.
+
 ---
 
-### 23. ⬜ `EnvironmentSetting.check()` validates and fails on `fromEnvironment()` values overridden by an earlier `setting()` call
+### 23. ✅ `EnvironmentSetting.check()` validates and fails on `fromEnvironment()` values overridden by an earlier `setting()` call
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -730,9 +735,11 @@ However, `setFromCode(key)` (`EmbeddedAgentConfig.kt:598-600`) removes a key fro
 readFromEnvironment = readFromEnvironment.filterKeys { it.key !in settings },
 ```
 
+**Resolution:** Fixed in #603. `build()` drops each environment value that a `setting()` of its key, or of a section it's in, such as `tls`, shadows, whatever the order (`EnvironmentSetting.shadowedBy`), so `start()` checks only values the agent uses.
+
 ---
 
-### 24. ⬜ Ktor plugin `PrometheusProxyAgentConfig` eagerly parses `path` and `labels` in its constructor, crashing `install()` even when `enabled = false` or `required = false`
+### 24. ✅ Ktor plugin `PrometheusProxyAgentConfig` eagerly parses `path` and `labels` in its constructor, crashing `install()` even when `enabled = false` or `required = false`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -753,9 +760,11 @@ Verified against Ktor's `HoconApplicationConfig` bytecode: if `prometheus-proxy.
 
 **Fix:** Defer/catch exceptions reading `path` and `labels` from `fileSettings` (recording the first deferred failure unless overwritten in the install block), and surface any unresolved failure inside `applyTo()`'s `attempt { ... }` block so `AgentLifecycle.start()` honors `enabled`, `required`, and `onFailure`.
 
+**Resolution:** Fixed in #603. The config reads `path` and `labels` through `fromFile`, which keeps the first failure, and `applyTo` throws it as the agent starts, so `enabled`, `required`, and `onFailure` decide what it does. A malformed `enabled` or `required` still fails `install()`, since they decide whether the agent starts.
+
 ---
 
-### 25. ⬜ Ktor plugin `AgentLifecycle` has `beginStop()`/`finishStop()` and `start()`/`beginStop()` races plus unguarded `Thread.join()` throwing checked `InterruptedException`
+### 25. ✅ Ktor plugin `AgentLifecycle` has `beginStop()`/`finishStop()` and `start()`/`beginStop()` races plus unguarded `Thread.join()` throwing checked `InterruptedException`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -771,9 +780,11 @@ Verified against Ktor's `HoconApplicationConfig` bytecode: if `prometheus-proxy.
 
 **Fix:** Wait uninterruptibly in `finishStop()` (using `Uninterruptibles.joinUninterruptibly` or an interrupt-preserving join loop that restores `Thread.currentThread().interrupt()` in `finally`). Guard `AgentLifecycle` state transitions (`NEW -> STARTING -> RUNNING -> STOPPING -> STOPPED`) with a small lock so `beginStop()` publishes `stopping` atomically with clearing `agent`, `start()` immediately shuts down a late-finishing `started` handle if stop already began, and duplicate `start()` calls are no-ops.
 
+**Resolution:** Fixed in #603. `AgentLifecycle`'s state changes under one lock: a second `ApplicationStarted`, or one after the stop began, starts nothing; `beginStop()` takes the agent and publishes its stop thread in one step; an agent whose start ends after the stop began is stopped at once; and `finishStop()` waits with `Uninterruptibles.joinUninterruptibly`, so the thread keeps its interrupt. Six `AgentLifecycleTest` cases cover them.
+
 ---
 
-### 26. ⬜ Spring Boot starter's default `metricsPath()` uses `spring.application.name` verbatim, failing startup when the app name contains spaces or disallowed path characters
+### 26. ✅ Spring Boot starter's default `metricsPath()` uses `spring.application.name` verbatim, failing startup when the app name contains spaces or disallowed path characters
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -788,9 +799,11 @@ When `prometheus-proxy.agent.path` is unset and `source` is `REGISTRY` (the defa
 
 **Fix:** Trim `appName()` and either sanitize disallowed path characters when deriving the default path from `spring.application.name` (e.g., replacing whitespace/slashes with `_`, documented on the starter page) or detect disallowed characters in `metricsPath()` and throw a clear `ConfigLoadException` instructing the operator to set `prometheus-proxy.agent.path`.
 
+**Resolution:** Fixed in #603. The default path trims `spring.application.name` and makes each run of whitespace, control characters, `?`, `#`, or `/` one `_`, leaving out those at its ends, so `Order Service` gives `Order_Service_metrics`; the starter page says so.
+
 ---
 
-### 27. ⬜ `EmbeddedAgentInfo` leaks internal `STOP_THREAD_NAME` constant as a `public static final` JVM field
+### 27. ✅ `EmbeddedAgentInfo` leaks internal `STOP_THREAD_NAME` constant as a `public static final` JVM field
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -803,6 +816,8 @@ Inside `private companion object`, line 196 declares `const val STOP_THREAD_NAME
 **Impact:** Exposes an internal thread-name detail as part of `EmbeddedAgentInfo`'s public JVM binary API.
 
 **Fix:** Mark it `private const val STOP_THREAD_NAME = "prometheus-agent-shutdown"`.
+
+**Resolution:** Fixed in #603. `STOP_THREAD_NAME` is a `private const val`; an `EmbeddedAgentInfoTest` case checks the handle has no public fields.
 
 ---
 

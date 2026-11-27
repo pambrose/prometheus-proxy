@@ -75,7 +75,7 @@ class EmbeddedAgentConfig private constructor(
   private val config: Config,
   // The paths served in-process (Builder.source), which no Config can hold.
   private val sources: List<AgentPathManager.PathConfig>,
-  // The values fromEnvironment set, by the variable each came from, that nothing set after it.
+  // The values fromEnvironment set, by the variable each came from, that nothing set after it, nor a setting() shadows.
   private val readFromEnvironment: Map<EnvironmentSetting, String>,
   // The handlers onFailure added, which startIfConfigured tells of a start that fails.
   private val failureHandlers: List<BiConsumer<in String, in Exception>>,
@@ -231,9 +231,9 @@ class EmbeddedAgentConfig private constructor(
      * Once it's up, the call returns, with a warning in the log, and the agent goes on stopping on a daemon thread of
      * its own, so a host's shutdown fits the window its platform gives it, such as Cloud Run's 10 seconds after
      * SIGTERM. [Duration.INFINITE] waits for as long as the stop takes. Null, the default, leaves the wait to the
-     * agent's own stop, which gives up after 30 seconds by throwing a `java.util.concurrent.TimeoutException` out of
-     * `shutdown()`. One of zero or less throws [ConfigLoadException]. It's the handle's, so the tree
-     * [toConfig][EmbeddedAgentConfig.toConfig] gives doesn't hold it.
+     * agent's own stop, which gives up after 30 seconds by throwing an `IllegalStateException` out of `shutdown()`,
+     * with the `java.util.concurrent.TimeoutException` as its cause. One of zero or less throws [ConfigLoadException].
+     * It's the handle's, so the tree [toConfig][EmbeddedAgentConfig.toConfig] gives doesn't hold it.
      */
     @get:JvmSynthetic
     @set:JvmSynthetic
@@ -414,10 +414,8 @@ class EmbeddedAgentConfig private constructor(
       labels: Map<String, String> = emptyMap(),
     ): Builder =
       apply {
-        val normalized = path.trim().removePrefix("/")
-        if (normalized.isEmpty()) invalid("A path is required")
-        requireOneSegment(path)
-        put("metrics.proxyPath", normalized)
+        requirePath(path)
+        put("metrics.proxyPath", path.trim().removePrefix("/"))
         put("metrics.proxyPathLabels", labelsJson(labels) ?: "{}")
       }
 
@@ -484,7 +482,8 @@ class EmbeddedAgentConfig private constructor(
     /**
      * Has the agent scrape the target at [url], served to Prometheus at the proxy's [path]. A [username] and
      * [password] are sent as Basic Auth; they're percent-encoded into the URL, which then mustn't carry credentials of
-     * its own. Both empty means none.
+     * its own. Both empty means none. A blank [path], or `/` alone, or a blank [url], throws [ConfigLoadException]:
+     * the agent would drop such a target at startup, as it does a config file's placeholder.
      */
     @JvmOverloads
     fun path(
@@ -495,8 +494,9 @@ class EmbeddedAgentConfig private constructor(
       labels: Map<String, String> = emptyMap(),
     ): Builder =
       apply {
-        if (path.isBlank()) invalid("A path is required")
-        requireOneSegment(path)
+        requirePath(path)
+        // The agent drops a target with a blank URL, as a config's placeholder, so the app wouldn't hear of it
+        if (url.isBlank()) invalid("A URL is required for path $path")
         val credentials = userInfo(username, password)
         val target =
           if (credentials.isEmpty()) {
@@ -522,10 +522,10 @@ class EmbeddedAgentConfig private constructor(
      * Has the agent serve [source], the app's own metrics read in-process, to Prometheus at the proxy's [path]: the app
      * needs no metrics endpoint, port, or credentials for the agent to read them, and the agent opens no connection to
      * it. A [path] that a `pathConfigs` entry or another path also names, or that has whitespace, a control character,
-     * `?`, or `#`, fails [EmbeddedAgentConfig.start], as such a `pathConfigs` entry does, and one of more than one
-     * segment, such as `app/metrics` or `//metrics`, throws [ConfigLoadException] here. The path's target shows as
-     * `in-process`. See [MetricsSource] for how the agent calls it. [source] comes last, so a Kotlin lambda can follow
-     * the call.
+     * `?`, or `#`, fails [EmbeddedAgentConfig.start], as such a `pathConfigs` entry does, and a blank one, `/` alone,
+     * or one of more than one segment, such as `app/metrics` or `//metrics`, throws [ConfigLoadException] here. The
+     * path's target shows as `in-process`. See [MetricsSource] for how the agent calls it. [source] comes last, so a
+     * Kotlin lambda can follow the call.
      */
     fun source(
       path: String,
@@ -563,9 +563,8 @@ class EmbeddedAgentConfig private constructor(
       source: MetricsSource,
     ): Builder =
       apply {
+        requirePath(path)
         val normalized = path.removePrefix("/")
-        if (normalized.isBlank()) invalid("A path is required")
-        requireOneSegment(path)
         sources +=
           AgentPathManager.PathConfig(
             name = normalized,
@@ -619,7 +618,9 @@ class EmbeddedAgentConfig private constructor(
       return EmbeddedAgentConfig(
         config = config,
         sources = sources.toList(),
-        readFromEnvironment = readFromEnvironment.toMap(),
+        // Less the values a setting() shadows, whatever its order, as it comes last in the tree: the agent never reads
+        // them, so they aren't checked as it starts (November 26 review, #23)
+        readFromEnvironment = readFromEnvironment.filterKeys { variable -> settings.keys.none(variable::shadowedBy) },
         failureHandlers = failureHandlers.toList(),
         stopTimeout = stopTimeout,
       )
@@ -672,11 +673,14 @@ class EmbeddedAgentConfig private constructor(
 
     private fun invalid(message: String): Nothing = throw ConfigLoadException(message)
 
-    // Refuses [path] when it's more than one segment once a leading slash is dropped, as the agent refuses such a
-    // configured path. The builder drops one slash and the agent another, so "//foo" served "foo" (November 26 #11).
-    private fun requireOneSegment(path: String) {
-      segmentProblem(path.trim().removePrefix("/"))
-        ?.let { invalid("Path '${shownValue(path)}' is one the proxy refuses: $it") }
+    // Refuses [path] when nothing is left of it once it's trimmed and a leading slash is dropped, as of "/", which the
+    // agent would drop at startup, with a warning, as a config's placeholder, where the app wouldn't hear of it
+    // (November 26 review, #22); or when it's more than one segment, as the agent refuses such a configured path. The
+    // builder drops one slash and the agent another, so "//foo" served "foo" (November 26 #11).
+    private fun requirePath(path: String) {
+      val normalized = path.trim().removePrefix("/")
+      if (normalized.isEmpty()) invalid("A path is required")
+      segmentProblem(normalized)?.let { invalid("Path '${shownValue(path)}' is one the proxy refuses: $it") }
     }
 
     // Logs why a start failed, and tells each of [handlers], in turn, as startIfConfigured and reportFailure do

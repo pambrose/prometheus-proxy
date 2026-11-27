@@ -21,7 +21,10 @@ import io.prometheus.agent.EmbeddedAgentInfo;
 import io.prometheus.common.ConfigLoadException;
 import io.prometheus.metrics.model.registry.PrometheusRegistry;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Optional;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.info.BuildProperties;
@@ -44,6 +47,10 @@ import org.springframework.context.SmartLifecycle;
 public class PrometheusProxyAgent implements SmartLifecycle {
   private static final Logger logger = LoggerFactory.getLogger(PrometheusProxyAgent.class);
   private static final String PROXY_UNSET = "No proxy is set (prometheus-proxy.agent.proxy or PROXY_HOSTNAME)";
+  // A run of the characters the proxy refuses in a path, as the agent's AgentValues.pathCharacterProblem and
+  // segmentProblem refuse them: a control character (Cc, Kotlin's isISOControl), whitespace (Kotlin's isWhitespace,
+  // Java's isWhitespace or isSpaceChar, each of which is in Cc or Z), '?', '#', or '/'
+  private static final Pattern REFUSED_IN_PATH = Pattern.compile("[\\p{Cc}\\p{Z}?#/]+");
 
   private final PrometheusProxyAgentProperties properties;
   // Read as the agent starts, once every bean is: the app's name, its build info, its registry, and the customizers
@@ -274,16 +281,30 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     return build == null || isBlank(build.getVersion()) ? app : app + "-" + build.getVersion();
   }
 
+  // The path given, or one made from the app's name, as a path the proxy takes
   private String metricsPath() {
     if (!isBlank(properties.getPath())) {
       return properties.getPath();
     }
-    String app = appName();
-    return (app == null ? "application" : app) + "_metrics";
+    String segment = pathSegment(appName());
+    return (segment.isEmpty() ? "application" : segment) + "_metrics";
   }
 
+  // The app's name, trimmed, or null without one
   private String appName() {
-    return blankToNull(context.getEnvironment().getProperty("spring.application.name"));
+    String app = context.getEnvironment().getProperty("spring.application.name");
+    return isBlank(app) ? null : app.strip();
+  }
+
+  // The app's name as one segment of a path the proxy takes, or empty without one: each run of the characters the
+  // proxy refuses in a path, whitespace, a control character, '?', '#', or '/', made one '_', and those at its ends
+  // left out. A default path of a name such as "Order Service" failed the agent's start, blaming source() (November 26
+  // review, #26). A path given is the app's own, so it's kept as it is.
+  private static String pathSegment(String name) {
+    if (name == null) {
+      return "";
+    }
+    return Arrays.stream(REFUSED_IN_PATH.split(name)).filter(part -> !part.isEmpty()).collect(Collectors.joining("_"));
   }
 
   private static boolean isBlank(String value) {

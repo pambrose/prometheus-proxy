@@ -16,6 +16,7 @@
 
 package io.prometheus.agent.ktor
 
+import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
@@ -24,6 +25,8 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
+import io.ktor.server.config.ApplicationConfig
+import io.ktor.server.config.HoconApplicationConfig
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
 import io.prometheus.common.ConfigLoadException
@@ -115,6 +118,37 @@ class PrometheusProxyAgentPluginTest : StringSpec() {
       reasons.single() shouldContain "trustCertCollectionPem"
     }
 
+    // The plugin read the file's path and labels as it was installed, so labels it couldn't read failed the app's
+    // install, the agent disabled or not, and told no onFailure handler (November 26 review, #24)
+    "labels in the file the plugin can't read leave a disabled agent off, and the app running" {
+      testApplication {
+        environment { config = hocon("enabled = false, proxy = \"localhost:${closedPort()}\", labels = \"team=web\"") }
+        application { install(PrometheusProxyAgent) }
+        startApplication()
+
+        application.prometheusProxyAgent.shouldBeNull()
+      }
+    }
+
+    "labels in the file the plugin can't read leave the agent off, tell its onFailure, and the app runs on" {
+      val reasons = mutableListOf<String>()
+      testApplication {
+        environment { config = hocon("proxy = \"localhost:${closedPort()}\", labels = \"team=web\"") }
+        application {
+          install(PrometheusProxyAgent) {
+            registry = PrometheusRegistry()
+            path = "my_app_metrics"
+            agent { onFailure { reason, _ -> reasons += reason } }
+          }
+        }
+        startApplication()
+
+        application.prometheusProxyAgent.shouldBeNull()
+      }
+
+      reasons.single() shouldContain "labels"
+    }
+
     // Ktor rethrows what an ApplicationStarted handler throws, so the app's start fails
     "a required agent with a setting it rejects fails the app's start" {
       shouldThrow<ConfigLoadException> {
@@ -132,6 +166,10 @@ class PrometheusProxyAgentPluginTest : StringSpec() {
   }
 
   private companion object {
+    // An app's configuration file with [section] as its prometheus-proxy.agent section
+    fun hocon(section: String): ApplicationConfig =
+      HoconApplicationConfig(ConfigFactory.parseString("prometheus-proxy.agent { $section }"))
+
     // A proxy, and a certificate the agent can't read
     fun PrometheusProxyAgentConfig.rejectedSettings() =
       agent {

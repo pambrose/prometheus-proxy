@@ -39,12 +39,22 @@ private const val DEFAULT_STOP_TIMEOUT_SECONDS = 30
  * (a list of targets, each with `path`, `url`, `username`, `password`, and `labels`), `stop-timeout` (the builder's
  * `stopTimeout`, a number of seconds or a duration such as `10s` or `PT10S`, 30 seconds unless the file or an [agent]
  * block sets another), and `settings`, any other agent setting by its key; and [enabled], [required], [path], and
- * [labels] here. A blank value counts as unset, as an unset environment variable gives.
+ * [labels] here. A blank value counts as unset, as an unset environment variable gives. A value the plugin can't read,
+ * such as `labels` that aren't a section, or one the builder rejects, such as a `paths` entry without a `url`, fails
+ * the agent's start, which tells the [agent] blocks' `onFailure` handlers, and fails the app's start only for a
+ * [required] agent; an [enabled] or [required] it can't read fails the plugin's install, since they decide whether the
+ * agent starts.
  */
 class PrometheusProxyAgentConfig internal constructor(
   file: ApplicationConfig,
 ) {
   private val fileSettings = FileSettings(file)
+
+  // What reading the file's path or labels threw, which applyTo throws as the agent starts. They're read here, so the
+  // install block sees the file's, but a malformed one, such as labels that aren't a section, would otherwise throw
+  // out of install(), before the block runs, whether the agent is enabled or required, and tell no onFailure handler
+  // (November 26 review, #24). It fails the agent's start instead, as any other value in the file it can't read does.
+  private var unreadable: Exception? = null
 
   /** Whether to run the agent at all; it also needs a proxy. The file's `enabled`; true by default. */
   var enabled: Boolean = fileSettings.boolean("enabled") ?: true
@@ -67,10 +77,10 @@ class PrometheusProxyAgentConfig internal constructor(
    * The proxy's path the [registry]'s metrics are served at, such as `my_app_metrics`; required with a registry, since
    * two apps that defaulted to the same path would take it from each other. The file's `path`.
    */
-  var path: String? = fileSettings.string("path")
+  var path: String? = fromFile(default = null) { fileSettings.string("path") }
 
   /** The labels of [path], in the proxy's service discovery. The file's `labels`. */
-  var labels: Map<String, String> = fileSettings.stringMap("labels")
+  var labels: Map<String, String> = fromFile(default = emptyMap()) { fileSettings.stringMap("labels") }
 
   private val agentBlocks = mutableListOf<EmbeddedAgentConfig.Builder.() -> Unit>()
 
@@ -95,22 +105,37 @@ class PrometheusProxyAgentConfig internal constructor(
   // that failed, the file's or a block's, and the first failure is thrown once they all have, for the plugin to tell
   // them of it (EmbeddedAgentConfig.Builder.reportFailure).
   internal fun applyTo(builder: EmbeddedAgentConfig.Builder) {
-    var failure =
-      attempt {
-        builder.stopTimeout = DEFAULT_STOP_TIMEOUT_SECONDS.seconds
-        fileSettings.applyTo(builder)
-        registry?.also { registry ->
-          val servedAt = path
-          if (servedAt.isNullOrBlank())
-            throw ConfigLoadException("prometheus-proxy.agent.path is required to serve a registry")
-          builder.source(path = servedAt, labels = labels, registry = registry)
-        }
-      }
+    var failure = attempt { applyFile(builder) }
     agentBlocks.forEach { block ->
       val thrown = attempt { builder.block() }
       if (failure == null) failure = thrown
     }
     failure?.also { throw it }
+  }
+
+  // The plugin's stop timeout, the file's settings, then the registry at its path, which the file's path or the
+  // install block's gives
+  private fun applyFile(builder: EmbeddedAgentConfig.Builder) {
+    builder.stopTimeout = DEFAULT_STOP_TIMEOUT_SECONDS.seconds
+    fileSettings.applyTo(builder)
+    unreadable?.also { throw it }
+    registry?.also { registry ->
+      val servedAt = path
+      if (servedAt.isNullOrBlank())
+        throw ConfigLoadException("prometheus-proxy.agent.path is required to serve a registry")
+      builder.source(path = servedAt, labels = labels, registry = registry)
+    }
+  }
+
+  // The file's value, as [read] gives it, or [default] when it can't be read, the first such failure kept for applyTo
+  private fun <T> fromFile(
+    default: T,
+    read: () -> T,
+  ): T {
+    var value = default
+    val thrown = attempt { value = read() }
+    if (unreadable == null) unreadable = thrown
+    return value
   }
 
   // What [step] threw, or null. Kotlin can throw a checked exception undeclared, so Exception is caught, not only

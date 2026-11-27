@@ -70,8 +70,9 @@ public class PrometheusProxyAgentProperties {
   private String name;
 
   /**
-   * The proxy's path the app's metrics are served at. Defaults to spring.application.name followed by _metrics, and
-   * to application_metrics without spring.application.name.
+   * The proxy's path the app's metrics are served at. Defaults to spring.application.name followed by _metrics, each
+   * run of whitespace, control characters, ?, #, or / in the name made one _, and those at its ends left out, as the
+   * proxy refuses them in a path; and to application_metrics without spring.application.name.
    */
   private String path;
 
@@ -378,10 +379,10 @@ public class PrometheusProxyAgentProperties {
 
   /** A target the agent scrapes over HTTP, served to Prometheus at the proxy's path. */
   public static class Target {
-    /** The proxy's path the target's metrics are served at. */
+    /** The proxy's path the target's metrics are served at; required. */
     private String path;
 
-    /** The target's metrics URL. */
+    /** The target's metrics URL; required. */
     private String url;
 
     /** The username the agent sends the target as Basic Auth. */

@@ -54,6 +54,10 @@ internal enum class EnvironmentSetting(
       }
     }.exceptionOrNull()
 
+  // Whether a setting() of [key], under agent, replaces this setting's value in the tree: a setting of its key, or of a
+  // section it's in, such as tls, which replaces the whole section.
+  fun shadowedBy(key: String): Boolean = this.key == key || this.key.startsWith("$key.")
+
   companion object {
     // The port the agent gives an endpoint without one; it plays no part in whether an endpoint parses.
     private const val DEFAULT_PORT = 50051
