@@ -1,9 +1,9 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 26 resolved, 44 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 27 resolved, 43 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
-and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597.
+and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598.
 
 **Date:** 2026-11-26
 
@@ -59,7 +59,7 @@ and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, a
 | 40 | Unthrottled WebSocket per-frame full-HTML re-render amplification on dashboard `/events` | Security | medium | ✅ |
 | 41 | Dashboard browser Basic-Auth restriction (`isBrowser`) is bypassed over plain HTTP on non-localhost hosts | Security | low | ✅ |
 | 42 | Unescaped/unsanitized inputs in log output (`ProxyHttpConfig`, `MetricFilter`, and local config parse errors in `BaseOptions`) | Security | low | ⬜ |
-| 43 | Helm charts mount the default Kubernetes ServiceAccount token unnecessarily (`automountServiceAccountToken: false` omitted) | Security | low | ⬜ |
+| 43 | Helm charts mount the default Kubernetes ServiceAccount token unnecessarily (`automountServiceAccountToken: false` omitted) | Security | low | ✅ |
 | 44 | Helm charts crash with nil pointer on `helm upgrade --reuse-values` from 4.6.0 (`dashboard` / `dashboard.login`) | CI/build | high | ✅ |
 | 45 | Inverted severity thresholds in `grafana/prometheus-agents.json` (Panels 27 "Not on Primary" and 38 "Since Last Discovery") | CI/build | medium | ⬜ |
 | 46 | `ProxyScrapeSuccessRateLow` alert and Proxy Grafana Panel 4 silently miss 0% success rate when no scrape has succeeded since startup | CI/build | medium | ⬜ |
@@ -1150,7 +1150,7 @@ Consequently, `isBrowser()` returns `false` on those deployments: a browser hold
 
 ---
 
-### 43. ⬜ Helm charts mount the default Kubernetes ServiceAccount token unnecessarily (`automountServiceAccountToken: false` omitted)
+### 43. ✅ Helm charts mount the default Kubernetes ServiceAccount token unnecessarily (`automountServiceAccountToken: false` omitted)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1164,6 +1164,8 @@ Both Helm charts apply strong pod/container hardening (`runAsNonRoot: true`, `re
 **Impact:** Kubernetes automatically mounts the namespace's default ServiceAccount JWT at `/var/run/secrets/kubernetes.io/serviceaccount/token` inside every proxy and agent pod (CIS Kubernetes Benchmark 5.1.6), increasing post-compromise blast radius unnecessarily.
 
 **Fix:** Set `automountServiceAccountToken: false` (or expose `automountServiceAccountToken: false` as a configurable default in `values.yaml` rendered on `spec:`) in both `charts/prometheus-proxy/templates/deployment.yaml` and `charts/prometheus-agent/templates/deployment.yaml`.
+
+**Resolution:** Fixed in #598. Each chart sets `automountServiceAccountToken: false` on its pod spec, from a new top-level `automountServiceAccountToken` value that turns the token back on for a container added to the pod that needs it; neither chart creates a ServiceAccount, so the pod spec is the place. A `--reuse-values` upgrade from a release without the value renders `false` too, and `make helm-lint` fails on a render that mounts the token. The release notes list it under Before you upgrade.
 
 ---
 
@@ -1216,7 +1218,7 @@ Reproduced directly with `helm template`:
 - Guard login env rendering on `$login.existingSecret`, defaulting `$login.username` to `"admin"` and `$login.key` to `"password"`.
 - Add a `helm template` regression check in `Makefile` (`helm-lint`) and CI rendering both charts against 4.6.0-shaped values (`--set dashboard.login=null` and `--set dashboard=null`).
 
-**Resolution:** Fixed in #586. It was broader than reported: a plain `--reuse-values` upgrade of the proxy chart failed too, with no `--set`, as `deployment.yaml` read `dashboard.login` whether or not the dashboard was on. Each chart's `<chart>.dashboard` helper renders the dashboard values, each one missing at its default (the host keeps its `hasKey` rule, so an empty host stays empty). `deployment.yaml`, `NOTES.txt`, and `dashboardIsLocal` read it with `fromYaml`, in place of the `dashboardHost` helper, and a comment says its defaults repeat `values.yaml`'s. For every `ci/` values file, with and without dashboard, host, and login overrides, the render, `NOTES.txt` included, is byte-identical to before. New `ci/reuse-4.6.0*-values.yaml` files, which `make helm-lint` lints, renders, and validates, null out what 4.6.0 lacked, for each chart and, for the agent's, with the README's `--set dashboard.enabled=true`. They fail on the old charts with the reported nil pointers and pass now. #43 stays open.
+**Resolution:** Fixed in #586. It was broader than reported: a plain `--reuse-values` upgrade of the proxy chart failed too, with no `--set`, as `deployment.yaml` read `dashboard.login` whether or not the dashboard was on. Each chart's `<chart>.dashboard` helper renders the dashboard values, each one missing at its default (the host keeps its `hasKey` rule, so an empty host stays empty). `deployment.yaml`, `NOTES.txt`, and `dashboardIsLocal` read it with `fromYaml`, in place of the `dashboardHost` helper, and a comment says its defaults repeat `values.yaml`'s. For every `ci/` values file, with and without dashboard, host, and login overrides, the render, `NOTES.txt` included, is byte-identical to before. New `ci/reuse-4.6.0*-values.yaml` files, which `make helm-lint` lints, renders, and validates, null out what 4.6.0 lacked, for each chart and, for the agent's, with the README's `--set dashboard.enabled=true`. They fail on the old charts with the reported nil pointers and pass now.
 
 ---
 
