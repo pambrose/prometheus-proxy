@@ -67,6 +67,9 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.runCatchingNonFatal
+import io.prometheus.common.runEachOrThrow
+import io.prometheus.common.startOrRelease
+import io.prometheus.common.stopUnlessFailed
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeUrl
@@ -944,7 +947,7 @@ class Agent(
   private val releaseSteps: List<() -> Unit>
     get() =
       listOf(
-        { dashboardService?.takeUnless { it.state() == Service.State.FAILED }?.stopSync() },
+        { dashboardService?.stopUnlessFailed() },
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
         { if (tracingHolder.isInitialized()) tracing?.close() },
@@ -954,13 +957,7 @@ class Agent(
   // Every step runs even when an earlier one fails, so a gRPC shutdown that throws can't leave the client cache open,
   // or the admin and metrics servers that super.shutDown() stops running. The first failure is rethrown with the rest
   // attached as suppressed exceptions.
-  override fun shutDown() {
-    val failures = (releaseSteps + { super.shutDown() }).runEach()
-    failures.firstOrNull()?.let { first ->
-      failures.drop(1).forEach(first::addSuppressed)
-      throw first
-    }
-  }
+  override fun shutDown() = (releaseSteps + { super.shutDown() }).runEachOrThrow()
 
   // Removes this agent from the agent metrics every agent in the JVM shares, if it built them.
   private fun closeMetrics() {
@@ -1205,18 +1202,3 @@ private fun registerJvmMetricGroups(metrics: ConfigVals.Agent.Metrics) =
       enableNativeMemoryExports = nativeMemoryExportsEnabled,
     )
   }
-
-// Runs [start], and when it throws, runs every one of [release] and rethrows, with what they threw attached as
-// suppressed exceptions.
-private fun startOrRelease(
-  release: List<() -> Unit>,
-  start: () -> Unit,
-) {
-  runCatching(start).onFailure { e ->
-    release.runEach().forEach(e::addSuppressed)
-    throw e
-  }
-}
-
-// Runs every step, including those after one that throws, and returns what they threw.
-private fun List<() -> Unit>.runEach(): List<Throwable> = mapNotNull { step -> runCatching(step).exceptionOrNull() }

@@ -501,7 +501,10 @@ Three support helpers also live here (not test classes themselves):
   and puts the agent's departure in the activity feed, an eviction as a problem, with the paths it served; and counts an
   announced agent's removal in `proxy_agent_disconnects_total` by its reason, and not an unannounced connection's; a
   context orphaned by a registration of its own launch is removed at once, its scrape failed as agent_disconnected, and
-  its departure in the activity feed as replaced
+  its departure in the activity feed as replaced; a failed startup stops what started, invalidates the agent contexts,
+  closes the tracing, and throws its own failure, the sub-service that failed to start left alone; and a gRPC shutdown
+  that throws (MockK) still lets the scrape and metrics servers stop, the Zipkin reporter stop, the tracing close, and
+  the proxy leave the shared metrics
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent (recording the identity the call authenticated as for
   the dashboard, without binding the context to it, and the connect in the activity feed), registerPath (a path the
   identity may not register noted as a rejection), unregisterPath (a blank path refused with a reason, not thrown on),
@@ -959,6 +962,11 @@ Two support helpers also live here (not test classes themselves):
 - **SnapshotCacheTest** (`dashboard/`) — the snapshot cache a dashboard's pages and sessions render from: one collect
   per refresh interval however many reads, a fresh collect for the push loop's tick that the reads after it share,
   shared by concurrent reads, and none reused across a change, even one landing mid-collect
+- **TeardownTest** — the steps the proxy and the agent release what they hold with, as they stop and when their
+  startup fails (`Teardown.kt`): `runEachOrThrow` runs every step, even after one that throws, and throws the first
+  failure with the rest suppressed; `startOrRelease` runs every release step only when the start fails, and throws the
+  start's failure with theirs suppressed; and `stopUnlessFailed` stops a running service, terminates one that never
+  started, leaves one that FAILED alone, since its wait to terminate would throw, and throws for one that fails to stop
 - **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port, and below 32768,
   outside the ephemeral range the OS hands out to outgoing connections; and none a spec binds is a host port a demo
   publishes (its `docker/compose.yml` ports, its kind configs' `hostPort`s, and its `demo.sh` port defaults), so a
