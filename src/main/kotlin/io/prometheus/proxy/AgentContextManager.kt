@@ -175,9 +175,11 @@ internal class AgentContextManager(
   }
 
   // Skips a context already invalidated: ProxyServerInterceptor can announce in the moment after transportTerminated
-  // removed it, which would report a connection that is already gone.
+  // removed it, which would report a connection that is already gone. markAnnounced refuses an invalidated context in
+  // the same step that marks it, so a removal racing this one either finds it announced, and reports it leaving, or
+  // leaves it never announced.
   private fun announce(agentContext: AgentContext) {
-    if (agentContext.isValid() && agentContext.markAnnounced()) {
+    if (agentContext.markAnnounced()) {
       logger.info { "Registering agentId: ${agentContext.agentId}" }
       eventBus.emit(ProxyEvent.AgentConnected(agentContext.agentId))
     }
@@ -265,13 +267,14 @@ internal class AgentContextManager(
     reason: RemovalReason,
   ) {
     val agentId = agentContext.agentId
+    // Invalidated first, which fixes whether it was announced, so the log agrees with what the removal reports.
+    agentContext.invalidate()
     // A connection that never authenticated -- a bad token, a port scanner, a grpc_health_probe -- isn't an agent,
     // so its closing is logged at DEBUG (October #4).
     if (!agentContext.announced)
       logger.debug { "Removed $agentContext for agentId: $agentId (${reason.logText})" }
     else if (!isTestMode)
       logger.info { "Removed $agentContext for agentId: $agentId (${reason.logText})" }
-    agentContext.invalidate()
     agentIdsByIdentity.computeIfPresent(agentContext.authIdentityName) { identity, agentIds ->
       agentIds.apply {
         remove(agentId)

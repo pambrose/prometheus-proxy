@@ -378,7 +378,35 @@ class ProxyOptionsTest : StringSpec() {
         shouldThrow<IllegalArgumentException> {
           proxyOptionsFromConfig("""proxy.service.discovery.path = "" """, extraArgs = ["--sd_enabled"])
         }
-      exception.message shouldContain "sdPath is empty"
+      exception.message shouldContain "sdPath names no path: ''"
+    }
+
+    // Registration reserves the SD path by its key, the path without one leading slash, as an agent's path is keyed. A
+    // path of whitespace, or "/" alone, names none, and passed the empty check; "//discovery" kept a slash in its key,
+    // so it matched no agent's path, and an agent could register /discovery while the SD route, which Ktor serves there
+    // too, answered every scrape of it with the SD document. With service discovery on, each fails startup, which
+    // failOnInvalidConfig reports for a standalone proxy as one Invalid configuration line; with it off, each is
+    // harmless, as an empty one is.
+    "a sdPath that names no path, or has more than one leading slash, should fail startup while discovery is on" {
+      val (noPath, slashes) = "names no path" to "has more than one leading slash"
+      listOf("/" to noPath, " " to noPath, "/ " to noPath, "//discovery" to slashes, "///discovery" to slashes)
+        .forEach { (path, problem) ->
+          shouldThrow<ConfigLoadException> {
+            failOnInvalidConfig(embedded = true) {
+              proxyOptionsFromConfig("proxy.service.discovery.path = \"$path\"", extraArgs = ["--sd_enabled"])
+            }
+          }.message shouldBe "Invalid configuration: sdPath $problem: '$path'"
+          proxyOptionsFromConfig("proxy.service.discovery.path = \"$path\"").sdPath shouldBe path
+        }
+    }
+
+    // The SD route is a route of its own, so a path of several segments serves it as one does, and no agent's path, one
+    // segment, can be it.
+    "a sdPath of one segment or several, with or without its leading slash, should be accepted" {
+      listOf("discovery", "/discovery", "sd/targets", "/sd/targets").forEach { path ->
+        proxyOptionsFromConfig("proxy.service.discovery.path = \"$path\"", extraArgs = ["--sd_enabled"]).sdPath shouldBe
+          path
+      }
     }
 
     "an empty sdTargetPrefix should be rejected when service discovery is enabled" {

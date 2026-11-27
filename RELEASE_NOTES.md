@@ -23,6 +23,12 @@ its own that holds them all, with Prometheus and Grafana.
   `//metrics`, which no scrape can reach and the proxy refuses, now stops the agent at startup, naming it, where 4.7.0
   ran without it; a discovered one is skipped when the agent reads its discovery file. Use one segment, such as
   `app_metrics`.
+- **A `proxy.auth` pattern no path can match, or an unusable service discovery path, now stops the proxy at startup.** A
+  `proxy.auth` path pattern with a `/` after its leading one, such as `team_a/*`, and, with service discovery on, a
+  `proxy.service.discovery.path` of whitespace, `/` alone, or two leading slashes, such as `//discovery`, now fail
+  startup, naming the setting, where 4.7.0 started with them. Give a pattern one segment, such as `team_a_*`, and the
+  discovery path one leading slash at most, such as `/discovery`. A pattern with one leading slash, such as `/team_a_*`,
+  is fine, and now matches.
 
 ### New Features
 
@@ -92,6 +98,26 @@ its own that holds them all, with Prometheus and Grafana.
   (`invalid_response`).
 - **`maxUnzippedContentSizeMBytes` bounds every scrape body.** A body the agent sent without gzip, as it does a small
   one, passed `proxy.internal.maxUnzippedContentSizeMBytes`; it's now held to the limit too.
+- **A `proxy.auth` pattern with a leading slash matches.** A pattern written as agent paths are, such as `/team_a_*`,
+  matched no path, so its identity's agents could register none. It now matches as `team_a_*` does.
+- **A consolidated path no longer keeps a departed agent's labels.** An agent that joined a consolidated path just as
+  its last agent left kept that agent's labels, in service discovery and the dashboard, for good, another team's when
+  the two had different identities, and scrapes still went to the departed agent until it was swept.
+- **A reconnected agent's old connection goes at once.** When an agent reconnected before the proxy saw its old
+  connection close, the old one stayed until that connection closed or it was evicted, up to about a minute later: a
+  scrape sent to it waited until then or timed out, and an eviction showed in the Activity view as a problem. The proxy
+  now removes it as the new connection takes its paths, its scrapes fail at once, and `proxy_agent_disconnects_total`
+  counts it as `replaced`.
+- **Connections that never authenticate no longer slow scrapes.** Each connection to the agent port that closed, a
+  port scanner's or a bad token's among them, scanned every path under the lock scrapes need, which on a proxy with
+  many paths held them up.
+- **The eviction counts agree.** `proxy_eviction_count_total` and `proxy_agent_disconnects_total{reason="eviction"}`
+  could drift apart when an agent's first call came just as it was evicted.
+- **A service discovery path with two leading slashes is refused, not shared.** With `sdPath = "//discovery"`, an
+  agent could register `/discovery`, and every scrape of it got the discovery document. The proxy now refuses such a
+  path at startup (see Before you upgrade).
+- **The proxy's Activity view names a path once per line.** Clicking Scrape now on one path a few times showed
+  `/orders, /orders, /orders`; the line now names `/orders` once and counts the clicks.
 
 ### Behavior Changes
 

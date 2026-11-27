@@ -107,7 +107,7 @@ class ProxyOptions internal constructor(
 
   /**
    * HTTP path (relative to the Proxy HTTP port) at which the service-discovery document is served.
-   * Required and validated to be non-empty when [sdEnabled] is `true`.
+   * When [sdEnabled] is `true`, it must name a path, with at most one leading slash.
    */
   @Parameter(names = ["--sd_path"], description = "Service discovery endpoint path")
   var sdPath = ""
@@ -295,8 +295,16 @@ class ProxyOptions internal constructor(
     logger.info { "sdEnabled: $sdEnabled" }
 
     sdPath = resolveStringOption(sdPath, SD_PATH, discovery.path)
-    if (sdEnabled)
-      require(sdPath.isNotEmpty()) { "sdPath is empty" }
+    // Registration reserves the path by its key, without one leading slash, as an agent's path is keyed. With service
+    // discovery on, a path of whitespace or "/" alone names nothing to reserve, and one with two leading slashes keeps
+    // one in its key, which no agent's path has: an agent could register /discovery while the route, which Ktor serves
+    // there too, answered its scrapes with the service discovery document. Each fails startup, as a blitz path that
+    // names no path does. A path of several segments is a route of its own, which no agent's path can be.
+    if (sdEnabled) {
+      val sdKey = sdPath.removePrefix("/")
+      require(sdKey.isNotBlank()) { "sdPath names no path: '$sdPath'" }
+      require(!sdKey.startsWith('/')) { "sdPath has more than one leading slash: '$sdPath'" }
+    }
     logger.info { "sdPath: $sdPath" }
 
     sdTargetPrefix = resolveStringOption(sdTargetPrefix, SD_TARGET_PREFIX, discovery.targetPrefix)

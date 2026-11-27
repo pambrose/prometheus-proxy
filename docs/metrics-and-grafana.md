@@ -86,7 +86,7 @@ Three more groups are off by default:
 | `proxy_scrape_requests_total`             | `type`    | Scrape request outcomes. See label values below.                    |
 | `proxy_connect_count_total`               | —         | Agent connects the proxy accepted                                   |
 | `proxy_agent_connect_refusals_total`      | `reason`  | Agent connects refused: `identity_limit`, `transport_filter_mismatch` |
-| `proxy_agent_disconnects_total`           | `reason`  | Agents the proxy removed: `eviction`, `termination`, `stream_terminated` |
+| `proxy_agent_disconnects_total`           | `reason`  | Agents the proxy removed: `eviction`, `termination`, `stream_terminated`, `replaced` |
 | `proxy_eviction_count_total`              | —         | Stale agent evictions                                               |
 | `proxy_heartbeat_count_total`             | —         | Heartbeats the proxy accepted                                       |
 | `proxy_agent_auth_failures_total`         | `reason`  | Agent calls refused for their token: `missing_token`, `unknown_token` |

@@ -1014,7 +1014,7 @@
           "refId": "A"
         }
       ],
-      "description": "Agents the proxy removed: eviction (no contact within maxAgentInactivitySecs), termination (connection closed), stream_terminated (transportFilterDisabled)."
+      "description": "Agents the proxy removed: eviction (no contact within maxAgentInactivitySecs), termination (connection closed), stream_terminated (transportFilterDisabled), replaced (a newer connection of the same agent took its last path)."
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },

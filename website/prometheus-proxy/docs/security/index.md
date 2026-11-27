@@ -107,7 +107,9 @@ enforces, on every path registration, that the requested path matches one of the
 | Empty `paths` list       | Identity may register **any** path (allow-all)     |
 
 Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
-(e.g. `team_a_*`).
+(e.g. `team_a_*`). A pattern may start with one `/`, as a path may, and matches the same paths without it:
+`/team_a_*` is `team_a_*`. One with a `/` after that, such as `team_a/*` or `//team_a_*`, can't match any path the
+proxy accepts, so the proxy refuses to start with it, naming the identity and the pattern.
 
 A path is checked against the patterns only once its form and size have passed
 (`proxy.internal.maxPathLength` and `maxLabelsSizeBytes`; see

@@ -161,7 +161,8 @@ internal object DashboardFixtures {
     detail: String = "",
     at: Instant = Clock.System.now(),
     agentId: String = "1",
-  ) = ActivityEntry(at, kind, agentId, agentName, identity, paths, count, detail)
+    pathCount: Int = maxOf(count, paths.size),
+  ) = ActivityEntry(at, kind, agentId, agentName, identity, paths, count, detail, pathCount = pathCount)
 
   /**
    * A snapshot whose `paths` defaults to the agents' own paths, matching what

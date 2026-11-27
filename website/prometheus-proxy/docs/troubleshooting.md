@@ -69,6 +69,10 @@ Settings that fail startup since 4.5.0:
   ([Links](web-dashboard.md#links)).
 - A negative `proxy.internal.maxTargetUrlLength` or `proxy.internal.maxAgentsPerIdentity`, and since 4.7.0 a negative
   `proxy.internal.maxPathsPerIdentity` or `proxy.internal.maxLabelsPerPath`.
+- Since 4.7.1, a `proxy.auth` path pattern with a `/` after its leading one, such as `team_a/*`, which no path can
+  match ([Security](security/index.md#per-agent-identities-and-path-authorization)), and, with service discovery on, a
+  `proxy.service.discovery.path` of whitespace, `/` alone, or more than one leading slash
+  ([Service Discovery](service-discovery.md)).
 
 ## Agent Can't Connect to the Proxy
 

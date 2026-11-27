@@ -134,23 +134,13 @@ internal class ProxyPathManager(
     val reclaim: Boolean = false,
   )
 
-  private val pathMap = HashMap<String, AgentContextInfo>()
+  // The path map, and the paths each agent waits on, which it indexes; also the lock that guards it and the counts.
+  // Changed only through its store, which keeps the index in step.
+  private val pathMap = PathEntries()
 
-  // How many paths each agent serves, by agentId; guarded by pathMap. Kept in step with every change to pathMap, so
-  // enforcing proxy.internal.maxPathsPerAgent -- and finding an agent left with no paths -- needs no scan of the map.
-  private val pathCounts = HashMap<String, Int>()
-
-  // The auth identity each agent's paths count against, by agentId, and how many paths the agents of each identity
-  // serve together, for proxy.internal.maxPathsPerIdentity; guarded by pathMap, and changed only with pathCounts, in
-  // countPaths. An agent's paths count against the identity its first one registered as, so each path it gives up comes
-  // off the identity it was counted against, even when a later call presented another identity's token.
-  private val countedIdentities = HashMap<String, String>()
-  private val identityPathCounts = HashMap<String, Int>()
-
-  // When to warn that an agent nears maxPathsPerAgent, and the agents of an identity maxPathsPerIdentity: told of each
-  // change to the counts, in countPaths, so the warnings change under pathMap too.
-  private val agentsNearPathLimit = NearLimitWarnings<String>()
-  private val identitiesNearPathLimit = NearLimitWarnings<String>()
+  // How many paths each agent, and the agents of each identity, serve; guarded by pathMap, and changed only in
+  // countPaths, with every change to pathMap.
+  private val pathCounts = PathCounts(proxy, logger)
 
   // Adds [delta] to the paths [agentId] serves, and to its identity's: [identity], the identity of the registration,
   // when the agent serves none yet. Callers MUST hold pathMap.
@@ -158,28 +148,13 @@ internal class ProxyPathManager(
     agentId: String,
     delta: Int,
     identity: String = "",
-  ) {
-    val counted = countedIdentities[agentId] ?: identity
-    val agentCount = pathCounts.addTo(agentId, delta)
-    if (agentCount > 0)
-      countedIdentities[agentId] = counted
-    else
-      countedIdentities.remove(agentId)
-    val identityCount = identityPathCounts.addTo(counted, delta)
-    if (delta > 0) {
-      warnNearPathLimit(agentId, agentCount)
-      warnNearIdentityPathLimit(counted, identityCount)
-    } else {
-      agentsNearPathLimit.fell(agentId, agentCount)
-      identitiesNearPathLimit.fell(counted, identityCount)
-    }
-  }
+  ) = pathCounts.add(agentId, delta, identity)
 
   // The number of paths [agentId] serves. Callers that already hold pathMap take it again, which the JVM allows.
-  internal fun pathCountFor(agentId: String): Int = synchronized(pathMap) { pathCounts[agentId] ?: 0 }
+  internal fun pathCountFor(agentId: String): Int = synchronized(pathMap) { pathCounts.of(agentId) }
 
   // The number of paths the agents of [identity] serve together, empty for agents with no auth identity.
-  internal fun identityPathCountFor(identity: String): Int = synchronized(pathMap) { identityPathCounts[identity] ?: 0 }
+  internal fun identityPathCountFor(identity: String): Int = synchronized(pathMap) { pathCounts.ofIdentity(identity) }
 
   // AgentContextInfo is deeply immutable and mutations replace the pathMap entry (never mutate in
   // place), so returning the stored instance is already an effective snapshot — no defensive copy.
@@ -188,6 +163,9 @@ internal class ProxyPathManager(
 
   val pathMapSize: Int
     get() = synchronized(pathMap) { pathMap.size }
+
+  // The paths [agentId] waits on, as the index has them.
+  internal fun waitedPathsOf(agentId: String): Set<String> = synchronized(pathMap) { pathMap.waitedOnBy(agentId) }
 
   // Copy only the map to snapshot the key set under the lock; the immutable values can be shared.
   fun allPathContextInfos(): Map<String, AgentContextInfo> = synchronized(pathMap) { pathMap.toMap() }
@@ -222,10 +200,13 @@ internal class ProxyPathManager(
         sdLabels = pathLabels.served,
         agentTargets = mapOf(agentContext.agentId to PathTarget(bounded.targetUrl, bounded.pathSource)),
       )
-    return addValidatedPath(key, agentContext, entry, bounded.reclaim).also { rejection ->
+    val orphans = mutableListOf<AgentContext>()
+    return addValidatedPath(key, agentContext, entry, bounded.reclaim, orphans).also { rejection ->
       // Warned only once the path is stored, so an agent retrying a refused registration isn't warned about each time.
       if (rejection == null)
         warnAboutRegistration(key, agentContext, pathLabels, cut)
+      // Removed only once pathMap is let go of, since a removal sweeps the context's paths under it (settleDisplaced).
+      orphans.forEach { proxy.removeAgentContextIfCurrent(it, RemovalReason.REPLACED) }
     }
   }
 
@@ -319,7 +300,8 @@ internal class ProxyPathManager(
     }
 
   // Rejects a path the scrape port answers itself: registered, it would be advertised in service discovery but could
-  // never be scraped. The SD path returned the SD JSON, favicon.ico a 404, and the blitz path "42" (October #6).
+  // never be scraped. The SD path returned the SD JSON, favicon.ico a 404, and the blitz path "42" (October #6). The SD
+  // path is compared by its key, which ProxyOptions makes sure names a path with no leading slash left.
   private fun reservedPathRejection(
     key: String,
     shown: String,
@@ -398,17 +380,6 @@ internal class ProxyPathManager(
     return rejectPath(agentContext, path, reason, PATH_LIMIT_REACHED)
   }
 
-  // Warns as [agentId], now serving [count] paths, reaches 80% of maxPathsPerAgent, so an operator hears about it
-  // before its registrations start failing; once, until the count falls below 70%. Callers MUST hold pathMap.
-  private fun warnNearPathLimit(
-    agentId: String,
-    count: Int,
-  ) {
-    val max = proxy.maxPathsPerAgent
-    if (agentsNearPathLimit.rose(agentId, count, max))
-      logger.warn { "Agent $agentId serves $count of $max paths allowed by proxy.internal.maxPathsPerAgent" }
-  }
-
   // Rejects a path [agentContext] doesn't serve yet once the agents of [identity], the identity its paths count
   // against, serve proxy.internal.maxPathsPerIdentity paths together (0 = unlimited). maxPathsPerAgent counts one
   // connection, and an identity may open any number, each with a quota of its own. With agent auth off, or only the
@@ -419,27 +390,13 @@ internal class ProxyPathManager(
     identity: String,
   ): PathRejection? {
     val max = proxy.maxPathsPerIdentity
-    val count = identityPathCounts[identity] ?: 0
+    val count = pathCounts.ofIdentity(identity)
     if (max !in 1..count)
       return null
+    val agents = "The agents ${PathCounts.identityDesc(identity)}"
     val reason =
-      "The agents ${identityDesc(identity)} already serve $count paths, the proxy.internal.maxPathsPerIdentity limit " +
-        "($max); path /$path refused"
+      "$agents already serve $count paths, the proxy.internal.maxPathsPerIdentity limit ($max); path /$path refused"
     return rejectPath(agentContext, path, reason, PATH_LIMIT_REACHED)
-  }
-
-  // Warns as the agents of [identity], now serving [count] paths, reach 80% of maxPathsPerIdentity, so an operator
-  // hears about it before their registrations start failing; once, until the count falls below 70%. Callers MUST hold
-  // pathMap.
-  private fun warnNearIdentityPathLimit(
-    identity: String,
-    count: Int,
-  ) {
-    val max = proxy.maxPathsPerIdentity
-    if (identitiesNearPathLimit.rose(identity, count, max))
-      logger.warn {
-        "The agents ${identityDesc(identity)} serve $count of $max paths allowed by proxy.internal.maxPathsPerIdentity"
-      }
   }
 
   // Logs why a path was refused and returns the rejection. The first time this connection is told a cause for a
@@ -473,12 +430,14 @@ internal class ProxyPathManager(
     }
 
   // Registers [path] for [agentContext] unless a check made under the lock refuses it. [entry] is what addPath built
-  // from the registration: the path's entry when the agent is its only one. [reclaim] is the registration's flag.
+  // from the registration: the path's entry when the agent is its only one. [reclaim] is the registration's flag. Adds
+  // to [orphans] each context the registration leaves orphaned, for addPath to remove once it lets go of the lock.
   private fun addValidatedPath(
     path: String,
     agentContext: AgentContext,
     entry: AgentContextInfo,
     reclaim: Boolean,
+    orphans: MutableList<AgentContext>,
   ): PathRejection? {
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
@@ -488,15 +447,32 @@ internal class ProxyPathManager(
       if (rejection == null) {
         val displaced =
           if (entry.isConsolidated) {
-            pathMap[path] = agentInfo?.joinedBy(agentContext, entry) ?: entry
+            pathMap.store(path, agentInfo?.let { withoutGoneAgents(it) }?.joinedBy(agentContext, entry) ?: entry)
             null
           } else {
-            takeOverPath(path, agentContext, agentInfo, entry)
+            takeOverPath(path, agentContext, agentInfo, entry, orphans)
           }
         recordRegistration(path, agentContext, entry.identityName, alreadyServes, displaced)
       }
       return rejection
     }
+  }
+
+  // [agentInfo], a consolidated path's entry, without the agents that are gone, which are taken off their counts, or
+  // null when none is left. removeAgentContext invalidates an agent before it sweeps its paths, so a registration can
+  // come in between: joined to the entry as it was, the gone agent stayed first, so scrapes still went to it and the
+  // path showed its target, and the path kept its labels, another identity's perhaps, after its sweep. With none left,
+  // the registration's own entry is the path's, labels and all. Its sweep then finds the path no longer its own.
+  // Callers MUST hold pathMap.
+  private fun withoutGoneAgents(agentInfo: AgentContextInfo): AgentContextInfo? {
+    val (gone, live) = agentInfo.agentContexts.partition { it.isNotValid() }
+    if (gone.isEmpty())
+      return agentInfo
+    gone.forEach { countPaths(it.agentId, -1) }
+    if (live.isEmpty())
+      return null
+    val goneIds = gone.mapTo(HashSet()) { it.agentId }
+    return agentInfo.copy(agentContexts = live, agentTargets = agentInfo.agentTargets - goneIds).showingFirstAgent()
   }
 
   // Why a check that must hold the lock refuses [agentContext]'s registration of [path] as [entry], a [reclaim] or not,
@@ -528,10 +504,10 @@ internal class ProxyPathManager(
   ): PathRejection? {
     pathLimitRejection(agentContext, path)?.let { return it }
     // The identity the agent's paths count against: its first path's.
-    val identity = countedIdentities[agentContext.agentId] ?: entry.identityName
+    val identity = pathCounts.identityOf(agentContext.agentId) ?: entry.identityName
     val replacesOwn =
       !entry.isConsolidated &&
-        agentInfo?.agentContexts.orEmpty().any { countedIdentities[it.agentId] == identity }
+        agentInfo?.agentContexts.orEmpty().any { pathCounts.identityOf(it.agentId) == identity }
     return if (replacesOwn) null else identityPathLimitRejection(agentContext, path, identity)
   }
 
@@ -607,8 +583,10 @@ internal class ProxyPathManager(
     if (agentContext.recordRejection(path, HELD_BY_ANOTHER_AGENT)) logger.info { reason } else logger.debug { reason }
     // The holder the agent was told of may have left since, and the path gone to this one.
     tellHolder(path, holder, [agentContext])
-    if (agentInfo.waiting.none { it.agentId == agentContext.agentId })
-      pathMap[path] = agentInfo.copy(waiting = waitersOf(agentInfo.waiting + agentContext, agentInfo.agentContexts))
+    if (agentInfo.waiting.none { it.agentId == agentContext.agentId }) {
+      val waiting = waitersOf(agentInfo.waiting + agentContext, agentInfo.agentContexts)
+      pathMap.store(path, agentInfo.copy(waiting = waiting))
+    }
     return PathRejection(reason, HELD_BY_ANOTHER_AGENT)
   }
 
@@ -648,12 +626,14 @@ internal class ProxyPathManager(
   // Gives the exclusive [path], which [agentInfo] held, to [agentContext] alone as [entry], and returns the agent it
   // displaced, or null. Every other agent on the path is displaced; re-registering its own path is neither logged nor
   // counted. A displaced agent of another launch that reads path notices is told who holds the path, and waits on it,
-  // with the agents already waiting, to be told once no agent serves it. Callers MUST hold pathMap.
+  // with the agents already waiting, to be told once no agent serves it. Adds each displaced context left orphaned to
+  // [orphans]. Callers MUST hold pathMap.
   private fun takeOverPath(
     path: String,
     agentContext: AgentContext,
     agentInfo: AgentContextInfo?,
     entry: AgentContextInfo,
+    orphans: MutableList<AgentContext>,
   ): AgentContext? {
     val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
     val displaced = displacedContexts.firstOrNull()
@@ -665,8 +645,11 @@ internal class ProxyPathManager(
     // first, so the waiting list keeps the agents displaced last.
     val told = tellHolder(path, agentContext, agentInfo?.waiting.orEmpty() + displacedContexts)
     // tellHolder kept only agents that can wait: valid, of another launch, and reading notices.
-    pathMap[path] = if (told.isEmpty()) entry else entry.copy(waiting = told.takeLast(MAX_WAITERS_PER_PATH))
-    displacedContexts.forEach { settleDisplaced(path, agentContext, it, told = it in told) }
+    pathMap.store(path, if (told.isEmpty()) entry else entry.copy(waiting = told.takeLast(MAX_WAITERS_PER_PATH)))
+    displacedContexts.forEach { displacedContext ->
+      if (settleDisplaced(path, agentContext, displacedContext, told = displacedContext in told))
+        orphans += displacedContext
+    }
     return displaced
   }
 
@@ -693,26 +676,29 @@ internal class ProxyPathManager(
     return told
   }
 
-  // Takes [path], which [agentContext] took, off [displacedContext]'s count. A displaced context left with no paths is
-  // invalidated only when it is a stale copy of the agent that took the path: an agent keeps its launch id across
-  // reconnects, so a context of the same launch is one the agent has already left. An agent of another launch stays
-  // connected without paths, [told] or not. Invalidating it freed nothing, since it reconnected within seconds,
-  // registered its paths again, and displaced this agent in turn: two agents configured with the same exclusive path
-  // displaced each other every few seconds without end. A dead context of another launch is evicted for inactivity.
-  // Callers MUST hold pathMap.
+  // Takes [path], which [agentContext] took, off [displacedContext]'s count, and returns whether that left it orphaned.
+  // A displaced context left with no paths is orphaned only when it is a stale copy of the agent that took the path:
+  // an agent keeps its launch id across reconnects, so a context of the same launch is one the agent has already left.
+  // It is invalidated here, under the lock, and removed once the registration lets go of it, as a disconnect removes a
+  // context: invalidated alone, it stayed in the context manager, and a scrape it had already been sent, or a chunked
+  // transfer it had begun, waited for its eviction or its timeout. An agent of another launch stays connected without
+  // paths, [told] or not. Invalidating it freed nothing, since it reconnected within seconds, registered its paths
+  // again, and displaced this agent in turn: two agents configured with the same exclusive path displaced each other
+  // every few seconds without end. A dead context of another launch is evicted for inactivity. Callers MUST hold
+  // pathMap.
   private fun settleDisplaced(
     path: String,
     agentContext: AgentContext,
     displacedContext: AgentContext,
     told: Boolean,
-  ) {
+  ): Boolean {
     countPaths(displacedContext.agentId, -1)
     if (pathCountFor(displacedContext.agentId) > 0)
-      return
+      return false
     if (displacedContext.launchId == agentContext.launchId) {
-      logger.info { "Invalidating orphaned agentId ${displacedContext.agentId} after path /$path was overwritten" }
+      logger.info { "Removing orphaned agentId ${displacedContext.agentId} after path /$path was overwritten" }
       displacedContext.invalidate()
-      return
+      return true
     }
     val toldHint = if (told) ". It was told, and takes the path back once no agent serves it" else ""
     logger.info {
@@ -720,6 +706,7 @@ internal class ProxyPathManager(
         "${agentContext.agentId}, of another launch, took over /$path; to serve a path from both agents, " +
         "set agent.consolidated = true on each$toldHint"
     }
+    return false
   }
 
   // Counts, reports, and announces [agentContext]'s registration of [path], as [identity], once pathMap holds it. The
@@ -791,7 +778,7 @@ internal class ProxyPathManager(
 
           agentContext == null -> {
             // An agent waiting on the path gives it up, so it isn't told the path is free.
-            pathMap[key] = agentInfo.withoutWaiter(agentId)
+            pathMap.store(key, agentInfo.withoutWaiter(agentId))
             val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
             "Unable to remove path /$shown - invalid agentId: $agentId -- [$agentIds]"
           }
@@ -826,17 +813,22 @@ internal class ProxyPathManager(
     // skipping the sweep would leave that path 404ing forever (finding 7). The caller invalidates the
     // context before calling this, so the context is normally already absent from the manager here —
     // report on what the sweep actually removed rather than on a manager lookup that no longer
-    // distinguishes a live disconnect from a repeat call.
+    // distinguishes a live disconnect from a repeat call. The sweep scans the map only for an agent that
+    // serves a path, which its count, kept in step with the map, tells, and visits only the paths it waits
+    // on, which pathMap indexes: most connections that close, a port scanner's or a bad token's among
+    // them, serve none and wait on none, and each scanned every entry twice under the lock.
     // The paths the agent served, and those no agent is left on.
     val (servedPathCount, removedPathCount) =
       synchronized(pathMap) {
+        val count = pathCounts.of(agentId)
         // Snapshot the agent's entries first, since dropping it from a path changes pathMap.
-        val served = pathMap.filterValues { info -> info.agentContexts.any { it.agentId == agentId } }
+        val served = if (count == 0) emptyMap() else pathMap.servedBy(agentId)
         served.forEach { dropAgentFromPath(it.key, it.value, agentId) }
         // Nor does it wait on any path now: a waiting list kept it, and all it holds, until the path's entry changed.
-        pathMap.replaceAll { _, info -> info.withoutWaiter(agentId) }
+        pathMap.forgetWaiter(agentId)
         // The sweep took every path the agent served, off its count and its identity's.
-        countPaths(agentId, -pathCountFor(agentId))
+        if (count > 0)
+          countPaths(agentId, -count)
         served.size to served.keys.count { it !in pathMap }
       }
 
@@ -856,7 +848,7 @@ internal class ProxyPathManager(
   ) {
     val remaining = agentInfo.agentContexts.filterNot { it.agentId == agentId }
     if (remaining.isEmpty()) {
-      pathMap.remove(path)
+      pathMap.store(path, null)
       // No agent serves the path now, so the agents waiting on it are told, and each tries to take it back. A waiter
       // that has since disconnected refuses the notice.
       val free = pathNotice { this.path = path }
@@ -871,8 +863,10 @@ internal class ProxyPathManager(
         logger.info { "Removed path /$path for agentId $agentId" }
     } else {
       // The departing agent's target goes with it, and the path shows the target of whichever agent is now first.
-      pathMap[path] =
-        agentInfo.copy(agentContexts = remaining, agentTargets = agentInfo.agentTargets - agentId).showingFirstAgent()
+      pathMap.store(
+        path,
+        agentInfo.copy(agentContexts = remaining, agentTargets = agentInfo.agentTargets - agentId).showingFirstAgent(),
+      )
       if (!isTestMode)
         logger.info { "Removed agentId $agentId from consolidated path /$path" }
     }
@@ -883,12 +877,13 @@ internal class ProxyPathManager(
 
   fun toPlainText(): String =
     synchronized(pathMap) {
-      if (pathMap.isEmpty()) {
+      if (pathMap.size == 0) {
         "No agents connected."
       } else {
         val maxPath = pathMap.keys.maxOfOrNull { it.length } ?: 0
         "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
           pathMap
+            .toMap()
             .toSortedMap()
             .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
             .joinToString("\n\n")
@@ -903,17 +898,6 @@ internal class ProxyPathManager(
 
     // How many displaced agents one path keeps waiting to be told it's free; see AgentContextInfo.waiting.
     internal const val MAX_WAITERS_PER_PATH = 16
-
-    // Adds [delta] to [key]'s count, which goes once it reaches 0, and returns the new count.
-    private fun HashMap<String, Int>.addTo(
-      key: String,
-      delta: Int,
-    ): Int = ((this[key] ?: 0) + delta).also { if (it > 0) this[key] = it else remove(key) }
-
-    // [identity] as a log line or a rejection names the agents of an identity. Identity names are the proxy's own,
-    // from proxy.auth, never an agent's.
-    private fun identityDesc(identity: String) =
-      if (identity.isEmpty()) "with no auth identity" else "of identity '$identity'"
 
     // [key] as a rejection or a log line shows it: whole up to SHOWN_PATH_CHARS characters, and otherwise cut there and
     // marked "...", with its control characters escaped (November #16). See AgentValues.shownValue.

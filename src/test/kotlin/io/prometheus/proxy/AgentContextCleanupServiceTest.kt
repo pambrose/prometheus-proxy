@@ -212,6 +212,42 @@ class AgentContextCleanupServiceTest : StringSpec() {
       counts.evictions.get() shouldBe 0.0
     }
 
+    // A context can be announced, by its first authenticated call, while the sweep evicts it. The sweep decided whether
+    // to count the eviction from what it read before the removal, while the removal counted the disconnect, as an
+    // eviction, from what the context said after it: proxy_eviction_count_total and
+    // proxy_agent_disconnects_total{reason="eviction"} drifted apart. The sweep now reads the context it removed.
+    "an eviction should be counted as the removal released the context, announced or not" {
+      val agentContextManager = AgentContextManager(isTestMode = true)
+      // Unannounced as the sweep finds it; announced just as it is removed.
+      var announced = false
+      val staleAgentContext = mockk<AgentContext>(relaxed = true)
+      every { staleAgentContext.agentId } returns "racing-agent"
+      every { staleAgentContext.inactivityDuration } returns 5.seconds
+      every { staleAgentContext.announced } answers { announced }
+      agentContextManager.addAgentContext(staleAgentContext, announce = false)
+
+      val counts = CountingProxyMetrics()
+      val mockProxy = counts.installOn(mockk<Proxy>(relaxed = true))
+      every { mockProxy.agentContextManager } returns agentContextManager
+      every { mockProxy.removeAgentContext(any(), any()) } answers {
+        announced = true
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<RemovalReason>())
+      }
+
+      val service =
+        AgentContextCleanupService(
+          mockProxy,
+          createConfigVals(maxAgentInactivitySecs = 1, staleAgentCheckPauseSecs = 1),
+        )
+      service.startAsync()
+      eventually(5.seconds) {
+        verify(exactly = 1) { mockProxy.removeAgentContext("racing-agent", RemovalReason.EVICTION) }
+      }
+      service.stopAsync().awaitTerminated()
+
+      counts.evictions.get() shouldBe 1.0
+    }
+
     "cleanup should not evict active agent" {
       val configVals = createConfigVals(
         maxAgentInactivitySecs = 60,

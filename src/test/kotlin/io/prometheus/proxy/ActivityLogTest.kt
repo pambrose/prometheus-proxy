@@ -95,6 +95,39 @@ class ActivityLogTest : StringSpec() {
       }
     }
 
+    // Scrape now clicked again and again on one path, or a path flapping, within one burst: the line named the path
+    // once per event, "/orders, /orders, /orders", and counted every repeat in its "and N more". It names and counts
+    // each path once, those past the sample too, as the agent's feed does.
+    "a burst should name and count each of its paths once, those past the sample too" {
+      val log = log()
+      val east = agent("agent-east")
+
+      listOf("p1", "p1", "p2", "p3", "p4", "p5", "p4", "p1").forEach {
+        log.record(ActivityKind.SCRAPED_NOW, east, it)
+        now += 0.5.seconds
+      }
+
+      log.entries().single().apply {
+        count shouldBe 8
+        paths shouldBe ["p1", "p2", "p3"]
+        pathCount shouldBe 5
+      }
+    }
+
+    // A path is counted once only within its burst: a line no burst can join any more lets go of what it counted.
+    "a path should be counted again on a line of its own once its burst's window has passed" {
+      val log = log()
+      val east = agent("agent-east")
+
+      log.record(ActivityKind.SCRAPED_NOW, east, "orders")
+      log.record(ActivityKind.SCRAPED_NOW, east, "orders")
+      now += ActivityLog.COALESCE_WINDOW
+      log.record(ActivityKind.SCRAPED_NOW, east, "orders")
+
+      log.entries().map { Triple(it.count, it.paths, it.pathCount) } shouldBe
+        [Triple(1, ["orders"], 1), Triple(2, ["orders"], 1)]
+    }
+
     // A fleet reconnecting at once interleaves every agent's registrations; each agent's burst is still one line.
     "bursts from agents registering at once should each be one line" {
       val log = log()

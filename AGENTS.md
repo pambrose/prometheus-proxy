@@ -210,7 +210,10 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 
 - **Chunking**: Large metric payloads are split into `ChunkedScrapeResponse` messages to stay within gRPC limits. Configurable via `chunkContentSizeKbs`.
 - **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s).
-- **Consolidated mode**: Multiple agents can register the same path for redundancy.
+- **Consolidated mode**: Multiple agents can register the same path for redundancy. A registration first takes the
+  path's gone agents, invalidated but not yet swept, off it (`ProxyPathManager.withoutGoneAgents`), and with none left
+  the path starts afresh, so it never keeps a gone agent's labels, another identity's perhaps (`ProxyRegistry.tla`'s
+  `LabelsOfPathIdentity`).
 - **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`. One started that way
   (`Agent.startEmbedded`, which `EmbeddedAgentConfig` uses too) sets `isEmbedded`, so it registers no JVM shutdown
   hook (common-utils' `registersShutDownHook`): its host stops it after the work that needs it, where the hook stopped
@@ -229,21 +232,28 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   agent, as a scrape's does. Don't catch one there with `runCatching` or common-utils' `runCatchingCancellable`, which
   ended only the connection, and the agent reconnected.
 - **Path takeover**: a non-consolidated registration takes the path (`ProxyPathManager.takeOverPath`), and a displaced
-  agent of another launch stays connected. The proxy tells it on `readPathNoticesFromProxy`
-  (`AgentContext.queuePathNotice`); it keeps the path, its `PathEntry` in `AgentPathManager.paths` carrying the
-  takeover and shown `retrying`, and registers it again only with `reclaim`, which `ProxyPathManager.reclaimRejection`
-  refuses while a live agent of another launch serves it. The path entry's `waiting` list gets a "free" notice when the
-  path is dropped, so the reclaim comes at once. A reconnect keeps the takeover (`AgentPathManager.clear`), and
-  `registerPaths` leaves such a path to the reclaim task. A discovery edit registers its path again as a reclaim too,
-  in place for an exclusive path, and a notice that comes while the proxy answers a registration waits for the answer
-  (`AgentPathManager.registering`), as the two come on different streams. Never register a taken-over path without
-  `reclaim`: that brings back two agents swapping the path every few seconds (`ProxyRegistry.tla`'s
-  `ReclaimNeverDisplaces` and `ReconnectReclaims`). A reclaim refused for a cause that can't clear drops the path, but
-  for `INVALID_AGENT` (`reclaimFailed`); a connection that leaves serving nothing (`AgentPathManager.servesNothing`: no
-  static path registered, taken over, or awaiting retry, and no discovery) ends, from the reclaim task as from the
-  static retry task, so the agent reconnects or fails over, as `registerPaths` fails such a connect.
+  agent of another launch stays connected. A displaced context of the registering agent's own launch left with no paths,
+  an orphan, is invalidated under the lock, and `addPath` removes it once it lets go of the lock
+  (`Proxy.removeAgentContextIfCurrent`, `RemovalReason.REPLACED`), so its scrapes fail at once. The proxy tells the
+  agent of another launch on `readPathNoticesFromProxy` (`AgentContext.queuePathNotice`); it keeps the path, its
+  `PathEntry` in `AgentPathManager.paths` carrying the takeover and shown `retrying`, and registers it again only with
+  `reclaim`, which `ProxyPathManager.reclaimRejection` refuses while a live agent of another launch serves it. The path
+  entry's `waiting` list gets a "free" notice when the path is dropped, so the reclaim comes at once.
+  The path map, `PathEntries`, indexes the lists by agent, so a disconnect visits only the paths it waits on, and the
+  sweep scans the map only for an agent whose count (`PathCounts`) says it serves a path: every connection to the agent
+  port, a port scanner's included, is swept as it closes. `PathEntries.store` is the only way to change an entry, and
+  keeps the index in step.
+  A reconnect keeps the takeover (`AgentPathManager.clear`), and `registerPaths` leaves such a path to the reclaim task.
+  A discovery edit registers its path again as a reclaim too, in place for an exclusive path, and a notice that comes
+  while the proxy answers a registration waits for the answer (`AgentPathManager.registering`), as the two come on
+  different streams. Never register a taken-over path without `reclaim`: that brings back two agents swapping the path
+  every few seconds (`ProxyRegistry.tla`'s `ReclaimNeverDisplaces` and `ReconnectReclaims`). A reclaim refused for a
+  cause that can't clear drops the path, but for `INVALID_AGENT` (`reclaimFailed`); a connection that leaves serving
+  nothing (`AgentPathManager.servesNothing`: no static path registered, taken over, or awaiting retry, and no discovery)
+  ends, from the reclaim task as from the static retry task, so the agent reconnects or fails over, as `registerPaths`
+  fails such a connect.
 - **Dynamic target discovery**: `PathDiscoveryService` polls a watched file and calls `AgentPathManager.reconcileDiscoveredPaths`; paths are tagged `STATIC`/`DISCOVERED`, and static entries are never touched.
-- **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity. `registerPath` runs `ProxyPathManager.formRejection` (length, form, labels size) before the globs see a path, and `AgentAuthManager.globMatches` matches in time proportional to the path's length; keep both, since a regex or the other order lets one authenticated agent stall the proxy with a long path. With `transportFilterDisabled`, where the agent names its own agentId on every call, `readRequestsFromProxy` looks the context up once and removes only that object (`Proxy.removeAgentContextIfCurrent`), and `AgentContextManager.addAgentContextWithinLimit` caps the contexts one identity holds at `proxy.internal.maxAgentsPerIdentity`. In either mode `ProxyPathManager.countPaths` counts each identity's paths beside each agent's, for `proxy.internal.maxPathsPerIdentity` (an agent's against the identity of its first path, so a decrement always meets its increment); change `pathCounts` only through it.
+- **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity. `registerPath` runs `ProxyPathManager.formRejection` (length, form, labels size) before the globs see a path, and `AgentAuthManager.globMatches` matches in time proportional to the path's length; keep both, since a regex or the other order lets one authenticated agent stall the proxy with a long path. A pattern loses one leading slash, as a path does, and one with a `/` left can't match a path, so it fails startup (`AgentAuthManager.pathGlobs`). With `transportFilterDisabled`, where the agent names its own agentId on every call, `readRequestsFromProxy` looks the context up once and removes only that object (`Proxy.removeAgentContextIfCurrent`), and `AgentContextManager.addAgentContextWithinLimit` caps the contexts one identity holds at `proxy.internal.maxAgentsPerIdentity`. In either mode `ProxyPathManager.countPaths` counts each identity's paths beside each agent's (`PathCounts`), for `proxy.internal.maxPathsPerIdentity` (an agent's against the identity of its first path, so a decrement always meets its increment); change `pathCounts` only through it.
 - **Agent-supplied values**: the proxy cuts what an agent reports about itself (`ProxyServiceImpl.boundedRegistration`, `proxy.internal.maxAgentFieldLength` / `maxAgentProxyEndpoints`), about each path (`ProxyPathManager.addPath`: the target URL, redacted before it's cut, to `maxTargetUrlLength`; the labels, at most `maxLabelsPerPath`, kept only as `Proxy.pathLabels` parsed them, never also as sent), and about each scrape result (its agent ID, URL, failure reason, and content type, sent whole or chunked, to `ProxyServiceImpl.MAX_RESULT_FIELD_LENGTH`, in `boundedResponse` / `boundedHeader`), and logs every agent-supplied value through `AgentValues.shownValue`, which cuts it and escapes its control characters so it can't forge a log line (`ProxyPathManager.shownPath` for a path or `agentId`, its first 64 characters); bound or cut any new agent-supplied value before storing it, and pass it through `shownValue` before logging it. `formRejection` refuses a path with whitespace, a control character, `?`, or `#` (`AgentValues.pathCharacterProblem`), which the agent checks on its `pathConfigs` at startup too. What a result puts in the scrape's HTTP response is checked in `ScrapeDispatch`: an exposition content type keeps only its formats' parameters (`EXPOSITION_PARAMETERS`), each with a short token for its value; a status outside 200..599, or a 204, 205, or 304, which can't be served with a body, fails the scrape as a 502 `invalid_response`; and a body, plain or gzipped, past `maxUnzippedContentSizeMBytes` as a 413 `payload_too_large`.
 - **Shared metrics**: `AgentMetrics` / `ProxyMetrics` build their collectors once per JVM in their companion objects and share them through `SharedCollectors`, since the default registry rejects a second collector with the same name and label names, which kept a second agent in a JVM from connecting. Add a new metric to its companion's `SHARED` list (the agent's `COLLECTORS`, whose names `agent.metrics.proxyPath` serves and a registry source of the default registry leaves out); an agent metric takes `launch_id` as its first label and goes in `PER_LAUNCH`, which `COLLECTORS` includes, so a stopped agent's series are removed (and, given the label values, start at zero).
 - **TLS material**: each certificate, key, or trust collection is a file (`tls.*FilePath`) or PEM text or its base64

@@ -15,8 +15,9 @@ on every run, so after a version bump the old one is replaced rather than run. T
 
 `ProxyRegistry.tla` models the proxy's agent registry, path map, and scrape-request lifecycle: `AgentContextManager`,
 `AgentContext` (validity, queue, notifier, `invalidate()` and its drain), `ProxyPathManager` (`addPath`, after
-`registerPath`'s out-of-lock context lookup, and its `synchronized(pathMap)` block in `addValidatedPath`, `removePath`,
-`removeFromPathManager`), `ScrapeRequestManager`, `Proxy.removeAgentContext`, one HTTP handler per scrape, and the
+`registerPath`'s out-of-lock context lookup, its `synchronized(pathMap)` block in `addValidatedPath`, and its removal
+of the contexts that block orphaned, once it lets go of the lock; `removePath`, `removeFromPathManager`),
+`ScrapeRequestManager`, `Proxy.removeAgentContext`, one HTTP handler per scrape, and the
 `readRequestsFromProxy` loop, including, with the transport filter disabled, a stream that names another connection's
 agentId, which only the identity check binds.
 It also models path notices and reclaims: the notice `takeOverPath` queues for a displaced connection of another
@@ -33,8 +34,14 @@ It is a model of the code, not the code: when you change one of those classes, u
 
 Each connection belongs to one of `Launches`, as an agent keeps its launch id across reconnects. A registration that
 displaces a connection and leaves it with no paths invalidates it only when it is of the registering connection's
-launch, a stale connection of the same agent; one of another launch stays connected without paths. `Init` fixes one
-connection's launch, so the others cover both cases without relabelings that check nothing new.
+launch, a stale connection of the same agent, an orphan, which `RemoveOrphan` then removes as a disconnect would; one of
+another launch stays connected without paths. `Init` fixes one connection's launch, so the others cover both cases
+without relabelings that check nothing new. An orphan may still answer a scrape it was sent, but nothing promises it
+will, since its agent has left it, so `Fairness` covers only a valid connection's `Emit` and `Respond`.
+
+A consolidated registration takes the path's agents that are gone, invalidated but not yet swept, off the path first,
+and the path starts afresh, with the registering agent's labels, when none is left. Each path entry's `labels` is the
+identity of the agent whose registration its labels came from, which is all of a path's labels the model needs.
 
 ### Properties
 
@@ -46,9 +53,10 @@ connection's launch, so the others cover both cases without relabelings that che
 | `IdentityIsolation` | No identity takes over or joins a path another identity's live agent serves |
 | `AnswerFromOwner` | Only the agent a scrape was sent to can answer it, even when another agent names it before it is tracked |
 | `ModesNeverMix` | Consolidated and non-consolidated agents never share a path |
+| `LabelsOfPathIdentity` | A path serves the labels of its own identity's agents, never those of another identity's agent that is gone |
 | `StreamIdentity` | With the transport filter disabled, a scrape-request stream reads, and as it ends removes, only a context of its caller's identity, even when it named the agentId before that context was registered |
 | `InvalidatedHasNoNotices` | An invalidated connection, removed or orphaned, holds no unread notices, which `invalidate()` clears and `queuePathNotice` refuses after it |
-| `EveryScrapeFinishes` | With the handler timeout off, every started scrape still finishes |
+| `EveryScrapeFinishes` | With the handler timeout off, every started scrape still finishes, one sent to an orphan too |
 | `ReclaimNeverDisplaces` | A reclaim never takes a path from a live connection of another launch, so two agents with the same exclusive path never swap it back and forth |
 | `DisplacedReclaims` | An agent told its path was taken over takes it back once no connection holds it, on whichever connection it has then, unless another takes it first or that connection is invalidated |
 | `ReconnectReclaims` | An agent registers a path it was told was taken over only as a reclaim, after a reconnect too, so its reconnect never takes the path from the live agent holding it |
@@ -94,6 +102,16 @@ finding nothing, and an agent of another identity connecting under that agentId 
 it. The configs set `StreamSameLookup = TRUE`, where the stream checks, reads, and removes the one context it looked up.
 One connection, the `Intruder`, plays the caller: connections are interchangeable and `Init` tries every mix of
 identities, so letting each connection intrude only doubles the states.
+
+`DropGone = FALSE` has a consolidated registration join the path's gone agents, as before November 26 #2's fix: TLC
+then reports `LabelsOfPathIdentity` violated, in `ProxyRegistry.cfg`, by an agent of one identity leaving a consolidated
+path, invalidated and not yet swept, and an agent of the other identity joining it, which keeps the first one's labels.
+`RemoveOrphans = FALSE` leaves an orphan invalidated but registered, as before November 26 #3's fix: TLC then reports
+`EveryScrapeFinishes` violated, in `ProxyRegistry.cfg`, by a scrape sent to a connection that a registration of its own
+launch then orphans, which waits on it for good, since nothing removes the orphan and the orphan needn't answer. The
+configs set both `TRUE`, but for `ProxyRegistryReconnect.cfg`'s `RemoveOrphans = FALSE`: there an orphan is left to
+`Disconnect`, whose removal is `RemoveOrphan`'s, so the config's behaviors include those with the step, and none of its
+properties depends on what becomes of a connection already invalidated. The step grew its states by 60%.
 
 `UseReclaim` turns path notices and reclaims on; `ProxyRegistry.cfg` and `ProxyRegistrySafety.cfg` leave it off, as
 for agents and proxies predating them, so their state spaces are unchanged, and `ProxyRegistryReclaim.cfg` and

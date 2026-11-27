@@ -23,6 +23,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.ScrapeTracing.Companion.SENT_TO_AGENT
@@ -376,7 +377,13 @@ internal class ProxyServiceImpl(
     }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    val identityReason = agentContext?.let { identityMismatchReason(it, "unregisterPath") }
+    // Why the call is refused once its context is found: it is another identity's, or the path is blank, as
+    // registerPath refuses one too. removePath requires a path, so a blank one threw, and the caller got
+    // Status.UNKNOWN.
+    val refusal =
+      agentContext?.let { context ->
+        identityMismatchReason(context, "unregisterPath") ?: BLANK_PATH_MSG.takeIf { request.path.isBlank() }
+      }
     return if (agentContext == null) {
       val shown = shownAgentId(agentId)
       logger.error { "Missing AgentContext for agentId: $shown" }
@@ -384,10 +391,10 @@ internal class ProxyServiceImpl(
         valid = false
         reason = "Invalid agentId: $shown (unregisterPath)"
       }
-    } else if (identityReason != null) {
+    } else if (refusal != null) {
       unregisterPathResponse {
         valid = false
-        reason = identityReason
+        reason = refusal
       }
     } else {
       // The activity-time bump is unrelated to the response receiver, so .also (not .apply) -- finding 36.

@@ -34,11 +34,12 @@ import kotlinx.coroutines.channels.Channel.Factory.CONFLATED
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import java.util.concurrent.ConcurrentLinkedQueue
-import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.update
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -105,17 +106,26 @@ internal class AgentContext(
   val connectTime: Instant = Clock.System.now()
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
-  private var valid by atomicBoolean(true)
 
-  // Whether this context has been announced as a connected agent; see AgentContextManager.announceAgentContext.
-  private val announcedFlag = AtomicBoolean(false)
+  // Whether the context is valid and whether it has been announced as a connected agent (see
+  // AgentContextManager.announceAgentContext), as one state, so each changes knowing the other. As two flags, an
+  // announcement that found the context valid just before a removal invalidated it still marked it announced just
+  // after, and the removal, having read it unannounced, emitted no AgentDisconnected for the AgentConnected that
+  // followed, and counted the eviction where the cleanup service didn't.
+  private val state = AtomicReference(State.PENDING)
 
-  /** True once the agent made its first authenticated call; until then the context is a pending connection. */
+  private val valid: Boolean
+    get() = state.load().isValid
+
+  /**
+   * True once the agent made its first authenticated call; until then the context is a pending connection. Fixed once
+   * the context is invalidated, so whoever removed it reads what every other reader will.
+   */
   val announced: Boolean
-    get() = announcedFlag.load()
+    get() = state.load().isAnnounced
 
-  // Marks the context announced, returning true only for the call that did it.
-  internal fun markAnnounced(): Boolean = announcedFlag.compareAndSet(expectedValue = false, newValue = true)
+  // Marks the context announced, returning true only for the call that did it, and never once it is invalidated.
+  internal fun markAnnounced(): Boolean = state.compareAndSet(expectedValue = State.PENDING, newValue = State.ANNOUNCED)
 
   // Readable rather than private: the dashboard displays it to distinguish two runs of the same agent name.
   var launchId: String by nonNullableReference("Unassigned")
@@ -316,7 +326,7 @@ internal class AgentContext(
   }
 
   fun invalidate() {
-    valid = false
+    state.update { it.invalidated }
     scrapeRequestNotifier.close()
     pathNoticeSignal.close()
     synchronized(pendingPathNotices) { pendingPathNotices.clear() }
@@ -368,6 +378,22 @@ internal class AgentContext(
   }
 
   override fun hashCode() = agentId.hashCode()
+
+  // Valid or not, announced or not. A context starts valid and pending; it may be announced while valid, and is
+  // invalidated once, keeping whether it was announced.
+  private enum class State(
+    val isValid: Boolean,
+    val isAnnounced: Boolean,
+  ) {
+    PENDING(isValid = true, isAnnounced = false),
+    ANNOUNCED(isValid = true, isAnnounced = true),
+    INVALIDATED_PENDING(isValid = false, isAnnounced = false),
+    INVALIDATED_ANNOUNCED(isValid = false, isAnnounced = true),
+    ;
+
+    val invalidated: State
+      get() = if (isAnnounced) INVALIDATED_ANNOUNCED else INVALIDATED_PENDING
+  }
 
   companion object {
     private val logger = logger {}
