@@ -105,8 +105,18 @@ class ScrapeDispatchTest : StringSpec() {
 
   // Runs one successful scrape whose target answered with Content-Type [contentType], and returns the proxy's response.
   private suspend fun submitWithContentType(contentType: String): ScrapeRequestResponse =
+    submitPlainResult(contentType = contentType)
+
+  // Runs one scrape whose agent answers with a plain (not gzipped) result of [statusCode], [contentType], and [body],
+  // on a proxy started with [args], and returns the proxy's response.
+  private suspend fun submitPlainResult(
+    statusCode: Int = 200,
+    contentType: String = "text/plain; charset=utf-8",
+    body: String = "metric_value 1.0",
+    args: List<String> = emptyList(),
+  ): ScrapeRequestResponse =
     coroutineScope {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, args = args)
       val agentContext = AgentContext("test-remote")
       launch {
         val wrapper = agentContext.readScrapeRequest()!!
@@ -115,9 +125,10 @@ class ScrapeDispatchTest : StringSpec() {
             srAgentId = agentContext.agentId,
             srScrapeId = wrapper.scrapeId,
             srValidResponse = true,
-            srStatusCode = 200,
+            srStatusCode = statusCode,
             srContentType = contentType,
-            srContentAsText = "metric_value 1.0",
+            srContentAsText = body,
+            srUrl = "http://target/metrics",
           ),
         ) { true }
       }
@@ -712,6 +723,79 @@ class ScrapeDispatchTest : StringSpec() {
       }
     }
 
+    // An exposition type passed every parameter through, so an agent could make the scrape's Content-Type header
+    // megabytes long, past what Prometheus and a reverse proxy take, or give it a parameter name with CR/LF in it,
+    // which Ktor refused only as it wrote the header, answering 500. Only the exposition formats' own parameters are
+    // kept, each with a short token for its value.
+    "submitScrapeRequest should keep only an exposition type's own parameters, each with a short token value" {
+      val served =
+        mapOf(
+          "text/plain; a=${"x".repeat(1 shl 20)}" to "text/plain",
+          "text/plain; a\r\nb=1" to "text/plain",
+          "text/plain; version=${"9".repeat(1000)}; charset=utf-8" to "text/plain; charset=utf-8",
+          "text/plain; charset=\"utf-8\r\nX-Forged: 1\"" to "text/plain",
+          "text/plain; version=0.0.4; version=1.0.0" to "text/plain; version=0.0.4",
+          "TEXT/Plain; Version=0.0.4" to "text/plain; version=0.0.4",
+          "application/openmetrics-text; version=1.0.0; charset=utf-8; escaping=underscores; extra=1" to
+            "application/openmetrics-text; version=1.0.0; charset=utf-8; escaping=underscores",
+        )
+
+      served.forEach { (sent, expected) ->
+        val contentType = submitWithContentType(sent).contentType
+
+        withClue(sent.take(64)) {
+          contentType shouldBe ContentType.parse(expected)
+          contentType.toString() shouldBe expected.lowercase()
+        }
+      }
+    }
+
+    // An agent's status went out as it was sent, any 32-bit number: an interim 1xx, which desynchronizes the client's
+    // connection, a 204 or 205 with the body after it, or a number that isn't an HTTP status at all.
+    "submitScrapeRequest should answer 502 invalid_response for a status the proxy can't serve" {
+      for (status in [-1, 0, 99, 100, 101, 103, 204, 205, 304, 600, 99_999]) {
+        val response = submitPlainResult(statusCode = status)
+
+        withClue(status) {
+          response.statusCode shouldBe HttpStatusCode.BadGateway
+          response.updateMsg shouldBe ProxyFailure.INVALID_RESPONSE.label
+          response.contentText shouldBe ""
+          response.failureReason shouldContain "$status"
+          response.url shouldBe "http://target/metrics"
+        }
+      }
+    }
+
+    "submitScrapeRequest should pass a target's other statuses through" {
+      for ((status, body) in [200 to "metric_value 1.0", 203 to "metric_value 1.0", 302 to "", 404 to "", 503 to ""]) {
+        val response = submitPlainResult(statusCode = status)
+
+        withClue(status) {
+          response.statusCode shouldBe HttpStatusCode.fromValue(status)
+          response.contentText shouldBe body
+        }
+      }
+    }
+
+    // maxUnzippedContentSizeMBytes bounded only a gzipped body, so a plain one, up to gRPC's 4 MiB message limit,
+    // passed any lower limit, including 0, which is to refuse all content.
+    "submitScrapeRequest should hold a plain body to maxUnzippedContentSizeMBytes, in bytes" {
+      val refused = submitPlainResult(body = "a", args = ["-Dproxy.internal.maxUnzippedContentSizeMBytes=0"])
+      val oneMiB = ["-Dproxy.internal.maxUnzippedContentSizeMBytes=1"]
+      val atLimit = submitPlainResult(body = "a".repeat(1 shl 20), args = oneMiB)
+      // Half a MiB of characters, but a byte past a MiB of UTF-8.
+      val pastLimit = submitPlainResult(body = "é".repeat(1 shl 19) + "a", args = oneMiB)
+
+      refused.statusCode shouldBe HttpStatusCode.PayloadTooLarge
+      refused.updateMsg shouldBe "payload_too_large"
+      refused.failureReason shouldContain "exceeds limit"
+      refused.url shouldBe "http://target/metrics"
+      atLimit.statusCode shouldBe HttpStatusCode.OK
+      atLimit.byteCount shouldBe (1L shl 20)
+      pastLimit.statusCode shouldBe HttpStatusCode.PayloadTooLarge
+      pastLimit.updateMsg shouldBe "payload_too_large"
+    }
+
     // Finding 10: a non-2xx upstream status must map to a label that reflects the cause, so operators
     // can tell a down target, a timeout, an oversized payload, and a truly unknown path apart -- instead
     // of every failure being labeled path_not_found.
@@ -1262,6 +1346,29 @@ class ScrapeDispatchTest : StringSpec() {
 
       // Both entries have multiple trailing newlines that should be trimmed
       merged shouldBe "metric_a 1.0\nmetric_b 2.0\n# EOF"
+    }
+
+    // An agent whose registry is empty, or whose metric filter dropped every family, answers OpenMetrics with "# EOF"
+    // alone. Its body was empty once the marker was stripped, and joining it left a blank line, which OpenMetrics
+    // forbids, so Prometheus refused the whole consolidated scrape. A body of whitespace alone did the same.
+    "mergeContentTexts should leave no blank line for an agent that answered only # EOF, or only whitespace" {
+      fun merged(vararg bodies: String) =
+        ScrapeDispatch.mergeContentTexts(
+          bodies.map {
+            ScrapeRequestResponse(
+              statusCode = HttpStatusCode.OK,
+              updateMsg = "success",
+              contentText = it,
+              fetchDuration = 10.milliseconds,
+            )
+          },
+        )
+
+      merged("metric_a 1.0\n# EOF\n", "# EOF\n") shouldBe "metric_a 1.0\n# EOF"
+      merged("# EOF\n", "metric_b 2.0\n# EOF\n") shouldBe "metric_b 2.0\n# EOF"
+      merged("# EOF\n", "# EOF\n") shouldBe "# EOF"
+      merged("metric_a 1.0\n", " \n") shouldBe "metric_a 1.0"
+      merged(" \n", "\n") shouldBe ""
     }
 
     // ==================== submitScrapeRequests Tests ====================

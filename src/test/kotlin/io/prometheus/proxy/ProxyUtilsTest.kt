@@ -27,6 +27,7 @@ import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -42,6 +43,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.proxy.ProxyUtils.respondWith
+import io.prometheus.proxy.ProxyUtils.toDecodedContent
 import io.prometheus.proxy.ProxyUtils.unzip
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -295,9 +297,21 @@ class ProxyUtilsTest : StringSpec() {
       decoded.byteCount shouldBe 0L
     }
 
-    "unzip should throw ZipBombException when the decoded size exceeds the limit" {
+    "unzip should throw ContentTooLargeException when the decoded size exceeds the limit" {
       val zipped = "a".repeat(1000).zip()
-      shouldThrow<ProxyUtils.ZipBombException> { zipped.unzip(100) }
+      shouldThrow<ProxyUtils.ContentTooLargeException> { zipped.unzip(100) }
+    }
+
+    // A plain body is unzipped content already, so the unzipped limit holds it too, in UTF-8 bytes, not characters.
+    "toDecodedContent should report a plain body's UTF-8 byte count, and throw past the limit" {
+      val decoded = "世界".toDecodedContent(6)
+      val pastLimit = runCatching { "世界".toDecodedContent(5) }.exceptionOrNull()
+      val emptyAtZero = "".toDecodedContent(0)
+
+      decoded.text shouldBe "世界"
+      decoded.byteCount shouldBe 6L
+      pastLimit.shouldBeInstanceOf<ProxyUtils.ContentTooLargeException>().message shouldContain "exceeds limit of 5"
+      emptyAtZero.byteCount shouldBe 0L
     }
   }
 }

@@ -22,6 +22,7 @@ import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
+import io.ktor.http.HeaderValueParam
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
@@ -36,7 +37,7 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeTracing.Companion.FORWARD_SPAN
 import io.prometheus.common.ScrapeTracing.Companion.endedAs
 import io.prometheus.common.ScrapeTracing.Companion.traced
-import io.prometheus.proxy.ProxyUtils.DecodedContent
+import io.prometheus.proxy.ProxyUtils.toDecodedContent
 import io.prometheus.proxy.ProxyUtils.unzip
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -80,14 +81,28 @@ internal object ScrapeDispatch {
       ContentType("application", "vnd.google.protobuf"),
     ]
 
+  // The parameters an exposition content type keeps: those the text, OpenMetrics, and protobuf formats define. Any
+  // other is dropped, as is one whose value isn't a token (RFC 9110) of at most MAX_PARAMETER_VALUE_LENGTH characters.
+  // The longest real value, the protobuf format's io.prometheus.client.MetricFamily, is 33.
+  private val EXPOSITION_PARAMETERS = setOf("version", "charset", "escaping", "proto", "encoding")
+  private const val MAX_PARAMETER_VALUE_LENGTH = 64
+  private val TOKEN_REGEX = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+
+  // The statuses a result may be served with, but for NO_CONTENT_STATUSES: the final ones, 2xx to 5xx.
+  private val SERVABLE_STATUSES = 200..599
+
+  // The statuses whose response has no content (RFC 9110). The proxy always answers with a body, if an empty one, so
+  // it can't serve them.
+  private val NO_CONTENT_STATUSES = setOf(204, 205, 304)
+
   // Each agent's queue is capped at this multiple of scrapeRequestBacklogUnhealthySize, matching how the agent
   // sizes its own request channel.
   private const val BACKLOG_CAPACITY_MULTIPLIER = 2
 
   // The most characters /debug keeps, or a log line shows, of an agent's per-scrape failure reason, URL, or content
-  // type: what a chunked transfer's header keeps of each, so a unary result, bounded only by gRPC's 4 MiB message
-  // limit, is shown no longer than a chunked one (November #12). The scrape route's /debug line uses it too.
-  internal const val MAX_SHOWN_RESULT_CHARS = ProxyServiceImpl.MAX_CHUNKED_HEADER_FIELD_LENGTH
+  // type: what the proxy keeps of each as a result arrives, sent whole or in chunks (November #12). The scrape route's
+  // /debug line uses it too.
+  internal const val MAX_SHOWN_RESULT_CHARS = ProxyServiceImpl.MAX_RESULT_FIELD_LENGTH
 
   // The most scrape requests one agent's queue holds. One chunked stream's transfers under way are capped at the same
   // number (ProxyServiceImpl's readHeader).
@@ -127,9 +142,15 @@ internal object ScrapeDispatch {
 
     val trimmed = nonEmpty.map { it.contentText.trimEnd() }
     val hasEof = trimmed.any { it.endsWith(Exposition.EOF_MARKER) }
-    val stripped = trimmed.map { it.removeSuffix(Exposition.EOF_MARKER).trimEnd() }
+    // A body that is "# EOF" alone, from an empty registry or a filter that dropped every family, or whitespace alone,
+    // is empty here, and joining it would leave a blank line, which OpenMetrics forbids (November 26 #7).
+    val stripped = trimmed.map { it.removeSuffix(Exposition.EOF_MARKER).trimEnd() }.filter { it.isNotEmpty() }
     val joined = stripped.joinToString("\n")
-    return if (hasEof) "$joined\n${Exposition.EOF_MARKER}" else joined
+    return when {
+      !hasEof -> joined
+      stripped.isEmpty() -> Exposition.EOF_MARKER
+      else -> "$joined\n${Exposition.EOF_MARKER}"
+    }
   }
 
   /**
@@ -200,8 +221,19 @@ internal object ScrapeDispatch {
           fetchDuration = scrapeRequest.ageDuration(),
         )
 
-    val statusCode = scrapeResults.httpStatus
-    val contentType = parseContentType(scrapeResults.srContentType, scrape.path)
+    return responseTo(proxy, scrape.path, scrapeRequest, scrapeResults)
+  }
+
+  // The response to a scrape of [path] whose agent answered with [scrapeResults], or that the proxy failed itself.
+  private fun responseTo(
+    proxy: Proxy,
+    path: String,
+    scrapeRequest: ScrapeRequestWrapper,
+    scrapeResults: ScrapeResults,
+  ): ScrapeRequestResponse {
+    val statusCode =
+      servableStatus(scrapeResults.srStatusCode) ?: return unservableStatus(path, scrapeRequest, scrapeResults)
+    val contentType = parseContentType(scrapeResults.srContentType, path)
 
     // Do not return content on error status codes.
     return if (!statusCode.isSuccess())
@@ -215,7 +247,34 @@ internal object ScrapeDispatch {
         fetchDuration = scrapeRequest.ageDuration(),
       )
     else
-      buildSuccessResponse(proxy, scrapeRequest, scrapeResults, contentType)
+      buildSuccessResponse(proxy, scrapeRequest, scrapeResults, statusCode, contentType)
+  }
+
+  // The status [status] is served as, or null when the proxy can't serve it: an interim 1xx, after which the client
+  // waits for the real response; a number outside 100..599, which isn't an HTTP status; or one of NO_CONTENT_STATUSES.
+  // The agent sends a status as an Int, and Ktor writes whatever number it's given (November 26 #38).
+  private fun servableStatus(status: Int): HttpStatusCode? =
+    if (status in SERVABLE_STATUSES && status !in NO_CONTENT_STATUSES) HttpStatusCode.fromValue(status) else null
+
+  // The response to a scrape of [path] whose agent answered with a status the proxy can't serve: a 502,
+  // invalid_response, as for a chunked result the proxy can't use.
+  private fun unservableStatus(
+    path: String,
+    scrapeRequest: ScrapeRequestWrapper,
+    scrapeResults: ScrapeResults,
+  ): ScrapeRequestResponse {
+    val status = scrapeResults.srStatusCode
+    logger.warn {
+      "Agent ${scrapeRequest.agentContext.agentId} answered /$path with HTTP status $status, which the proxy can't " +
+        "serve; answering ${ProxyFailure.INVALID_RESPONSE.statusCode.value}"
+    }
+    return ScrapeRequestResponse(
+      statusCode = ProxyFailure.INVALID_RESPONSE.statusCode,
+      failureReason = "Agent answered with HTTP status $status, which the proxy can't serve",
+      url = scrapeResults.srUrl,
+      updateMsg = ProxyFailure.INVALID_RESPONSE.label,
+      fetchDuration = scrapeRequest.ageDuration(),
+    )
   }
 
   // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map, and any chunked
@@ -298,8 +357,9 @@ internal object ScrapeDispatch {
         }
         Text.Plain.withCharset(Charsets.UTF_8)
       }.let { parsed ->
-        if (EXPOSITION_CONTENT_TYPES.any { parsed.match(it) }) {
-          parsed
+        val exposition = EXPOSITION_CONTENT_TYPES.firstOrNull { parsed.match(it) }
+        if (exposition != null) {
+          servedAs(exposition, parsed)
         } else {
           logger.debug {
             "Serving /$path's content type '${shownValue(rawContentType, MAX_SHOWN_RESULT_CHARS)}' as text/plain"
@@ -308,16 +368,32 @@ internal object ScrapeDispatch {
         }
       }
 
-  // The result's status: the one the target answered the agent with, or the proxy's own for a failure it made itself.
-  private val ScrapeResults.httpStatus: HttpStatusCode
-    get() = HttpStatusCode.fromValue(srStatusCode)
+  // [parsed], an [exposition] type, as it's served: the exposition type with only EXPOSITION_PARAMETERS, the first of
+  // each, named in lowercase, with a short token for its value. Ktor matches a type without parameters and kept every
+  // one, so an agent could make the header megabytes long, past what Prometheus and a reverse proxy take, or give a
+  // parameter a name with CR/LF in it, which Ktor refused only as it wrote the header, answering 500 (November 26 #38).
+  private fun servedAs(
+    exposition: ContentType,
+    parsed: ContentType,
+  ): ContentType {
+    val kept =
+      parsed.parameters
+        .filter { it.name.lowercase() in EXPOSITION_PARAMETERS && isShortToken(it.value) }
+        .distinctBy { it.name.lowercase() }
+        .map { HeaderValueParam(it.name.lowercase(), it.value) }
+    return ContentType(exposition.contentType, exposition.contentSubtype, kept)
+  }
 
-  // Decodes (and size-guards) a successful scrape body and assembles the response, returning a terminal
-  // 413/502 response instead when the gzipped payload is a zip bomb or is corrupt.
+  private fun isShortToken(value: String) = value.length <= MAX_PARAMETER_VALUE_LENGTH && TOKEN_REGEX.matches(value)
+
+  // Decodes (and size-guards) a successful scrape body and assembles the response, returning a terminal 413/502
+  // response instead when the body is past maxUnzippedContentSizeMBytes, gzipped or plain, or the gzipped payload is
+  // corrupt. A plain body is unzipped content already, so the limit bounds it too (November 26 #38).
   private fun buildSuccessResponse(
     proxy: Proxy,
     scrapeRequest: ScrapeRequestWrapper,
     scrapeResults: ScrapeResults,
+    statusCode: HttpStatusCode,
     contentType: ContentType,
   ): ScrapeRequestResponse {
     val maxSize = proxy.proxyConfigVals.internal.maxUnzippedContentSizeMBytes * 1024L * 1024L
@@ -326,8 +402,8 @@ internal object ScrapeDispatch {
         if (scrapeResults.srZipped)
           scrapeResults.srContentAsZipped.unzip(maxSize)
         else
-          DecodedContent(scrapeResults.srContentAsText, scrapeResults.srContentAsText.toByteArray().size.toLong())
-      } catch (e: ProxyUtils.ZipBombException) {
+          scrapeResults.srContentAsText.toDecodedContent(maxSize)
+      } catch (e: ProxyUtils.ContentTooLargeException) {
         return ScrapeRequestResponse(
           statusCode = HttpStatusCode.PayloadTooLarge,
           contentType = Text.Plain.withCharset(Charsets.UTF_8),
@@ -348,15 +424,15 @@ internal object ScrapeDispatch {
       }
 
     return ScrapeRequestResponse(
-      statusCode = scrapeResults.httpStatus,
+      statusCode = statusCode,
       contentType = contentType,
       contentText = decoded.text,
       failureReason = scrapeResults.srFailureReason,
       url = scrapeResults.srUrl,
       updateMsg = SUCCESS_LABEL,
       fetchDuration = scrapeRequest.ageDuration(),
-      // The byte count already computed during unzip (gzipped) or the small plain payload's length, so the size need
-      // not be measured again by re-encoding the decoded text.
+      // The byte count already computed during unzip (gzipped) or the size check (plain), so the size need not be
+      // measured again by re-encoding the decoded text.
       byteCount = decoded.byteCount,
       encoding = if (scrapeResults.srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN,
     )

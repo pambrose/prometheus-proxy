@@ -147,7 +147,9 @@ The path is known but cannot be served right now, or the agent couldn't reach th
 
 - **Target error** (`upstream_error`) — the target itself answered 502; check the target.
 - **Unusable response** (`invalid_response`) — the agent answered, but a chunk or summary failed
-  validation. Check `proxy_chunk_validation_failures_total` and the proxy log.
+  validation, or it reported a status the proxy can't serve: one outside 200–599, or a 204, 205, or 304, which can't
+  carry the body the proxy always sends. Check `proxy_chunk_validation_failures_total` and the proxy log, which names
+  the status.
 - **Zipped payload too large** (`invalid_response`) — a result sent in chunks passed
   `proxy.internal.maxZippedContentSizeMBytes` (default `5`) before it was unzipped, and the proxy log says `Zipped
   content size … exceeds maximum allowed size`. Raise the limit for a target with that much to send.
@@ -159,7 +161,8 @@ The scrape body exceeded a configured size limit.
 - **Agent side:** raise `agent.http.maxContentLengthMBytes` (default `10`). Outcome label
   `content_too_large`.
 - **Proxy side:** raise `proxy.internal.maxUnzippedContentSizeMBytes` (the decompressed-size
-  guard; `0` means "reject all"). Outcome label `payload_too_large`.
+  guard, which holds a body the agent sent without gzip too; `0` means "reject all"). Outcome label
+  `payload_too_large`.
 - The two limits are independent and both surface as HTTP 413 — the outcome label tells you which
   one rejected the scrape.
 
