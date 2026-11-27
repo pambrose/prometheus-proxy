@@ -1,8 +1,8 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 6 resolved, 64 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 8 resolved, 62 open (4 high, 35 medium, 31 low).
 
-**Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593.
+**Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #13 and #31 in #595.
 
 **Date:** 2026-11-26
 
@@ -28,7 +28,7 @@
 | 10 | `ProxyServiceImpl.unregisterPath` throws unhandled `IllegalArgumentException` on blank `path`, and proxy `ActivityLog` duplicates repeated paths in a burst | Proxy | low | ⬜ |
 | 11 | Double-slash path stripping (`//foo`, `//`) causes permanent 404s for static paths, infinite discovery flapping + static-path clobbering, and a phantom `metricsProxyPath` | Agent | high | ✅ |
 | 12 | Reclaim loop tight-spins with zero delay (unbounded gRPC flood) when `rejectedPathRetryMaxSecs == 1`, and fires every reclaim 1s early otherwise | Agent | high | ✅ |
-| 13 | Connection stays stuck forever serving zero paths (no reconnect or failover) when a taken-over static path is permanently rejected on reclaim | Agent | medium | ⬜ |
+| 13 | Connection stays stuck forever serving zero paths (no reconnect or failover) when a taken-over static path is permanently rejected on reclaim | Agent | medium | ✅ |
 | 14 | Concurrent overlapping scrapes of the same `MetricsSource` defeat `AgentHttpService.stuckSources` protection | Agent | medium | ⬜ |
 | 15 | `writeResponsesToProxyUntilDisconnected` can drop `RESULT_DROPPED` metrics on early writer exit, loses `endedBy` on stream failure, and doesn't tear down on early normal completion | Agent | medium | ⬜ |
 | 16 | Fatal JVM `Error` in `Agent.run()` blocks for `reconnectPauseSecs` and logs `"Waited ... to reconnect"` before terminating | Agent | medium | ⬜ |
@@ -46,7 +46,7 @@
 | 28 | `/screens` Split layout ignores `first`/`second` pane ordering at `<= 720px`, breaking pane swaps and `#later+earlier` links | Dashboards | medium | ⬜ |
 | 29 | `DashboardScript.scrapeNow` lacks an in-flight guard, leaves `#scrape-result` uncloseable on network/non-panel errors, and writes arbitrary error bodies via `innerHTML` | Dashboards | medium | ⬜ |
 | 30 | Theme toggle on `/screens` and its same-origin Proxy Dashboard iframe go out of sync | Dashboards | medium | ⬜ |
-| 31 | `AgentScrapeNow` strips all leading slashes (`trimStart('/')`) while `AgentSnapshot`/`AgentPathManager` strip only one, breaking Scrape now for `//...`/`///...` paths | Dashboards | low | ⬜ |
+| 31 | `AgentScrapeNow` strips all leading slashes (`trimStart('/')`) while `AgentSnapshot`/`AgentPathManager` strip only one, breaking Scrape now for `//...`/`///...` paths | Dashboards | low | ✅ |
 | 32 | `ScreensScript.splitPanes` misparses single-pane search links as Split layouts when a query term after `+` matches a screen ID | Dashboards | low | ⬜ |
 | 33 | `GET <base>/login` ignores `?next=...` when the viewer already has a valid session | Dashboards | low | ⬜ |
 | 34 | `DashboardSessions.isValid(..., counts = false)` mutates LRU access order on every push tick | Dashboards | low | ⬜ |
@@ -408,7 +408,7 @@ Whitespace-only non-empty bodies trigger the same defect.
 
 **Fix:** Reject any `'/'` remaining after stripping a single leading `'/'` (matching `ProxyPathManager.multiSegmentPathError`) in `AgentPathManager`'s `pathConfigs` validation, `AgentOptions.assignMetricsProxyPath`, and `DiscoveredPath.usable` / `desiredDiscoveredPaths`. Normalize once at the entry boundary and assert `'/' !in path` inside `doRegisterPath` so double-stripping is impossible.
 
-**Resolution:** Fixed in #586. `AgentValues.segmentProblem` names a path with a slash left once one leading slash is dropped, and the agent refuses such a path where it comes in. A `pathConfigs` entry fails startup, naming it, as one with a character no scrape can carry does, and `agent.metrics.proxyPath` fails in `AgentOptions`. The embedded builder's `path()`, `scrapeSelf()`, `source()`, and `agentMetricsAt()` throw `ConfigLoadException` for one, as each drops a slash of its own before the agent drops another, so `source("//foo")` had served `foo`. The proxy's `multiSegmentPathError` calls `segmentProblem` too, so the two sides share one rule. `DiscoveredPath.usable` is false, so `FileDiscoverySource` skips and reports the entry (its message now says "single-segment path"), and the reconcile drops an unusable entry from any source. That covers `app/metrics` as well as `//foo`: the proxy already refused it, but a static one is now refused at startup, not at each connect, which the release notes list under Before you upgrade. The Path Rules note, the discovery table, the agent dashboard and troubleshooting pages, and `examples/discovery-targets.conf` say so. #31 stays open: `AgentScrapeNow` can no longer meet a configured or discovered `//` path, but its lookup still strips differently from `AgentSnapshot`'s.
+**Resolution:** Fixed in #586. `AgentValues.segmentProblem` names a path with a slash left once one leading slash is dropped, and the agent refuses such a path where it comes in. A `pathConfigs` entry fails startup, naming it, as one with a character no scrape can carry does, and `agent.metrics.proxyPath` fails in `AgentOptions`. The embedded builder's `path()`, `scrapeSelf()`, `source()`, and `agentMetricsAt()` throw `ConfigLoadException` for one, as each drops a slash of its own before the agent drops another, so `source("//foo")` had served `foo`. The proxy's `multiSegmentPathError` calls `segmentProblem` too, so the two sides share one rule. `DiscoveredPath.usable` is false, so `FileDiscoverySource` skips and reports the entry (its message now says "single-segment path"), and the reconcile drops an unusable entry from any source. That covers `app/metrics` as well as `//foo`: the proxy already refused it, but a static one is now refused at startup, not at each connect, which the release notes list under Before you upgrade. The Path Rules note, the discovery table, the agent dashboard and troubleshooting pages, and `examples/discovery-targets.conf` say so.
 
 ---
 
@@ -456,7 +456,7 @@ Keep `remaining <= RECLAIM_WINDOW` inside `reclaimTakenOverPaths()` so once the 
 
 ---
 
-### 13. ⬜ Connection stays stuck forever serving zero paths (no reconnect or failover) when a taken-over static path is permanently rejected on reclaim
+### 13. ✅ Connection stays stuck forever serving zero paths (no reconnect or failover) when a taken-over static path is permanently rejected on reclaim
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -477,6 +477,8 @@ The same stall occurs if `/a` was retryably rejected at connect while `/b` was t
 **Impact:** The agent remains permanently connected (`isConnectedToProxy == true`) to a proxy that serves none of its paths, never reconnecting or failing over to a healthy backup proxy.
 
 **Fix:** After `reclaimTakenOverPaths()` in the reclaim task (`Agent.kt:522-524`), check `if (pathManager.servesNoStaticPath() && !pathManager.hasRejectedStaticPaths && pathDiscoveryService == null)` (mirroring `retryRejectedStaticPathsForConnection` at `Agent.kt:562`) and return to tear down the connection. Also consider clearing `EndpointFailover.previousAttemptRegistered` on a no-paths teardown so failover advances past the rejecting proxy immediately instead of retrying primary once first.
+
+**Resolution:** Fixed in #595. `AgentPathManager.servesNothing` is true when static paths are configured, none is registered, taken over, or waiting to be retried, and discovery is off. `reclaimTakenOverPathsWhile` checks it after each pass and returns, with a WARN, once a refusal that can't clear drops the last such path; its task ending ends the connection, so the agent reconnects or fails over, as the static retry task already did, which now uses the same check. Two `AgentPathManagerTest` cases, the review's two scenarios, timed out before. Clearing `previousAttemptRegistered` on such a teardown, so the next attempt skips the primary, is left out: it changes `EndpointFailover` and `AgentFailover.tla` for both teardowns.
 
 ---
 
@@ -851,7 +853,7 @@ Because `storage` events fire only in *other* same-origin browsing contexts, `/s
 
 ---
 
-### 31. ⬜ `AgentScrapeNow` strips all leading slashes (`trimStart('/')`) while `AgentSnapshot`/`AgentPathManager` strip only one, breaking Scrape now for `//...` / `///...` paths
+### 31. ✅ `AgentScrapeNow` strips all leading slashes (`trimStart('/')`) while `AgentSnapshot`/`AgentPathManager` strip only one, breaking Scrape now for `//...` / `///...` paths
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -866,6 +868,8 @@ Because `AgentPathManager` and `AgentSnapshot` (`AgentSnapshot.kt:279, 284`) nor
 **Impact:** Clicking Scrape now on any `//...` or `///...` path in the Agent Dashboard always fails with a misleading 404. (Shares root cause with #11; once #11 rejects multi-slash paths at agent startup/discovery, this remains relevant for direct/runtime paths unless normalized consistently.)
 
 **Fix:** Resolve #11 so invalid leading-slash paths are rejected upfront, and in `AgentScrapeNow.scrape` look up `path`, `path.removePrefix("/")`, and `AgentPathManager.requestedPathKey(path)` consistently so `AgentScrapeNow` and `AgentSnapshot` never disagree.
+
+**Resolution:** Fixed in #595. `AgentScrapeNow` drops one leading slash, as `AgentSnapshot` and the proxy's Scrape now do, and refuses a path with a slash left (`AgentValues.segmentProblem`) before the path manager's lookup, which drops every leading slash and would find another path by it. `//orders` now gets a 404, where it scraped `orders` without its filter. Through the dashboard it could no longer happen once #586 refused such paths, so this is for consistency and for a hand-made request.
 
 ---
 
