@@ -272,11 +272,21 @@ internal class AgentPathManager(
   val hasRejectedStaticPaths: Boolean
     get() = rejectedStaticPaths.isNotEmpty()
 
-  // True when static paths are configured and none is registered: every one was rejected, whether at connect or on a
-  // later retry that found its rejection could no longer clear. Agent ends such a connection rather than idle on it.
+  // True when static paths are configured and none is registered or taken over: every one was rejected, whether at
+  // connect, on a later retry that found its rejection could no longer clear, or on a reclaim (see reclaimFailed).
   fun servesNoStaticPath(): Boolean =
     pathConfigs.isNotEmpty() &&
       pathConfigs.none { paths[it.path.removePrefix("/")]?.context?.source == PathSource.STATIC }
+
+  /**
+   * Whether this connection serves the agent nothing, and can't come to: static paths are configured, and none is
+   * registered, taken over, for [reclaimTakenOverPaths] to take back, or waiting for [retryRejectedStaticPaths], and no
+   * discovery runs to register another. The connection's retry and reclaim tasks each end such a connection once they
+   * leave it so, as [registerPaths] fails a connect at which the proxy refuses every static path for a cause that
+   * can't clear, so the agent reconnects or fails over rather than idle on a proxy that serves none of its paths.
+   */
+  val servesNothing: Boolean
+    get() = servesNoStaticPath() && !hasRejectedStaticPaths && !agentConfigVals.discovery.enabled
 
   // Registers a static path, keeping rejectedStaticPaths in step, and returns the proxy's rejection, or null once
   // registered. Only a rejection whose cause is in RETRYABLE_CAUSES stays for retrying; any other can't clear before a
@@ -512,14 +522,14 @@ internal class AgentPathManager(
   }
 
   // Records [e], the failure of a reclaim of [path] tried as [tried]. A refusal that can't clear drops the path, which
-  // then shows as refused, as at connect, except INVALID_AGENT: the proxy has already dropped this connection's
-  // context, so the connection is ending, and the takeover stays for the next connection to reclaim, as
-  // ProxyRegistry.tla's told does. Dropping it would have the reconnect register the path without reclaim, taking it
-  // back from the agent serving it. Anything else keeps it taken over and waits longer before the next try, unless a
-  // notice came meanwhile, whose word is newer. The proxy's refusal while another agent holds the path is what
-  // the takeover already shows, so it is logged at DEBUG; one for another cause, such as an agent of another identity
-  // that took the path once it was free, shows as the proxy gave it, and is logged at WARN once. Callers MUST hold
-  // pathMutex.
+  // then shows as refused, as at connect, and a connection it leaves serving nothing ends (see
+  // reclaimTakenOverPathsWhile), except INVALID_AGENT: the proxy has already dropped this connection's context, so the
+  // connection is ending, and the takeover stays for the next connection to reclaim, as ProxyRegistry.tla's told does.
+  // Dropping it would have the reconnect register the path without reclaim, taking it back from the agent serving it.
+  // Anything else keeps it taken over and waits longer before the next try, unless a notice came meanwhile, whose word
+  // is newer. The proxy's refusal while another agent holds the path is what the takeover already shows, so it is
+  // logged at DEBUG; one for another cause, such as an agent of another identity that took the path once it was free,
+  // shows as the proxy gave it, and is logged at WARN once. Callers MUST hold pathMutex.
   private fun reclaimFailed(
     path: String,
     source: PathSource,
@@ -556,7 +566,10 @@ internal class AgentPathManager(
   // Runs reclaimTakenOverPaths while [active] holds -- the connection's reclaim task, which Agent.launchConnectionTasks
   // starts -- sleeping until the next path's try is due, or until a notice, with none taken over. It slept until a
   // second before, RECLAIM_WINDOW, which tried every path a second early, and with rejectedPathRetryMaxSecs = 1, never
-  // slept at all (November 26 #12).
+  // slept at all (November 26 #12). It returns once a refusal that can't clear has dropped the last path that kept the
+  // connection worth having (see servesNothing), which ends the connection, as the static retry task's return does:
+  // it slept on, waiting for a notice about a path it no longer had, and the agent stayed connected to a proxy serving
+  // none of its paths, never reconnecting or failing over (November 26 #13).
   suspend fun reclaimTakenOverPathsWhile(active: () -> Boolean) {
     while (active()) {
       val wait = paths.values.minOfOrNull { it.takenOver?.backoff?.remaining ?: Duration.INFINITE }
@@ -566,6 +579,10 @@ internal class AgentPathManager(
         wait > Duration.ZERO -> withTimeoutOrNull(wait) { reclaimWake.receive() }
       }
       reclaimTakenOverPaths()
+      if (servesNothing) {
+        logger.warn { "Proxy refused a taken-over static path for good, and serves no other; ending the connection" }
+        return
+      }
     }
   }
 

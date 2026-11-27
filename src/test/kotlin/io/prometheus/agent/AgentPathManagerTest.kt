@@ -2641,6 +2641,99 @@ class AgentPathManagerTest : StringSpec() {
         loop.cancel()
       }
     }
+
+    // ==================== A Connection Left Serving Nothing ====================
+
+    // A manager whose only taken-over path, of [paths], is metrics, as after a reconnect: registerPaths left metrics to
+    // the reclaim, whose try is due at once, and the proxy refuses the reclaim for a cause that can't clear. [rejected]
+    // are the other paths the proxy refuses at that reconnect, for a cause that can.
+    suspend fun reconnectedWithMetricsTakenOver(
+      vararg paths: String,
+      rejected: List<String> = emptyList(),
+      agentHocon: String = "",
+    ): Pair<AgentPathManager, AgentGrpcService> {
+      val (agent, grpc) = agentWithStaticPaths("metrics", *paths, agentHocon = agentHocon)
+      val manager = AgentPathManager(agent)
+      manager.registerPaths()
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      manager.clear()
+      rejected.forEach { rejectPath(grpc, it, PathRejectionCause.HELD_BY_ANOTHER_IDENTITY) }
+      manager.registerPaths()
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws notAuthorized()
+      return manager to grpc
+    }
+
+    // Runs the reclaim loop until the proxy has refused metrics' reclaim, and says whether the loop is still running a
+    // moment after: it parks waiting for a notice while nothing is taken over.
+    suspend fun reclaimLoopKeepsRunning(
+      manager: AgentPathManager,
+      grpc: AgentGrpcService,
+    ): Boolean =
+      coroutineScope {
+        val loop = launch { manager.reclaimTakenOverPathsWhile { true } }
+        eventually(5.seconds) { coVerify(exactly = 1) { grpc.reclaimPathOnProxy("metrics", any(), any(), any()) } }
+        delay(100.milliseconds)
+        loop.isActive.also { loop.cancelAndJoin() }
+      }
+
+    // A taken-over static path the proxy then refused to give back for good was dropped, and the reclaim loop parked
+    // waiting for a notice that would never come: an agent with no other static path, none waiting to be retried, and
+    // no discovery stayed connected to a proxy serving none of its paths, never reconnecting or failing over
+    // (November 26 #13). The loop now returns, which ends the connection, as the static retry task does.
+    "the reclaim loop should return once a refusal that can't clear leaves the connection serving nothing" {
+      val (manager, _) = reconnectedWithMetricsTakenOver()
+
+      val warnings =
+        captureLogs<AgentPathManager>(Level.WARN) {
+          withTimeout(5.seconds) { manager.reclaimTakenOverPathsWhile { true } }
+        }
+
+      manager.takenOverContexts.shouldBeEmpty()
+      manager.servesNothing.shouldBeTrue()
+      warnings.filter { "ending the connection" in it.formattedMessage } shouldHaveSize 1
+    }
+
+    // The same stall with a second static path: rejected at the reconnect for a cause that can clear, then, on its
+    // retry, for one that can't, so the retry task stopped while metrics still counted as served, taken over, and
+    // idled.
+    "the reclaim loop should return when it drops the last static path after the retry task gave up on the rest" {
+      val (manager, grpc) = reconnectedWithMetricsTakenOver("other", rejected = listOf("other"))
+      rejectPath(grpc, "other", PathRejectionCause.NOT_AUTHORIZED)
+      manager.retryRejectedStaticPaths()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+
+      manager.servesNothing.shouldBeFalse()
+
+      withTimeout(5.seconds) { manager.reclaimTakenOverPathsWhile { true } }
+
+      manager.servesNothing.shouldBeTrue()
+    }
+
+    "the reclaim loop should keep the connection while another static path is registered" {
+      val (manager, grpc) = reconnectedWithMetricsTakenOver("other")
+
+      reclaimLoopKeepsRunning(manager, grpc).shouldBeTrue()
+      manager.registeredPaths.map { it.path } shouldBe listOf("other")
+      manager.servesNothing.shouldBeFalse()
+    }
+
+    // The retry task registers that path once its rejection clears, or ends the connection itself once it can't.
+    "the reclaim loop should keep the connection while another static path waits to be retried" {
+      val (manager, grpc) = reconnectedWithMetricsTakenOver("other", rejected = listOf("other"))
+
+      reclaimLoopKeepsRunning(manager, grpc).shouldBeTrue()
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+      manager.servesNothing.shouldBeFalse()
+    }
+
+    // Discovery can register a path on this connection at any reconcile.
+    "the reclaim loop should keep the connection with discovery on" {
+      val (manager, grpc) = reconnectedWithMetricsTakenOver(agentHocon = "discovery.enabled = true")
+
+      reclaimLoopKeepsRunning(manager, grpc).shouldBeTrue()
+      manager.servesNoStaticPath().shouldBeTrue()
+      manager.servesNothing.shouldBeFalse()
+    }
   }
 }
 
@@ -2661,3 +2754,7 @@ private fun freeNotice(path: String): PathNotice = pathNotice { this.path = path
 // The proxy's refusal of a reclaim while another agent holds the path, for [reason].
 private fun heldRefusal(reason: String = "held"): RequestFailureException =
   RequestFailureException.fromProxy("registerPathOnProxy", reason, PathRejectionCause.HELD_BY_ANOTHER_AGENT)
+
+// The proxy's refusal of a path the agent's identity isn't authorized for, which can't clear while it stays connected.
+private fun notAuthorized(): RequestFailureException =
+  RequestFailureException.fromProxy("registerPathOnProxy", "not authorized", PathRejectionCause.NOT_AUTHORIZED)

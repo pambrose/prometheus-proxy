@@ -70,6 +70,11 @@ All notable changes to this project are documented in this file.
   as the proxy refused them, since its reclaim task slept until a second before the next try was due, and woke at the
   proxy's notice after each refusal to try a path due within a second. Otherwise it tried each reclaim a second early.
   It now sleeps until a try is due, and tries the paths due within a second of it only once one is
+- An agent whose taken-over static path the proxy refused to give back for a cause that can't clear, such as an
+  identity no longer allowed it, dropped the path but stayed connected even when that left it serving nothing, never
+  reconnecting or failing over. Once no static path is registered, taken over, or waiting to be retried, and discovery
+  is off, its reclaim task now ends the connection, as the static retry task does when a rejection turns out not to
+  clear, so the agent reconnects, and a proxy that refuses every static path at connect sends it to the next endpoint
 - The proxy let a second `writeChunkedResponsesToProxy` stream on a connection, or of an identity with the transport
   filter disabled, extend or finish a chunked transfer the first had opened, and the two could update its checksum,
   byte count, and buffer at once, which could corrupt the result or let it past `maxZippedContentSizeMBytes`. Only the
@@ -107,6 +112,9 @@ All notable changes to this project are documented in this file.
   proxy refused the path at each connect; the embedded builder's `path()`, `scrapeSelf()`, `source()`, and
   `agentMetricsAt()` throw `ConfigLoadException` for one; and a discovery entry is skipped when the file is read, as
   one without a path or a URL is
+- The agent dashboard's Scrape now drops one leading slash from the path it's asked for, as the dashboard drops it
+  from the paths it shows and the proxy's Scrape now from its path, and refuses a path with a slash left, which names no
+  path the agent has, where it dropped every leading slash, so `//orders` scraped `orders`
 - The dashboards' theme picker is one button in place of three, to take less of the top bar: it shows the theme in
   force, light, dark, or auto, and each click moves to the next, in that order; its tooltip names the theme in force
   and the next

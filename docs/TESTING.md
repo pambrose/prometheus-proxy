@@ -328,7 +328,9 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   for the activity feed, a path registered, refused once with the proxy's reason, and unregistered, static or
   discovered, paths refused for one cause one line, and filters failing open for different reasons apart; and a JVM
   `Error` in a static path's retry, a discovered path's registration or unregister, or a reclaim propagated, not
-  isolated as the path's failure
+  isolated as the path's failure; and the reclaim loop returning, which ends the connection, once a reclaim refused for
+  a cause that can't clear leaves no static path registered, taken over, or waiting to be retried, with discovery off,
+  and running on while one is, or with discovery on
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
@@ -459,7 +461,8 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   password, PEM, or `-D` value anywhere in it
 - **AgentScrapeNowTest** (`dashboard/`) — the agent dashboard's Scrape now, its fetch stood in for: a configured path
   scraped at its own URL through its own filter, though not registered, summarized with its sizes before and after
-  the filter; a gzipped body unzipped and a path asked for with a leading slash found; a failure's reason; a path the
+  the filter; a gzipped body unzipped and a path asked for with a leading slash found, but one asked for with two
+  refused, registered or not, never scraped as the path without them; a failure's reason; a path the
   agent doesn't know refused without a fetch, shown escaped; a path at most once a cooldown; at most a few at once;
   and a path served in-process read through its source
 - **FileDiscoverySourceTest** (`discovery/`) — Discovery-file parsing: HOCON and JSON, empty or absent `paths`,

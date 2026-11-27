@@ -20,7 +20,6 @@ import com.pambrose.common.util.unzip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Agent
-import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.ScrapeTarget
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.AgentValues
@@ -70,8 +69,13 @@ internal class AgentScrapeNow(
     path: String,
     client: String,
   ): ScrapeNowResult {
-    val key = AgentPathManager.requestedPathKey(path)
-    val target = targetOf(key)
+    // One leading slash dropped, as AgentSnapshot drops it from the paths the dashboard shows, and the proxy's Scrape
+    // now from the path it's given, where every one was dropped, and "//orders" scraped "orders" (November 26 #31). No
+    // path the agent knows has a slash left after that (AgentValues.segmentProblem), so one that does is refused before
+    // the path manager's lookup, which drops every leading slash, for an old proxy's scrapes: through it, "//orders"
+    // would be scraped at orders' URL, but without orders' filter.
+    val key = path.removePrefix("/")
+    val target = if (AgentValues.segmentProblem(key) == null) targetOf(key) else null
     val shown = AgentValues.shownValue(key)
     return if (target == null)
       Refused(HttpStatusCode.NotFound, "/$shown isn't configured, discovered, or registered")

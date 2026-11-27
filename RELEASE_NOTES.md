@@ -72,6 +72,10 @@ its own that holds them all, with Prometheus and Grafana.
 - **A one-second reclaim backoff no longer floods the proxy.** With `agent.internal.rejectedPathRetryMaxSecs = 1`, an
   agent whose path another agent took over asked for it back as fast as the proxy could refuse it. It now waits out
   each retry, and no longer tries one a second early.
+- **An agent no longer stays connected to a proxy that serves none of its paths.** When the proxy refused for good to
+  give back a path another agent had taken over, such as one the agent's identity is no longer allowed, an agent with
+  no other static path and no discovery stayed connected, never reconnecting or moving to its next proxy. It now
+  reconnects, and moves on to the next proxy in `agent.proxy.endpoints` when one refuses every path at connect.
 - **One agent stream can't disturb another's large scrape result.** A second stream an agent opened could add to or
   finish a result the first was sending in chunks, which could corrupt it or let it past the proxy's size limit. The
   proxy now ignores such data.
