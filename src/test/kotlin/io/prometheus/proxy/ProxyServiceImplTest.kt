@@ -3104,7 +3104,7 @@ class ProxyServiceImplTest : StringSpec() {
           scrapeRequestManager = scrapeRequestManager,
           agentContextManager = AgentContextManager(isTestMode = true),
         )
-      val limit = ProxyServiceImpl.MAX_CHUNKED_HEADER_FIELD_LENGTH
+      val limit = ProxyServiceImpl.MAX_RESULT_FIELD_LENGTH
       val long = "x".repeat(1_000_000)
       val data = "metric 1".toByteArray()
       val crc = CRC32().apply { update(data) }
@@ -3137,6 +3137,38 @@ class ProxyServiceImplTest : StringSpec() {
       results.srContentType shouldBe "text/plain; $long".take(limit)
       results.srUrl shouldBe "http://target/metrics?$long".take(limit)
       results.srFailureReason shouldBe "reason $long".take(limit)
+    }
+
+    // A result sent whole had no bound on its strings but gRPC's 4 MiB message limit, though a chunked transfer's
+    // header was cut to the same strings' limit, so a content type of megabytes reached the scrape's response header.
+    "writeResponsesToProxy should cut the result's strings as a chunked header's are, and leave its body whole" {
+      val owner = AgentContext("owner-host")
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
+      val limit = ProxyServiceImpl.MAX_RESULT_FIELD_LENGTH
+      val long = "x".repeat(1_000_000)
+      val response = scrapeResponse {
+        agentId = "agent-$long"
+        scrapeId = scrape.scrapeId
+        validResponse = true
+        statusCode = 200
+        contentType = "text/plain; $long"
+        url = "http://target/metrics?$long"
+        failureReason = "reason $long"
+        contentAsText = "metric $long"
+      }
+
+      onConnection(owner.agentId) {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(response))
+      }
+
+      val results = scrape.scrapeResults.shouldNotBeNull()
+      results.srAgentId shouldBe "agent-$long".take(limit)
+      results.srContentType shouldBe "text/plain; $long".take(limit)
+      results.srUrl shouldBe "http://target/metrics?$long".take(limit)
+      results.srFailureReason shouldBe "reason $long".take(limit)
+      results.srContentAsText shouldBe "metric $long"
     }
 
     // ==================== late results logged at DEBUG (November #3) ====================

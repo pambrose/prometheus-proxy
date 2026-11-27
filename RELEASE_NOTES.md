@@ -78,6 +78,16 @@ its own that holds them all, with Prometheus and Grafana.
 - **The Helm charts upgrade from 4.6.0 with `--reuse-values`.** `helm upgrade --reuse-values` from a 4.6.0 release,
   as the agent chart's README shows for turning its dashboard on, failed with a nil pointer; the charts now take each
   dashboard value the old release lacks from its default.
+- **A consolidated OpenMetrics scrape no longer gets blank lines.** An agent that answered `# EOF` alone, as one with
+  an empty registry or a metric filter that drops every family does, added a blank line to the merged scrape, and
+  Prometheus refused the whole scrape.
+- **An agent can't break the scrape's response.** An agent could send a `Content-Type` megabytes long, or with a
+  control character in a parameter's name, which reached Prometheus as the scrape's header or failed the scrape with a
+  500, and could report a status HTTP doesn't allow. The proxy now keeps only the exposition formats' own content-type
+  parameters, and fails a scrape whose status it can't serve, one outside 200–599 or a 204, 205, or 304, with a 502
+  (`invalid_response`).
+- **`maxUnzippedContentSizeMBytes` bounds every scrape body.** A body the agent sent without gzip, as it does a small
+  one, passed `proxy.internal.maxUnzippedContentSizeMBytes`; it's now held to the limit too.
 
 ### Behavior Changes
 

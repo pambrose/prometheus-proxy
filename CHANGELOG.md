@@ -78,6 +78,21 @@ All notable changes to this project are documented in this file.
   nil pointer on `dashboard.login` (both charts) or `dashboard` (the agent chart, whose 4.6.0 had none), since that
   upgrade keeps the old chart's values. Each dashboard value the release lacks now takes its default, and `make
   helm-lint` renders both charts with such values
+- A consolidated path's OpenMetrics scrape got a blank line, which OpenMetrics forbids and Prometheus refuses, for
+  each agent that answered `# EOF` alone, as one whose registry is empty or whose metric filter drops every family
+  does, or whitespace alone. Such a body now adds nothing to the merged scrape
+- A scrape result the agent sent whole had no bound on its agent ID, URL, failure reason, or content type but gRPC's 4
+  MiB message limit, and an exposition `Content-Type` kept every parameter, so an agent could make the scrape's
+  response header megabytes long, or give it a parameter name with CR/LF in it, which answered the scrape 500. A whole
+  result's strings are now cut to 4,096 characters, as a chunked header's are, and the content type keeps only the
+  exposition formats' own parameters (`version`, `charset`, `escaping`, `proto`, `encoding`), each with a short token
+  for its value
+- The proxy served any status an agent reported: an interim 1xx, a 204 or 205 followed by the body, or a number that
+  isn't an HTTP status. A status outside 200–599, or a 204, 205, or 304, now fails the scrape with a 502,
+  `invalid_response`, as a chunked result the proxy can't use does
+- `proxy.internal.maxUnzippedContentSizeMBytes` bounded only a gzipped body, so one the agent sent plain passed any
+  lower limit, `0` (refuse all content) included. A plain body is now held to it too, and one past it fails its scrape
+  with a 413, `payload_too_large`
 
 ### Behavior Changes
 

@@ -625,7 +625,7 @@ internal class ProxyServiceImpl(
         // Whatever becomes of the result: one whose scrape is no longer tracked still proves the agent is alive.
         sender.markActive(response.agentId)
         try {
-          if (!proxy.scrapeRequestManager.assignScrapeResults(response.toScrapeResults(), isOwner))
+          if (!proxy.scrapeRequestManager.assignScrapeResults(boundedResponse(response).toScrapeResults(), isOwner))
             proxy.metrics { lateScrapeResultCount.inc() }
         } catch (e: CancellationException) {
           throw e
@@ -937,25 +937,45 @@ internal class ProxyServiceImpl(
     private val KEEPALIVE_REQUEST: ScrapeRequest = scrapeRequest { keepalive = true }
     internal const val UNKNOWN_ADDRESS = "Unknown"
 
-    // The most characters a chunked transfer keeps of each string in its header; see boundedHeader. A fixed bound, not
+    // The most characters the proxy keeps of each string in a scrape result, sent whole or in chunks: its agent ID,
+    // URL, failure reason, and content type; see boundedResponse and boundedHeader. A fixed bound, not
     // proxy.internal.maxTargetUrlLength: it caps what a transfer holds while it lasts (November #13), so a limit an
     // operator can turn off mustn't lift it. A result's strings are cut again where they're shown; see ScrapeDispatch.
-    internal const val MAX_CHUNKED_HEADER_FIELD_LENGTH = 4096
+    internal const val MAX_RESULT_FIELD_LENGTH = 4096
 
-    // [response] with each string in its header cut to MAX_CHUNKED_HEADER_FIELD_LENGTH characters. A transfer keeps
+    // Whether any of [fields] is longer than MAX_RESULT_FIELD_LENGTH characters.
+    private fun anyTooLong(vararg fields: String) = fields.any { it.length > MAX_RESULT_FIELD_LENGTH }
+
+    private fun cut(value: String) = truncate(value, MAX_RESULT_FIELD_LENGTH)
+
+    // [response] with each of its strings but its body cut to MAX_RESULT_FIELD_LENGTH characters, as a chunked
+    // transfer's header is. gRPC's 4 MiB message limit was their only bound, so an agent's content type of megabytes
+    // reached the scrape's response header (November 26 #38).
+    private fun boundedResponse(response: ScrapeResponse): ScrapeResponse {
+      if (!anyTooLong(response.agentId, response.url, response.failureReason, response.contentType))
+        return response
+      logger.debug {
+        "Cut the scrape result for scrapeId: ${response.scrapeId} to $MAX_RESULT_FIELD_LENGTH characters a field"
+      }
+      return response.toBuilder()
+        .setAgentId(cut(response.agentId))
+        .setUrl(cut(response.url))
+        .setFailureReason(cut(response.failureReason))
+        .setContentType(cut(response.contentType))
+        .build()
+    }
+
+    // [response] with each string in its header cut to MAX_RESULT_FIELD_LENGTH characters. A transfer keeps
     // its header until it ends, and gRPC's 4 MiB message limit was the only other bound on them, so each transfer could
     // hold up to 4 MiB of header besides its chunks (November #13). A real agent ID, URL, failure reason, or content
     // type is far shorter, so they are cut rather than refused.
     private fun boundedHeader(response: ChunkedScrapeResponse): ChunkedScrapeResponse {
       val header = response.header
-      val max = MAX_CHUNKED_HEADER_FIELD_LENGTH
-      val fields = listOf(header.headerAgentId, header.headerUrl, header.headerFailureReason, header.headerContentType)
-      if (fields.none { it.length > max })
+      if (!anyTooLong(header.headerAgentId, header.headerUrl, header.headerFailureReason, header.headerContentType))
         return response
-
-      fun cut(value: String) = truncate(value, max)
-
-      logger.debug { "Cut the chunked header for scrapeId: ${header.headerScrapeId} to $max characters a field" }
+      logger.debug {
+        "Cut the chunked header for scrapeId: ${header.headerScrapeId} to $MAX_RESULT_FIELD_LENGTH characters a field"
+      }
       return response.toBuilder()
         .setHeader(
           header.toBuilder()

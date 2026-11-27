@@ -310,10 +310,15 @@ To keep the port to Prometheus:
 ## Scrape Port Responses
 
 The proxy passes a target's `Content-Type` through only for the Prometheus exposition formats
-(`text/plain`, `application/openmetrics-text`, and the protobuf format); anything else is served as
-`text/plain`. Every scrape-port response also carries `X-Content-Type-Options: nosniff` and
-`Content-Security-Policy: sandbox`. A compromised target therefore can't serve a page that runs as
-script on the proxy's origin in an operator's browser.
+(`text/plain`, `application/openmetrics-text`, and the protobuf format), with only those formats'
+own parameters (`version`, `charset`, `escaping`, `proto`, and `encoding`), each with a short value;
+anything else is served as `text/plain`. Every scrape-port response also carries
+`X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`. A compromised target
+therefore can't serve a page that runs as script on the proxy's origin in an operator's browser.
+
+A status the proxy can't serve, one outside 200–599, or a 204, 205, or 304, which can't carry a
+body, fails the scrape with a 502 (`invalid_response`). A compromised agent therefore can't send
+Prometheus a status line or a `Content-Type` header it would refuse.
 
 ## Auth Header Forwarding
 

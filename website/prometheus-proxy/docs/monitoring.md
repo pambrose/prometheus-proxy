@@ -172,7 +172,7 @@ Since 4.3.0, three more groups are available, also off by default:
 | `missing_results`       | Internal error: results object was null                             |
 | `path_not_found`        | The agent doesn't serve the path, or the target answered 404        |
 | `upstream_error`        | Any other non-2xx from the target, or an unreachable target (503)   |
-| `invalid_response`      | Agent answered, but a chunk or summary failed validation (502)      |
+| `invalid_response`      | Agent answered, but a chunk failed validation or its status can't be served (502) |
 | `content_too_large`     | Over the agent's content-length limit, or the target answered 413   |
 | `payload_too_large`     | Unzipped content exceeded the proxy's size limit                    |
 | `invalid_gzip`          | Gzip decompression failed                                           |
@@ -227,7 +227,7 @@ timeout, counts in `proxy_late_scrape_results_total`. The scrape itself was alre
     a refused connection, is the agent's own 503 `upstream_error`; the agent's
     `agent_scrape_request_count_total{type="failure"}` tells those apart. A scrape the proxy fails itself names
     why instead: `agent_disconnected` (look at the agent's connection, not the target), `proxy_stopped`, or
-    `invalid_response`.
+    `invalid_response`, an answer it can't use, such as a status outside 200–599, or a 204, 205, or 304.
 
 ### Histograms
 

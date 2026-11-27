@@ -309,7 +309,8 @@ proxy.internal {
 
 `maxZippedContentSizeMBytes` bounds a result the agent sends in chunks, as it arrives, before the proxy unzips it: one
 past it fails its scrape with a 502 (`invalid_response`). `maxUnzippedContentSizeMBytes` bounds any result once it's
-unzipped: one past it fails its scrape with a 413 (`payload_too_large`). The agent's own
+unzipped, and one the agent sent without gzip, as it does a small one: one past it fails its scrape with a 413
+(`payload_too_large`). The agent's own
 `agent.http.maxContentLengthMBytes` bounds what it takes from a target ([Troubleshooting](../troubleshooting.md#413-payload-too-large)).
 
 ## Transport Filter

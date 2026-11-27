@@ -57,7 +57,7 @@ internal object ProxyUtils {
           if (totalBytes > maxSize) {
             val msg = "Unzipped content size exceeds limit of $maxSize bytes"
             logger.error { msg }
-            throw ZipBombException(msg)
+            throw ContentTooLargeException(msg)
           }
           baos.write(buffer, 0, len)
         }
@@ -66,7 +66,21 @@ internal object ProxyUtils {
     }
   }
 
-  class ZipBombException(
+  // A body the agent sent plain, and its UTF-8 byte length, held to the [maxSize] an unzipped body is held to: it is
+  // unzipped content already, so proxy.internal.maxUnzippedContentSizeMBytes bounds it too. Only gRPC's message limit
+  // bounded it before, so a limit below that, 0 (refuse all content) included, let it through.
+  fun String.toDecodedContent(maxSize: Long): DecodedContent {
+    val byteCount = toByteArray().size.toLong()
+    if (byteCount > maxSize) {
+      val msg = "Content size $byteCount exceeds limit of $maxSize bytes"
+      logger.error { msg }
+      throw ContentTooLargeException(msg)
+    }
+    return DecodedContent(this, byteCount)
+  }
+
+  // A body past proxy.internal.maxUnzippedContentSizeMBytes, unzipped or sent plain.
+  class ContentTooLargeException(
     message: String,
   ) : RuntimeException(message)
 
