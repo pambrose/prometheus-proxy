@@ -117,6 +117,10 @@ All notable changes to this project are documented in this file.
   and its tour, scenarios, README, and page link into `/screens`, which `make open` opens, but while part 4 has the
   proxy stopped, when they give the agent dashboard's own address; `make up` builds from the checkout until 4.7.1 is
   on Docker Hub
+- The Kubernetes demo's proxy lists the agent's dashboard, at the port `./demo.sh agent-dashboard` forwards, and
+  Prometheus's targets as its screens, whose addresses `demo.sh` gives it through the proxy chart's `env`, and its tour,
+  scenarios, README, and page link into `/screens`, which `make open` opens; `make screenshots` adds a shot of the
+  page, and `make up` builds from the checkout until 4.7.1 is on Docker Hub
 - `examples/simple.conf` and the basics, network, and Kubernetes demos' agents serve their own metrics through the
   proxy with `agent.metrics.proxyPath`, in-process, where each scraped its own port, `localhost:8083`, as a path; all
   but the Kubernetes demo's, whose chart opens the port for its Service, leave the metrics port off

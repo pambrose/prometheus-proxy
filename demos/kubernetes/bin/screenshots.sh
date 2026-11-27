@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Kubernetes Demo page (website/prometheus-proxy/docs/kubernetes-demo.md) from
-# the running demo: it plays the page's scenarios, parts 1, 3, and 4, captures the dashboard and Prometheus in headless
-# Chrome at three times the pixel density, each a whole window, and writes lossless WebP to
+# the running demo: it plays the page's scenarios, parts 1, 3, and 4, captures the dashboard, Prometheus, and the
+# proxy's screens page in headless Chrome at three times the pixel density, each a whole window, and writes lossless
+# WebP to
 # website/prometheus-proxy/docs/images/kubernetes-demo/: <name>.webp in the dark theme and <name>-light.webp in the
 # light one, which the page shows by the reader's theme. It puts the demo back to normal when it finishes, or when it
 # fails.
@@ -34,6 +35,10 @@ cluster_port() {
 }
 DASHBOARD_URL="http://localhost:$(cluster_port "${KUBERNETES_DEMO_DASHBOARD_PORT:-}" 30094 8294)/dashboard"
 PROMETHEUS_URL="http://localhost:$(cluster_port "${KUBERNETES_DEMO_PROMETHEUS_PORT:-}" 30090 9290)"
+# The proxy's screens page, on the dashboard's port, and the port its agent tab reaches the agent's dashboard on, which
+# a port-forward holds while the screens page is taken, as `demo.sh agent-dashboard` does for a reader.
+SCREENS_URL="${DASHBOARD_URL%/dashboard}/screens"
+AGENT_DASHBOARD_PORT="${KUBERNETES_DEMO_AGENT_DASHBOARD_PORT:-8295}"
 TK=(kubectl --context kind-pp-target)
 
 # The settings in the header. SKIP_UPTIME_WAIT takes exactly 1; any other value leaves the wait in.
@@ -85,10 +90,21 @@ curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
   die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/kubernetes"
 
 WORK="$(mktemp -d)"
+FORWARD_PID=""
 
-# Undoes every scenario, whatever state a failure left the demo in: the search service goes, and the agent runs its
-# own config.
+# Stops the port-forward to the agent's dashboard, if it runs.
+stop_forward() {
+  if [[ -n "$FORWARD_PID" ]]; then
+    kill "$FORWARD_PID" 2>/dev/null || true
+    wait "$FORWARD_PID" 2>/dev/null || true
+    FORWARD_PID=""
+  fi
+}
+
+# Undoes every scenario, whatever state a failure left the demo in: the port-forward stops, the search service goes,
+# and the agent runs its own config.
 restore() {
+  stop_forward
   "$DEMO" remove-service >/dev/null 2>&1 || true
   "$DEMO" restore-config >/dev/null 2>&1 || true
   rm -rf "$WORK"
@@ -193,6 +209,31 @@ shoot_table() {
   done
 }
 
+# The screens page at a link, such as two views side by side, in each theme, a whole TABLE_WIDTH x TABLE_HEIGHT
+# window, so each pane is as wide as a dashboard window. Prometheus renders after loading its data, so the capture gets
+# its longer virtual-time budget: shoot_screens <name> <link>
+shoot_screens() {
+  local name="$1" link="$2" theme
+  for theme in "${THEMES[@]}"; do
+    capture "$SCREENS_URL#$link" "$WORK/$(named "$name" "$theme").png" "$TABLE_HEIGHT" "$theme" 8000 "$TABLE_WIDTH"
+  done
+}
+
+# Forwards AGENT_DASHBOARD_PORT to the agent's dashboard, in the background, as demo.sh agent-dashboard does, so the
+# screens page's agent tab answers, and waits until it does.
+start_forward() {
+  local port
+  port="$("${TK[@]}" -n monitoring get deployment prometheus-agent \
+    -o jsonpath='{.spec.template.spec.containers[0].ports[?(@.name=="dashboard")].containerPort}')"
+  [[ -n "$port" ]] || die "the agent's dashboard is off"
+  "${TK[@]}" -n monitoring port-forward deploy/prometheus-agent "$AGENT_DASHBOARD_PORT:$port" >/dev/null 2>&1 &
+  FORWARD_PID=$!
+  wait_until "the agent's dashboard on localhost:$AGENT_DASHBOARD_PORT" forwarded
+}
+
+# Whether the port-forward reaches the agent's dashboard yet.
+forwarded() { curl -fsS -o /dev/null "http://localhost:$AGENT_DASHBOARD_PORT/dashboard" 2>/dev/null; }
+
 # A page in each theme, a whole WIDTH x HEIGHT window: shoot_fixed <name> <url> [budget]
 shoot_fixed() {
   local name="$1" url="$2" budget="${3:-3000}" theme
@@ -230,6 +271,10 @@ step "Part 3: annotate a Service, and Prometheus scrapes it"
 "$DEMO" add-service >/dev/null
 wait_until "search up in Prometheus" prometheus_has 'up{job="search"} == 1'
 shoot_table discovered /paths
+# The proxy's Paths view beside Prometheus's targets, with the agent's tab answering, as the tour has it.
+start_forward
+shoot_screens screens "proxy/paths+prometheus/targets"
+stop_forward
 "$DEMO" remove-service >/dev/null
 
 step "Part 4: Kubernetes replaces a deleted agent pod in about a second"
@@ -240,7 +285,7 @@ shoot_table replaced /activity
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agent targets discovered replaced; do
+for name in agent targets discovered screens replaced; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"

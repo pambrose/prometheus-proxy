@@ -68,7 +68,7 @@ its targets:
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.7.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
-make up      # creates both clusters, installs everything, prints the URLs
+make up      # creates both clusters, installs everything, prints the screens page's URL
 make tour    # walks through every scenario below, pausing before each step
 make down    # deletes both clusters
 ```
@@ -76,8 +76,16 @@ make down    # deletes both clusters
 The first `make up` pulls the kind node image, and each new cluster pulls its images, the proxy's and Prometheus's or
 the agent's and Python's, which takes a few minutes. After that, `make up` on running clusters takes under a minute.
 
+Then open the proxy's [screens page](web-dashboard.md#screens), <http://localhost:8294/>, one browser tab that holds
+every screen in the demo, each in a tab of its own: the proxy's dashboard, the agent's, and Prometheus. The agent's tab
+is red until `./demo.sh agent-dashboard` forwards its port, below. `make open` opens it, and the tour's links open in
+it.
+
+Each screen also has an address of its own, which the table gives with the variable that moves its port:
+
 | What | URL | Port variable |
 |---|---|---|
+| The screens page, every screen in one tab | <http://localhost:8294/> | `KUBERNETES_DEMO_DASHBOARD_PORT` |
 | Proxy dashboard | <http://localhost:8294/dashboard> | `KUBERNETES_DEMO_DASHBOARD_PORT` |
 | Agent dashboard | <http://localhost:8295/dashboard>, while `./demo.sh agent-dashboard` runs | `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` |
 | Prometheus | <http://localhost:9290> (targets at `/targets`) | `KUBERNETES_DEMO_PROMETHEUS_PORT` |
@@ -97,7 +105,8 @@ anything shared.
 The agent's dashboard is the exception, since the target cluster publishes no port: `./demo.sh agent-dashboard` reaches
 it with `kubectl port-forward`, on `localhost` only, and holds its port only while it runs.
 `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` moves it without recreating a cluster. Nothing keeps it, so give it to each
-`./demo.sh agent-dashboard` and `make tour`, or export it in your shell.
+`./demo.sh agent-dashboard` and `make tour`, or export it in your shell, and to a `make up`, which gives the screens
+page's agent tab the port.
 
 ## What's Running
 
@@ -185,6 +194,7 @@ path's Scrape now has the agent fetch its target at once, from inside the target
 resolves. The Connection view shows the agent connected to the proxy's NodePort, and under Discovery the file the
 chart mounts from the targets ConfigMap, read every 5 seconds, with how its last read went. The Activity view lists
 what the agent did since its pod started: it connected, then registered its static path and its discovered ones.
+Open it in the screens page, whose agent tab turns green once the forward runs: <http://localhost:8294/screens#agent>
 
 The agent keeps that list in memory, so each pod starts its own, and a port-forward reaches one pod, so once the
 agent's pod is replaced, as in the scenarios below that delete the pod or change its config, it fails at the next
@@ -200,7 +210,14 @@ targets-sync sees the new Service and writes it into the agent's targets ConfigM
 into the agent's pod, the agent re-reads it and registers the path, and Prometheus picks it up from the proxy's
 `/discovery`. The path was in `/discovery` up to about 10 seconds after the Service was created, and in Prometheus up
 to about 10 seconds after that, at a 5-second discovery refresh. Nothing restarted: the agent's pod is the same one,
-and no other path missed a scrape.
+and no other path missed a scrape. The screens page shows the proxy dashboard's Paths view beside Prometheus's
+targets, where the path reaches one, then the other: <http://localhost:8294/screens#proxy/paths+prometheus/targets>
+
+<figure markdown="span">
+  ![The proxy's Paths view beside Prometheus's targets, with search_metrics on both](images/kubernetes-demo/screens.webp#only-dark){ loading=lazy }
+  ![The proxy's Paths view beside Prometheus's targets, with search_metrics on both](images/kubernetes-demo/screens-light.webp#only-light){ loading=lazy }
+  <figcaption>The proxy's screens page: search_metrics on the proxy's Paths view, from discovery, and up in Prometheus's targets</figcaption>
+</figure>
 
 <figure markdown="span">
   ![The Paths view, with search_metrics from discovery](images/kubernetes-demo/discovered.webp#only-dark){ loading=lazy }
@@ -247,8 +264,9 @@ Prometheus scrape that lands in it fails, and the next succeeds. Nobody touched 
 </figure>
 
 The agent's own dashboard reached the old pod, since a port-forward reaches one pod, so its port-forward fails at the
-next request. Run `./demo.sh agent-dashboard` again, and the new pod's Activity view lists only its own start, where
-the proxy's, above, saw both pods.
+next request, and the screens page's agent tab turns red. Run `./demo.sh agent-dashboard` again, and the tab reloads:
+the new pod's Activity view lists only its own start, where the proxy's saw both pods:
+<http://localhost:8294/screens#proxy/activity+agent/activity>
 
 ### A Config Change Restarts the Agent; a Targets Change Doesn't
 
@@ -284,7 +302,7 @@ original config back, with another replacement.
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | Both clusters' pods and Services, the Helm releases, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows a workload's logs: `agent`, the default, `proxy`, `prometheus`, `targets-sync`, or a service |  |
-| `make open` | Opens the dashboard and Prometheus's targets in the browser |  |
+| `make open` | Opens the proxy's screens page, which holds its dashboard, the agent's, and Prometheus's targets, in the browser |  |
 
 `remove-service` and `restore-config` undo every scenario. For a clean slate, `make down && make up`.
 
