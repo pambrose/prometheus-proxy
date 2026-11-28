@@ -53,6 +53,19 @@ All notable changes to this project are documented in this file.
   Kubernetes API. Each chart's new `automountServiceAccountToken` value turns it back on, for an injected sidecar that
   needs the token; a `--reuse-values` upgrade from a release without the value takes `false`, and `make helm-lint` fails
   on a render that mounts the token
+- A URL's user info was masked only up to its first `@`, so a target or config URL whose user name is an email address,
+  or whose password holds an `@`, such as `https://admin:p@ss@host/metrics`, showed the rest of it, often the
+  password, in the agent's and the proxy's logs, the dashboards, `/debug`, the scrape's trace tags, a
+  `ConfigLoadException`'s message, and the Spring Boot starter's logged properties. The mask now runs to the last `@`
+  before the host, where the agent's HTTP client reads the host from
+- The proxy's request log (`proxy.http.requestLoggingEnabled`, at DEBUG), and the line the proxy's and the dashboards'
+  servers log when a client hangs up, showed the method and path a client sent raw and whole. Ktor's CIO engine passes
+  control characters other than whitespace in a request line, so a client could write terminal escapes or forged lines
+  into the log; both are now escaped, and a long path cut, as the scrape route's own line already showed the path. The
+  agent's warning that a target's content type isn't text, which a metric filter logs, shows it cut and escaped too
+- A config file that failed to parse was logged with its raw error and stack trace, and Typesafe Config quotes the text
+  it stopped at, which can be a URL with credentials, such as `url "http://user:pass@host/metrics"`. Both are now
+  logged redacted, as a config URL's error already was
 
 ### Bug Fixes
 

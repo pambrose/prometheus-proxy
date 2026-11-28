@@ -34,6 +34,7 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.withCharset
@@ -79,6 +80,16 @@ class ProxyHttpConfigTest : StringSpec() {
     val method = ProxyHttpConfig::class.java.getDeclaredMethod(methodName, ApplicationCall::class.java)
     method.isAccessible = true
     return method.invoke(ProxyHttpConfig, call) as String
+  }
+
+  private fun callLogClientGone(
+    call: ApplicationCall,
+    cause: Throwable,
+  ) {
+    val method =
+      ProxyHttpConfig::class.java.getDeclaredMethod("logClientGone", ApplicationCall::class.java, Throwable::class.java)
+    method.isAccessible = true
+    method.invoke(ProxyHttpConfig, call, cause)
   }
 
   private fun createTestProxy(): Proxy =
@@ -392,6 +403,39 @@ class ProxyHttpConfigTest : StringSpec() {
       // Null status hits the else branch
       result shouldContain "null"
       result shouldContain "127.0.0.1"
+    }
+
+    // November 26 #42: CIO passes control characters other than whitespace in a request's method and target, so the
+    // call log shows both escaped, and a long path cut, as the scrape route logs a path; raw, a client could forge
+    // lines in the log.
+    "getFormattedLog should show the request's method and path escaped" {
+      val mockCall = mockk<ApplicationCall>(relaxed = true)
+
+      every { mockCall.response.status() } returns HttpStatusCode.NotFound
+      every { mockCall.request.origin.method } returns HttpMethod("GET\r\nX")
+      every { mockCall.request.origin.uri } returns "/metrics\r\n200 OK: GET - /forged?token=abc"
+      every { mockCall.request.origin.remoteHost } returns "10.0.0.1"
+
+      callGetFormattedLog(mockCall) shouldBe
+        "404 Not Found: GET\\r\\nX - /metrics\\r\\n200 OK: GET - /forged - 10.0.0.1"
+
+      every { mockCall.request.origin.uri } returns "/" + "a".repeat(200)
+
+      callGetFormattedLog(mockCall) shouldBe "404 Not Found: GET\\r\\nX - /${"a".repeat(63)}... - 10.0.0.1"
+    }
+
+    // The StatusPages handler for a client that hung up, which the dashboards' servers install too
+    "a call its client ended should be logged with its path escaped" {
+      val mockCall = mockk<ApplicationCall>(relaxed = true)
+      every { mockCall.request.origin.uri } returns "/metrics\r\nforged"
+
+      val events =
+        captureLogs<ProxyHttpConfig>(LogbackLevel.DEBUG) {
+          callLogClientGone(mockCall, CancellationException("gone"))
+        }
+
+      events.map { it.formattedMessage } shouldBe
+        ["Call to /metrics\\r\\nforged ended by the client: CancellationException - gone"]
     }
 
     // ==================== configureCallLogging Filter Tests ====================

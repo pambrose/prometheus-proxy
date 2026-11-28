@@ -33,9 +33,16 @@ import java.security.MessageDigest
 
 internal object Utils {
   private const val REDACTED = "***"
-  private val USERINFO_REGEX = Regex("(://)[^@/?#]+@")
 
-  // A URL inside free text: a scheme, "://", then everything up to the next whitespace.
+  // A URL's user info: from "://" to the last "@" before the authority ends, at "/", "?", "#", or a backslash, as
+  // Ktor's URL parser reads it. A user name that's an email address, or a password with an "@" in it, is masked whole;
+  // stopping at the first "@" showed the rest of it (November 26 #37).
+  private val USERINFO_REGEX = Regex("""(://)[^/?#\\]+@""")
+
+  // A URL inside free text: a scheme, "://", then everything up to the next whitespace. Nothing shorter, such as
+  // punctuation after what looks like a host and port, can end it: user info may hold any of those characters
+  // (`http://bob:2024'pw@host`), and a password left whole is worse than a path-less URL masked to an "@" in the text
+  // after it (November 26 #37).
   private val URL_IN_TEXT_REGEX = Regex("""[A-Za-z][A-Za-z0-9+.-]*://\S+""")
   private const val TRAILING_PUNCTUATION = ",.;:)]}>'\""
   private const val KOTLIN_LOGGING_STARTUP_PROPERTY = "kotlin-logging.logStartupMessage"
@@ -54,8 +61,8 @@ internal object Utils {
   /**
    * Masks secrets in a URL before it is logged or echoed back to Prometheus.
    *
-   * Redacts both the userinfo component (`user:pass@host` becomes `***@host`) and every
-   * query-parameter value (`?token=secret&job=x` becomes `?token=***&job=***`). Query values are
+   * Redacts both the userinfo component, up to the last `@` before the host (`user:p@ss@host` becomes `***@host`), and
+   * every query-parameter value (`?token=secret&job=x` becomes `?token=***&job=***`). Query values are
    * redacted unconditionally rather than via a key allowlist, since custom secret parameter names
    * (api_key, access_token, sig, …) cannot be enumerated in advance. The fragment is preserved.
    */

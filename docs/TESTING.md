@@ -487,7 +487,8 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved;
   a quoted name judged by its name, blanks before it in the braces or not; and why a filter lets a scrape through
-  unfiltered, told once per cause, and a dashboard's preview that it lets through leaving no trace
+  unfiltered, told once per cause, its warning showing the target's content type cut and escaped, and a dashboard's
+  preview that it lets through leaving no trace
 
 Three support helpers also live here (not test classes themselves):
 
@@ -542,7 +543,8 @@ Three support helpers also live here (not test classes themselves):
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; the status line given as the body
   of a 404 without one, an unknown route's or an empty one, and a 404 with a body of its own keeping it; a call
   cancelled by a client disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception
-  still logs at WARN
+  still logs at WARN; the call log and the disconnect's line show the request's method and path escaped, a long path
+  cut
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
   ensureLeadingSlash, and the service discovery route on and off; the scrape port's `nosniff` and sandbox headers;
   `recordScrapeOutcome`'s `/debug` line, scrape record, and event, each only while its consumer is on, with a huge

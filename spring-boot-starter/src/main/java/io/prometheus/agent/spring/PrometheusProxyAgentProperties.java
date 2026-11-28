@@ -303,13 +303,15 @@ public class PrometheusProxyAgentProperties {
     return secret == null || secret.isBlank() ? "(none)" : "(set)";
   }
 
-  // A URL as toString shows it, masked as the agent's logs mask one: its user info, up to the first @, and each query
-  // value, whose key is kept, since a credential such as an api_key can be either
+  // A URL as toString shows it, masked as the agent's logs mask one: its user info, up to the last @ before the host,
+  // where the authority ends at /, ?, #, or a backslash, so a user name that's an email address or a password with an
+  // @ in it is masked whole; and each query value, whose key is kept, since a credential such as an api_key can be
+  // either
   static String shownUrl(String url) {
     if (url == null) {
       return null;
     }
-    String masked = url.replaceAll("(://)[^@/?#]+@", "$1***@");
+    String masked = url.replaceAll("(://)[^/?#\\\\]+@", "$1***@");
     int query = masked.indexOf('?');
     if (query < 0) {
       return masked;

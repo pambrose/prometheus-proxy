@@ -141,8 +141,8 @@ class PrometheusProxyAgentAutoConfigurationTest {
         });
   }
 
-  // The properties' toString, there so they can be logged, masks a target URL as the agent's logs do: its user info and
-  // each query value, keeping the keys
+  // The properties' toString, there so they can be logged, masks a target URL as the agent's logs do: its user info, up
+  // to the last @ before the host, and each query value, keeping the keys
   @Test
   void theLoggedPropertiesMaskATargetUrlsCredentialsAndQueryValues() {
     runner
@@ -156,8 +156,23 @@ class PrometheusProxyAgentAutoConfigurationTest {
     assertThat(PrometheusProxyAgentProperties.shownUrl("http://grinder:9100/metrics")).isEqualTo(
         "http://grinder:9100/metrics");
     assertThat(PrometheusProxyAgentProperties.shownUrl("http://a@b@grinder/m?flag&k=v&")).isEqualTo(
-        "http://***@b@grinder/m?flag&k=***&");
+        "http://***@grinder/m?flag&k=***&");
     assertThat(PrometheusProxyAgentProperties.shownUrl(null)).isNull();
+  }
+
+  // A user name that's an email address, or a password with an @ in it, is masked whole: stopping at the first @, as
+  // the mask once did, showed the rest of it. An @ after the host, in the path, is left alone.
+  @Test
+  void aTargetUrlsUserInfoIsMaskedUpToTheLastAtBeforeTheHost() {
+    assertThat(PrometheusProxyAgentProperties.shownUrl("https://alice@corp.com:s3cr3t@grinder/metrics")).isEqualTo(
+        "https://***@grinder/metrics");
+    assertThat(PrometheusProxyAgentProperties.shownUrl("https://admin:p@ssword@grinder:9100/metrics")).isEqualTo(
+        "https://***@grinder:9100/metrics");
+    assertThat(PrometheusProxyAgentProperties.shownUrl("https://grinder/@alice")).isEqualTo("https://grinder/@alice");
+    assertThat(PrometheusProxyAgentProperties.shownUrl("https://u:pw@grinder/@alice")).isEqualTo(
+        "https://***@grinder/@alice");
+    assertThat(PrometheusProxyAgentProperties.shownUrl("https://grinder\\@alice")).isEqualTo(
+        "https://grinder\\@alice");
   }
 
   @Test

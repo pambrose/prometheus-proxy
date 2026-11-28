@@ -34,6 +34,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
@@ -585,6 +586,26 @@ class UtilsTest : StringSpec() {
       sanitizeUrl("http://admin@host/metrics") shouldBe "http://***@host/metrics"
     }
 
+    // November 26 #37: a user name that's an email address, or a password with an "@" in it, runs to the last "@"
+    // before the host, where Ktor's URL parser reads the host from. Stopping at the first "@" showed the rest of it.
+    "sanitizeUrl should strip user info up to the last @ before the host" {
+      sanitizeUrl("https://alice@corp.com:s3cr3t@metrics.internal/metrics") shouldBe
+        "https://***@metrics.internal/metrics"
+      sanitizeUrl("https://admin:p@ssword@metrics.internal/metrics") shouldBe "https://***@metrics.internal/metrics"
+      sanitizeUrl("http://user:p@ss@host:$PROXY_HTTP_PORT") shouldBe "http://***@host:$PROXY_HTTP_PORT"
+      sanitizeUrl("http://user:p@ss@[::1]:$PROXY_HTTP_PORT/m?k=v") shouldBe "http://***@[::1]:$PROXY_HTTP_PORT/m?k=***"
+      // A URL alone has no text after it, so a quote or a space in a password is the password's, as Ktor reads it
+      sanitizeUrl("http://user:p\"a ss@host/m") shouldBe "http://***@host/m"
+    }
+
+    // The authority ends at "/", "?", "#", or "\", so an "@" after it is the path's, the query's, or the fragment's
+    "sanitizeUrl should leave an @ after the host alone" {
+      sanitizeUrl("https://host/@alice") shouldBe "https://host/@alice"
+      sanitizeUrl("https://host#@alice") shouldBe "https://host#@alice"
+      sanitizeUrl("https://host\\@alice") shouldBe "https://host\\@alice"
+      sanitizeUrl("https://user:pw@host/@alice") shouldBe "https://***@host/@alice"
+    }
+
     "sanitizeUrl should not modify URL without credentials" {
       sanitizeUrl("http://host:$PROXY_HTTP_PORT/metrics") shouldBe "http://host:$PROXY_HTTP_PORT/metrics"
     }
@@ -677,6 +698,41 @@ class UtilsTest : StringSpec() {
     "sanitizeUrlsInText should redact every URL in the text" {
       sanitizeUrlsInText("from https://a:b@one/x?k=1 to http://two/y?s=2") shouldBe
         "from https://***@one/x?k=*** to http://two/y?s=***"
+    }
+
+    // November 26 #37: as for a URL alone, the user info runs to the last "@" before the host
+    "sanitizeUrlsInText should redact user info up to the last @ before the host" {
+      sanitizeUrlsInText("timed out [url=https://alice@corp.com:s3cr3t@host:9100/m, connect_timeout=1 ms]") shouldBe
+        "timed out [url=https://***@host:9100/m, connect_timeout=1 ms]"
+      sanitizeUrlsInText("from http://a:p@ss@one/x to http://b@corp.com:pw@two/y") shouldBe
+        "from http://***@one/x to http://***@two/y"
+      sanitizeUrlsInText("Key 'url \"http://user:p@ss@host/metrics\"' may not be followed by token: '}'") shouldBe
+        "Key 'url \"http://***@host/metrics\"' may not be followed by token: '}'"
+    }
+
+    // Whitespace ends a URL in text, so a URL with no user info doesn't run on to an "@" in a later word
+    "sanitizeUrlsInText should leave an @ in a later word alone" {
+      listOf(
+        "failed to load http://host:80/x, contact ops@example.com",
+        "failed to load http://host:80, contact ops@example.com",
+        "failed to load http://host:80 (ops@example.com)",
+      ).forEach { text -> sanitizeUrlsInText(text) shouldBe text }
+    }
+
+    // Only whitespace ends a URL in text: user info may hold any punctuation, even right after digits that look like a
+    // port, so a password with a quote, a comma, or a bracket in it is redacted whole
+    "sanitizeUrlsInText should redact a password with punctuation in it" {
+      sanitizeUrlsInText("[url=http://user:pa\"ss@host/m, x]") shouldBe "[url=http://***@host/m, x]"
+      sanitizeUrlsInText("[url=http://user:p,a@ss@host/m]") shouldBe "[url=http://***@host/m]"
+      sanitizeUrlsInText("[url=http://user:p'w>@host/m]") shouldBe "[url=http://***@host/m]"
+      sanitizeUrlsInText("load 'http://bob:2024'pw@host/m' failed") shouldBe "load 'http://***@host/m' failed"
+      sanitizeUrlsInText("[url=http://admin:1234,x@host/m]") shouldBe "[url=http://***@host/m]"
+    }
+
+    // A path-less URL followed, in the same word, by text with an "@" is masked up to that "@": redaction errs toward
+    // masking too much rather than leaving a password whole
+    "sanitizeUrlsInText should mask too much rather than too little" {
+      sanitizeUrlsInText("""{"url":"http://host:9100","owner":"ops@example.com"}""") shouldNotContain "host:9100"
     }
 
     // A URL ends at whitespace, not at a comma: a comma is legal inside a query value, and stopping there

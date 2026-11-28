@@ -17,6 +17,7 @@
 package io.prometheus.agent.filter
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.Exposition
 import java.nio.charset.CharacterCodingException
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -164,7 +165,9 @@ internal class MetricFilter private constructor(
     when (reason) {
       FailOpenReason.NON_TEXT -> {
         if (contentTypeWarned.compareAndSet(expectedValue = false, newValue = true)) {
-          logger.warn { "Skipping metric filter for /$path: content type \"$contentType\" is not text" }
+          // The target's, so cut and escaped, as a value from outside the agent is logged (November 26 #42)
+          val shown = shownValue(contentType, SHOWN_CONTENT_TYPE_CHARS)
+          logger.warn { "Skipping metric filter for /$path: content type \"$shown\" is not text" }
           onFailedOpen("a scrape's content type, $contentType, was not text")
         }
       }
@@ -323,6 +326,9 @@ internal class MetricFilter private constructor(
         MetricFilter(path, allow.map { compile(it, path) }, deny.map { compile(it, path) }, onFailedOpen)
 
     private const val INVALID_UTF8 = "a scrape's body was not valid UTF-8"
+
+    // How much of a content type the warning shows, enough for any the exposition formats use
+    private const val SHOWN_CONTENT_TYPE_CHARS = 256
 
     private fun compile(
       pattern: String,
