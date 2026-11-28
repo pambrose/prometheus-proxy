@@ -33,7 +33,8 @@ import java.io.File
 // shows and why that matters, which make up and make tour link to. The parts are the tour's TOUR_PARTS in demo.sh, so a
 // part renamed, added, or dropped there fails here until both tables, and the README's Guided Tour, follow. The table
 // reads as a table of contents for what follows it, so a page's row links only to a section below the table, and a
-// README's to its part's section of its Guided Tour.
+// README's to its part's section of its Guided Tour. A demo's bin/screenshots.sh that announces a scene by the tour
+// part it shows names that part as TOUR_PARTS does, so it follows a rename too.
 class DemoTourTablesTest : StringSpec() {
   private class Row(
     val number: Int,
@@ -48,6 +49,7 @@ class DemoTourTablesTest : StringSpec() {
     val script: String by lazy { File(dir, "demo.sh").readText() }
     val readme: String by lazy { File(dir, "README.md").readText() }
     val page: File get() = File(SITE_DIR, "$name-demo.md")
+    val screenshots: String by lazy { File(dir, "bin/screenshots.sh").takeIf { it.isFile }?.readText().orEmpty() }
 
     // The tour's parts, in order, without the minutes each entry starts with.
     val parts: List<String> by lazy {
@@ -106,6 +108,19 @@ class DemoTourTablesTest : StringSpec() {
           rows(text).mapNotNull { it.anchor }.filterNot { it in below }.shouldBeEmpty()
         }
       }
+    }
+
+    // The network, nginx, and Kubernetes scripts announce a scene with step "Part <n>: <name>", the tour's own part
+    // number and name, on one line; the other demos' scenes don't follow the tour's parts, and name none.
+    "each tour part a demo's screenshots script names should be that part of its tour, by its name" {
+      val steps = demos.flatMap { demo -> PART_STEP.findAll(demo.screenshots).map { demo to it }.toList() }
+      steps.shouldNotBeEmpty()
+
+      steps
+        .filterNot { (demo, step) ->
+          val (number, rest) = step.destructured
+          rest == "${demo.parts.getOrNull(number.toInt() - 1)}\""
+        }.map { (demo, step) -> "${demo.name}/bin/screenshots.sh: ${step.value.trim()}" } shouldBe emptyList()
     }
 
     "each demo's PAGE_URL should be its website page, which make up and make tour link to" {
@@ -174,6 +189,10 @@ class DemoTourTablesTest : StringSpec() {
     private val TOUR_PARTS =
       Regex("""^TOUR_PARTS=\(\n(.*?)\n\)""", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))
     private val TOUR_PART = Regex("""^\s+"\d+ (.+)"$""", RegexOption.MULTILINE)
+
+    // A screenshots step that names a tour part, with the rest of its line after the part's number: the part's name and
+    // the closing quote, so a name continued on the next line doesn't match the part's.
+    private val PART_STEP = Regex("""^\s*step "Part (\d+): (.*)$""", RegexOption.MULTILINE)
     private val MARKDOWN_FILE = Regex("""\.md\b""")
     private val PAGE_URL = Regex("""^PAGE_URL="https://prometheus-proxy\.com/([a-z-]+)/"$""", RegexOption.MULTILINE)
 
