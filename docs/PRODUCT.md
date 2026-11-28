@@ -62,20 +62,23 @@ defaults. The everyday settings are reachable from all four, because deployment 
 which one they can control (a Kubernetes ConfigMap, a systemd unit, a `docker run` line). Not every
 setting is: the dashboards' login and the TLS PEMs have an env var but no CLI flag; `agent.discovery`, the `internal`
 tuning, and the rest of the tuning, such as the dashboards' beyond their port, path, and host, have neither (a `-D`
-override sets them); and the lists of objects, `proxy.auth`, `proxy.dashboard.links`, `agent.pathConfigs`, and
-`agent.filters`, are set in the config file only.
+override sets them); and the lists of objects, `proxy.auth`, `proxy.dashboard.links`, `proxy.dashboard.screens`,
+`agent.pathConfigs`, and `agent.filters`, are set in the config file only.
 
 **Surfaces in scope for design work:**
 
 1. **The operational dashboard** — served from its own port (default `8094`, base path `/dashboard`),
-   **opt-in and disabled by default**. Four bookmarkable layouts, switched by folder tabs: an agent view
-   (master–detail: which agents are connected, what each is doing), a path view (a table of every
-   registered path and how its recent scrapes went, *including paths whose agent has departed* —
-   precisely the case that used to vanish from view — with search, a problems-only filter, scrape-now,
-   and links out to Prometheus, Grafana, or a runbook), an activity view (what the proxy did with its
-   agents and paths, including what it refused, newest first), and a settings view (how the proxy is set
+   **opt-in and disabled by default**. Four bookmarkable layouts, switched by underlined tabs, each an icon
+   before its name: an agent view (master–detail: which agents are connected, what each is doing), a path view
+   (a table of every registered path and how its recent scrapes went, *including paths whose agent has
+   departed* — precisely the case that used to vanish from view — with search, a problems-only filter,
+   scrape-now, and links out to Prometheus, Grafana, or a runbook), an activity view (what the proxy did with
+   its agents and paths, including what it refused, newest first), and a settings view (how the proxy is set
    up, as it resolved its flags, env vars, config, and defaults). A status bar carries connection liveness
-   and proxy-internal health counters. Updates arrive live over a WebSocket.
+   and proxy-internal health counters. Updates arrive live over a WebSocket. While `proxy.dashboard.screens` lists
+   any, the same port also serves a screens page, `/screens`, which the port's root and the dashboard's bar lead to: the
+   dashboard and each listed screen (agents' dashboards, Grafana, Prometheus) in a tab and a frame, one at a time,
+   two side by side, or all in a grid, each tab with a dot that says whether its screen answers.
 2. **A project landing page** — a surface that persuades a prospective adopter, distinct from the
    reference documentation.
 
@@ -110,9 +113,10 @@ Explicitly **out of scope** for now: the Zensical documentation site at
 - TLS with optional mutual auth.
 - An agent dashboard (`agent.dashboard`, off by default) on the same design system and server code as the proxy's,
   showing what the proxy's can't: an agent's connection while it can't reach the proxy, each path the proxy
-  refused, with its reason, each path's scrapes as the agent saw them, with a Scrape now that fetches a target
-  from the agent and, like the proxy's, is counted nowhere, and an activity feed of what happened to the agent's
-  connection and paths. The same no-CDN constraint binds it.
+  refused, with its reason, each path's scrapes as the agent saw them, and an activity feed of what happened to the
+  agent's connection and paths. Its Scrape now fetches a target from the agent and is counted in no metric, where
+  the proxy's is counted on the agent, in `agent_dashboard_scrapes_total` rather than its `agent_scrape_*` metrics.
+  The same no-CDN constraint binds it.
 
 **Binding constraint — no CDN, no external assets.** Everything the dashboard serves must be
 self-contained in the JAR. htmx ships as a vendored WebJar for exactly this reason. No Google Fonts,
@@ -139,7 +143,8 @@ lives relative to the docs site.
 
 - **Name:** `prometheus-proxy` (lowercase, hyphenated) is the project name. The two services are `proxy`
   and `agent`. A dashboard's brand mark is the logo beside its name, `Proxy: host:port` or
-  `Agent: name`, which says which proxy or agent the page is.
+  `Agent: name`, which says which proxy or agent the page is; the screens page and the login page name the product,
+  `Prometheus Proxy`, beside the logo.
 - **License:** Apache 2.0. Author: Paul Ambrose. Repository: `pambrose/prometheus-proxy`.
 - **Existing assets:** the architecture diagram at `docs/prometheus-proxy.png`, from which `make readme-diagram`
   makes the light and dark versions the README shows (`docs/prometheus-proxy-light.png` and
@@ -156,7 +161,7 @@ lives relative to the docs site.
 
 **Real and usable:**
 
-- **Repo signals only** — GitHub releases (v4.6.0, released 2026-11-20), Docker Hub pull counts for
+- **Repo signals only** — GitHub releases (v4.7.0, released 2026-11-24), Docker Hub pull counts for
   both images, Maven Central presence, Apache 2.0 license, CI / Codecov / Codacy badges. All
   independently verifiable.
 - **Working configuration and demonstration** — the config examples under `examples/`, the reference
@@ -195,6 +200,7 @@ verifiable repo signals. Nothing else is available.
 ## Accessibility & Inclusion
 
 No formal conformance standard has been committed to, and none should be claimed. The existing
-dashboard already handles `:focus-visible` outlines and `prefers-reduced-motion`, and light/dark
-schemes via `prefers-color-scheme`; keep doing sensible things at that level. Recorded here so a
-future pass does not re-ask: this was a deliberate decision, not an oversight.
+dashboard already handles `:focus-visible` outlines, `prefers-reduced-motion`, forced colors, and light/dark
+schemes, following `prefers-color-scheme` unless the theme button in the bar sets light or dark; keep doing
+sensible things at that level. Recorded here so a future pass does not re-ask: this was a deliberate decision, not
+an oversight.

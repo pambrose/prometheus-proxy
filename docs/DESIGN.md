@@ -80,7 +80,7 @@ typography:
 rounded:
   none: "0"
   tab: "6px"
-  bar-end: "3px"
+  control: "3px"
   pill: "20px"
   dot: "50%"
 spacing:
@@ -233,23 +233,24 @@ entire job is telling an operator whether something is broken. Every visual deci
 that: if the dashboard is ever wrong, or ever *looks* wrong, it has failed at the one thing it exists
 to do.
 
-The system's discipline shows most in what it refuses. There are no shadows, anywhere: the one `box-shadow` draws a
-hairline, not depth. There are no transitions, anywhere — hover, selection, and live swaps all land instantly, which is
-itself a claim about latency the interface then has to keep. The accent color has exactly two jobs on the entire
-surface: focus, and the current item. The only thing that moves is a 7px dot reporting whether the socket is alive. This
-is a system built by subtraction, and the remaining elements are load-bearing.
+The system's discipline shows most in what it refuses. There are no shadows, anywhere: where a `box-shadow` is used,
+it draws a line inside its element, not depth. There are no transitions, anywhere — hover, selection, and live swaps
+all land instantly, which is itself a claim about latency the interface then has to keep. The accent color has exactly
+two jobs on the entire surface: focus, and the current item. The only thing that moves is a 7px dot reporting whether
+the socket is alive. This is a system built by subtraction, and the remaining elements are load-bearing.
 
 **Key Characteristics:**
 
 - One typeface — monospace — at 12.5px base, for every role from title to micro-label.
-- Zero shadows. Depth is four tonal planes plus two hairline weights. The one `box-shadow`, the Links column's hover
-  ring, is a hairline.
-- Two radii: `0` and fully round. Rectangles hold content; circles report status. The exceptions are the top corners
-  of the tabs' hover ground and the `3px` corners of the bar's end, the Theme Button and Log out.
+- Zero shadows. Depth is four tonal planes plus two hairline weights. Each `box-shadow` draws a line inside its
+  element, with no blur: the Links column's hover ring, and the More menu's edge for Split's right screen.
+- Square for content, round for status. Rectangles hold content; circles report status. Between them are two small
+  radii and no more: `6px` for the tab row (the tabs' hover ground, and on the screens page the More button and its
+  menu), and `3px` for the bordered controls and the screens page's panes.
 - The accent is used twice: focus rings and the current item's edge. It never fills a surface.
 - No CSS transitions. The only animation in the system is the connection beacon.
-- Full-bleed layout — no centered container, no max-width, no page margins.
-- Complete light/dark parity via `prefers-color-scheme`; neither theme is the afterthought.
+- Full-bleed layout — no centered container, no max-width, no page margins but the screens page's 10px stage.
+- Complete light/dark parity via `prefers-color-scheme` or the Theme Button; neither theme is the afterthought.
 
 ## Colors
 
@@ -401,7 +402,9 @@ region needs more prominence, it gets a hairline, not bigger type.
 ## Layout
 
 **Full-bleed, no container.** There is no `max-width`, no centered column, no page padding. The
-interface occupies the entire viewport, because a dashboard on a wide monitor should use the monitor.
+interface occupies the entire viewport, because a dashboard on a wide monitor should use the monitor. The screens
+page's stage is the one region with padding: its panes are cards, `10px` apart and `10px` in from the window's edges,
+on `bg`, so the pages they frame read as separate pages.
 
 **The master–detail grid.** `262px 1fr`. The 262px list column is sized to hold a typical agent name
 plus its address line without wrapping.
@@ -410,7 +413,8 @@ plus its address line without wrapping.
 and the content region is `flex: 1`, so it occupies exactly the space the top bar leaves. It must not
 go back to subtracting a bar height: the bar sizes itself from its own content and grows on touch
 devices, so any hard-coded number is wrong on some viewport — the previous `calc(100vh - 44px)` was
-subtracting 44px from a bar that actually measured 48px.
+subtracting 44px from a bar that actually measured 48px. The screens page sets `body` to the window's height rather
+than a minimum of it, so its stage, `flex: 1`, takes exactly what the bar leaves and a frame is as tall as it can be.
 
 **The path table.** Deliberately flat — no selection, no drill-in, no per-session state. The row *is*
 the answer. Column headers are `position: sticky; top: 0`, and the whole table lives inside its own
@@ -430,15 +434,16 @@ values align down the pane without a table.
 the list's right border becomes a bottom border, and the tabs take a row of their own, the top bar's last, so the
 current tab's line still lies on its rule. Above it, the bar's tail, the counters and the buttons after them, keeps
 beside the tabs while it has `380px` or its widest stat and buttons, and otherwise takes a row of its own above the
-brand and tabs, whole, set by the content rather than a second breakpoint. Nothing else changes — no hamburger, no
-drawer, no reflowed table. The table keeps its horizontal scroller, which is the correct mobile behavior for tabular
-data.
+brand and tabs, whole, set by the content rather than a second breakpoint. On the screens page, whose bar has no
+tail, the tabs take the bar's free width and keep to one row, a More button holding those that don't fit, and below
+720px Split stacks its two panes, the left one on top. Nothing else changes — no hamburger, no drawer, no reflowed
+table. The table keeps its horizontal scroller, which is the correct mobile behavior for tabular data.
 
-**One input-mode breakpoint: `pointer: coarse`.** Tabs grow to 44px tall on touch
-devices only. Target size is a property of the *input*, not the viewport — a tablet is wide and
-touch-driven, a narrow desktop window is neither — so this is deliberately not folded into the 720px
-rule, and pointer devices keep the dense 26px tab rather than paying for vertical space they cannot
-use.
+**One input-mode breakpoint: `pointer: coarse`.** Tabs grow to 44px tall, and the bar's buttons, the screens page's
+buttons, and the More menu's search and entries to 46px, on touch devices only. Target size is a property of the
+*input*, not the viewport — a tablet is wide and touch-driven, a narrow desktop window is neither — so this is
+deliberately not folded into the 720px rule, and pointer devices keep the dense 26px tab rather than paying for
+vertical space they cannot use.
 
 ### Named Rules
 
@@ -451,9 +456,13 @@ scroller before it ships.
 ## Elevation & Depth
 
 **There are no shadows in this system.** Depth is built entirely from two mechanisms: four tonal planes and two
-hairline weights. The one `box-shadow` declaration is no exception to that: the Links column's hover ring
-(`inset 0 0 0 1px` in `ink-3`, see Row Links) has no offset and no blur, so it draws a `1px` hairline inside a mark's
-round target without changing the target's size.
+hairline weights. The `box-shadow` declarations are no exception to that: each is inset and has no blur, so it draws
+a line inside its element without changing the element's size. The Links column's hover ring (`inset 0 0 0 1px` in
+`ink-3`, see Row Links) draws a `1px` hairline inside a mark's round target; the More menu's entry for Split's right
+screen (`inset 2px 0 0` in `ink-3`) draws a `2px` left edge, matching the line under its tab; and in forced colors a
+screen's dot that isn't answering is a `1.5px` ring drawn the same way.
+
+The More menu, the one layer that floats over the page, stands off it on its `line` border alone.
 
 The tonal planes do not form a simple light-to-dark ramp. `surface` is the **reading plane**;
 `surface-2` and `surface-3` step *away* from it in the direction of contrast — darker in light mode,
@@ -468,8 +477,8 @@ structure before it resolves content — you see the panes, then the rows, then 
 
 **The No-Shadow Rule.** Zero shadows. Not for hover, not for panels, not for the "elevated" state of
 anything. If an element needs to separate from its neighbor, it gets a hairline or a tonal step. A `box-shadow` that
-draws only a hairline, inset, with no offset or blur, as the Links column's hover ring does, is a hairline, not a
-shadow; anything softer is a shadow.
+draws only a line inside its element, inset and with no blur, as the Links column's hover ring and the More menu's
+edge do, is a line, not a shadow; anything softer, or drawn outside the element, is a shadow.
 
 **The Reading Plane Rule.** `surface` is where content is read. `surface-2` and `surface-3` are always
 *away* from it in contrast, never toward it. When adding a plane, ask which direction from the reading
@@ -477,33 +486,44 @@ plane it belongs, not whether it is lighter or darker in absolute terms.
 
 ## Shapes
 
-The form language is **two radii and nothing between them.**
+The form language is **square for content, round for status, and two small radii for controls.**
 
 - **`0` — everything structural.** Panels, rows, cells, the top bar, section headers, empty states, the
-  table. No rounded corners on any container, with one exception, below.
-- **`6px` on the tabs' hover ground, and only there.** A tab is a handle on the layout below it, not a
-  container, and the ground its hover lays is rounded, as a code host's tabs are, so it reads as a control on
-  the bar rather than a box.
-- **`3px` on the bar's end: the Theme Button and the Log out button.** The corners of their quiet `line`
-  border. They're controls, neither a container nor a report of state.
+  table, and the Path Search's field, which holds content. The regions of a dashboard meet each other at
+  hairlines, and no corner where they meet is rounded.
 - **Fully round (`20px` on short elements, `50%` on dots) — everything that reports state.** Status
-  pills, tags, LEDs, the connection beacon.
+  pills, tags, LEDs, the connection beacon, the History Strip's dots, and a screen's dot. The icon buttons (the
+  Copy Button and its kin) and a Row Link's mark have round targets too, which their hover fills or rings.
+- **`6px` — the tab row.** The tabs' hover ground, all four corners: a tab is a handle on the layout below it,
+  not a container, and the ground its hover lays is rounded, as a code host's tabs are, so it reads as a control
+  on the bar rather than a box. On the screens page, the More button that ends the row, at a tab's height, and
+  the menu it opens take the same `6px`.
+- **`3px` — the bordered controls.** The corners of a quiet `line` border: the bar's end (the Theme Button
+  and Log out), the proxy's Screens link, and on the screens page the One, Split, and All control (its outer
+  corners), the handoff's button, a pane's picker, and the More menu's search; and the hover ground of a More
+  menu entry. They're controls, neither a container nor a report of state.
+- **`3px` on the screens page's panes.** A pane holds another page in a frame and stands apart on the stage's
+  `bg`, `10px` from its neighbours, rather than meeting them at a hairline: a card, not a region of this page.
 
-The split is semantic, not decorative: **rectangles hold content, round things report status.** A
-7px circle is a lamp. A 20px-radius capsule is a badge. Neither shape is ever used for a container,
-and no container is ever softened toward them. Apart from the tabs and the bar's end, there is no
-`4px`, no `6px`, no `8px` radius in the system (the Login Page, its one deliberate exception, aside), and introducing
-one would blur a distinction that currently does real work.
+The split is semantic, not decorative: **rectangles hold content, round things report status, and a control
+may take a small radius.** A 7px circle is a lamp. A 20px-radius capsule is a badge. Neither shape is ever used
+for a container, and no region that meets another at a hairline is ever softened. The only containers with a
+radius are the two that meet no neighbour at a hairline, the screens page's panes and the More menu, which
+floats; each takes a control's radius. Beyond `3px` and `6px` there is no `4px`, no `8px`, no `12px` radius in
+the system (the Login Page, its one deliberate exception, aside), and introducing one would blur a distinction
+that currently does real work.
 
-Borders carry the remaining form language: 1px hairlines for structure,
-and the current-item edges in `accent`, the only borders in the system thicker than a hairline: the row item's
-2px left border, transparent at rest, and the current tab's 2px bottom.
+Borders carry the remaining form language: 1px hairlines for structure, and `2px` edges for the current item,
+the only lines in the system thicker than a hairline: in `accent`, the row item's 2px left border, transparent
+at rest, and the current tab's 2px bottom; and, quieter, in `ink-3`, the screens page's mark on Split's right
+screen, along its tab's bottom and its More menu entry's left side.
 
 ### Named Rules
 
-**The Square-or-Circle Rule.** Radius is `0` or fully round. Nothing in between ships, but for the
-tabs' hover ground and the bar's end's `3px`. If a new element feels like it wants `6px`, it is a container
-and it wants `0`.
+**The Square-or-Circle Rule.** Content is square and state is round. The only radii between them are the tab
+row's `6px` and the bordered controls' `3px`, which the two containers that meet no neighbour at a hairline, the
+More menu and the screens page's panes, borrow. If a new element feels like it wants a radius and isn't a control,
+it is a container, and unless it meets no neighbour at a hairline, it wants `0`.
 
 ## Components
 
@@ -659,8 +679,7 @@ Activity layouts; the Agents layout has no table columns to explain.
 - **One list:** each view builds its columns once (`TableColumn`), and the header row and the guide both iterate them,
   so a column can't reach the header without an explanation, and the guide lists Identity and Links exactly when the
   table shows them. The Event explanation names the problem kinds from `ActivityKind`, so a new kind can't be left out.
-- **A strip, not a layer:** it pushes the table down. A floating panel would need a shadow (see The No-Shadow Rule)
-  and would cover the columns it explains.
+- **A strip, not a layer:** it pushes the table down. A floating panel would cover the columns it explains.
 - **Survives pushes:** outside every out-of-band region, so it stays open as the table updates. Tooltips or a pop-up
   per header were ruled out for this reason: the table's header is replaced with it every refresh, which would close
   them; hover reaches neither touch nor the keyboard; and ten icons would crowd the engraved header.
@@ -831,11 +850,18 @@ line (`6px` below 720px, where the tabs take a row of their own). The brand mark
 leads with the logo's small-size cut, `18px`, `7px` before the dashboard's name (`DashboardLogo.brand`) and centered on
 its line, which is taller, so the mark changes neither the bar's height nor the name's place. The name says which
 process the page is, `Proxy: ` and the proxy's host and scrape port, or `Agent: ` and the agent's name, cut with an
-ellipsis past 48 characters (`DashboardLogo.BRAND_MAX_CHARS`) and given whole in its tooltip. One
-row above 720px, where the counters wrap within themselves rather than push the tabs off the rule. Left to
-right: the brand mark, the layout's tabs, then the
-connection beacon and a run of counters — agents, paths, and the internal chunk/scrape gauges, which
-turn `warn` as they approach their thresholds.
+ellipsis past 48 characters (`DashboardLogo.BRAND_MAX_CHARS`) and given whole in its tooltip. Left to right:
+the brand mark, the layout's tabs, then the bar's tail (`DashboardPage.barTail`): the connection beacon and a run
+of counters — agents, paths, and the internal chunk/scrape gauges, which turn `warn` as they approach their
+thresholds — then, on a proxy whose `proxy.dashboard.screens` lists any, the Screens link, and the bar's end, the
+Theme Button and Log out. Above 720px the tail keeps beside the tabs while it has `380px` or its widest stat and
+buttons, the counters wrapping within themselves, and otherwise moves, whole, to a row of its own above the brand
+and tabs, so the tabs keep the rule (see Layout); below 720px the tabs take the bar's last row.
+
+The **Screens link** opens the screens page in the top window, so the proxy's own pane on that page never opens
+the page inside itself. It is as quiet as Log out: `Screens` in `ink-2` in the same `1px` `line` border with `3px`
+corners, `26px` tall, the Theme Button's height (`46px` under a coarse pointer), and `ink` on a `surface-2` ground
+on hover.
 
 A **failing count** joins the run in `crit` whenever a registered path's last scrape failed (`2 failing`),
 and the bar carries the tab's title, which counts the paths failing or departed, the ones "Problems only"
@@ -866,10 +892,12 @@ is that reaching a theme can take two presses. Auto follows the system's prefere
   system leans now, and the theme a press moves to ("Theme: auto, following your system, now dark. Press for
   light.").
 
-The choice is kept in the browser's `localStorage`, one per dashboard, since each is its own origin, and a script
-in the head applies it as `<html data-theme>` before the page draws, so a page set to light never flashes dark;
-the login page applies it too. Outside the status bar's pushed region, like Log out, so no frame resets it, and
-its change is said in the Connection Announcer.
+The choice is kept in the browser's `localStorage`, one per origin, which a dashboard's port usually makes its own
+(the proxy's screens page shares its dashboard's), and a script in the head applies it as `<html data-theme>` before
+the page draws, so a page set to light never flashes dark; the login page and the screens page apply it too. A theme
+another page on the origin stores, such as the screens page's or that of the proxy's dashboard in its frame, applies
+at once, unsaid, so the screens page's Theme Button and the one in its proxy frame never disagree. Outside the status
+bar's pushed region, like Log out, so no frame resets it, and its change is said in the Connection Announcer.
 
 ### Log Out Button
 
@@ -914,17 +942,18 @@ inventing it is a design decision, not an extraction.
 
 ### Login Page
 
-The page a browser gets, before anything else, once `proxy.dashboard.password` is set (`LoginHtml`). **The one
-deliberate exception to this system**, styled after Grafana's login page at the maintainer's request (2026-11-20): a
-full-page radial gradient from `surface-3` to `bg`, one 400px column, centered across and 40% of the way down, the
-logo (42px, inline) beside a 28px weight-600 "Prometheus Proxy", and under them the heading, the dashboard's name
-("Proxy Dashboard" or "Agent Dashboard") at 17px weight 500 in `ink-2`, midway between that line and the card as the
-eye reads it (27px from the product name's baseline, which the logo's legs hang below, to its capitals, and 28.5px from
-its baseline to the card's edge, which its descenders take 3.5px of), in a system sans-serif stack (Inter, then
-`system-ui`), labels above 40px fields on `surface-2` with a 4px radius, an 8px-radius `surface` card, one full-width
-`accent`-filled Log in button whose text is white on the light accent (4.83:1) and `bg` on the dark one (6.94:1), and a
-`crit-soft` alert with a `crit` left edge after a wrong login. It uses this system's color tokens, in both themes, and
-loads nothing. The Don'ts below still bind the dashboard itself; the exception is the login page alone.
+The page a browser gets, before anything else, once its dashboard's password is set (`proxy.dashboard.password` or
+`agent.dashboard.password`; `LoginHtml`). **The one deliberate exception to this system**, styled after Grafana's login
+page at the maintainer's request (2026-11-20): a full-page radial gradient from `surface-3` to `bg`, one 400px column,
+centered across and 40% of the way down, the logo (42px, inline) beside a 28px weight-600 "Prometheus Proxy", and under
+them the heading, the dashboard's name ("Proxy Dashboard" or "Agent Dashboard") at 17px weight 500 in `ink-2`, midway
+between that line and the card as the eye reads it (27px from the product name's baseline, which the logo's legs hang
+below, to its capitals, and 28.5px from its baseline to the card's edge, which its descenders take 3.5px of), in a
+system sans-serif stack (Inter, then `system-ui`), labels above 40px fields on `surface-2` with a 4px radius, an
+8px-radius `surface` card, one full-width `accent`-filled Log in button whose text is white on the light accent (4.83:1)
+and `bg` on the dark one (6.94:1), and a `crit-soft` alert with a `crit` left edge after a wrong login. It uses this
+system's color tokens, in both themes, and loads nothing. The Don'ts below still bind the dashboard itself; the
+exception is the login page alone.
 
 ### Agent Dashboard
 
@@ -960,9 +989,21 @@ screen `proxy.dashboard.screens` lists, on this system without exception. Its ba
 Status LED standing where a view's icon would (`ink-3` until the first check, then `ok` or `crit`, with its state in
 words for a screen reader), the right pane's screen in Split marked by an `ink-3` line under its tab, then One, Split,
 and All as a segmented control quiet as the bar's end, the pressed one on `surface-2` at weight 600, and the Theme
-Button and Log Out. Below, a pane per screen on a `surface` card with a 3px radius: a 30px bar in the secondary type
-with its name (in Split, a picker), and "Open in a tab ↗" at its end, over the screen's frame. All lays each frame out
-at 1280×800 and scales it to its tile. A screen not answering says so over its frame, its name in `crit`, on `bg`.
+Button and Log Out.
+
+The tabs keep to one row. A tab that doesn't fit is hidden, never moved, and the row ends in a **More** button, at a
+tab's height in a `line` border with `6px` corners, that says how many screens it holds and, in `crit`, how many of
+those aren't answering (`More 12 · 2 down`). It opens the More menu, a popover on `surface` in a `line` border with
+`6px` corners and no shadow: a search, then every screen with its dot, the current one at weight 600 and Split's right
+one marked by a `2px` `ink-3` left edge. A name past 24 characters is cut in its tab, its tooltip whole, and where even
+the tabs kept in the row don't fit, they shrink, their names cut.
+
+Below, a pane per screen on a `surface` card with a 3px radius, `10px` from the next on the stage's `bg`: a 30px bar in
+the secondary type with its name (in Split, a picker), and "Open in a tab ↗" at its end, over the screen's frame. All
+lays each frame out at 1280×800, scales it to its tile, and scrolls, loading a frame as its tile nears the view; a
+tile's bar opens it in One. A screen not answering says so over its frame, its name in `crit`, on `bg`. A link opened
+while the page is open in another tab goes to that tab, and the new copy closes itself or, where the browser won't let
+it, says so in a `surface-2` strip under the bar, with a button to stay.
 
 ### Named Rules
 
@@ -993,8 +1034,9 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
 - **Do** render absent data as an en dash and departed state as visible-and-labeled.
 - **Do** pair every animation with a `prefers-reduced-motion: reduce` override, and make sure color
   and text still carry the full signal when motion is off.
-- **Do** put focus rings *inside* full-bleed rows and tabs (`outline-offset: -2px`) and *outside* icon
-  buttons, links, and inputs (`outline-offset: 1px`).
+- **Do** put focus rings *inside* full-bleed rows, tabs, the More menu's entries, and the screens page's layout
+  buttons (`outline-offset: -2px`), and *outside* icon buttons, other buttons, links, and inputs
+  (`outline-offset: 1px`).
 - **Do** ship every new color as a light/dark pair. Neither theme is the fallback.
 - **Do** check a new color against the *worst* ground it touches, not the reading plane. `surface-2` is
   the binding case for anything quiet; a value tuned against white alone fails under the table headers.
@@ -1010,9 +1052,11 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
   drop shadows, no illustrated empty states, no sparkline that decorates rather than informs. *(User-confirmed
   anti-reference.)*
 - **Don't** add a `box-shadow`. There are no shadows in the system and that is the elevation strategy, not
-  an oversight; the one declaration, the Links column's hover ring, draws a hairline, not a shadow.
-- **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`. The tabs' `6px` hover ground and
-  the bar's end's `3px` are the only ones.
+  an oversight; the declarations it has, the Links column's hover ring among them, draw a line inside their
+  element, not a shadow.
+- **Don't** add a radius between `0` and fully round beyond the two the system has, the tab row's `6px` and the
+  bordered controls' `3px` (see The Square-or-Circle Rule). No `4px`, no `8px`, no `12px`, and no radius on a region
+  that meets another at a hairline.
 - **Don't** fill anything with the accent. It draws focus rings and the current item's edge; that is the
   complete list.
 - **Don't** use a soft status color as a region or row background. Soft colors back pills and tags only.

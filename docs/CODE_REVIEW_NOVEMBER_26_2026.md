@@ -1,11 +1,12 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 61 resolved, 9 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 63 resolved, 7 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
 and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16, #17, #18, #19, and #20 in #602; #21,
-#22, #23, #24, #25, #26, and #27 in #603; #37 and #42 in #604; #60, #61, #64, #65, #66, #67, #68, #69, and #70 in #605.
+#22, #23, #24, #25, #26, and #27 in #603; #37 and #42 in #604; #60, #61, #64, #65, #66, #67, #68, #69, and #70 in #605;
+#62 and #63 in #606.
 
 **Date:** 2026-11-26
 
@@ -80,8 +81,8 @@ and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16,
 | 59 | Vacuous JSON assertion in `UtilsTest` for `Utils.getVersionDesc(true)` | Tests | low | ⬜ |
 | 60 | `README.md` omits 4.7.1's `/screens` page and default-open framing behavior change from "New Features", and omits `/screens` (and `SAME_ORIGIN`) from "Operational Dashboard" | Docs | medium | ✅ |
 | 61 | `website/prometheus-proxy/docs/embedded-upgrading.md` is missing an "Upgrading from 4.7.0" section for 4.7.1's behavior changes affecting embedders | Docs | medium | ✅ |
-| 62 | `docs/PRODUCT.md` has a factual error on proxy Scrape-now metrics and multiple pre-4.7.1 stale statements | Docs | medium | ⬜ |
-| 63 | `docs/DESIGN.md` contradicts itself and the actual CSS on the Status Bar layout above 720px and on border-radius rules | Docs | medium | ⬜ |
+| 62 | `docs/PRODUCT.md` has a factual error on proxy Scrape-now metrics and multiple pre-4.7.1 stale statements | Docs | medium | ✅ |
+| 63 | `docs/DESIGN.md` contradicts itself and the actual CSS on the Status Bar layout above 720px and on border-radius rules | Docs | medium | ✅ |
 | 64 | `demos/network/README.md` has a stale `make open` description (and omits `screens` on `proxy-standby.conf`), and `demos/basics/README.md` omits `make open` from Scenario Reference | Docs | medium | ✅ |
 | 65 | `demos/spring-boot/README.md` duplicates and contradicts its `make up` explanation in Quick Start | Docs | low | ✅ |
 | 66 | `website/prometheus-proxy/docs/embedded-agent.md` omits `stopTimeout` from the "Every Setting, Every Way" cross-reference table | Docs | low | ✅ |
@@ -1615,7 +1616,7 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 ---
 
-### 62. ⬜ `docs/PRODUCT.md` has a factual error on proxy Scrape-now metrics and multiple pre-4.7.1 stale statements
+### 62. ✅ `docs/PRODUCT.md` has a factual error on proxy Scrape-now metrics and multiple pre-4.7.1 stale statements
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1634,9 +1635,11 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 **Fix:** Correct line 114, add `proxy.dashboard.screens` at lines 65–66, update line 71 to underlined icon tabs and `/screens`, update line 159 to the latest release, and note the manual theme toggle at lines 198–199.
 
+**Resolution:** Fixed in #606. PRODUCT.md said the agent dashboard's Scrape now is, like the proxy's, counted nowhere, though the agent counts the proxy's in `agent_dashboard_scrapes_total`; it also left `proxy.dashboard.screens` out of the config-file-only settings, described folder tabs, named v4.6.0 as the latest release, and gave only `prefers-color-scheme` for the theme. It now says only the agent's own Scrape now is uncounted, lists `proxy.dashboard.screens`, describes the underlined icon tabs and `/screens`, names v4.7.0 (2026-11-24), and adds the theme button and forced colors.
+
 ---
 
-### 63. ⬜ `docs/DESIGN.md` contradicts itself and the actual CSS on the Status Bar layout above 720px and on border-radius rules
+### 63. ✅ `docs/DESIGN.md` contradicts itself and the actual CSS on the Status Bar layout above 720px and on border-radius rules
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1653,6 +1656,8 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 **Impact:** Contradictory visual contract in `docs/DESIGN.md` can mislead future UI changes or design audits.
 
 **Fix:** Update `docs/DESIGN.md:834-836` to match `:431-433` and `DashboardCss.kt:90-97` (and mention `.screens-link`); remove *"top corners of"* at `:247`; and reconcile the radius rules (`:247-248, 482-496, 504-506, 1014-1015`) with the `3px` radius on `.screens-link` and `/screens` controls/panes (`:963`).
+
+**Resolution:** Fixed in #606. DESIGN.md's Status Bar still put the bar on one row above 720px, contradicting its Layout section and the `barTail` CSS, and its shape rules allowed only the tabs' 6px "top corners" and the bar's end's 3px. The Status Bar now describes the tail moving whole above the tabs, and the Screens link; Shapes, the Square-or-Circle Rule, and the Don'ts describe the radii as the CSS has them (square for content, round for state, 6px for the tab row, 3px for bordered controls, the panes and the More menu the only rounded containers), and the shadow, Screens Page, Theme Button, and Layout sections match the screens page and the theme sync.
 
 ---
 
