@@ -1,11 +1,11 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 50 resolved, 20 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 52 resolved, 18 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
 and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16, #17, #18, #19, and #20 in #602; #21,
-#22, #23, #24, #25, #26, and #27 in #603.
+#22, #23, #24, #25, #26, and #27 in #603; #37 and #42 in #604.
 
 **Date:** 2026-11-26
 
@@ -55,12 +55,12 @@ and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16,
 | 34 | `DashboardSessions.isValid(..., counts = false)` mutates LRU access order on every push tick | Dashboards | low | ✅ |
 | 35 | `DashboardServer.render` never resets `session.renderFailed` on recovery and logs nothing on repeated render errors | Dashboards | low | ✅ |
 | 36 | Toggling "Problems only" during the search input debounce window causes a duplicate WebSocket announce and screen-reader announcement | Dashboards | low | ✅ |
-| 37 | Incomplete URL userinfo redaction leaks passwords containing or following `@` in `Utils.sanitizeUrl` and Spring Boot's `PrometheusProxyAgentProperties.shownUrl` | Security | medium | ⬜ |
+| 37 | Incomplete URL userinfo redaction leaks passwords containing or following `@` in `Utils.sanitizeUrl` and Spring Boot's `PrometheusProxyAgentProperties.shownUrl` | Security | medium | ✅ |
 | 38 | Unary `ScrapeResponse` lacks header-field caps, `parseContentType` passes multi-MB and control-character parameters, `httpStatus` emits arbitrary 32-bit codes, and plain bodies bypass `maxUnzippedContentSizeMBytes` | Security | medium | ✅ |
 | 39 | Dashboard `isOriginAllowed()` ignores URL scheme and bypasses explicit `allowedOrigins` restrictions | Security | medium | ✅ |
 | 40 | Unthrottled WebSocket per-frame full-HTML re-render amplification on dashboard `/events` | Security | medium | ✅ |
 | 41 | Dashboard browser Basic-Auth restriction (`isBrowser`) is bypassed over plain HTTP on non-localhost hosts | Security | low | ✅ |
-| 42 | Unescaped/unsanitized inputs in log output (`ProxyHttpConfig`, `MetricFilter`, and local config parse errors in `BaseOptions`) | Security | low | ⬜ |
+| 42 | Unescaped/unsanitized inputs in log output (`ProxyHttpConfig`, `MetricFilter`, and local config parse errors in `BaseOptions`) | Security | low | ✅ |
 | 43 | Helm charts mount the default Kubernetes ServiceAccount token unnecessarily (`automountServiceAccountToken: false` omitted) | Security | low | ✅ |
 | 44 | Helm charts crash with nil pointer on `helm upgrade --reuse-values` from 4.6.0 (`dashboard` / `dashboard.login`) | CI/build | high | ✅ |
 | 45 | Inverted severity thresholds in `grafana/prometheus-agents.json` (Panels 27 "Not on Primary" and 38 "Since Last Discovery") | CI/build | medium | ✅ |
@@ -1032,7 +1032,7 @@ Typing in `#filter-q` schedules `filterTimer = setTimeout(applyFilter, 250)`. Un
 
 ## 🔒 Security
 
-### 37. ⬜ Incomplete URL userinfo redaction leaks passwords containing or following `@` in `Utils.sanitizeUrl` and Spring Boot's `PrometheusProxyAgentProperties.shownUrl`
+### 37. ✅ Incomplete URL userinfo redaction leaks passwords containing or following `@` in `Utils.sanitizeUrl` and Spring Boot's `PrometheusProxyAgentProperties.shownUrl`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1055,6 +1055,8 @@ In real deployments, HTTP Basic Auth userinfo commonly contains an unescaped `@`
 - `PrometheusProxyAgentProperties.java:311`: `url.replaceAll("(://)[^/?#\\\\]+@", "$1***@")`
 
 Add unit tests covering email usernames (`https://alice@corp.com:s3cr3t@host/metrics`), passwords with `@` (`https://user:p@ss@host/metrics`), and paths containing `@` (`https://host/@alice`, which stays unredacted because `/` precedes `@`), and update the existing comment/test in `PrometheusProxyAgentAutoConfigurationTest.java:157`.
+
+**Resolution:** Fixed in #604. Both redactors stopped at the first `@`, so an email user name or a password with an `@` showed the rest of it. `Utils.sanitizeUrl` (and so `sanitizeUrlsInText`) and the starter's `shownUrl` now mask up to the last `@` before the authority ends at `/`, `?`, `#`, or `\`, as Ktor reads the host. In free text a URL still runs to the next whitespace, so user info with any punctuation in it is masked whole, and a path-less URL followed in the same word by an `@` is masked too much rather than too little.
 
 ---
 
@@ -1162,7 +1164,7 @@ Consequently, `isBrowser()` returns `false` on those deployments: a browser hold
 
 ---
 
-### 42. ⬜ Unescaped/unsanitized inputs in log output (`ProxyHttpConfig`, `MetricFilter`, and local config parse errors in `BaseOptions`)
+### 42. ✅ Unescaped/unsanitized inputs in log output (`ProxyHttpConfig`, `MetricFilter`, and local config parse errors in `BaseOptions`)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1179,6 +1181,8 @@ Consequently, `isBrowser()` returns `false` on those deployments: a browser hold
 **Impact:** Log forging / terminal escape injection on HTTP scrape/dashboard ports (when `DEBUG` is enabled) and at `WARN` from scraped targets; potential credential leakage into startup error logs on local config syntax errors.
 
 **Fix:** Pass `request.path()` through `ProxyPathManager.shownPath(...)` / `AgentValues.shownValue(...)` in `ProxyHttpConfig.kt:95, 100, 147`; wrap `contentType` in `AgentValues.shownValue(contentType)` in `MetricFilter.kt:156`; and log `sanitizeUrlsInText(e.message.orEmpty())` without passing the raw exception at `BaseOptions.kt:849` (matching `:837`).
+
+**Resolution:** Fixed in #604. The proxy's call log and client-gone line logged the client's method and path raw, `MetricFilter` logged a target's content type raw at WARN, and a local config parse error logged its raw message and exception, which can quote a URL with credentials. The method and path now go through `shownValue`/`shownPath`, the content type through `shownValue` (256 characters), and the parse error is logged through `sanitizeUrlsInText` with the redacted exception, which keeps the stack trace and causes.
 
 ---
 
