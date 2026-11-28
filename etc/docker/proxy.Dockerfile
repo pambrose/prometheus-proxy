@@ -11,7 +11,7 @@ FROM gcr.io/distroless/base-nossl-debian13:latest@sha256:f21fdfe4ede467d9ea8a6ca
 # bytecode, which runs unchanged on the newer JRE. The image takes only /opt/java/openjdk and the C.UTF-8 locale from
 # this stage, which also does the steps that need a shell. Keep the -noble (Ubuntu 24.04) variant: its locale files
 # load under Debian 13's glibc, which ContainersPackagingTest checks.
-FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS jre
+FROM eclipse-temurin:25-jre-noble@sha256:f3dd0838e69b881cc382237d5901e74ae3705b1056ad964b2e0e523b174fef99 AS jre
 
 # Add the user the image runs as, rather than running as root, to the base's passwd and group files, and make it an
 # /app it owns. The UID and GID are fixed: the charts run the pods as 1001 (podSecurityContext in
