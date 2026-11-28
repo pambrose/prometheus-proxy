@@ -25,10 +25,11 @@ environment, and the [Spring Boot Demo](spring-boot-demo.md) in a Spring Boot ap
 graph TB
   accTitle: The Plain Kotlin Demo's containers
   accDescr {
-    On the proxy host, Grafana on port 3600 reads Prometheus on 9690, which reads the proxy's service discovery and
-    scrapes each oven's path through the proxy, dashboard 8694. One to five ovens, each a plain Kotlin program with
-    no port in a container and JVM of its own, take orders from a Redis queue the counter pushes them to. Each
-    oven's embedded agent reads its registry in-process and connects out to the proxy over gRPC with a token.
+    Outside the firewall, on the proxy host, Grafana on port 3600 reads Prometheus on 9690, which reads the proxy's
+    service discovery and scrapes each oven's path through the proxy, dashboard 8694. Inside the firewall, one to five
+    ovens, each a plain Kotlin program with no port in a container and JVM of its own, take orders from a Redis queue
+    the counter pushes them to. Each oven's embedded agent reads its registry in-process and connects out to the proxy
+    over gRPC with a token.
   }
   G[Grafana :3600] --> P[Prometheus :9690]
   P -->|reads /discovery, scrapes each oven's path| Proxy[Proxy, dashboard :8694]
@@ -44,15 +45,21 @@ graph TB
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
   %% edges' labels onto their arrowheads.
-  subgraph host ["<br>Proxy host"]
+  subgraph host ["<br>Outside Firewall<br>Proxy host"]
     G
     P
     Proxy
   end
 
-  subgraph ovens ["<br>ovens, 1 to 5, one container and JVM each"]
-    Agent
-    Oven
+  %% The ovens' zone sits inside the firewall's, beside the Redis queue and the counter. Its title takes two lines, as
+  %% the firewall's zone doesn't grow to fit an inner zone's title, and one line ran the ovens' zone past its edge.
+  subgraph inside ["<br>Inside Firewall"]
+    subgraph ovens ["<br>ovens, 1 to 5,<br>one container and JVM each"]
+      Agent
+      Oven
+    end
+    Redis
+    Counter
   end
 ```
 

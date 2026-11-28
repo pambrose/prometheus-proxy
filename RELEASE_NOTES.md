@@ -258,7 +258,8 @@ its own that holds them all, with Prometheus and Grafana.
 - **The docs are easier to find your way through.** The Embedded Agent page is three pages now: Embedded Agent, the
   Embedded Agent API, and Debugging an Embedded Agent. Running in Production starts with its checklist. Version
   history and implementation details on the Embedded Agent and Security pages fold away until you open them, and the
-  Architecture page's request-flow diagram shows where the firewall is.
+  Architecture page's request-flow diagram and the Ktor, Spring Boot, and plain Kotlin demos' diagrams show where the
+  firewall is.
 - **The examples serve the agent's metrics without a port.** `examples/simple.conf`, which the Quick Start runs, has
   the agent serve its own metrics at `/agent_metrics` with `agent.metrics.proxyPath`, so its metrics port stays off,
   as do the basics and network demos' agents, `examples/federate.conf`'s, and the Compose stack's
