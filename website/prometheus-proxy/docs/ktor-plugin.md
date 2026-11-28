@@ -57,7 +57,7 @@ With that, the app gets:
   instead, then without a proxy too, or add an `onFailure` handler in the `agent { }` block to have the app told why
   ([below](#a-failed-start-and-the-stop)).
 
-The `agent { }` block takes the agent's [`EmbeddedAgentConfig.Builder`](embedded-agent.md#embeddedagentconfig), with a
+The `agent { }` block takes the agent's [`EmbeddedAgentConfig.Builder`](embedded-api.md#embeddedagentconfig), with a
 typed method for each setting, such as a certificate the app reads from a secret store, and `agentMetricsAt(path)`,
 which serves the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) through the proxy too, with no port,
 as the file's `metrics-proxy-path` does.
@@ -68,7 +68,7 @@ precedence over its settings, and `PROXY_HOSTNAME` alone starts it, so give the 
 ## A Failed Start, and the Stop
 
 Since 4.7.1, the `agent { }` block can add a failure handler and set a stop timeout. Both are the agent's own
-settings, the builder's, so they go there, as for any [embedded agent](embedded-agent.md#embeddedagentconfig).
+settings, the builder's, so they go there, as for any [embedded agent](embedded-api.md#embeddedagentconfig).
 
 An agent that can't start stays off while the app runs on, and the plugin logs why. A handler the block adds with
 `onFailure { reason, cause -> }` is told too, with the reason the log gives, which holds no token, password, or PEM,
@@ -137,7 +137,7 @@ environment variable gives:
 ## The Agent's Connection
 
 While the agent runs, `application.prometheusProxyAgent` is its
-[`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo), with its connection to the proxy, read live; it's null
+[`EmbeddedAgentInfo`](embedded-api.md#embeddedagentinfo), with its connection to the proxy, read live; it's null
 while the agent is off. A route can show it:
 
 ```kotlin

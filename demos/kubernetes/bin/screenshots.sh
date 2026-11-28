@@ -128,7 +128,7 @@ if ! agent_up_a_minute; then
   fi
 fi
 
-step "Part 1: The Helm charts on two clusters, with no inbound access"
+step "Part 1: Two clusters, no inbound access"
 pod="$(agent_pod)"
 id="$(agent_id "$pod")"
 [[ -n "$id" ]] || die "the agent $pod isn't on the dashboard"
@@ -137,7 +137,7 @@ shoot agent "$DASHBOARD_URL/agents/$id"
 # Prometheus renders after loading its data, so it gets a longer virtual-time budget.
 shoot targets "$PROMETHEUS_URL/targets" 8000
 
-step "Part 3: annotate a Service, and Prometheus scrapes it"
+step "Part 3: Annotate a Service, and Prometheus scrapes it"
 "$DEMO" add-service >/dev/null
 wait_until "search up in Prometheus" prometheus_has 'up{job="search"} == 1'
 shoot_table discovered /paths
@@ -148,7 +148,7 @@ shoot_screens screens "proxy/paths+prometheus/targets" 8000
 stop_forward
 "$DEMO" remove-service >/dev/null
 
-step "Part 4: Kubernetes replaces a deleted agent pod in about a second"
+step "Part 4: Kubernetes replaces a deleted agent pod"
 "$DEMO" delete-agent-pod >/dev/null
 # The Activity view lists the old pod's paths leaving and the new pod's arriving, newest first.
 wait_until "the new agent's scrapes" normal

@@ -222,26 +222,29 @@ it still has allow-all access — the per-agent entries constrain only the agent
 
 ## Isolation between Agents
 
-Authenticated agents share one proxy, so the proxy keeps each agent to its own traffic:
+Authenticated agents share one proxy, so the proxy keeps each agent to its own traffic: an agent's scrape results,
+heartbeats, and calls count only as its own, and behind a reverse proxy, one identity can connect only so many agents.
 
-- **Scrape results come only from the agent the scrape was sent to.** Scrape IDs come from one
-  counter shared by every agent, so the proxy checks each result, failure, and chunked-transfer message
-  against the agent that owns the scrape. A message for another agent's scrape is dropped and logged
-  at WARN, and the rest of the stream is still processed.
-- **Heartbeats are bound to their connection.** A heartbeat naming another agent is refused and does
-  not keep that agent from being evicted as stale.
-- **Behind a reverse proxy, calls are bound to an identity.** With
-  [`transportFilterDisabled`](../configuration/proxy.md#transport-filter) there is no connection to tie a
-  call to, so the proxy records the auth identity an agent connected with and refuses a call naming that
-  agent under a different identity. The stream an agent reads its scrape requests from checks, reads, and,
-  when it ends, removes the one agent it found when it opened, so a stream that names an agent ID before
-  that agent connects is refused, rather than later reading or removing the agent another identity
-  connects with under that ID.
-- **Behind a reverse proxy, each identity's agents are limited.** Every connect adds an agent, so the
-  proxy refuses a connect once `proxy.internal.maxAgentsPerIdentity` (10,000) agents are connected with
-  the same identity, rather than let one caller add agents without limit. Agents of other identities
-  are unaffected, but agents that share an identity share its limit, and with agent auth off that is
-  every agent.
+??? info "How the proxy keeps each agent to its own traffic"
+
+    - **Scrape results come only from the agent the scrape was sent to.** Scrape IDs come from one
+      counter shared by every agent, so the proxy checks each result, failure, and chunked-transfer message
+      against the agent that owns the scrape. A message for another agent's scrape is dropped and logged
+      at WARN, and the rest of the stream is still processed.
+    - **Heartbeats are bound to their connection.** A heartbeat naming another agent is refused and does
+      not keep that agent from being evicted as stale.
+    - **Behind a reverse proxy, calls are bound to an identity.** With
+      [`transportFilterDisabled`](../configuration/proxy.md#transport-filter) there is no connection to tie a
+      call to, so the proxy records the auth identity an agent connected with and refuses a call naming that
+      agent under a different identity. The stream an agent reads its scrape requests from checks, reads, and,
+      when it ends, removes the one agent it found when it opened, so a stream that names an agent ID before
+      that agent connects is refused, rather than later reading or removing the agent another identity
+      connects with under that ID.
+    - **Behind a reverse proxy, each identity's agents are limited.** Every connect adds an agent, so the
+      proxy refuses a connect once `proxy.internal.maxAgentsPerIdentity` (10,000) agents are connected with
+      the same identity, rather than let one caller add agents without limit. Agents of other identities
+      are unaffected, but agents that share an identity share its limit, and with agent auth off that is
+      every agent.
 
 !!! warning "Identity binding is only as fine-grained as the identities"
 
@@ -311,16 +314,19 @@ To keep the port to Prometheus:
 
 ## Scrape Port Responses
 
-The proxy passes a target's `Content-Type` through only for the Prometheus exposition formats
-(`text/plain`, `application/openmetrics-text`, and the protobuf format), with only those formats'
-own parameters (`version`, `charset`, `escaping`, `proto`, and `encoding`), each with a short value;
-anything else is served as `text/plain`. Every scrape-port response also carries
-`X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`. A compromised target
-therefore can't serve a page that runs as script on the proxy's origin in an operator's browser.
+A compromised target can't serve a page that runs as script on the proxy's origin in an operator's browser, and a
+compromised agent can't send Prometheus a status line or a `Content-Type` header it would refuse.
 
-A status the proxy can't serve, one outside 200–599, or a 204, 205, or 304, which can't carry a
-body, fails the scrape with a 502 (`invalid_response`). A compromised agent therefore can't send
-Prometheus a status line or a `Content-Type` header it would refuse.
+??? info "What the scrape port passes through, and what it refuses"
+
+    The proxy passes a target's `Content-Type` through only for the Prometheus exposition formats
+    (`text/plain`, `application/openmetrics-text`, and the protobuf format), with only those formats'
+    own parameters (`version`, `charset`, `escaping`, `proto`, and `encoding`), each with a short value;
+    anything else is served as `text/plain`. Every scrape-port response also carries
+    `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`.
+
+    A status the proxy can't serve, one outside 200–599, or a 204, 205, or 304, which can't carry a
+    body, fails the scrape with a 502 (`invalid_response`).
 
 ## Auth Header Forwarding
 

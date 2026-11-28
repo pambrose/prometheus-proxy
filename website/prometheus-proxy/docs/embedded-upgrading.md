@@ -18,7 +18,7 @@ A release that changed nothing an embedding app sees isn't listed; the
   `java.util.concurrent.TimeoutException` as its cause, for an agent without a `stopTimeout` that doesn't stop within
   30 seconds. Through 4.7.0 they threw the `TimeoutException` itself, which they didn't declare, so Java code couldn't
   catch it, and a catch of `RuntimeException` missed it. Kotlin code that caught `TimeoutException` there should catch
-  `IllegalStateException` (see [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo)).
+  `IllegalStateException` (see [`EmbeddedAgentInfo`](embedded-api.md#embeddedagentinfo)).
 - The Spring Boot starter's stop waits for the agent at most its new `prometheus-proxy.agent.stop-timeout`, 30 seconds
   by default, then returns, with a warning, and the agent goes on stopping on a daemon thread of its own. Through 4.7.0
   it waited the agent's own 30 seconds, then threw out of `stop()`. Set `stop-timeout` inside the window your platform
@@ -58,7 +58,7 @@ A release that changed nothing an embedding app sees isn't listed; the
   scope, and displaced an application's own SLF4J provider: Spring Boot failed to start an app on Log4j2, or ignored
   its Log4j2 configuration. The agent's loggers now go to your application's provider. An application that logged
   through the Logback the agent brought, with no SLF4J provider of its own, now gets SLF4J's warning that it found
-  none, and no logs, so add Logback to it (see [Logging](embedded-agent.md#logging)).
+  none, and no logs, so add Logback to it (see [Logging](embedded-debugging.md#logging)).
 - The agent reads `DASHBOARD_ENABLED`, `DASHBOARD_PORT`, `DASHBOARD_PATH`, `DASHBOARD_HOST`, `DASHBOARD_USERNAME`,
   `DASHBOARD_PASSWORD`, and `METRICS_PROXY_PATH` from your application's environment, which through 4.6.0 only the
   proxy read, or nothing did. If your application sets any of them for its own use, the agent now opens its dashboard,
@@ -67,7 +67,7 @@ A release that changed nothing an embedding app sees isn't listed; the
 - An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` registers no JVM shutdown hook. Through 4.6.0 it
   did, and on SIGTERM it stopped at the same time as your application's own hooks, in no set order. Stop it with
   `shutdown()` or `close()` where your application stops its own services (see
-  [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo)); one that's never stopped ends with the JVM, without draining the scrapes
+  [`EmbeddedAgentInfo`](embedded-api.md#embeddedagentinfo)); one that's never stopped ends with the JVM, without draining the scrapes
   in flight.
 - An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` runs on a daemon thread, so it no longer keeps the
   JVM running. Through 4.6.0 its thread did: an application that failed after starting the agent never exited, and a
@@ -86,14 +86,14 @@ A release that changed nothing an embedding app sees isn't listed; the
 ## Upgrading from 4.4.x
 
 - `startAsyncAgent()` throws `ConfigLoadException` for a config that loads but holds a setting the agent can't use,
-  as listed under [`Agent.startAsyncAgent()`](embedded-agent.md#agentstartasyncagent). Through 4.4.2 those escaped as an
+  as listed under [`Agent.startAsyncAgent()`](embedded-api.md#agentstartasyncagent). Through 4.4.2 those escaped as an
   `IllegalArgumentException` or a Typesafe `ConfigException`, and a `ConfigException`'s message began with the config
   URL, credentials included. Code that caught either should catch `ConfigLoadException`; the
   `IllegalArgumentException` is now its cause.
 - The library jar no longer carries a `logback.xml`. Through 4.4.2 it did, and Logback, and Spring Boot ahead of
   your `logback-spring.xml`, took it for your application's configuration. An application with no Logback
   configuration of its own now gets Logback's default, which logs everything at DEBUG, so add one (see
-  [Logging](embedded-agent.md#logging)); one whose own configuration was being replaced gets it back.
+  [Logging](embedded-debugging.md#logging)); one whose own configuration was being replaced gets it back.
 - Maven builds now get Jackson 2.23.0 and netty-tcnative 2.0.86.Final, natives included, through the agent, where
   they got Jackson 2.12.7 and the 2.0.84.Final natives. A Jackson your build declares itself still wins.
 - The agent's generated gRPC classes need protobuf-java 4.36.2 or later, which Maven and Gradle builds now resolve
@@ -120,7 +120,7 @@ A release that changed nothing an embedding app sees isn't listed; the
 - `grpc-netty-shaded` no longer arrives through the agent, which uses the unshaded `grpc-netty` transport.
   If your application relied on getting it that way, declare it yourself.
 - `startAsyncAgent()` now waits for the agent to start and throws if it fails, where it used to return a
-  handle to an agent that had failed (see [`Agent.startAsyncAgent()`](embedded-agent.md#agentstartasyncagent)).
+  handle to an agent that had failed (see [`Agent.startAsyncAgent()`](embedded-api.md#agentstartasyncagent)).
 - When a config URL's error message has to be redacted, the `ConfigLoadException`'s cause is a stand-in
   exception with the redacted message and the original stack trace, not Typesafe's `ConfigException`, so
   code that checks `cause is ConfigException` no longer matches it.

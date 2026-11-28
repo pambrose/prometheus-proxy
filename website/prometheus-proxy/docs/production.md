@@ -5,7 +5,47 @@ icon: lucide/clipboard-check
 # Running in Production
 
 Guidance for deploying Prometheus Proxy in a production environment, pulling together the
-security, reliability, and tuning knobs documented elsewhere into one operational checklist.
+security, reliability, and tuning knobs documented elsewhere: first as a checklist, then section by section.
+
+## Pre-Flight Checklist
+
+What to have in place before the proxy and its agents carry production scrapes, grouped as the sections below
+explain them.
+
+**Security**
+
+- [ ] [TLS](security/tls.md) (ideally mutual) enabled on the gRPC channel, and
+      [confirmed on](security/tls.md#confirm-its-on)
+- [ ] [Agent token](security/index.md#agent-authentication-pre-shared-token) set
+      ([per-agent identities](security/index.md#per-agent-identities-and-path-authorization) where teams share a
+      proxy), or mutual TLS in place
+- [ ] gRPC port reachable by agents; admin and dashboard ports **not** [publicly exposed](#security)
+
+**Running**
+
+- [ ] Proxy and agents run under a [supervisor](#running-as-a-service) that restarts them (systemd, Kubernetes,
+      Docker's `--restart`, or `brew services`)
+- [ ] [Liveness probes](kubernetes.md#health-probes-resources) on `/ping`; readiness on `/ping` (proxy) and
+      `/healthcheck` (agent)
+- [ ] An embedded agent's [`stopTimeout`](embedded-api.md#embeddedagentinfo) inside the platform's shutdown window,
+      and an [`onFailure`](embedded-agent.md#starting-where-theres-a-proxy) handler where a failed start should be
+      reported beyond the log
+
+**High Availability**
+
+- [ ] [Consolidated mode](advanced.md#consolidated-mode) where you need agent redundancy, with each agent scraping
+      its own instance
+
+**Sizing & Tuning**
+
+- [ ] `maxConcurrentClients` / timeouts [tuned](#sizing-tuning) for your targets
+- [ ] [Content-size limits](configuration/proxy.md#content-size-limits) sized for your largest payload
+- [ ] JVM heap [sized](#sizing-tuning) for peak decompressed payload × concurrency
+
+**Observability**
+
+- [ ] [Metrics enabled](monitoring.md#enabling-metrics) and scraped by Prometheus
+- [ ] [Dashboards imported](grafana.md#importing) and [alert rules](grafana.md#alerting-rules) loaded
 
 ## Security
 
@@ -230,33 +270,10 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 - Standalone proxy/agent processes shut down cleanly on SIGTERM. **Embedded** agents register no
   shutdown hook of their own: stop one with `EmbeddedAgentInfo.shutdown()` where the application
   stops its own services. The Ktor plugin and the Spring Boot starter do this with the app. See
-  [Embedded Agent](embedded-agent.md#embeddedagentinfo).
+  [Embedded Agent](embedded-api.md#embeddedagentinfo).
 - `shutdown()` blocks until the agent has stopped, up to the builder's `stopTimeout`, or, without
   one, 30 seconds, after which it throws. Set `stopTimeout` inside the window the platform gives a
   process between SIGTERM and killing it, such as Cloud Run's 10 seconds, so the rest of the app's
   shutdown isn't left waiting on the agent: once it's up, `shutdown()` returns, with a warning, and
   the agent goes on stopping on its own. The Ktor plugin and the Spring Boot starter take it as
   their `stop-timeout`, 30 seconds by default.
-
-## Pre-Flight Checklist
-
-- [ ] Proxy and agents run under a [supervisor](#running-as-a-service) that restarts them (systemd, Kubernetes,
-      Docker's `--restart`, or `brew services`)
-- [ ] [TLS](security/tls.md) (ideally mutual) enabled on the gRPC channel, and
-      [confirmed on](security/tls.md#confirm-its-on)
-- [ ] [Agent token](security/index.md#agent-authentication-pre-shared-token) set
-      ([per-agent identities](security/index.md#per-agent-identities-and-path-authorization) where teams share a
-      proxy), or mutual TLS in place
-- [ ] gRPC port reachable by agents; admin and dashboard ports **not** [publicly exposed](#security)
-- [ ] [Metrics enabled](monitoring.md#enabling-metrics) and scraped by Prometheus
-- [ ] [Dashboards imported](grafana.md#importing) and [alert rules](grafana.md#alerting-rules) loaded
-- [ ] `maxConcurrentClients` / timeouts [tuned](#sizing-tuning) for your targets
-- [ ] [Content-size limits](configuration/proxy.md#content-size-limits) sized for your largest payload
-- [ ] JVM heap [sized](#sizing-tuning) for peak decompressed payload × concurrency
-- [ ] [Liveness probes](kubernetes.md#health-probes-resources) on `/ping`; readiness on `/ping` (proxy) and
-      `/healthcheck` (agent)
-- [ ] [Consolidated mode](advanced.md#consolidated-mode) where you need agent redundancy, with each agent scraping
-      its own instance
-- [ ] An embedded agent's [`stopTimeout`](embedded-agent.md#embeddedagentinfo) inside the platform's shutdown window,
-      and an [`onFailure`](embedded-agent.md#starting-where-theres-a-proxy) handler where a failed start should be
-      reported beyond the log

@@ -9,7 +9,7 @@ This third demo puts [nginx](https://nginx.org/) between them, as the reverse pr
 service to end its TLS on one port, and in front of the proxy's dashboard. It shows what nginx's stream timeouts do to
 an agent from before the proxy's stream keepalives, a stream timeout shorter than the keepalive, why a reload of nginx
 doesn't reach an agent that's connected, and what nginx has to pass on for the dashboard's live updates. Every
-screenshot on this page comes from it. [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) is the guide to the
+screenshot on this page comes from it. [nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) is the guide to the
 same setup.
 
 ``` mermaid
@@ -113,16 +113,16 @@ Each part of the guided tour, `make tour`, makes one point. A part's name links 
 
 | Part | What it shows | Why it matters |
 |---|---|---|
-| 1. [Two agents reach the proxy through nginx, over TLS](#two-agents-reach-the-proxy-through-nginx-over-tls) | nginx ends the agents' TLS and passes their gRPC calls on; each agent has a token of its own | The usual way to put a service behind one TLS endpoint, and what nginx needs for it |
-| 2. [nginx's stream timeouts cut off an agent from 4.6.0 every minute](#nginxs-stream-timeouts-cut-off-an-agent-from-460-every-minute) | An agent without stream keepalives is cut off every minute, beside one that has them; longer timeouts fix it | What you see behind nginx with a proxy or agent from 4.6.0 or earlier, and the fix short of upgrading |
-| 3. [A shorter stream timeout, and a reload that doesn't reach connected agents](#a-shorter-stream-timeout-and-a-reload-that-doesnt-reach-connected-agents) | A timeout under the 30-second keepalive cuts agents off, and a reload doesn't reach connected ones | How to set `streamKeepAliveSecs` under a load balancer's idle timeout, and make a reload apply |
+| 1. [Two agents through nginx, over TLS](#two-agents-reach-the-proxy-through-nginx-over-tls) | nginx ends the agents' TLS and passes their gRPC calls on; each agent has a token of its own | The usual way to put a service behind one TLS endpoint, and what nginx needs for it |
+| 2. [A 4.6.0 agent cut off every minute](#nginxs-stream-timeouts-cut-off-an-agent-from-460-every-minute) | An agent without stream keepalives is cut off every minute, beside one that has them; longer timeouts fix it | What you see behind nginx with a proxy or agent from 4.6.0 or earlier, and the fix short of upgrading |
+| 3. [A shorter timeout, and a reload](#a-shorter-stream-timeout-and-a-reload-that-doesnt-reach-connected-agents) | A timeout under the 30-second keepalive cuts agents off, and a reload doesn't reach connected ones | How to set `streamKeepAliveSecs` under a load balancer's idle timeout, and make a reload apply |
 | 4. [The dashboard behind nginx](#the-dashboard-behind-nginx) | A plain `proxy_pass` breaks the dashboard's live updates, and two settings fix it | What an nginx in front of the dashboard has to pass on |
 
 ## Scenarios
 
 `./demo.sh reset` puts nginx and the proxy back as `make up` starts them.
 
-### Two Agents Reach the Proxy through nginx, over TLS
+### Two Agents through nginx, over TLS { #two-agents-reach-the-proxy-through-nginx-over-tls }
 
 Each agent dials nginx at `nginx.test.google.fr:443` over TLS, and checks nginx's certificate against that name: the
 certificate names `*.test.google.fr`, and the agent trusts the CA that signed it,
@@ -152,9 +152,9 @@ nginx counts all an agent sends on a stream as one request body, and stops a bod
 default. A stream of results stays open while the agent is connected, so behind nginx's default, every agent is cut off
 with 413 each time its results add up to a megabyte. Every entrance in the demo turns the limit off with
 `client_max_body_size 0`, as any nginx in front of the proxy needs; see
-[Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+[nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
-### nginx's Stream Timeouts Cut Off an Agent from 4.6.0 Every Minute
+### A 4.6.0 Agent Cut Off Every Minute { #nginxs-stream-timeouts-cut-off-an-agent-from-460-every-minute }
 
 This part is for you if the proxy or any agent you run behind nginx, or another reverse proxy, is on 4.6.0 or earlier,
 as happens while you upgrade one before the other: keepalives flow only when both ends are newer, so such a pair goes
@@ -187,7 +187,7 @@ agent-legacy is cut off once more, by the worker it's on, which keeps the old ti
 under the day-long ones and stays connected. For an agent or a proxy from 4.6.0 or earlier, raising both timeouts is
 the fix short of upgrading both.
 
-### A Shorter Stream Timeout, and a Reload That Doesn't Reach Connected Agents
+### A Shorter Timeout, and a Reload { #a-shorter-stream-timeout-and-a-reload-that-doesnt-reach-connected-agents }
 
 Some load balancers close a quiet connection sooner than nginx's 60 seconds.
 
@@ -294,7 +294,7 @@ it to proxy.dashboard.allowedOrigins if expected`. Passing the browser's `Host` 
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx) has these scenarios as
   a guided tour, explaining how each one works, and lists the files that set the demo up, nginx's configs among them.
-- [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) covers the settings this demo uses, for your own nginx.
+- [nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) covers the settings this demo uses, for your own nginx.
 - [Web Dashboard](web-dashboard.md#behind-a-reverse-proxy) covers putting the dashboard behind a reverse proxy.
 - The other demos, in the order the [Demos](demos/index.md) page gives them:
     - [Basics Demo](basics-demo.md): the whole system on one machine, the proxy and its dashboard, three agents behind

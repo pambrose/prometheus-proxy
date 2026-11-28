@@ -39,7 +39,7 @@ Another process already listens on one of the proxy's ports: the HTTP port Prome
 the agent gRPC port (`50051`), or, when they're enabled, the admin (`8092`), metrics (`8082`), or dashboard
 (`8094`) port. The proxy logs the exception and exits with status 1, so a supervisor's restart policy retries it;
 before 4.3.0 it kept running instead. An agent does the same when its admin (`8093`), metrics (`8083`), or dashboard
-(`8095`) port is taken, and an [embedded agent](embedded-agent.md#agentstartasyncagent) throws an
+(`8095`) port is taken, and an [embedded agent](embedded-api.md#agentstartasyncagent) throws an
 `IllegalStateException` with the `BindException` as its cause, having released the ports it had opened.
 
 - Find what holds the port: `lsof -nP -iTCP:8080 -sTCP:LISTEN` (macOS, Linux) or `ss -ltnp 'sport = :8080'`
@@ -51,7 +51,7 @@ before 4.3.0 it kept running instead. An agent does the same when its admin (`80
 
 A setting failed a check at startup. The line names the setting and why it was refused: fix it and start again. A
 standalone proxy or agent logs this one line and exits with status 1; before 4.5.0, some of these settings ended in
-an uncaught exception's stack trace instead. An [embedded agent](embedded-agent.md#agentstartasyncagent) throws a
+an uncaught exception's stack trace instead. An [embedded agent](embedded-api.md#agentstartasyncagent) throws a
 `ConfigLoadException` with the same reason. When the setting came from the app's environment through
 [`fromEnvironment()`](embedded-agent.md#settings-from-the-environment), the line names the variable too, as in
 `Invalid configuration: PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem:
@@ -281,12 +281,12 @@ connected and has registered the path. A 404 there means it hasn't; the agent's 
 
 ## Disconnects Aren't Detected behind nginx
 
-With `transportFilterDisabled` (required when fronting gRPC with Nginx), the proxy notices an
+With `transportFilterDisabled` (required when fronting gRPC with nginx), the proxy notices an
 agent leave when the agent's request stream ends, which a disconnect normally does at once. An
 agent that dies before opening that stream, or whose connection stays half-open, stays listed
 until [`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-settings) (default 60s) evicts it.
 This is expected; see
-[Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+[nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### Agents Reconnect Every Minute behind nginx
 
@@ -295,24 +295,24 @@ The agent logs `RST_STREAM closed stream` on `writeChunkedResponsesToProxy()` or
 about a minute after it connects, and again every minute, scraped or not. Its paths are gone from the proxy for a moment
 each time, so a scrape can fail.
 
-- **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's stream for chunked results carries
+- **Cause:** nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's stream for chunked results carries
   nothing while its results are small, and its other streams nothing between scrapes. A current agent and proxy keep
   their streams open with keepalives, but only when both support them, so this happens when the agent or the proxy is
   from 4.6.0 or earlier, or when a reverse proxy's idle timeout is under `proxy.internal.streamKeepAliveSecs`.
 - **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` to a day or more; under a shorter idle
-  timeout, lower `streamKeepAliveSecs` below it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+  timeout, lower `streamKeepAliveSecs` below it. See [nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### Agents Reconnect with HTTP Status 413 behind nginx
 
 The agent logs `writeResponsesToProxy(): UNKNOWN HTTP status code 413`, then `Disconnected from proxy`, and reconnects
-at once, again and again at an even pace, hours apart for small results, minutes apart for large ones. Nginx's error log
+at once, again and again at an even pace, hours apart for small results, minutes apart for large ones. nginx's error log
 says `client intended to send too large chunked body`.
 
-- **Cause:** Nginx counts all an agent sends on a stream as one request body, and an agent's streams of scrape results
-  stay open while it's connected, so Nginx ends one with 413 once its results pass `client_max_body_size`, 1 MB by
+- **Cause:** nginx counts all an agent sends on a stream as one request body, and an agent's streams of scrape results
+  stay open while it's connected, so nginx ends one with 413 once its results pass `client_max_body_size`, 1 MB by
   default. Every agent is affected, whatever its version.
 - **Fix:** set `client_max_body_size 0;` in the `server` or `location` block that passes to the proxy, which turns the
-  limit off. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+  limit off. See [nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### A Change to nginx Doesn't Reach Connected Agents
 
@@ -322,7 +322,7 @@ After `nginx -s reload`, agents connected before it behave as before, and nginx'
 - **Cause:** a reload leaves each open connection with the old worker it's on, under the old config, until the
   connection ends, and an agent's connection, which its keepalives keep open, doesn't.
 - **Fix:** set `worker_shutdown_timeout` in nginx's main context and restart nginx once; from then on, each reload
-  hands the agents to the new workers that long after it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+  hands the agents to the new workers that long after it. See [nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### `RESOURCE_EXHAUSTED` When an Agent Connects behind nginx
 

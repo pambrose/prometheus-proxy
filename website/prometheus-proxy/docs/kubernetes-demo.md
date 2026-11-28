@@ -126,18 +126,18 @@ Each part of the guided tour, `make tour`, makes one point. A part's name links 
 
 | Part | What it shows | Why it matters |
 |---|---|---|
-| 1. [The Helm charts on two clusters, with no inbound access](#the-helm-charts-on-two-clusters-with-no-inbound-access) | The proxy chart in one cluster, and the agent chart in another that exposes nothing | Nothing in the monitored cluster opens to the outside |
-| 2. [The agent's own dashboard, reached with kubectl port-forward](#the-agents-own-dashboard-reached-with-kubectl-port-forward) | The agent's dashboard through `kubectl port-forward`, and Scrape now against cluster-local URLs | The agent's view, reached without exposing anything new |
+| 1. [Two clusters, no inbound access](#the-helm-charts-on-two-clusters-with-no-inbound-access) | The proxy chart in one cluster, and the agent chart in another that exposes nothing | Nothing in the monitored cluster opens to the outside |
+| 2. [The agent's own dashboard](#the-agents-own-dashboard-reached-with-kubectl-port-forward) | The agent's dashboard through `kubectl port-forward`, and Scrape now against cluster-local URLs | The agent's view, reached without exposing anything new |
 | 3. [Annotate a Service, and Prometheus scrapes it](#annotate-a-service-and-prometheus-scrapes-it) | An annotated Service is scraped within seconds, and leaves when the annotation does, with no restart | A team adds monitoring with one annotation |
-| 4. [Kubernetes replaces a deleted agent pod in about a second](#kubernetes-replaces-a-deleted-agent-pod-in-about-a-second) | A deleted agent pod is replaced, and the new one registers every path again | The Deployment heals a lost agent by itself, at the cost of a scrape |
-| 5. [A config change restarts the agent; a targets change doesn't](#a-config-change-restarts-the-agent-a-targets-change-doesnt) | A change to the agent's main config replaces its pod, where part 3's change of targets didn't | Why the chart keeps targets in a ConfigMap of their own |
+| 4. [Kubernetes replaces a deleted agent pod](#kubernetes-replaces-a-deleted-agent-pod-in-about-a-second) | A deleted agent pod is replaced, and the new one registers every path again | The Deployment heals a lost agent by itself, at the cost of a scrape |
+| 5. [A config change and a targets change](#a-config-change-restarts-the-agent-a-targets-change-doesnt) | A change to the agent's main config replaces its pod, where part 3's change of targets didn't | Why the chart keeps targets in a ConfigMap of their own |
 
 ## Scenarios
 
 The commands that add, remove, or replace something print how long it took; the times on this page were measured on an
 Apple-silicon laptop.
 
-### The Helm Charts on Two Clusters, with No Inbound Access
+### Two Clusters, No Inbound Access { #the-helm-charts-on-two-clusters-with-no-inbound-access }
 
 ```bash
 ./demo.sh clusters    # pp-target's Services, each cluster's Helm release, and Prometheus's one job
@@ -175,7 +175,7 @@ discovery.
   <figcaption>Prometheus's targets: every one found through the proxy's /discovery, and scraped through the proxy</figcaption>
 </figure>
 
-### The Agent's Own Dashboard, Reached with kubectl port-forward
+### The Agent's Own Dashboard { #the-agents-own-dashboard-reached-with-kubectl-port-forward }
 
 ```bash
 ./demo.sh agent-dashboard   # in a second terminal: kubectl port-forward to the agent's dashboard, until Ctrl-C
@@ -239,7 +239,7 @@ from the proxy, which logs `WARN Invalid path request /search_metrics`, and `up{
 The [Basics Demo](basics-demo.md) shows dynamic discovery itself, from a file; here Kubernetes drives it. targets-sync
 is the demo's: a discovery source in the agent that read Services itself would replace it.
 
-### Kubernetes Replaces a Deleted Agent Pod in About a Second
+### Kubernetes Replaces a Deleted Agent Pod { #kubernetes-replaces-a-deleted-agent-pod-in-about-a-second }
 
 ```bash
 ./demo.sh delete-agent-pod   # deletes the agent's pod; its Deployment starts another
@@ -268,7 +268,7 @@ next request, and the screens page's agent tab turns red. Run `./demo.sh agent-d
 the new pod's Activity view lists only its own start, where the proxy's saw both pods:
 <http://localhost:8294/screens#proxy/activity+agent/activity>
 
-### A Config Change Restarts the Agent; a Targets Change Doesn't
+### A Config Change and a Targets Change { #a-config-change-restarts-the-agent-a-targets-change-doesnt }
 
 ```bash
 ./demo.sh change-config      # helm upgrade with a change to the agent's main config

@@ -12,7 +12,8 @@
 //   3. gives the diagram its text equivalent, the accTitle and accDescr its source declares, which Mermaid writes
 //      into the SVG as its title and desc. The closed shadow root hides those from a screen reader, and from
 //      aria-describedby, which can't reach into one, so the button takes the title in its name, and a visually hidden
-//      paragraph after it, which the button names as its description, holds the description.
+//      paragraph after it, which the button names as its description, holds the description. And
+//   4. says under it, on a touch screen, that a tap enlarges it.
 // Instant navigation swaps only the page's content, so the wrapper, and the listeners below, last from page to page.
 // The styles are in stylesheets/diagrams.css, which every page lists: a style this added to the head would be gone
 // after one.
@@ -54,8 +55,47 @@
     }
   };
 
+  // The line under the diagram that says it opens larger, which only a touch screen shows (diagrams.css), as it has no
+  // zoom-in cursor to say so. It goes after the description, if there's one, and a drawing before this one left it.
+  // The button's name says so already, so a screen reader skips it.
+  const isA = (node, name) => node?.classList.contains(name) ?? false;
+
+  const addHint = (node) => {
+    const hint = document.createElement("p");
+    hint.className = "diagram-hint";
+    hint.setAttribute("aria-hidden", "true");
+    hint.textContent = "Tap the diagram to enlarge it.";
+    node.after(hint);
+    return hint;
+  };
+
+  const hintAfter = (node) => {
+    const next = node.nextElementSibling;
+    if (isA(next, "diagram-desc")) {
+      return hintAfter(next);
+    }
+    return isA(next, "diagram-hint") ? next : addHint(node);
+  };
+
+  // A sequence diagram's boxes, the two sides of the firewall, outlined as the flowcharts' zones are. Mermaid's own
+  // style, in the shadow root, outlines them in its theme's purple, which no page style can reach, so the diagram gets
+  // a style of its own, once.
+  const boxStyle = () => {
+    const style = document.createElement("style");
+    style.className = "diagram-boxes";
+    style.textContent = "g rect.rect { stroke: var(--md-default-fg-color--lighter) !important; }";
+    return style;
+  };
+
+  const styleBoxes = (root) => {
+    if (!root.querySelector("style.diagram-boxes")) {
+      root.append(boxStyle());
+    }
+  };
+
   const enlargeable = (root) => {
     const host = root.host;
+    styleBoxes(root);
     const title = svgText(root, "title");
     roots.set(host, root);
     host.dataset.title = title;
@@ -64,6 +104,7 @@
     host.setAttribute("aria-label", title ? `Enlarge the diagram: ${title}` : "Enlarge the diagram");
     host.title = "Click to enlarge";
     describe(host, svgText(root, "desc"));
+    hintAfter(host);
   };
 
   // Whether [mermaid] has a render this script hasn't wrapped yet.
@@ -164,7 +205,7 @@
     const copy = svg.cloneNode(true);
     copy.removeAttribute("style");
     const fits = sizeCopy(copy, onPage, view);
-    view.shadowRoot.replaceChildren(copy);
+    view.shadowRoot.replaceChildren(copy, boxStyle());
     scrollable(zoom, !fits);
   };
 

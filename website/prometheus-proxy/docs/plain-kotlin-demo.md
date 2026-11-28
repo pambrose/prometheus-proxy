@@ -157,7 +157,7 @@ The oven's build adds Logback, since the library brings neither an SLF4J provide
 `logback.xml` sets the agent's logging along with the oven's: INFO to the console, with gRPC's internals and Netty at
 WARN. A plain program has no
 framework to set logging up, and with no configuration Logback logs everything at DEBUG, gRPC and Netty included, which
-would bury the lines `startIfConfigured()` logs. [Logging](embedded-agent.md#logging) covers the agent's loggers.
+would bury the lines `startIfConfigured()` logs. [Logging](embedded-debugging.md#logging) covers the agent's loggers.
 
 ## What This Demo Shows
 

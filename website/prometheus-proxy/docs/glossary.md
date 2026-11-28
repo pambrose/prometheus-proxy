@@ -38,11 +38,9 @@ path, and the agent returns a **ScrapeResponse** with the fetched body, status c
 
 ### Consolidated Mode
 
-A mode (`agent.consolidated = true`) in which multiple agents may register the **same** path,
-for redundancy or to put several instances behind one path, instead of the later registration
-displacing the earlier one. A scrape of the path goes to every agent serving it, and their responses
-are merged, so each agent should scrape its own instance of the service: agents that scrape the same
-endpoint send each series twice. See [Advanced Topics](advanced.md#consolidated-mode).
+A mode (`agent.consolidated = true`) in which several agents serve the **same** path, and the proxy merges their
+answers to each scrape, instead of the later registration displacing the earlier one. See
+[Consolidated Mode](advanced.md#consolidated-mode).
 
 ### Chunking
 
@@ -129,7 +127,7 @@ gRPC call so the proxy can authenticate agents at the application layer. See
 
 A gRPC server filter the proxy uses to detect agent disconnects promptly. Disabling it
 (`transportFilterDisabled`) is required when fronting the gRPC port with an L7 proxy such as
-Nginx. Without it, an agent is removed when its request stream ends, and the inactivity timeout
+nginx. Without it, an agent is removed when its request stream ends, and the inactivity timeout
 covers only an agent that dies before opening its stream, or whose connection stays half-open. See
 [Advanced Topics](advanced.md#nginx-reverse-proxy).
 

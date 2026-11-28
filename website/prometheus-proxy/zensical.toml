@@ -69,6 +69,8 @@ nav = [
   ]},
   { "Embed" = [
     { "Embedded Agent" = "embedded-agent.md" },
+    { "Embedded Agent API" = "embedded-api.md" },
+    { "Debugging" = "embedded-debugging.md" },
     { "Plain Kotlin Demo" = "plain-kotlin-demo.md" },
     { "Ktor Plugin" = "ktor-plugin.md" },
     { "Ktor Demo" = "ktor-demo.md" },
@@ -193,7 +195,7 @@ auto_caption = true
 [project.markdown_extensions.attr_list]                 # HTML attributes on Markdown elements
 [project.markdown_extensions.def_list]
 [project.markdown_extensions.footnotes]
-[project.markdown_extensions.md_in_html]                # Markdown inside HTML blocks, for the grid cards
+[project.markdown_extensions.md_in_html]                # Markdown inside HTML blocks, for the rows of ways on
 
 # Each heading's permalink, for linking straight to a setting or a step
 [project.markdown_extensions.toc]

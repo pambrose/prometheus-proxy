@@ -124,10 +124,10 @@ Expose it with a `LoadBalancer` Service (or an Ingress controller):
     NGINX Ingress `nginx.ingress.kubernetes.io/backend-protocol: GRPC` annotation). On NGINX
     Ingress, also set `nginx.ingress.kubernetes.io/proxy-body-size: "0"`: its default, 1 MB,
     cuts off every agent each time its results add up to a megabyte, as
-    [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) explains. Terminate
+    [nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) explains. Terminate
     or pass through TLS as described under [TLS](#tls). With an agent or a proxy from 4.6.0 or
     earlier, also raise the Ingress's stream timeouts, as
-    [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) explains: on NGINX Ingress, the
+    [nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) explains: on NGINX Ingress, the
     `nginx.ingress.kubernetes.io/proxy-read-timeout` annotation and the controller ConfigMap's
     `client-body-timeout`.
 
@@ -308,38 +308,22 @@ which requires `ADMIN_ENABLED=true`. The manifests also set conservative CPU/mem
 
 ## Next Steps
 
-<div class="grid cards" markdown>
+<div class="pp-ways" markdown>
 
--   :lucide-cable:{ .lg .middle } __Agent Configuration__
-
-    ---
+- [Agent Configuration](configuration/agent.md)
 
     Path configs, HTTP client tuning, and scrape options
 
-    [:lucide-arrow-right: Agent Configuration](configuration/agent.md)
-
--   :lucide-shield:{ .lg .middle } __Security & TLS__
-
-    ---
+- [Security & TLS](security/index.md)
 
     Secure the proxy-agent channel with TLS and mutual authentication
 
-    [:lucide-arrow-right: Security](security/index.md)
-
--   :lucide-radar:{ .lg .middle } __Service Discovery__
-
-    ---
+- [Service Discovery](service-discovery.md)
 
     Let Prometheus discover proxied targets dynamically
 
-    [:lucide-arrow-right: Service Discovery](service-discovery.md)
-
--   :lucide-activity:{ .lg .middle } __Monitoring__
-
-    ---
+- [Monitoring](monitoring.md)
 
     Scrape the proxy's and agent's own operational metrics
-
-    [:lucide-arrow-right: Monitoring](monitoring.md)
 
 </div>

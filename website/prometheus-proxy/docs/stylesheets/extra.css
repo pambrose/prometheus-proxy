@@ -168,10 +168,12 @@ body {
 
 /* Reading text at about 75 characters a line, the comfortable measure, where the column's full width ran the system
    sans, narrower than the theme's Inter, to about 95. Code, tables, diagrams, screenshots, and cards keep the full
-   width, which they use. 27rem is 34em of the reading text's 0.8rem, so it scales with the text. */
+   width, which they use. 27rem is 34em of the reading text's 0.8rem, so it scales with the text. A callout that
+   opens, as one that's always open, keeps to the measure too. */
 .md-typeset > :is(p, ul, ol, dl, blockquote):not(:has(img)),
 .md-typeset .tabbed-block > :is(p, ul, ol, dl):not(:has(img)),
-.md-typeset > .admonition {
+.md-typeset > .admonition,
+.md-typeset > details {
   max-width: 27rem;
 }
 
@@ -224,6 +226,19 @@ body {
 
 .md-typeset :is(.note, .tip, .info) > :is(.admonition-title, summary)::before {
   background-color: var(--pp-callout-icon);
+}
+
+/* A callout that opens takes its icon's color for the chevron that opens it, where the theme gave it its own hue. */
+.md-typeset :is(.note, .tip, .info) > summary::after {
+  color: var(--pp-callout-icon);
+}
+
+.md-typeset .warning > summary::after {
+  color: var(--pp-warn);
+}
+
+.md-typeset .danger > summary::after {
+  color: var(--pp-crit);
 }
 
 .md-typeset :is(.admonition, details).warning {
@@ -321,6 +336,14 @@ body {
   outline-offset: 2px;
 }
 
+/* The header's search button and icons take the site's focus ring, the accent, where the browser drew its own blue, the
+   one blue on the page. */
+.md-search__button:focus-visible,
+.md-header__button:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 2px;
+}
+
 /* A table's text a step up from the theme's 12.8px. */
 .md-typeset table:not([class]) {
   font-size: 0.7rem;
@@ -402,8 +425,8 @@ body {
   }
 }
 
-/* The home page's ways on: one list, a row each, the whole row its link, in the dashboard's rows rather than the
-   theme's cards. The link is the row's name; the text under it says where it goes. */
+/* The ways on, the home page's and each Next Steps list's: one list, a row each, the whole row its link, in the
+   dashboard's rows rather than the theme's cards. The link is the row's name; the text under it says where it goes. */
 .md-typeset .pp-ways > ul {
   max-width: 27rem;
   margin: 1em 0;
@@ -472,13 +495,4 @@ body {
 .md-typeset .pp-ways > ul > li:has(a:focus-visible) {
   outline: 2px solid var(--md-accent-fg-color);
   outline-offset: -2px;
-}
-
-/* A card's link, an arrow and the page it opens: the arrow and the name laid out apart, so the link's underline runs
-   under the name alone, where it ran under the space after the arrow too. Last in the file, after the home page's
-   links, which are less specific. */
-.md-typeset .grid.cards a:has(> .twemoji:first-child) {
-  display: inline-flex;
-  gap: 0.3em;
-  align-items: center;
 }

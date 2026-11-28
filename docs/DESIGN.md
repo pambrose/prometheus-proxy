@@ -360,15 +360,17 @@ have rather than one it claims. Keeping it is nearly free; the values above are 
 **Label/Mono Font:** the same stack. There is exactly one.
 
 **Character:** A pure system-monospace stack, self-hosted by definition — no webfont, no CDN request,
-no FOUT. It resolves to SF Mono on Apple platforms, Consolas on Windows, and the platform default
-elsewhere, so it always matches the terminal the operator already has open. Hierarchy comes entirely
-from size, weight, case, and color — never from a second family, because there isn't one.
+no FOUT. Only Safari reads `ui-monospace`, as SF Mono, which macOS doesn't install for other apps: Chrome and Firefox
+on a Mac draw Menlo, Windows draws Consolas, and Linux its default monospace, each a terminal face the operator already
+knows. Hierarchy comes entirely from size, weight, case, and color — never from a second family, because there isn't
+one.
 
 ### Hierarchy
 
 - **Title** (weight 640, 15px, lh 1.5): The agent name in the detail hero. The single largest text on
-  the surface. The unusual 640 weight sits between the stack's regular and bold — heavy enough to
-  anchor the pane, light enough not to shout.
+  the surface. The unusual 640 weight sits between SF Mono's regular and bold — heavy enough to
+  anchor the pane, light enough not to shout. Menlo and Consolas have only a regular and a bold, so outside Safari it
+  draws as their bold, as 600 does.
 - **Body** (weight 400, 12.5px, lh 1.5): The base. Agent names in the list, paths, table cells, kv
   labels. Nearly everything.
 - **Body Emphasis** (weight 600, 12.5px): The brand mark and the current tab. Weight, not size,

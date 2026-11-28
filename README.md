@@ -407,7 +407,7 @@ scrape_configs:
 | **TLS (no mutual auth)**   | [`examples/tls-no-mutual-auth.conf`](examples/tls-no-mutual-auth.conf)     |
 | **TLS (with mutual auth)** | [`examples/tls-with-mutual-auth.conf`](examples/tls-with-mutual-auth.conf) |
 | **Prometheus federation**  | [`examples/federate.conf`](examples/federate.conf)                         |
-| **Nginx reverse proxy**    | [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf)                         |
+| **nginx reverse proxy**    | [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf)                         |
 
 ## 🐳 Docker Usage
 
@@ -753,7 +753,7 @@ This leverages the existing service discovery features already built into Promet
 
 ### nginx Reverse Proxy
 
-To use with Nginx as a reverse proxy, disable the transport filter on both Proxy and Agent:
+To use with nginx as a reverse proxy, disable the transport filter on both Proxy and Agent:
 ```bash
 java -jar prometheus-proxy.jar --tf_disabled
 java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
@@ -779,7 +779,7 @@ whose connection stays half-open, is removed after the inactivity timeout (defau
 `proxy.internal.maxAgentsPerIdentity` (10,000), and with agent auth off, or only the shared `agentToken`, every agent
 shares one identity.
 
-> 📖 **Docs site:** [Advanced Topics guide](https://prometheus-proxy.com/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
+> 📖 **Docs site:** [Advanced Topics guide](https://prometheus-proxy.com/advanced/) covers the nginx reverse-proxy setup, federation, and other advanced configurations.
 
 ### Performance Tuning
 

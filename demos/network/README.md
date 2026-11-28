@@ -102,12 +102,12 @@ Tour](#guided-tour).
 | Part | What it shows | Why it matters |
 |---|---|---|
 | 1. [Two agents reach the proxy over a simulated WAN](#1-two-agents-reach-the-proxy-over-a-simulated-wan) | Two agents, each with a link to a primary and a standby proxy, and the agent's dashboard listing them in failover order | The healthy baseline, and the agent's side of its connection |
-| 2. [A high-latency link slows scrapes, but nothing fails](#2-a-high-latency-link-slows-scrapes-but-nothing-fails) | 250 ms each way adds about half a second to each scrape, and every scrape succeeds | The connection is already open, so a far site costs one round trip |
-| 3. [A low-bandwidth link fails scrapes; filtering at the agent fixes it](#3-a-low-bandwidth-link-fails-scrapes-filtering-at-the-agent-fixes-it) | A thin link makes a large payload miss Prometheus's timeout, until the agent drops a metric family no one uses | Filtering at the agent saves bandwidth, storage, and query cost |
-| 4. [The primary proxy stops, and the agents fail over to the standby](#4-the-primary-proxy-stops-and-the-agents-fail-over-to-the-standby) | Both agents move to the standby within seconds, and an alert says they're off their primary | Failover needs no operator |
-| 5. [A link goes silent; the agent detects it and fails over](#5-a-link-goes-silent-the-agent-detects-it-and-fails-over) | A link that drops traffic without closing: the agent gives up on it, and fails over, while the proxy evicts it | A NAT or firewall that silently drops a connection is caught by timeouts alone |
-| 6. [A link that keeps dropping: the agent reconnects, traced in Zipkin](#6-a-link-that-keeps-dropping-the-agent-reconnects-traced-in-zipkin) | A link that closes every 15 seconds; the agent reconnects in milliseconds, and Zipkin shows each reconnect | A flapping link costs one scrape per drop, and tracing shows where |
-| 7. [The whole WAN goes down: an alert fires, and the agents reconnect](#7-the-whole-wan-goes-down-an-alert-fires-and-the-agents-reconnect) | Both agents lose both proxies; their targets leave discovery, one alert fires, and they reconnect when it's back | An outage raises one clear alert, not a wall of red targets |
+| 2. [A high-latency link](#2-a-high-latency-link) | 250 ms each way adds about half a second to each scrape, and every scrape succeeds | The connection is already open, so a far site costs one round trip |
+| 3. [A low-bandwidth link and a filter](#3-a-low-bandwidth-link-and-a-filter) | A thin link makes a large payload miss Prometheus's timeout, until the agent drops a metric family no one uses | Filtering at the agent saves bandwidth, storage, and query cost |
+| 4. [Failover to the standby](#4-failover-to-the-standby) | Both agents move to the standby within seconds, and an alert says they're off their primary | Failover needs no operator |
+| 5. [A link goes silent](#5-a-link-goes-silent) | A link that drops traffic without closing: the agent gives up on it, and fails over, while the proxy evicts it | A NAT or firewall that silently drops a connection is caught by timeouts alone |
+| 6. [A flaky link, traced in Zipkin](#6-a-flaky-link-traced-in-zipkin) | A link that closes every 15 seconds; the agent reconnects in milliseconds, and Zipkin shows each reconnect | A flapping link costs one scrape per drop, and tracing shows where |
+| 7. [The whole WAN goes down](#7-the-whole-wan-goes-down) | Both agents lose both proxies; their targets leave discovery, one alert fires, and they reconnect when it's back | An outage raises one clear alert, not a wall of red targets |
 
 ## Guided Tour
 
@@ -134,7 +134,7 @@ These are the basics demo's proxy and agents, now with a simulated WAN between t
 - Open Grafana, <http://localhost:8195/screens#grafana>. Every target is up on **Target health**, and **Scrape time
   through the WAN, by agent** shows the two agents side by side, each well under a tenth of a second.
 
-### 2. A High-Latency Link Slows Scrapes, but Nothing Fails
+### 2. A High-Latency Link
 
 ```bash
 ./demo.sh far             # agent-branch's links add 250 ms, give or take 50 ms, each way
@@ -149,7 +149,7 @@ These are the basics demo's proxy and agents, now with a simulated WAN between t
 ./demo.sh heal
 ```
 
-### 3. A Low-Bandwidth Link Fails Scrapes; Filtering at the Agent Fixes It
+### 3. A Low-Bandwidth Link and a Filter
 
 ```bash
 ./demo.sh thin            # agent-branch's links carry 8 KB/s toward the proxies
@@ -189,7 +189,7 @@ These are the basics demo's proxy and agents, now with a simulated WAN between t
 `heal` alone, without the filter, brings every path back within a second or two: what the thin link had queued
 drains at full speed.
 
-### 4. The Primary Proxy Stops, and the Agents Fail Over to the Standby
+### 4. Failover to the Standby
 
 Open agent-branch's **Connection** view beside the standby's dashboard,
 <http://localhost:8195/screens#agent-branch/connection+proxy>. The page stays up when the primary stops, since the
@@ -231,7 +231,7 @@ once, and they return to the primary within seconds, which resolves the alert. a
 ./demo.sh heal
 ```
 
-### 5. A Link Goes Silent; the Agent Detects It and Fails Over
+### 5. A Link Goes Silent
 
 Contrast this with part 4, where the connection closed. Here agent-branch's link to the primary stops passing anything,
 the agent's goodbye included, and closes nothing: what a stateful firewall or NAT that drops a connection does. Nothing
@@ -268,7 +268,7 @@ hears, the other what the agent tries.
 ./demo.sh heal
 ```
 
-### 6. A Link That Keeps Dropping: The Agent Reconnects, Traced in Zipkin
+### 6. A Flaky Link, Traced in Zipkin
 
 ```bash
 ./demo.sh flaky           # agent-branch's link to the primary drops its connection about every 15 seconds
@@ -303,7 +303,7 @@ hears, the other what the agent tries.
 ./demo.sh heal
 ```
 
-### 7. The Whole WAN Goes Down: An Alert Fires, and the Agents Reconnect
+### 7. The Whole WAN Goes Down
 
 ```bash
 ./demo.sh wan-down        # every link goes down
