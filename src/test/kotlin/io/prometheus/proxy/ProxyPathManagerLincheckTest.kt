@@ -36,6 +36,7 @@ import org.jetbrains.lincheck.datastructures.StressOptions
 import org.jetbrains.lincheck.datastructures.Validate
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.reflect.KClass
 import kotlin.time.Duration
 
 // Lincheck races ProxyPathManager's path registration, takeovers, and reclaims against unregistering and against agent
@@ -43,18 +44,23 @@ import kotlin.time.Duration
 // ProxyServiceImpl.registerPath does -- look the agent's context up outside the path-map lock, then addPath -- and a
 // reclaim does the same with the reclaim flag, which an agent sends for a path it was told another agent took.
 // Removal does what Proxy.removeAgentContext does: remove and invalidate the context, then sweep its paths. Seven
-// agents share three paths, each serving at most two. Four are exclusive agents of team-a, which may take over each
-// other's paths: two launches that read path notices, a context of the first's launch (the same agent reconnected while
-// the proxy still holds its old context, which a takeover of its own launch invalidates once it has no paths), and an
-// agent predating path notices, which is never told and never waits. An exclusive agent of team-b may not take team-a's
-// paths, and a consolidated agent of each team may not share a path with an exclusive one.
+// agents share three paths, each agent serving at most two, and the agents of each identity two together. Four are
+// exclusive agents of team-a, which may take over each other's paths: two launches that read path notices, a context
+// of the first's launch (the same agent reconnected while the proxy still holds its old context, which a takeover of
+// its own launch invalidates once it has no paths), and an agent predating path notices, which is never told and never
+// waits. An exclusive agent of team-b may not take team-a's paths, and a consolidated agent of each team may not share
+// a path with an exclusive one.
 //
-// Each reclaim checks, as addPath decides it, that it takes no path from a live agent of another launch (the TLA+
-// spec's ReclaimNeverDisplaces), and that it is refused as held by another agent only while such an agent serves the
-// path. Once every operation has finished, validate checks the spec's invariants:
+// The operations run twice, in two ops classes. ProxyPathManagerOps makes every path-map change under a lock of its
+// own, so each reclaim checks, as addPath decides it, that it takes no path from a live agent of another launch (the
+// TLA+ spec's ReclaimNeverDisplaces), and that it is refused as held by another agent only while such an agent serves
+// the path. That lock keeps the path manager's calls from racing one another, so ProxyPathManagerRaceOps makes the
+// same calls without it, as the proxy's gRPC threads make them, leaving ProxyPathManager's own lock the only one: taken
+// out of addPath or removePath, the counts or the path map come out wrong, which only this one catches. Once every
+// operation has finished, validate checks the spec's invariants, in both:
 //  - NoStrandedPath: every agent a path lists is still valid (finding 7: none left on a removed agent);
-//  - PathCountsAgree: pathCountFor, which enforces the limit and decides when a displaced agent is orphaned, matches
-//    the path map, and never exceeds the limit;
+//  - PathCountsAgree: pathCountFor and identityPathCountFor, which enforce the limits and decide when a displaced agent
+//    is orphaned, match the path map, and never exceed the limits;
 //  - an exclusive path has one agent, consolidated and exclusive agents never share a path, and every valid agent on a
 //    path has the path's identity. Only a consolidated join can break that last one: a refused exclusive takeover
 //    leaves no trace in the path map, as an allowed one replaces the path's only agent;
@@ -74,6 +80,16 @@ class ProxyPathManagerLincheckTest : StringSpec() {
     tags(Lincheck)
 
     "path registration, takeovers, and reclaims keep the path map consistent under stress" {
+      stress(ProxyPathManagerOps::class)
+    }
+
+    "the path manager's calls, racing one another on its own lock, keep the path map and its counts consistent" {
+      stress(ProxyPathManagerRaceOps::class)
+    }
+  }
+
+  companion object {
+    private fun stress(ops: KClass<*>) {
       // Rejections, displacements, and refused reclaims log at WARN and INFO, on every one of thousands of runs.
       withLoggingOff<ProxyPathManager> {
         StressOptions()
@@ -81,12 +97,10 @@ class ProxyPathManagerLincheckTest : StringSpec() {
           .invocationsPerIteration(INVOCATIONS)
           .threads(THREADS)
           .actorsPerThread(ACTORS_PER_THREAD)
-          .check(ProxyPathManagerOps::class)
+          .check(ops)
       }
     }
-  }
 
-  companion object {
     private inline fun <reified T : Any> withLoggingOff(block: () -> Unit) {
       val logger = LoggerFactory.getLogger(T::class.java) as Logger
       val level = logger.level
@@ -105,16 +119,32 @@ class ProxyPathManagerLincheckTest : StringSpec() {
   }
 }
 
+// The operations under every path-map change, with the reclaim's check.
+class ProxyPathManagerOps : PathManagerOps(serialized = true)
+
+// The operations with no lock of the spec's own, so the path manager's calls race one another.
+class ProxyPathManagerRaceOps : PathManagerOps(serialized = false)
+
+// The agents, the paths, and the operations of both ops classes, which Lincheck finds here, as it reads a test class's
+// superclasses. [serialized] says whether every path-map change is made under pathLock.
 @Param(name = "agent", gen = IntGen::class, conf = "0:6")
 @Param(name = "path", gen = IntGen::class, conf = "0:2")
-class ProxyPathManagerOps {
+abstract class PathManagerOps(
+  private val serialized: Boolean,
+) {
   private val contextManager = AgentContextManager(isTestMode = true)
   private val pathManager = ProxyPathManager(PROXY, isTestMode = true)
 
-  // Held around every path-map change, so a reclaim sees who serves the path as addPath decides; see reclaim. It
-  // serializes nothing the path map's own lock doesn't: those calls do all their shared work under it.
+  // Held around every path-map change while serialized, so a reclaim sees who serves the path as addPath decides; see
+  // reclaim. Those calls do all their shared work under the path map's own lock, but this one keeps them from racing
+  // one another, which ProxyPathManagerRaceOps, without it, leaves to that lock alone.
   private val pathLock = Any()
   private val violations = ConcurrentLinkedQueue<String>()
+
+  // Makes [change], a change to the path map, under pathLock while serialized.
+  private inline fun pathChange(change: () -> Unit) {
+    if (serialized) synchronized(pathLock) { change() } else change()
+  }
 
   private val agents =
     listOf(
@@ -149,13 +179,14 @@ class ProxyPathManagerOps {
     @Param(name = "path") path: Int,
   ) {
     val context = contextManager.getAgentContext(agents[agent].agentId) ?: return
-    synchronized(pathLock) {
+    pathChange {
       pathManager.addPath(PATHS[path], "{}", context, PathMetadata(identityName = context.authIdentityName))
     }
   }
 
   // registerPath with the reclaim flag. Any agent may send it, as the proxy can't tell an agent predating notices from
-  // one that ignores them.
+  // one that ignores them. Checked only while serialized, as only then does no other change come between the look at
+  // the path and addPath's decision.
   @Operation
   fun reclaim(
     @Param(name = "agent") agent: Int,
@@ -163,6 +194,10 @@ class ProxyPathManagerOps {
   ) {
     val context = contextManager.getAgentContext(agents[agent].agentId) ?: return
     val key = PATHS[path]
+    if (!serialized) {
+      pathManager.addPath(key, "{}", context, PathMetadata(identityName = context.authIdentityName, reclaim = true))
+      return
+    }
     synchronized(pathLock) {
       // No other path-map change comes between this look and addPath's decision. Validity can change, as disconnect
       // invalidates outside the lock, but a context never becomes valid again: one valid after the call was valid as it
@@ -187,7 +222,7 @@ class ProxyPathManagerOps {
     @Param(name = "agent") agent: Int,
     @Param(name = "path") path: Int,
   ) {
-    synchronized(pathLock) {
+    pathChange {
       pathManager.removePath(PATHS[path], agents[agent].agentId)
     }
   }
@@ -199,7 +234,7 @@ class ProxyPathManagerOps {
   ) {
     val agentId = agents[agent].agentId
     contextManager.removeFromContextManager(agentId, RemovalReason.TERMINATION)
-    synchronized(pathLock) {
+    pathChange {
       pathManager.removeFromPathManager(agentId, RemovalReason.TERMINATION)
     }
   }
@@ -237,6 +272,16 @@ class ProxyPathManagerOps {
         "Agent ${agent.agentId} serves ${served.size} paths, over $MAX_PATHS_PER_AGENT"
       }
       validateNotices(agent, served, unread.getValue(agent.agentId))
+    }
+
+    // Each agent's paths count against its identity, the identity of its registrations, which is its auth identity.
+    agents.groupBy { it.authIdentityName }.forEach { (identity, members) ->
+      val served = members.sumOf { agent -> paths.values.count { it.serves(agent) } }
+      val counted = pathManager.identityPathCountFor(identity)
+      check(counted == served) { "The agents of '$identity' are counted as serving $counted paths but serve $served" }
+      check(served <= MAX_PATHS_PER_IDENTITY) {
+        "The agents of '$identity' serve $served paths, over $MAX_PATHS_PER_IDENTITY"
+      }
     }
   }
 
@@ -288,6 +333,11 @@ class ProxyPathManagerOps {
 
   companion object {
     private const val MAX_PATHS_PER_AGENT = 2
+
+    // Less than the three paths, which no identity can pass, as no path here holds two agents of one identity. At two,
+    // team-a's agents reach it, so a third path is refused, and a takeover among them passes only as it replaces the
+    // identity's own path.
+    private const val MAX_PATHS_PER_IDENTITY = 2
     private const val TEAM_A = "team-a"
     private const val TEAM_B = "team-b"
     private const val LAUNCH_A1 = "launch-a1"
@@ -300,7 +350,13 @@ class ProxyPathManagerOps {
 
     private val PROXY by lazy {
       Proxy(
-        options = ProxyOptions(listOf("-Dproxy.internal.maxPathsPerAgent=$MAX_PATHS_PER_AGENT")),
+        options =
+          ProxyOptions(
+            listOf(
+              "-Dproxy.internal.maxPathsPerAgent=$MAX_PATHS_PER_AGENT",
+              "-Dproxy.internal.maxPathsPerIdentity=$MAX_PATHS_PER_IDENTITY",
+            ),
+          ),
         inProcessServerName = "proxy-path-manager-lincheck",
         testMode = true,
       )

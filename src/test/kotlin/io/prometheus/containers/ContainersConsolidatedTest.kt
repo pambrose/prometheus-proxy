@@ -31,6 +31,7 @@ import io.prometheus.containers.support.ContainerTestSupport.proxyContainer
 import io.prometheus.containers.support.baseUrl
 import io.prometheus.containers.support.bodyOf
 import io.prometheus.containers.support.closeQuietly
+import io.prometheus.containers.support.startOrTearDown
 import io.prometheus.containers.support.stopQuietly
 import org.testcontainers.containers.Network
 import kotlin.time.Duration.Companion.seconds
@@ -69,18 +70,19 @@ class ContainersConsolidatedTest : StringSpec() {
         )
       val httpClient = httpClient()
 
-      beforeSpec {
-        stubA.start()
-        stubB.start()
-        proxy.start()
-        agentA.start()
-        agentB.start()
-      }
-
-      afterSpec {
+      // Run by afterSpec, and by beforeSpec when a container doesn't start, as Kotest then skips afterSpec
+      fun teardown() {
         httpClient.close()
         stopQuietly(agentB, agentA, proxy, stubB, stubA)
         closeQuietly(network)
+      }
+
+      beforeSpec {
+        startOrTearDown(stubA, stubB, proxy, agentA, agentB, teardown = ::teardown)
+      }
+
+      afterSpec {
+        teardown()
       }
 
       "a single consolidated path returns metrics merged from both agents" {

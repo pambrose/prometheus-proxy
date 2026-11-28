@@ -38,6 +38,7 @@ import io.prometheus.containers.support.ContainerTestSupport.transferable
 import io.prometheus.containers.support.baseUrl
 import io.prometheus.containers.support.bodyOf
 import io.prometheus.containers.support.closeQuietly
+import io.prometheus.containers.support.startOrTearDown
 import io.prometheus.containers.support.stopQuietly
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.Network
@@ -77,16 +78,19 @@ class ContainersLargePayloadTest : StringSpec() {
         )
       val httpClient = httpClient()
 
-      beforeSpec {
-        metricsStub.start()
-        proxy.start()
-        agent.start()
-      }
-
-      afterSpec {
+      // Run by afterSpec, and by beforeSpec when a container doesn't start, as Kotest then skips afterSpec
+      fun teardown() {
         httpClient.close()
         stopQuietly(agent, proxy, metricsStub)
         closeQuietly(network)
+      }
+
+      beforeSpec {
+        startOrTearDown(metricsStub, proxy, agent, teardown = ::teardown)
+      }
+
+      afterSpec {
+        teardown()
       }
 
       "a large payload is reassembled intact through the proxy" {

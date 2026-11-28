@@ -319,6 +319,9 @@ All notable changes to this project are documented in this file.
   does, where the agent connects to the proxy by its container name, or to `PROXY_HOSTNAME` when it's set, in place of
   a hard-coded `mymachine.lan`. They publish their ports on `127.0.0.1` only, no longer publish the agent's metrics
   port, which `examples/simple.conf` leaves off, and fetch `simple.conf` at the release they run, not `master`
+- A container spec whose tests share one stack tears it down when one of its containers fails to start, as its
+  `afterSpec` would, which Kotest skips once `beforeSpec` throws: five such specs left the containers already
+  started, their Docker network, and their HTTP client running for the rest of `make container-tests`
 
 ### Documentation
 

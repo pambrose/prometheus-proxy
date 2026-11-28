@@ -1,12 +1,12 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 63 resolved, 7 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 70 resolved, 0 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
 and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16, #17, #18, #19, and #20 in #602; #21,
 #22, #23, #24, #25, #26, and #27 in #603; #37 and #42 in #604; #60, #61, #64, #65, #66, #67, #68, #69, and #70 in #605;
-#62 and #63 in #606.
+#62 and #63 in #606; #53, #54, #55, #56, #57, #58, and #59 in #607.
 
 **Date:** 2026-11-26
 
@@ -72,13 +72,13 @@ and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16,
 | 50 | `demos/nginx/bin/screenshots.sh` `shows_reconnecting` uses stale 4.7.0 top-bar pixel coordinates after 4.7.1's 1-button theme switcher | CI/build | low | ✅ |
 | 51 | Dead color overrides in `demos/network/grafana/dashboards/network-overview.json` (Panels 14 and 18) | CI/build | low | ✅ |
 | 52 | Minor build/script drift (`Makefile` `.PHONY`, unused `NEXT_AGENT_DASHBOARD_URL` and stale comment in `demos/ktor/demo.sh`, stale port/binding/URL in `bin/docker-*.sh`) | CI/build | low | ✅ |
-| 53 | `ProxyPathManagerLincheckTest` externally serializes all `ProxyPathManager` mutations behind `pathLock` and omits `maxPathsPerIdentity` | Tests | medium | ⬜ |
-| 54 | Tautological `Bug #1` test in `AgentTest` tests a local copy-pasted `Semaphore` instead of `Agent.processScrapeRequests` | Tests | medium | ⬜ |
-| 55 | Leaked Logback logger level mutation in `BaseOptionsTest` contaminates subsequent specs in `unitTest` | Tests | medium | ⬜ |
-| 56 | Five container specs leak Docker containers, networks, and HTTP clients when `beforeSpec` fails partway through | Tests | medium | ⬜ |
-| 57 | Hygiene guard blind spots in `DemoScreensLinksTest` (hardcoded `DEMOS`) and `ConfigFileKeysTest` (`listEntrySchemas` omitting `links`/`screens`) | Tests | low | ⬜ |
-| 58 | Weak timeout assertion and untested `stopTimeout == null` branch in Ktor `AgentLifecycleTest` (plus missing `finally` in `EmbeddedAgentInfoTest`) | Tests | low | ⬜ |
-| 59 | Vacuous JSON assertion in `UtilsTest` for `Utils.getVersionDesc(true)` | Tests | low | ⬜ |
+| 53 | `ProxyPathManagerLincheckTest` externally serializes all `ProxyPathManager` mutations behind `pathLock` and omits `maxPathsPerIdentity` | Tests | medium | ✅ |
+| 54 | Tautological `Bug #1` test in `AgentTest` tests a local copy-pasted `Semaphore` instead of `Agent.processScrapeRequests` | Tests | medium | ✅ |
+| 55 | Leaked Logback logger level mutation in `BaseOptionsTest` contaminates subsequent specs in `unitTest` | Tests | medium | ✅ |
+| 56 | Five container specs leak Docker containers, networks, and HTTP clients when `beforeSpec` fails partway through | Tests | medium | ✅ |
+| 57 | Hygiene guard blind spots in `DemoScreensLinksTest` (hardcoded `DEMOS`) and `ConfigFileKeysTest` (`listEntrySchemas` omitting `links`/`screens`) | Tests | low | ✅ |
+| 58 | Weak timeout assertion and untested `stopTimeout == null` branch in Ktor `AgentLifecycleTest` (plus missing `finally` in `EmbeddedAgentInfoTest`) | Tests | low | ✅ |
+| 59 | Vacuous JSON assertion in `UtilsTest` for `Utils.getVersionDesc(true)` | Tests | low | ✅ |
 | 60 | `README.md` omits 4.7.1's `/screens` page and default-open framing behavior change from "New Features", and omits `/screens` (and `SAME_ORIGIN`) from "Operational Dashboard" | Docs | medium | ✅ |
 | 61 | `website/prometheus-proxy/docs/embedded-upgrading.md` is missing an "Upgrading from 4.7.0" section for 4.7.1's behavior changes affecting embedders | Docs | medium | ✅ |
 | 62 | `docs/PRODUCT.md` has a factual error on proxy Scrape-now metrics and multiple pre-4.7.1 stale statements | Docs | medium | ✅ |
@@ -1443,7 +1443,7 @@ Both panels carry copy-pasted `byName` overrides for `"prometheus-proxy"` (orang
 
 ## 🧪 Tests
 
-### 53. ⬜ `ProxyPathManagerLincheckTest` externally serializes all `ProxyPathManager` mutations behind `pathLock` and omits `maxPathsPerIdentity`
+### 53. ✅ `ProxyPathManagerLincheckTest` externally serializes all `ProxyPathManager` mutations behind `pathLock` and omits `maxPathsPerIdentity`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1459,9 +1459,11 @@ Both panels carry copy-pasted `byName` overrides for `"prometheus-proxy"` (orang
 
 **Fix:** Remove `pathLock` (or add a dedicated unguarded `ProxyPathManagerConcurrencyOps` alongside the atomic-observer reclaim check) so `addPath`, `removePath`, and `removeFromPathManager` genuinely race on `ProxyPathManager`'s own `synchronized(pathMap)` monitor. Configure `-Dproxy.internal.maxPathsPerIdentity=3` in `PROXY` and assert in `validate()` that `pathManager.identityPathCountFor(identity)` equals the actual served path count per identity and never exceeds the configured limit.
 
+**Resolution:** Fixed in #607. Every path-map change in the spec ran under the test's own `pathLock`, so `ProxyPathManager`'s calls never raced each other, and the per-identity quota was never set. A second ops class, `ProxyPathManagerRaceOps`, makes the same calls with no external lock, while `ProxyPathManagerOps` keeps the lock its reclaim check needs; both set `maxPathsPerIdentity`, and `validate()` checks that `identityPathCountFor` matches the path map and stays within the limit. Taking `synchronized(pathMap)` out of `addPath` or `removePath` now fails the spec.
+
 ---
 
-### 54. ⬜ Tautological `Bug #1` test in `AgentTest` tests a local copy-pasted `Semaphore` instead of `Agent.processScrapeRequests`
+### 54. ✅ Tautological `Bug #1` test in `AgentTest` tests a local copy-pasted `Semaphore` instead of `Agent.processScrapeRequests`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1476,9 +1478,11 @@ Both panels carry copy-pasted `byName` overrides for `"prometheus-proxy"` (orang
 
 **Fix:** Make `processScrapeRequests` `internal` (or drive it through a test `Agent` with `maxConcurrentHttpClients = 2` and a real `AgentConnectionContext`), feed gated `ScrapeRequestAction` lambdas into `connectionContext.scrapeRequestActions()`, and assert on the real production method that concurrency never exceeds `maxConcurrentHttpClients`, backpressure bounds launched coroutines, and `semaphore.release()`/`decrementBacklog(1)` execute even when an action throws.
 
+**Resolution:** Fixed in #607. The `Bug #1` test ran a copy of the loop, not the real method. `Agent.processScrapeRequests` is now `internal`, and two tests drive it through a connection's channel: at most `maxConcurrentHttpClients` scrapes run and no more requests are taken while they do, and a scrape that throws gives back its permit and its backlog place.
+
 ---
 
-### 55. ⬜ Leaked Logback logger level mutation in `BaseOptionsTest` contaminates subsequent specs in `unitTest`
+### 55. ✅ Leaked Logback logger level mutation in `BaseOptionsTest` contaminates subsequent specs in `unitTest`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1495,9 +1499,11 @@ Both panels carry copy-pasted `byName` overrides for `"prometheus-proxy"` (orang
 
 **Fix:** Save and restore `(LoggerFactory.getLogger("io.prometheus") as Logger).level` in `try/finally` around `BaseOptionsTest.kt:209-215`, and restore the captured prior `ROOT` level instead of hardcoded `Level.INFO` in `UtilsTest.kt:68, 85-87`.
 
+**Resolution:** Fixed in #607. `BaseOptionsTest`'s `--log_level DEBUG` test left Logback's `io.prometheus` logger at DEBUG for every later spec in the JVM, and `UtilsTest` reset the root logger to a fixed INFO. `BaseOptionsTest` now restores both levels in `try/finally`, and `UtilsTest` restores the root level it found.
+
 ---
 
-### 56. ⬜ Five container specs leak Docker containers, networks, and HTTP clients when `beforeSpec` fails partway through
+### 56. ✅ Five container specs leak Docker containers, networks, and HTTP clients when `beforeSpec` fails partway through
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1515,9 +1521,11 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 **Fix:** Extract a `teardown()` method (using `stopQuietly`/`closeQuietly`) in each of the five specs and call it both in `afterSpec` and in a `catch (t: Throwable) { teardown(); throw t }` wrapper in `beforeSpec`.
 
+**Resolution:** Fixed in #607. Kotest skips `afterSpec` once `beforeSpec` throws, so five container specs leaked the containers already started, their network, and their HTTP client. Each now starts its stack with `startOrTearDown` (`ContainerTestSupport`), which runs the teardown `afterSpec` runs when a container fails to start.
+
 ---
 
-### 57. ⬜ Hygiene guard blind spots in `DemoScreensLinksTest` and `ConfigFileKeysTest` for recent `/screens` and `links` features
+### 57. ✅ Hygiene guard blind spots in `DemoScreensLinksTest` and `ConfigFileKeysTest` for recent `/screens` and `links` features
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1534,9 +1542,11 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 **Fix:** Add a test in `DemoScreensLinksTest` scanning `demos/*/config/*.conf` for `proxy.dashboard.screens` and asserting every matching demo is in `DEMOS`; add `"proxy.dashboard.links"` and `"proxy.dashboard.screens"` to `ConfigFileKeysTest.listEntrySchemas` (or discover all object-list schemas dynamically from `config/config.conf`).
 
+**Resolution:** Fixed in #607. `DEMOS` had since grown to all seven demos, but nothing would catch a new one left out. `DemoScreensLinksTest` now requires every `demos/*/config` file that lists screens to be one of `DEMOS`' configs, and `ConfigFileKeysTest` reads every list of objects from `config/config.conf`, so `proxy.dashboard.links` and `proxy.dashboard.screens` entries are covered.
+
 ---
 
-### 58. ⬜ Weak timeout assertion and untested `stopTimeout == null` branch in Ktor `AgentLifecycleTest` (plus missing `finally` in `EmbeddedAgentInfoTest`)
+### 58. ✅ Weak timeout assertion and untested `stopTimeout == null` branch in Ktor `AgentLifecycleTest` (plus missing `finally` in `EmbeddedAgentInfoTest`)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1553,9 +1563,11 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 **Fix:** In `AgentLifecycleTest.kt:285-297`, signal a `shutdownStarted` latch inside the mocked `shutdown()`, wrap `release.countDown()` in `finally`, and assert `shutdownStarted` triggered and the `"still stopping after 50ms"` WARN was logged. Add a test setting `agent { stopTimeout = null }` exercising the unbounded `thread.join()` branch. Wrap `release.countDown()` in `finally` in `EmbeddedAgentInfoTest.kt:82-92`.
 
+**Resolution:** Fixed in #607. The timeout test checked only a latch nothing released. It now checks that the agent's stop began, that the disposal waited out the timeout plus its 1-second margin, and that the "still stopping" warning was logged, releasing the stop in `finally`; `EmbeddedAgentInfoTest` gained the same `finally`. The `stopTimeout == null` branch was already covered by Wave B's interrupt test, which runs with `null`.
+
 ---
 
-### 59. ⬜ Vacuous JSON assertion in `UtilsTest` for `Utils.getVersionDesc(true)`
+### 59. ✅ Vacuous JSON assertion in `UtilsTest` for `Utils.getVersionDesc(true)`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1569,6 +1581,8 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 **Impact:** If `asJson = true` were ignored and plain text returned, the test would still pass.
 
 **Fix:** Parse `Utils.getVersionDesc(true)` with `Json.parseToJsonElement(versionDesc).jsonObject`, assert `"version"` is present, and assert it differs from `Utils.getVersionDesc(false)`.
+
+**Resolution:** Fixed in #607. The test asserted only a non-empty string. It now parses `getVersionDesc(true)` as JSON, expects its three keys, and checks the version against `BuildConfig.APP_VERSION` and the plain form.
 
 ---
 

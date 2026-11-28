@@ -52,9 +52,13 @@ import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.BuildConfig
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -66,7 +70,10 @@ class UtilsTest : StringSpec() {
     (this is T).shouldBeTrue()
   }
 
-  private val originalLogLevel = Level.INFO // (LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger).level
+  // The setLogLevel tests set the root logger's level, which is JVM-wide, so each test puts back the level the spec
+  // found, not a fixed INFO, which changed the level for every later spec in the JVM that had set another.
+  private val rootLogger = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+  private lateinit var originalLogLevel: Level
 
   // Runs block with kotlin-logging's process-wide startup-message flag set to value, then restores it.
   private inline fun withStartupMessage(
@@ -83,8 +90,12 @@ class UtilsTest : StringSpec() {
   }
 
   init {
+    beforeSpec {
+      originalLogLevel = rootLogger.level
+    }
+
     afterTest {
-      setLogLevel("test", originalLogLevel.levelStr.lowercase())
+      rootLogger.level = originalLogLevel
     }
 
     // ==================== appendQueryParams Tests ====================
@@ -278,11 +289,13 @@ class UtilsTest : StringSpec() {
       versionDesc.shouldNotBeEmpty()
     }
 
+    // --version's JSON form, which a script reads, so it must parse, and give the version the plain form gives
     "getVersionDesc should return JSON when requested" {
-      val versionDesc = Utils.getVersionDesc(true)
+      val versionDesc = Json.parseToJsonElement(Utils.getVersionDesc(true)).jsonObject
 
-      versionDesc.shouldNotBeEmpty()
-      // JSON output should contain braces or JSON structure
+      versionDesc.keys shouldBe setOf("version", "release_date", "build_time")
+      versionDesc.getValue("version").jsonPrimitive.content shouldBe BuildConfig.APP_VERSION
+      Utils.getVersionDesc(false) shouldContain "Version: ${BuildConfig.APP_VERSION}"
     }
 
     // Bug #19: VersionValidator was removed — version printing now happens after parsing
