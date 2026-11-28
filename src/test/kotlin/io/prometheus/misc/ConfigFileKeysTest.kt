@@ -227,8 +227,8 @@ class ConfigFileKeysTest : StringSpec() {
       configFiles
         .associate { file ->
           val name = file.invariantSeparatorsPath
-          // Includes are read relative to the file, as web-ui-hosts.conf's of web-ui.conf is, and simple.conf's
-          // substitution is resolved as the agent resolves it with PROXY_HOSTNAME unset.
+          // Includes are read relative to the file, as web-ui-hosts.conf's of web-ui.conf is, and simple.conf's and
+          // prom-agent.conf's substitution is resolved as the agent resolves it with PROXY_HOSTNAME unset.
           val config = ConfigFactory.parseFile(file).resolve(ConfigResolveOptions.noSystem()).root()
           val fileSchema = if (config.containsKey(DISCOVERY_PATHS_KEY)) discoverySchema else schema
           name to undeclared("", config, fileSchema).filterNot { it in NOT_SETTINGS[name].orEmpty() }
@@ -384,9 +384,10 @@ class ConfigFileKeysTest : StringSpec() {
     // spelled out in full has, then its '='.
     private val D_SETTING = Regex("\"-D((?:proxy|agent)\\.[A-Za-z0-9_.]+)=")
 
-    // Top-level keys that hold no setting: simple.conf's proxyMetricsHost only feeds a substitution in a pathConfigs
-    // url, and neither the proxy nor the agent reads it.
-    private val NOT_SETTINGS = mapOf("examples/simple.conf" to setOf("proxyMetricsHost"))
+    // Top-level keys that hold no setting: simple.conf's and prom-agent.conf's proxyMetricsHost only feeds a
+    // substitution in a pathConfigs url, and neither the proxy nor the agent reads it.
+    private val NOT_SETTINGS =
+      listOf("examples/simple.conf", "examples/prom-agent.conf").associateWith { setOf("proxyMetricsHost") }
 
     // A setting() call with its key spelled out: the call, then the key's string literal, named or not.
     private val SETTING_CALL = Regex("""\bsetting\(\s*(?:key\s*=\s*)?"([^"$]+)"""")
