@@ -23,12 +23,12 @@ FROM ${APP_BUILD} AS jar
 # Spring Boot's own layout for an image, the app's jar beside lib/, its dependencies' jars, which `demo.sh versions`
 # lists, in layers, so a rebuild rewrites only those that changed: the app, and a snapshot of the library. A release
 # build has no snapshot, so its layer is made empty.
-FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS extracted
+FROM eclipse-temurin:25-jre-noble@sha256:f3dd0838e69b881cc382237d5901e74ae3705b1056ad964b2e0e523b174fef99 AS extracted
 COPY --from=jar /jar/roastery.jar /tmp/
 RUN java -Djarmode=tools -jar /tmp/roastery.jar extract --layers --destination /layers \
     && mkdir -p /layers/snapshot-dependencies
 
-FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce
+FROM eclipse-temurin:25-jre-noble@sha256:f3dd0838e69b881cc382237d5901e74ae3705b1056ad964b2e0e523b174fef99
 RUN useradd --system --uid 1001 --home-dir /app roastery
 COPY --from=extracted /layers/dependencies/ /app/
 COPY --from=extracted /layers/snapshot-dependencies/ /app/
