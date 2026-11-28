@@ -75,7 +75,8 @@ one is set, so keep it on an internal network or on `127.0.0.1`.
 ## Logs
 
 `setting("logLevel", "debug")`, or `AGENT_LOG_LEVEL=debug`, logs the agent's `io.prometheus` loggers at DEBUG, and
-leaves your application's own logging alone (see [Logging](#logging)). Even at INFO, the agent logs its settings as it
+leaves your application's own logging alone (see [Logging](#logging)), where a standalone agent's sets the root
+logger's level. Even at INFO, the agent logs its settings as it
 starts, such as `adminEnabled: true`, after the environment variables have taken precedence, so its startup log shows
 whether one overrode the builder.
 

@@ -3,8 +3,8 @@
 // The theme draws each diagram with mermaid.render into a closed shadow root as soon as Mermaid loads, which can be
 // before the page's font has, on a first visit. Mermaid then sizes every label for the fallback font, and the real one,
 // wider, overflows the boxes: a subgraph's title is cut short, and an edge's label runs into the box beside it. This
-// script loads before the theme's bundle (overrides/main.html) and wraps mermaid.render, the moment the theme's loader
-// defines Mermaid, so that it
+// script loads before the theme's bundle (overrides/main.html) and wraps mermaid.render and mermaid.initialize, the
+// moment the theme's loader defines Mermaid, so that it
 //   1. waits for the page's font before drawing, and
 //   2. hands the theme a bindFunctions that keeps the diagram's shadow root, which the theme calls with it once the
 //      diagram is on the page, and marks the diagram as a button that shows it in a dialog filling the window. A
@@ -13,7 +13,7 @@
 //      into the SVG as its title and desc. The closed shadow root hides those from a screen reader, and from
 //      aria-describedby, which can't reach into one, so the button takes the title in its name, and a visually hidden
 //      paragraph after it, which the button names as its description, holds the description. And
-//   4. says under it, on a touch screen, that a tap enlarges it.
+//   4. adds to the styles the theme gives Mermaid the outline of a sequence diagram's boxes.
 // Instant navigation swaps only the page's content, so the wrapper, and the listeners below, last from page to page.
 // The styles are in stylesheets/diagrams.css, which every page lists: a style this added to the head would be gone
 // after one.
@@ -55,47 +55,8 @@
     }
   };
 
-  // The line under the diagram that says it opens larger, which only a touch screen shows (diagrams.css), as it has no
-  // zoom-in cursor to say so. It goes after the description, if there's one, and a drawing before this one left it.
-  // The button's name says so already, so a screen reader skips it.
-  const isA = (node, name) => node?.classList.contains(name) ?? false;
-
-  const addHint = (node) => {
-    const hint = document.createElement("p");
-    hint.className = "diagram-hint";
-    hint.setAttribute("aria-hidden", "true");
-    hint.textContent = "Tap the diagram to enlarge it.";
-    node.after(hint);
-    return hint;
-  };
-
-  const hintAfter = (node) => {
-    const next = node.nextElementSibling;
-    if (isA(next, "diagram-desc")) {
-      return hintAfter(next);
-    }
-    return isA(next, "diagram-hint") ? next : addHint(node);
-  };
-
-  // A sequence diagram's boxes, the two sides of the firewall, outlined as the flowcharts' zones are. Mermaid's own
-  // style, in the shadow root, outlines them in its theme's purple, which no page style can reach, so the diagram gets
-  // a style of its own, once.
-  const boxStyle = () => {
-    const style = document.createElement("style");
-    style.className = "diagram-boxes";
-    style.textContent = "g rect.rect { stroke: var(--md-default-fg-color--lighter) !important; }";
-    return style;
-  };
-
-  const styleBoxes = (root) => {
-    if (!root.querySelector("style.diagram-boxes")) {
-      root.append(boxStyle());
-    }
-  };
-
   const enlargeable = (root) => {
     const host = root.host;
-    styleBoxes(root);
     const title = svgText(root, "title");
     roots.set(host, root);
     host.dataset.title = title;
@@ -104,16 +65,28 @@
     host.setAttribute("aria-label", title ? `Enlarge the diagram: ${title}` : "Enlarge the diagram");
     host.title = "Click to enlarge";
     describe(host, svgText(root, "desc"));
-    hintAfter(host);
+  };
+
+  // A sequence diagram's boxes, the two sides of the firewall, outlined as the flowcharts' zones are. Mermaid's own
+  // style outlines them in its theme's purple, inside the diagram's shadow root, where no page style reaches; Mermaid
+  // puts the theme's styles after its own, prefixed as its own are, so a rule added to them wins. It's in the SVG's
+  // own style, so the enlarged copy keeps it.
+  const BOX_OUTLINE = "g rect.rect { stroke: var(--md-default-fg-color--lighter); }";
+
+  const wrapInitialize = (mermaid) => {
+    const initialize = mermaid.initialize.bind(mermaid);
+    mermaid.initialize = (config) =>
+      initialize({ ...config, themeCSS: `${config?.themeCSS ?? ""}${BOX_OUTLINE}` });
   };
 
   // Whether [mermaid] has a render this script hasn't wrapped yet.
   const unwrapped = (mermaid) => typeof mermaid?.render === "function" && !mermaid.render.wrapped;
 
-  const wrapRender = (mermaid) => {
+  const wrapMermaid = (mermaid) => {
     if (!unwrapped(mermaid)) {
       return mermaid;
     }
+    wrapInitialize(mermaid);
     const render = mermaid.render.bind(mermaid);
     mermaid.render = async (...args) => {
       await fontsLoaded();
@@ -136,7 +109,7 @@
     configurable: true,
     get: () => mermaid,
     set: (value) => {
-      mermaid = wrapRender(value);
+      mermaid = wrapMermaid(value);
     },
   });
 
@@ -205,7 +178,7 @@
     const copy = svg.cloneNode(true);
     copy.removeAttribute("style");
     const fits = sizeCopy(copy, onPage, view);
-    view.shadowRoot.replaceChildren(copy, boxStyle());
+    view.shadowRoot.replaceChildren(copy);
     scrollable(zoom, !fits);
   };
 

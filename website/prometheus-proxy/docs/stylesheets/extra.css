@@ -167,8 +167,8 @@ body {
 }
 
 /* Reading text at about 75 characters a line, the comfortable measure, where the column's full width ran the system
-   sans, narrower than the theme's Inter, to about 95. Code, tables, diagrams, screenshots, and cards keep the full
-   width, which they use. 27rem is 34em of the reading text's 0.8rem, so it scales with the text. A callout that
+   sans, narrower than the theme's Inter, to about 95. Code, tables, diagrams, and screenshots keep the full width,
+   which they use. 27rem is 34em of the reading text's 0.8rem, so it scales with the text. A callout that
    opens, as one that's always open, keeps to the measure too. */
 .md-typeset > :is(p, ul, ol, dl, blockquote):not(:has(img)),
 .md-typeset .tabbed-block > :is(p, ul, ol, dl):not(:has(img)),
@@ -219,42 +219,29 @@ body {
 
 /* A callout's color says what it means, as the dashboard's do: amber for a caution, red for a danger. A note, a tip,
    and an info are neutral, where the theme gave each a hue of its own (blue, teal, cyan) and a warning the orange that
-   means a link here. Each keeps its own icon and title, so the color is never the only sign. */
+   means a link here. Each keeps its own icon and title, so the color is never the only sign. Its tone colors the icon,
+   and the chevron of one that opens, where the theme gave that its own hue. */
 .md-typeset :is(.admonition, details):is(.note, .tip, .info) {
+  --pp-tone: var(--pp-callout-icon);
   background-color: var(--pp-callout-bg);
 }
 
-.md-typeset :is(.note, .tip, .info) > :is(.admonition-title, summary)::before {
-  background-color: var(--pp-callout-icon);
-}
-
-/* A callout that opens takes its icon's color for the chevron that opens it, where the theme gave it its own hue. */
-.md-typeset :is(.note, .tip, .info) > summary::after {
-  color: var(--pp-callout-icon);
-}
-
-.md-typeset .warning > summary::after {
-  color: var(--pp-warn);
-}
-
-.md-typeset .danger > summary::after {
-  color: var(--pp-crit);
-}
-
 .md-typeset :is(.admonition, details).warning {
+  --pp-tone: var(--pp-warn);
   background-color: var(--pp-warn-soft);
 }
 
-.md-typeset .warning > :is(.admonition-title, summary)::before {
-  background-color: var(--pp-warn);
-}
-
 .md-typeset :is(.admonition, details).danger {
+  --pp-tone: var(--pp-crit);
   background-color: var(--pp-crit-soft);
 }
 
-.md-typeset .danger > :is(.admonition-title, summary)::before {
-  background-color: var(--pp-crit);
+.md-typeset :is(.note, .tip, .info, .warning, .danger) > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-tone);
+}
+
+.md-typeset :is(.note, .tip, .info, .warning, .danger) > summary::after {
+  color: var(--pp-tone);
 }
 
 /* What a command prints, set apart from what you type: a block you type from is filled, and one the proxy or agent

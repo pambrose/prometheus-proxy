@@ -428,9 +428,6 @@ Your application code runs normally while the agent handles metrics scraping in 
     metrics, and each series carries the agent's `launch_id`. An agent's series go when it shuts down. A host metric
     with one of the agent metrics' names makes `startAsyncAgent()` throw.
 
-The agent's `logLevel` (`agent.logLevel`, `AGENT_LOG_LEVEL`, or `--log_level`) sets the level of the `io.prometheus`
-loggers only, so it doesn't change your application's own logging. A standalone agent sets the root logger's level.
-
 !!! tip "Config file location"
 
     The config file path is relative to your application's working directory.

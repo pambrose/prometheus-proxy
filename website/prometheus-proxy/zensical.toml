@@ -205,11 +205,6 @@ permalink = true
 [project.markdown_extensions.pymdownx.caret]
 [project.markdown_extensions.pymdownx.details]          # Collapsible callouts (???)
 
-# Inline icons (:material-*:, :octicons-*:, :fontawesome-*:)
-[project.markdown_extensions.pymdownx.emoji]
-emoji_index = "material.extensions.emoji.twemoji"
-emoji_generator = "material.extensions.emoji.to_svg"
-
 # Syntax highlighting. Pygments has no HOCON lexer, so the config blocks are read as Scala, which colors their
 # comments, strings, numbers, booleans, and ${?VAR} substitutions and, unlike JavaScript or HCL, flags none of their
 # syntax as an error.
