@@ -330,14 +330,15 @@ All notable changes to this project are documented in this file.
 - The docs site's third critique's P2s. The Quick Start, Configuration Overview, and Kubernetes pages' Next Steps take
   the home page's rows, where they kept the theme's cards. The header's search button and icons draw the site's focus
   ring, not the browser's blue. Architecture's request-flow diagram puts Prometheus and the proxy outside the firewall
-  and the agent and its app inside, as the flowcharts' zones do, and on a touch screen a line under each diagram says
-  a tap enlarges it. The Embedded Agent page is split in three: the Embedded Agent API page holds its API Reference,
-  and Debugging an Embedded Agent its Logging and Debugging sections, with pointers where they were. Version history
-  and internals on the Embedded Agent and Security pages fold into callouts that open. Running in Production's
-  checklist comes first, grouped by the page's sections. Advanced Topics is consolidated mode's one home, which the
-  Architecture, Agent Configuration, and Glossary pages name and link to. The network, nginx, and Kubernetes demos'
-  long tour part titles are shorter, on their pages, in their READMEs, and in `demo.sh`, and their pages keep the
-  sections' old anchors. Prose and link text spell nginx as nginx does
+  and the agent and its app inside, as the flowcharts' zones do, and the Ktor, Spring Boot, and plain Kotlin demos'
+  diagrams name each zone's side of the firewall. On a touch screen, a line under each diagram says a tap enlarges it.
+  The Embedded Agent page is split in three: the Embedded Agent API page holds its API Reference, and Debugging an
+  Embedded Agent its Logging and Debugging sections, with pointers where they were. Version history and internals on
+  the Embedded Agent and Security pages fold into callouts that open. Running in Production's checklist comes first,
+  grouped by the page's sections. Advanced Topics is consolidated mode's one home, which the Architecture, Agent
+  Configuration, and Glossary pages name and link to. The network, nginx, and Kubernetes demos' long tour part titles
+  are shorter, on their pages, in their READMEs, and in `demo.sh`, and their pages keep the sections' old anchors.
+  Prose and link text spell nginx as nginx does
 - `docs/DESIGN.md` says only Safari draws the dashboards' monospace stack as SF Mono: Chrome and Firefox on a Mac draw
   Menlo, so the title's 640 weight draws as bold there
 - Add the November 26, 2026 code review (`docs/CODE_REVIEW_NOVEMBER_26_2026.md`): 70 findings (4 high, 35 medium,

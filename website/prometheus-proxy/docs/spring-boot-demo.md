@@ -27,29 +27,35 @@ The [Ktor Demo](ktor-demo.md)'s coffee shop shows the rest with an app in Kotlin
 graph TB
   accTitle: The Spring Boot Demo's containers
   accDescr {
-    On the proxy host, Prometheus on port 9490 scrapes /roastery_metrics through the proxy, dashboard 8494. In the
-    roastery, one container and one JVM, the agent the Spring Boot starter runs, dashboard 8495, reads the app's
-    metrics registry in-process and connects to the proxy over gRPC with TLS and a token.
+    Outside the firewall, on the proxy host, Prometheus on port 9490 scrapes /roastery_metrics through the proxy,
+    dashboard 8494. Inside the firewall, in the roastery, one container and one JVM, the agent the Spring Boot starter
+    runs, dashboard 8495, reads the app's metrics registry in-process and connects out to the proxy over gRPC with TLS
+    and a token.
   }
   P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
   %% The agent connects out to the proxy, so its arrow points up, into the proxy. Mermaid has no reverse arrow, and an
   %% Agent --> Proxy edge pinned under the proxy by an invisible link drew a second edge beside it, which bent this
   %% one. A two-headed edge keeps the proxy above the agent on one straight line, and the linkStyle below (this is
   %% edge 1, counting from 0) drops its arrowhead at the agent's end.
-  Proxy <-->|gRPC over TLS, with a token| Agent[embedded agent, run by the Spring Boot starter, dashboard :8495]
+  Proxy <-->|gRPC over TLS, with a token, outbound only| Agent[embedded agent, run by the Spring Boot starter, dashboard :8495]
   Agent -->|reads its metrics registry in-process| App[roastery: Spring Boot, Micrometer]
 
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
   %% edges' labels onto their arrowheads.
-  subgraph host ["<br>Proxy host"]
+  subgraph host ["<br>Outside Firewall<br>Proxy host"]
     P
     Proxy
   end
 
-  subgraph roastery ["<br>roastery: one container, one JVM"]
-    Agent
-    App
+  %% The roastery's zone sits inside the firewall's. The gRPC edge runs up the middle, where Mermaid centers a zone's
+  %% title, so trailing em spaces set the firewall's title to the left of the edge rather than under it, as on the home
+  %% page.
+  subgraph inside ["<br>Inside Firewall#8195;#8195;#8195;#8195;#8195;#8195;#8195;#8195;#8195;#8195;"]
+    subgraph roastery ["<br>roastery: one container, one JVM"]
+      Agent
+      App
+    end
   end
 
   linkStyle 1 marker-end:none
