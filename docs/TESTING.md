@@ -1110,7 +1110,8 @@ These support helpers also live here (not test classes themselves):
   names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
   of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the
   table; each `demo.sh`'s `PAGE_URL`, which `make up` and `make tour` print, is its page, and every section of the page
-  it links to (`${PAGE_URL}#running-it`) is one the page has; and no `demo.sh` prints a Markdown file's path, only a
+  it links to (`${PAGE_URL}#running-it`) is one the page has; a step of a demo's `bin/screenshots.sh` that names a tour
+  part, `Part <n>: <name>`, names that part as `TOUR_PARTS` does; and no `demo.sh` prints a Markdown file's path, only a
   comment may name one, since a raw `.md` file isn't readable without a viewer
 - **DocsCodeBlocksTest** — the fenced blocks of the docs site's pages, the maintainer docs, and the READMEs: every
   HOCON block that has an agent scrape its own metrics port, `localhost:8083`, turns the port on too, as it's off by
