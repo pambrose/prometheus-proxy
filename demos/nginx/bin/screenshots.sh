@@ -90,12 +90,12 @@ step "Putting the demo back as make up starts it"
 "$DEMO" reset >/dev/null
 wait_until "both agents connected" both_connected
 
-step "Part 1: Two agents reach the proxy through nginx, over TLS"
+step "Part 1: Two agents through nginx, over TLS"
 current="$(agent_id agent-current)"
 wait_until "agent-current's recent scrapes" page_has "$DASHBOARD_URL/agents/$current" 'data-scrape-count="([1-9][0-9])"'
 shoot agents "$DASHBOARD_URL/agents/$current"
 
-step "Part 2: nginx's stream timeouts cut off an agent from 4.6.0 every minute"
+step "Part 2: A 4.6.0 agent cut off every minute"
 # Two cuts, a minute apart, so the Activity view shows the pattern, not a one-off. Counted from a value Prometheus
 # scraped after the reset's reconnects, which part 1's wait for ten scrapes leaves well behind.
 closed="$(streams_closed)"
@@ -103,7 +103,7 @@ closed="$(streams_closed)"
 wait_until "nginx to close agent-legacy's stream twice" at_least streams_closed $((closed + 2))
 shoot legacy-cut "$DASHBOARD_URL/activity"
 
-step "Part 3: A shorter stream timeout, and a reload that doesn't reach connected agents"
+step "Part 3: A shorter timeout, and a reload"
 "$DEMO" nginx-shutdown-timeout >/dev/null
 wait_until "both agents back after nginx's restart" both_connected
 before="$(disconnects)"

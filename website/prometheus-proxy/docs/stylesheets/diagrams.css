@@ -12,6 +12,14 @@ body > div[id^="d__mermaid_"] {
   font-size: 16px;
 }
 
+/* A sequence diagram's boxes, the two sides of the firewall, filled as the flowcharts' zones are, where the theme filled
+   them with the accent's tint, as it does the participants: on the page, and enlarged. The diagram's shadow root
+   inherits the variable. diagrams.js outlines them. */
+.md-typeset div.mermaid,
+dialog.diagram-zoom {
+  --md-mermaid-sequence-box-bg-color: var(--md-default-fg-color--lightest);
+}
+
 .md-typeset div.mermaid[role="button"] {
   cursor: zoom-in;
 }
@@ -33,6 +41,19 @@ body > div[id^="d__mermaid_"] {
   border: 0;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* The line under a diagram that says a tap enlarges it, set as a screenshot's caption is: only on a touch screen, which
+   has no zoom-in cursor to say so. The button's name says so already, and a button's text isn't read apart from it, so
+   a screen reader skips it. */
+@media (hover: none) {
+  .md-typeset div.mermaid[role="button"]::after {
+    content: "Tap the diagram to enlarge it.";
+    display: block;
+    margin-top: 0.5em;
+    color: var(--md-default-fg-color--light);
+    font-size: 0.7rem;
+  }
 }
 
 dialog.diagram-zoom {

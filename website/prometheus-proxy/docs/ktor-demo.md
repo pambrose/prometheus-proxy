@@ -273,7 +273,7 @@ Turn them off once the agent works, since the admin port has no authentication a
 threads: take `ADMIN_ENABLED` and `DEBUG_ENABLED` out of the app's environment and restart it, with no new build, and
 set them again when you need to look. `ADMIN_PORT` moves the port. In code, `setting("admin.enabled", true)` and
 `setting("admin.debugEnabled", true)` do the same, though the environment overrides them.
-[Debugging](embedded-agent.md#debugging) on the Embedded Agent page has more.
+[Debugging an Embedded Agent](embedded-debugging.md) has more.
 
 The agent's [dashboard](agent-dashboard.md) answers the same questions in a browser, and some the admin endpoints
 can't. Its Connection view shows the last error from each proxy endpoint while the agent can't connect, its Paths view

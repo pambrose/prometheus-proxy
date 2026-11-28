@@ -317,7 +317,7 @@ unzipped, and one the agent sent without gzip, as it does a small one: one past 
 ## Transport Filter
 
 The transport filter detects agent disconnections immediately. Disable it when using a
-reverse proxy like Nginx, on the proxy and on each of its agents, since the proxy refuses an agent
+reverse proxy like nginx, on the proxy and on each of its agents, since the proxy refuses an agent
 whose setting doesn't match its own:
 
 ```hocon

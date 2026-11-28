@@ -727,12 +727,12 @@ check_tour_from() {
 # Each part's title, after about how many minutes it takes to show.
 TOUR_PARTS=(
   "4 Two agents reach the proxy over a simulated WAN"
-  "2 A high-latency link slows scrapes, but nothing fails"
-  "4 A low-bandwidth link fails scrapes; filtering at the agent fixes it"
-  "4 The primary proxy stops, and the agents fail over to the standby"
-  "4 A link goes silent; the agent detects it and fails over"
-  "3 A link that keeps dropping: the agent reconnects, traced in Zipkin"
-  "3 The whole WAN goes down: an alert fires, and the agents reconnect"
+  "2 A high-latency link"
+  "4 A low-bandwidth link and a filter"
+  "4 Failover to the standby"
+  "4 A link goes silent"
+  "3 A flaky link, traced in Zipkin"
+  "3 The whole WAN goes down"
 )
 
 # The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,

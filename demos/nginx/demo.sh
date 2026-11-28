@@ -729,9 +729,9 @@ check_tour_from() {
 
 # Each part's title, after about how many minutes it takes to show.
 TOUR_PARTS=(
-  "4 Two agents reach the proxy through nginx, over TLS"
-  "5 nginx's stream timeouts cut off an agent from 4.6.0 every minute"
-  "8 A shorter stream timeout, and a reload that doesn't reach connected agents"
+  "4 Two agents through nginx, over TLS"
+  "5 A 4.6.0 agent cut off every minute"
+  "8 A shorter timeout, and a reload"
   "4 The dashboard behind nginx"
 )
 

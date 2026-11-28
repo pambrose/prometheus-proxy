@@ -954,11 +954,11 @@ check_tour_from() {
 
 # Each part's title, after about how many minutes it takes to show.
 TOUR_PARTS=(
-  "3 The Helm charts on two clusters, with no inbound access"
-  "3 The agent's own dashboard, reached with kubectl port-forward"
+  "3 Two clusters, no inbound access"
+  "3 The agent's own dashboard"
   "3 Annotate a Service, and Prometheus scrapes it"
-  "3 Kubernetes replaces a deleted agent pod in about a second"
-  "3 A config change restarts the agent; a targets change doesn't"
+  "3 Kubernetes replaces a deleted agent pod"
+  "3 A config change and a targets change"
 )
 
 # The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,

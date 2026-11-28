@@ -6,7 +6,7 @@ icon: lucide/wrench
 
 ## nginx Reverse Proxy
 
-To use Nginx as a reverse proxy in front of the gRPC service, disable the transport filter
+To use nginx as a reverse proxy in front of the gRPC service, disable the transport filter
 on both proxy and agent:
 
 ```text
@@ -24,7 +24,7 @@ on both proxy and agent:
 In this mode the proxy also limits the agents connected as one auth identity, which is every agent when
 agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filter).
 
-!!! warning "Nginx's request body limit"
+!!! warning "nginx's request body limit"
 
     nginx counts everything an agent sends on a stream as one request body, and stops a body at
     `client_max_body_size`, 1 MB by default. An agent's streams of scrape results stay open for as long as it's
@@ -42,7 +42,7 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
     log says `client intended to send too large chunked body`, and the agent logs
     `writeResponsesToProxy(): UNKNOWN HTTP status code 413`, then `Disconnected from proxy`.
 
-!!! warning "Nginx's stream timeouts"
+!!! warning "nginx's stream timeouts"
 
     An agent's connection ends when any of its streams closes, and nginx closes a stream that's quiet for 60 seconds by
     default. A stream can be quiet while the agent is scraped: the one it sends chunked results on carries nothing while
@@ -84,7 +84,7 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
     the value from the config it started with, so it covers the reloads after it's in place: restart nginx once to
     bring it in.
 
-Example Nginx and proxy configuration files are available in the repository:
+Example nginx and proxy configuration files are available in the repository:
 
 - [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf)
 - [`nginx/nginx-proxy.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)
@@ -250,7 +250,7 @@ See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for detai
 These settings send HTTP/2 PINGs, which check the connection but carry no data on a stream, so they don't keep a
 reverse proxy from closing a quiet stream: nginx answers a PING without resetting a stream's timeout. The agent and
 the proxy send keepalive messages on their streams for that, every `proxy.internal.streamKeepAliveSecs`; see
-[Nginx Reverse Proxy](#nginx-reverse-proxy).
+[nginx Reverse Proxy](#nginx-reverse-proxy).
 
 ## Stale Agent Cleanup
 

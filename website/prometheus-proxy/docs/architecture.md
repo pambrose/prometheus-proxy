@@ -31,16 +31,23 @@ The Agent runs inside the firewall with the monitored services. It provides:
 sequenceDiagram
     accTitle: Request flow
     accDescr {
-      The agent connects to the proxy's gRPC port when it starts, registers itself, and registers the path
-      /app_metrics. When Prometheus scrapes /app_metrics on the proxy's port 8080, the proxy looks up the agent for
-      the path and sends it a scrape request over the stream. The agent fetches /metrics from the app on port 9100
-      and sends the response back over the stream, and the proxy returns it to Prometheus.
+      Prometheus and the proxy are outside the firewall; the agent and the app it scrapes are inside. The agent
+      connects out to the proxy's gRPC port when it starts, registers itself, and registers the path /app_metrics.
+      When Prometheus scrapes /app_metrics on the proxy's port 8080, the proxy looks up the agent for the path and
+      sends it a scrape request over the stream. The agent fetches /metrics from the app on port 9100 and sends the
+      response back over the stream, and the proxy returns it to Prometheus.
     }
-    participant P as Prometheus
-    participant Proxy as Proxy :8080
-    participant gRPC as Proxy gRPC :50051
-    participant Agent as Agent
-    participant App as App :9100/metrics
+    %% The firewall runs between the two boxes, as between the flowcharts' zones: every arrow across it travels on
+    %% the connection the agent opened from inside.
+    box Outside Firewall
+      participant P as Prometheus
+      participant Proxy as Proxy :8080
+      participant gRPC as Proxy gRPC :50051
+    end
+    box Inside Firewall
+      participant Agent as Agent
+      participant App as App :9100/metrics
+    end
 
     Note over Agent, gRPC: Agent connects on startup (outbound)
     Agent->>gRPC: connectAgent()
@@ -164,13 +171,5 @@ proxy.internal {
 
 ## Consolidated Mode
 
-By default, each path is owned by a single agent. In **consolidated mode**, multiple agents can
-register the same path for redundancy, each scraping its own instance of a service. When a scrape
-request arrives for a consolidated path, the proxy sends it to every agent serving the path and merges
-their responses into one, so agents that scrape the same endpoint send each series twice.
-
-```hocon
-agent.consolidated = true
-```
-
-See [Advanced Topics](advanced.md) for more details.
+By default, each path is owned by a single agent. In **consolidated mode**, several agents serve one path, and the
+proxy merges their answers to each scrape. [Consolidated Mode](advanced.md#consolidated-mode) explains it.

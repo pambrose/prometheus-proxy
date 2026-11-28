@@ -167,11 +167,13 @@ body {
 }
 
 /* Reading text at about 75 characters a line, the comfortable measure, where the column's full width ran the system
-   sans, narrower than the theme's Inter, to about 95. Code, tables, diagrams, screenshots, and cards keep the full
-   width, which they use. 27rem is 34em of the reading text's 0.8rem, so it scales with the text. */
+   sans, narrower than the theme's Inter, to about 95. Code, tables, diagrams, and screenshots keep the full width,
+   which they use. 27rem is 34em of the reading text's 0.8rem, so it scales with the text. A callout that
+   opens, as one that's always open, keeps to the measure too. */
 .md-typeset > :is(p, ul, ol, dl, blockquote):not(:has(img)),
 .md-typeset .tabbed-block > :is(p, ul, ol, dl):not(:has(img)),
-.md-typeset > .admonition {
+.md-typeset > .admonition,
+.md-typeset > details {
   max-width: 27rem;
 }
 
@@ -217,29 +219,29 @@ body {
 
 /* A callout's color says what it means, as the dashboard's do: amber for a caution, red for a danger. A note, a tip,
    and an info are neutral, where the theme gave each a hue of its own (blue, teal, cyan) and a warning the orange that
-   means a link here. Each keeps its own icon and title, so the color is never the only sign. */
+   means a link here. Each keeps its own icon and title, so the color is never the only sign. Its tone colors the icon,
+   and the chevron of one that opens, where the theme gave that its own hue. */
 .md-typeset :is(.admonition, details):is(.note, .tip, .info) {
+  --pp-tone: var(--pp-callout-icon);
   background-color: var(--pp-callout-bg);
 }
 
-.md-typeset :is(.note, .tip, .info) > :is(.admonition-title, summary)::before {
-  background-color: var(--pp-callout-icon);
-}
-
 .md-typeset :is(.admonition, details).warning {
+  --pp-tone: var(--pp-warn);
   background-color: var(--pp-warn-soft);
 }
 
-.md-typeset .warning > :is(.admonition-title, summary)::before {
-  background-color: var(--pp-warn);
-}
-
 .md-typeset :is(.admonition, details).danger {
+  --pp-tone: var(--pp-crit);
   background-color: var(--pp-crit-soft);
 }
 
-.md-typeset .danger > :is(.admonition-title, summary)::before {
-  background-color: var(--pp-crit);
+.md-typeset :is(.note, .tip, .info, .warning, .danger) > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-tone);
+}
+
+.md-typeset :is(.note, .tip, .info, .warning, .danger) > summary::after {
+  color: var(--pp-tone);
 }
 
 /* What a command prints, set apart from what you type: a block you type from is filled, and one the proxy or agent
@@ -318,6 +320,14 @@ body {
    script moves (javascripts/screenshots.js). */
 .glightbox-container .gbtn:is(.focused, :focus-visible) {
   outline: 2px solid #ff7043;
+  outline-offset: 2px;
+}
+
+/* The header's search button and icons take the site's focus ring, the accent, where the browser drew its own blue, the
+   one blue on the page. */
+.md-search__button:focus-visible,
+.md-header__button:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
   outline-offset: 2px;
 }
 
@@ -402,8 +412,8 @@ body {
   }
 }
 
-/* The home page's ways on: one list, a row each, the whole row its link, in the dashboard's rows rather than the
-   theme's cards. The link is the row's name; the text under it says where it goes. */
+/* The ways on, the home page's and each Next Steps list's: one list, a row each, the whole row its link, in the
+   dashboard's rows rather than the theme's cards. The link is the row's name; the text under it says where it goes. */
 .md-typeset .pp-ways > ul {
   max-width: 27rem;
   margin: 1em 0;
@@ -472,13 +482,4 @@ body {
 .md-typeset .pp-ways > ul > li:has(a:focus-visible) {
   outline: 2px solid var(--md-accent-fg-color);
   outline-offset: -2px;
-}
-
-/* A card's link, an arrow and the page it opens: the arrow and the name laid out apart, so the link's underline runs
-   under the name alone, where it ran under the space after the arrow too. Last in the file, after the home page's
-   links, which are less specific. */
-.md-typeset .grid.cards a:has(> .twemoji:first-child) {
-  display: inline-flex;
-  gap: 0.3em;
-  align-items: center;
 }

@@ -397,38 +397,22 @@ When Prometheus scrape configs include `basic_auth` or `bearer_token`, the proxy
 
 ## Next Steps
 
-<div class="grid cards" markdown>
+<div class="pp-ways" markdown>
 
--   :lucide-cable:{ .lg .middle } __Agent Configuration__
-
-    ---
+- [Agent Configuration](configuration/agent.md)
 
     All agent settings including path configs, HTTP client, and scrape options
 
-    [:lucide-arrow-right: Agent Configuration](configuration/agent.md)
-
--   :lucide-server:{ .lg .middle } __Proxy Configuration__
-
-    ---
+- [Proxy Configuration](configuration/proxy.md)
 
     All proxy settings including HTTP service, gRPC, and service discovery
 
-    [:lucide-arrow-right: Proxy Configuration](configuration/proxy.md)
-
--   :lucide-container:{ .lg .middle } __Docker Usage__
-
-    ---
+- [Docker Usage](docker.md)
 
     Production Docker setups and docker-compose examples
 
-    [:lucide-arrow-right: Docker](docker.md)
-
--   :lucide-shield:{ .lg .middle } __Security & TLS__
-
-    ---
+- [Security & TLS](security/index.md)
 
     Secure the proxy-agent connection with TLS and mutual authentication
-
-    [:lucide-arrow-right: Security](security/index.md)
 
 </div>

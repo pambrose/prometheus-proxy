@@ -461,10 +461,8 @@ agents to register the same path:
 
 Also set with [`--consolidated`](../cli-reference.md#agent.consolidated) or `CONSOLIDATED=true`.
 
-This is useful for redundancy — if one agent goes down, the others keep serving the path. Give each
-agent its own instance of the service to scrape: the proxy merges every agent's answer into each scrape,
-so agents that scrape the same endpoint send each series twice. See
-[Consolidated Mode](../advanced.md#consolidated-mode).
+Give each agent its own instance of the service to scrape. [Consolidated Mode](../advanced.md#consolidated-mode)
+explains how the proxy merges their answers, and why agents that scrape the same endpoint send each series twice.
 
 ## Agent Naming
 
@@ -523,7 +521,7 @@ When enabled, the following endpoints are available:
 `/healthcheck` reports the agent's own state, not its connection: it stays healthy while the agent can't reach a proxy,
 and turns unhealthy once `agent.internal.scrapeRequestBacklogUnhealthySize` scrape requests wait for the agent
 ([Internal Settings](#internal-settings)). The admin port answers on every interface without authentication, so keep it
-on an internal network. [Admin and Debug Endpoints](../embedded-agent.md#admin-and-debug-endpoints) says what each
+on an internal network. [Admin and Debug Endpoints](../embedded-debugging.md#admin-and-debug-endpoints) says what each
 endpoint shows.
 
 ## Dashboard
@@ -634,7 +632,7 @@ startup. `agent.internal.zipkin` sends traces of the agent's scrapes and gRPC ca
 ```
 
 Unset, a standalone agent logs at `info`; an embedded agent's loggers follow its application's logging (see
-[Logging](../embedded-agent.md#logging)).
+[Logging](../embedded-debugging.md#logging)).
 
 ## Full Example
 

@@ -92,9 +92,9 @@ Tour](#guided-tour).
 
 | Part | What it shows | Why it matters |
 |---|---|---|
-| 1. [Two agents reach the proxy through nginx, over TLS](#1-two-agents-reach-the-proxy-through-nginx-over-tls) | nginx ends the agents' TLS and passes their gRPC calls on; each agent has a token of its own | The usual way to put a service behind one TLS endpoint, and what nginx needs for it |
-| 2. [nginx's stream timeouts cut off an agent from 4.6.0 every minute](#2-nginxs-stream-timeouts-cut-off-an-agent-from-460-every-minute) | An agent without stream keepalives is cut off every minute, beside one that has them; longer timeouts fix it | What you see behind nginx with a proxy or agent from 4.6.0 or earlier, and the fix short of upgrading |
-| 3. [A shorter stream timeout, and a reload that doesn't reach connected agents](#3-a-shorter-stream-timeout-and-a-reload-that-doesnt-reach-connected-agents) | A timeout under the 30-second keepalive cuts agents off, and a reload doesn't reach connected ones | How to set `streamKeepAliveSecs` under a load balancer's idle timeout, and make a reload apply |
+| 1. [Two agents through nginx, over TLS](#1-two-agents-through-nginx-over-tls) | nginx ends the agents' TLS and passes their gRPC calls on; each agent has a token of its own | The usual way to put a service behind one TLS endpoint, and what nginx needs for it |
+| 2. [A 4.6.0 agent cut off every minute](#2-a-460-agent-cut-off-every-minute) | An agent without stream keepalives is cut off every minute, beside one that has them; longer timeouts fix it | What you see behind nginx with a proxy or agent from 4.6.0 or earlier, and the fix short of upgrading |
+| 3. [A shorter timeout, and a reload](#3-a-shorter-timeout-and-a-reload) | A timeout under the 30-second keepalive cuts agents off, and a reload doesn't reach connected ones | How to set `streamKeepAliveSecs` under a load balancer's idle timeout, and make a reload apply |
 | 4. [The dashboard behind nginx](#4-the-dashboard-behind-nginx) | A plain `proxy_pass` breaks the dashboard's live updates, and two settings fix it | What an nginx in front of the dashboard has to pass on |
 
 ## Guided Tour
@@ -102,7 +102,7 @@ Tour](#guided-tour).
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
 from `demos/nginx`; each one prints what to watch.
 
-### 1. Two Agents Reach the Proxy through nginx, over TLS
+### 1. Two Agents through nginx, over TLS
 
 Each agent dials nginx at `nginx.test.google.fr:443` over TLS. nginx ends the TLS and passes each gRPC call on to the
 proxy's agent port, which only nginx can reach.
@@ -131,7 +131,7 @@ proxy's agent port, which only nginx can reach.
   to trust, so this is needed even for a certificate a public CA signed: then point it at a CA bundle. Open the
   Connection view: <http://localhost:8594/screens#agent-current/connection>
 
-### 2. nginx's Stream Timeouts Cut Off an Agent from 4.6.0 Every Minute
+### 2. A 4.6.0 Agent Cut Off Every Minute
 
 This part is for you if the proxy or any agent you run behind nginx, or another reverse proxy, is on 4.6.0 or earlier,
 as happens while you upgrade one before the other: keepalives flow only when both ends are newer, so such a pair goes
@@ -163,7 +163,7 @@ results on.
   or a proxy from 4.6.0 or earlier, this is the fix short of upgrading both. Watch the proxy's Activity view beside
   the graph: <http://localhost:8594/screens#proxy/activity+prometheus>
 
-### 3. A Shorter Stream Timeout, and a Reload That Doesn't Reach Connected Agents
+### 3. A Shorter Timeout, and a Reload
 
 Some load balancers close a quiet connection sooner than nginx's 60 seconds. Here nginx's timeouts come down to 20
 seconds, under the 30 seconds after which the keepalives start.

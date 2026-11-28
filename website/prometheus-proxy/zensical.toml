@@ -69,6 +69,8 @@ nav = [
   ]},
   { "Embed" = [
     { "Embedded Agent" = "embedded-agent.md" },
+    { "Embedded Agent API" = "embedded-api.md" },
+    { "Debugging" = "embedded-debugging.md" },
     { "Plain Kotlin Demo" = "plain-kotlin-demo.md" },
     { "Ktor Plugin" = "ktor-plugin.md" },
     { "Ktor Demo" = "ktor-demo.md" },
@@ -193,7 +195,7 @@ auto_caption = true
 [project.markdown_extensions.attr_list]                 # HTML attributes on Markdown elements
 [project.markdown_extensions.def_list]
 [project.markdown_extensions.footnotes]
-[project.markdown_extensions.md_in_html]                # Markdown inside HTML blocks, for the grid cards
+[project.markdown_extensions.md_in_html]                # Markdown inside HTML blocks, for the rows of ways on
 
 # Each heading's permalink, for linking straight to a setting or a step
 [project.markdown_extensions.toc]
@@ -202,11 +204,6 @@ permalink = true
 [project.markdown_extensions.pymdownx.betterem]
 [project.markdown_extensions.pymdownx.caret]
 [project.markdown_extensions.pymdownx.details]          # Collapsible callouts (???)
-
-# Inline icons (:material-*:, :octicons-*:, :fontawesome-*:)
-[project.markdown_extensions.pymdownx.emoji]
-emoji_index = "material.extensions.emoji.twemoji"
-emoji_generator = "material.extensions.emoji.to_svg"
 
 # Syntax highlighting. Pygments has no HOCON lexer, so the config blocks are read as Scala, which colors their
 # comments, strings, numbers, booleans, and ${?VAR} substitutions and, unlike JavaScript or HCL, flags none of their

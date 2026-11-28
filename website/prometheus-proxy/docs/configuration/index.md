@@ -92,30 +92,18 @@ For the complete configuration schema, see the reference file:
 
 ## Next Steps
 
-<div class="grid cards" markdown>
+<div class="pp-ways" markdown>
 
--   :lucide-cable:{ .lg .middle } __Agent Configuration__
-
-    ---
+- [Agent Configuration](agent.md)
 
     Path configs, HTTP client, and scrape settings
 
-    [:lucide-arrow-right: Agent Configuration](agent.md)
-
--   :lucide-server:{ .lg .middle } __Proxy Configuration__
-
-    ---
+- [Proxy Configuration](proxy.md)
 
     HTTP service, gRPC, and service discovery settings
 
-    [:lucide-arrow-right: Proxy Configuration](proxy.md)
-
--   :lucide-terminal:{ .lg .middle } __CLI Reference__
-
-    ---
+- [CLI Reference](../cli-reference.md)
 
     All CLI options and environment variables
-
-    [:lucide-arrow-right: CLI Reference](../cli-reference.md)
 
 </div>
