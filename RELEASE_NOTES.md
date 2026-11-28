@@ -259,7 +259,9 @@ its own that holds them all, with Prometheus and Grafana.
   the agent serve its own metrics at `/agent_metrics` with `agent.metrics.proxyPath`, so its metrics port stays off,
   as do the basics and network demos' agents, `examples/federate.conf`'s, and the Compose stack's
   (`etc/compose/proxy.yml`), which no longer publishes port 8083. `examples/prom-agent.conf`, for debugging, serves
-  them at `/agent_metrics` too, and keeps the port on.
+  them at `/agent_metrics` too, and keeps the port on. It also fetches the proxy's metrics from `PROXY_HOSTNAME` when
+  it's set, as `simple.conf` does, so `/proxy_metrics` works when it runs in its own container, as the README's local
+  config example runs it.
 - **The network demo's tour runs in one browser tab.** Its standby proxy serves the screens page, which holds both
   proxies' dashboards, both agents', Prometheus, Grafana, and Zipkin, and stays up while the tour stops the primary:
   `make up` prints its address, `make open` opens it, and the tour's links open in it.
