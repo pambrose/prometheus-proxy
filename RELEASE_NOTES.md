@@ -86,6 +86,16 @@ its own that holds them all, with Prometheus and Grafana.
   ServiceAccount token in every proxy and agent pod, though neither calls the Kubernetes API, so whoever took over the
   container had the token too. Each chart's new `automountServiceAccountToken` value, `false` by default, turns it back
   on (see Before you upgrade).
+- **A password with an `@` in it stays hidden.** A target or config URL whose user name is an email address, or whose
+  password holds an `@`, such as `https://admin:p@ss@host/metrics`, was masked only up to its first `@`, so the rest
+  of it, often the password, showed in the logs, the dashboards, `/debug`, and the Spring Boot starter's logged
+  properties. The whole user info is now masked.
+- **A client can't forge lines in the proxy's request log.** The request log, at DEBUG, and the line logged when a
+  client hangs up, on the scrape port or a dashboard's, showed the method and path a client sent raw, so a client could
+  write terminal escapes or false lines into the log. Both are now escaped, as the scrape route's own line was. An
+  agent's warning that a target's content type isn't text, which a metric filter logs, escapes it too.
+- **A config file's syntax error no longer logs a URL's password.** The error quotes the text it stopped at, which can
+  be a URL with credentials; it's now logged redacted, as a config URL's error already was.
 
 ### Bug Fixes
 

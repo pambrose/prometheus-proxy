@@ -23,6 +23,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldContain
@@ -412,6 +413,23 @@ class BaseOptionsTest : StringSpec() {
 
       result.exitCode shouldBe 1
       result.output shouldNotContain "Exception in thread"
+    }
+
+    // November 26 #42: a parse error quotes the text it stopped at, which can hold a URL with credentials, so the error
+    // a config file's parse logs is redacted, its message and its exception, as a config URL's is. The message still
+    // names the file and the line.
+    "a config file's parse error should be logged without a URL's credentials" {
+      val events =
+        captureLogs<BaseOptions> {
+          shouldThrow<ConfigLoadException> {
+            agentOptionsFromConfig("agent {\n  url \"http://user:$SECRET@host/metrics\"\n}")
+          }
+        }
+
+      val error = events.single { "Key 'url" in it.formattedMessage }
+      error.formattedMessage shouldContain ".conf: 3: Key 'url \"http://***@host/metrics\"' may not be followed"
+      error.formattedMessage shouldNotContain SECRET
+      error.throwableProxy.shouldNotBeNull().message shouldNotContain SECRET
     }
 
     "standalone Proxy CLI fails cleanly on a config file that does not exist" {

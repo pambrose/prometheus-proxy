@@ -22,6 +22,7 @@ import ch.qos.logback.classic.Level
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -110,6 +111,24 @@ class MetricFilterTest : StringSpec() {
       scrapeLogs.map { it.level } shouldBe [Level.WARN]
       reasons shouldBe ["a scrape's content type, application/vnd.google.protobuf, was not text"]
       filter.failedOpen shouldBe "a scrape's content type was not text"
+    }
+
+    // November 26 #42: the content type is the target's, so the warning shows it cut and escaped, as a value from
+    // outside the agent is logged; whole and raw, a target could write terminal escapes, forged lines, or pages into
+    // the log.
+    "the warning for a content type that isn't text should show it cut and escaped" {
+      val filter = filter(deny = ["noise"])
+
+      val logs =
+        captureLogs("io.prometheus.agent.filter") {
+          filter.filterBytes("up 1\n".encodeToByteArray(), "application/x\r\nforged: line" + "x".repeat(5000))
+        }
+
+      val message = logs.single().formattedMessage
+      message shouldContain "content type \"application/x\\r\\nforged: line"
+      message shouldContain "...\" is not text"
+      message shouldNotContain "\r"
+      message.length shouldBeLessThan 400
     }
 
     // Prometheus 3 offers escaping=allow-utf-8, which the agent passes on, so a target can write a name outside the

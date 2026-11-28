@@ -843,10 +843,13 @@ abstract class BaseOptions protected constructor(
         runCatchingCancellable {
           ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
         }.getOrElse { e ->
+          // A parse error quotes the text it stopped at, which can hold a URL with credentials, as can an include's
+          // error (November 26 #42), so both the message and the exception are logged redacted. The redacted
+          // exception keeps the stack trace and the causes, such as why an include couldn't be read.
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid config filename: $configName" }
           else
-            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
+            logger.error(redacted(e)) { "Exception: ${e.simpleClassName} - ${sanitizeUrlsInText(e.message.orEmpty())}" }
           fail(e)
         }
       }

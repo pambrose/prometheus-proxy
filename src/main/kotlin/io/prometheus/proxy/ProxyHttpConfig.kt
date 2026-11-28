@@ -29,7 +29,6 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
 import io.ktor.server.http.HttpRequestLifecycle
-import io.ktor.server.logging.toLogString
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.calllogging.CallLoggingConfig
 import io.ktor.server.plugins.compression.Compression
@@ -41,10 +40,13 @@ import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.plugins.statuspages.StatusPagesConfig
+import io.ktor.server.request.ApplicationRequest
+import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import io.ktor.util.cio.ChannelIOException
 import io.prometheus.Proxy
+import io.prometheus.common.AgentValues.shownValue
 import kotlinx.coroutines.CancellationException
 import org.slf4j.event.Level
 
@@ -92,15 +94,20 @@ internal object ProxyHttpConfig {
     call.run {
       when (val status = response.status()) {
         HttpStatusCode.Found -> {
-          val logMsg = request.toLogString()
+          val logMsg = request.shown()
           "$status: $logMsg -> ${response.headers[HttpHeaders.Location]} - ${request.origin.remoteHost}"
         }
 
         else -> {
-          "$status: ${request.toLogString()} - ${request.origin.remoteHost}"
+          "$status: ${request.shown()} - ${request.origin.remoteHost}"
         }
       }
     }
+
+  // The request as a log line shows it: its method and path, as Ktor's toLogString() gives them, each cut and escaped,
+  // as the scrape route logs a path. CIO passes control characters other than whitespace in both, so a client could
+  // otherwise forge lines in the log (November 26 #42).
+  private fun ApplicationRequest.shown() = "${shownValue(httpMethod.value)} - ${ProxyPathManager.shownPath(path())}"
 
   fun CompressionConfig.configureCompression() {
     gzip {
@@ -144,6 +151,10 @@ internal object ProxyHttpConfig {
     call: ApplicationCall,
     cause: Throwable,
   ) {
-    logger.debug { "Call to ${call.request.path()} ended by the client: ${cause.simpleClassName} - ${cause.message}" }
+    // The dashboards' servers install this too; the path is shown cut and escaped, as in the call log
+    logger.debug {
+      "Call to ${ProxyPathManager.shownPath(call.request.path())} ended by the client: " +
+        "${cause.simpleClassName} - ${cause.message}"
+    }
   }
 }
