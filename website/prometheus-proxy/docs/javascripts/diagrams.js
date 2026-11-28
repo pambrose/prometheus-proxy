@@ -13,7 +13,8 @@
 //      into the SVG as its title and desc. The closed shadow root hides those from a screen reader, and from
 //      aria-describedby, which can't reach into one, so the button takes the title in its name, and a visually hidden
 //      paragraph after it, which the button names as its description, holds the description. And
-//   4. adds to the styles the theme gives Mermaid the outline of a sequence diagram's boxes.
+//   4. adds to the styles the theme gives Mermaid the outline of a sequence diagram's boxes, and centers a zone's
+//      title of two lines.
 // Instant navigation swaps only the page's content, so the wrapper, and the listeners below, last from page to page.
 // The styles are in stylesheets/diagrams.css, which every page lists: a style this added to the head would be gone
 // after one.
@@ -67,16 +68,22 @@
     describe(host, svgText(root, "desc"));
   };
 
-  // A sequence diagram's boxes, the two sides of the firewall, outlined as the flowcharts' zones are. Mermaid's own
-  // style outlines them in its theme's purple, inside the diagram's shadow root, where no page style reaches; Mermaid
-  // puts the theme's styles after its own, prefixed as its own are, so a rule added to them wins. It's in the SVG's
-  // own style, so the enlarged copy keeps it.
-  const BOX_OUTLINE = "g rect.rect { stroke: var(--md-default-fg-color--lighter); }";
+  // What the site adds to the styles the theme gives Mermaid. Mermaid's own styles are inside the diagram's shadow
+  // root, where no page style reaches, and it puts the theme's after them, prefixed as its own are, so a rule added
+  // there wins. They're in the SVG's own style, so the enlarged copy keeps them:
+  //   a sequence diagram's boxes, the two sides of the firewall, outlined as the flowcharts' zones are, where Mermaid
+  //   outlined them in its theme's purple, and
+  //   a zone's title of two lines, such as "Inside Firewall" over what runs there, centered, as a box's label is,
+  //   where Mermaid set its lines flush left.
+  const THEME_CSS = [
+    "g rect.rect { stroke: var(--md-default-fg-color--lighter); }",
+    ".cluster-label div { text-align: center; }",
+  ].join("\n");
 
   const wrapInitialize = (mermaid) => {
     const initialize = mermaid.initialize.bind(mermaid);
     mermaid.initialize = (config) =>
-      initialize({ ...config, themeCSS: `${config?.themeCSS ?? ""}${BOX_OUTLINE}` });
+      initialize({ ...config, themeCSS: `${config?.themeCSS ?? ""}\n${THEME_CSS}` });
   };
 
   // Whether [mermaid] has a render this script hasn't wrapped yet.
