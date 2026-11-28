@@ -9,7 +9,7 @@
 ARG APP_BUILD=compiled
 
 # The Gradle that matches the repository's wrapper most closely, on the JDK the runtime below ships.
-FROM gradle:9.9.1-jdk25@sha256:39d599d8df1777d73b00b5bf928254ecd121802d518577fe08d41a3cf86aa45f AS compiled
+FROM gradle:9.9.2-jdk25@sha256:a16370cdf4fab2bdec80810ba7f7d577fc2ce86eb1332b067031fcc19d947ed5 AS compiled
 ARG PROXY_VERSION
 WORKDIR /src
 # catalog is the named build context above, not a stage, which hadolint can't see
@@ -29,7 +29,7 @@ FROM ${APP_BUILD} AS app
 
 # The JRE the proxy and agent images take theirs from (etc/docker), on Ubuntu, with a shell and cat, which
 # `demo.sh sockets` reads the oven's sockets with, from /proc/net.
-FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce
+FROM eclipse-temurin:25-jre-noble@sha256:f3dd0838e69b881cc382237d5901e74ae3705b1056ad964b2e0e523b174fef99
 RUN useradd --system --uid 1001 --home-dir /app oven
 COPY --from=app /app /app
 USER oven
