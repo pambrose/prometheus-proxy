@@ -322,6 +322,8 @@ All notable changes to this project are documented in this file.
 - A container spec whose tests share one stack tears it down when one of its containers fails to start, as its
   `afterSpec` would, which Kotest skips once `beforeSpec` throws: five such specs left the containers already
   started, their Docker network, and their HTTP client running for the rest of `make container-tests`
+- `DocsExamplesTest` fails on a `docker run` in the docs that publishes an admin or metrics port beyond `127.0.0.1`,
+  and on a port `bin/docker-agent.sh` or `bin/docker-proxy.sh` publishes beyond it
 
 ### Documentation
 
@@ -375,6 +377,9 @@ All notable changes to this project are documented in this file.
   `/agent_metrics` with `agent.metrics.proxyPath`, where each scraped `localhost:8083` as a path; the compose stack's
   agent no longer turns on or publishes its metrics port, `federate.conf` leaves it off, and `prom-agent.conf`, a
   debugging config, keeps it on
+- `examples/prom-agent.conf` fetches the proxy's metrics from `PROXY_HOSTNAME` when it's set, as `simple.conf` does,
+  so the README's agent container that runs it serves `/proxy_metrics`; it fetched them from `localhost`, the agent's
+  own container
 - The README's, `llms.txt`'s, and the Docker page's `docker run` examples publish the scrape, admin, and metrics ports
   on `127.0.0.1` only, and those whose agent shares the proxy's Docker network no longer publish the agents' port,
   50051. The Docker page's Production Setup, whose agent is on another host, publishes 50051 with TLS and a token, and

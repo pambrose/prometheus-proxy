@@ -26,6 +26,10 @@ import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.common.AgentValues.labelsProblem
+import io.prometheus.common.TestPorts.AGENT_ADMIN_PORT
+import io.prometheus.common.TestPorts.AGENT_METRICS_PORT
+import io.prometheus.common.TestPorts.PROXY_ADMIN_PORT
+import io.prometheus.common.TestPorts.PROXY_METRICS_PORT
 import io.prometheus.common.agentOptions
 import io.prometheus.common.proxyOptions
 import java.io.File
@@ -37,16 +41,9 @@ class DocsExamplesTest : StringSpec() {
     File(EXAMPLES_DIR).listFiles { file -> file.extension == "conf" }.orEmpty().sortedBy { it.name }
   }
 
-  // Each docker run command in the docs, with its \ continuations joined, and the file it's in.
+  // Each docker run command in the docs, and the file it's in.
   private val dockerRunCommands by lazy {
-    docFiles().flatMap { file ->
-      file
-        .readText()
-        .replace(CONTINUATION, " ")
-        .lines()
-        .filter { DOCKER_RUN.containsMatchIn(it) }
-        .map { file.path to it.trim().replace(WHITESPACE, " ") }
-    }
+    docFiles().flatMap { file -> runCommands(file).map { file.path to it } }
   }
 
   // Each port a compose file publishes, with the file it's in: the repo's own compose files, and the compose snippets
@@ -69,10 +66,13 @@ class DocsExamplesTest : StringSpec() {
 
     // In the Docker quick start, the agent's localhost is its own container, so it gets PROXY_HOSTNAME, the proxy
     // container's name, and simple.conf fetches the proxy's metrics from that host. On one host, without it, they're
-    // on localhost.
-    "simple.conf should fetch the proxy's metrics from PROXY_HOSTNAME when it's set, and from localhost otherwise" {
-      proxyMetricsUrl(emptyMap()) shouldBe "http://localhost:8082/metrics"
-      proxyMetricsUrl(mapOf("PROXY_HOSTNAME" to "prometheus-proxy")) shouldBe "http://prometheus-proxy:8082/metrics"
+    // on localhost. The README runs prom-agent.conf in a container the same way.
+    "simple.conf and prom-agent.conf should fetch the proxy's metrics from PROXY_HOSTNAME, or from localhost" {
+      PROXY_METRICS_CONFIGS.forEach { config ->
+        proxyMetricsUrl(config, emptyMap()) shouldBe "http://localhost:8082/metrics"
+        proxyMetricsUrl(config, mapOf("PROXY_HOSTNAME" to "prometheus-proxy")) shouldBe
+          "http://prometheus-proxy:8082/metrics"
+      }
     }
 
     // Docker refuses a docker run with both, so a command that has them never starts its container.
@@ -95,6 +95,30 @@ class DocsExamplesTest : StringSpec() {
         .filterNot { (_, entry) -> entry.startsWith(LOOPBACK) }
         .map { (path, entry) -> "$path: $entry" } shouldBe emptyList()
     }
+
+    // A docs example may publish the scrape port, for a Prometheus on another host, or the agents' port, for an agent
+    // on another host, on every interface, as the Quick Start and the Production Setup do. Nothing off the host needs
+    // the admin and metrics ports, which no token or login guards.
+    "no docker run command in the docs should publish an admin or metrics port beyond 127.0.0.1" {
+      val published = dockerRunCommands.flatMap { (path, command) -> command.publishedPorts().map { path to it } }
+      published.map { (_, entry) -> entry.containerPort() } shouldContainAll HOST_ONLY_PORTS
+
+      published
+        .filter { (_, entry) -> entry.containerPort() in HOST_ONLY_PORTS && !entry.startsWith(LOOPBACK) }
+        .map { (path, entry) -> "$path: $entry" } shouldBe emptyList()
+    }
+
+    // The scripts run a proxy and an agent on this machine to try them, as the compose stacks do, with no token or
+    // login.
+    "bin/docker-agent.sh and bin/docker-proxy.sh should publish every port on 127.0.0.1" {
+      val published =
+        DOCKER_SCRIPTS.flatMap { path -> runCommands(File(path)).flatMap { it.publishedPorts() }.map { path to it } }
+      published.map { (path, _) -> path }.distinct() shouldBe DOCKER_SCRIPTS
+
+      published
+        .filterNot { (_, entry) -> entry.startsWith(LOOPBACK) }
+        .map { (path, entry) -> "$path: $entry" } shouldBe emptyList()
+    }
   }
 
   // Each path's name and labels: a discovery targets file's entries, as the agent reads them, or a config's
@@ -109,11 +133,23 @@ class DocsExamplesTest : StringSpec() {
         proxyOptions(["--config", file.path]).configVals,
       ).flatMap { configVals -> configVals.agent.pathConfigs.map { it.name to it.labels } }
 
-  // simple.conf's proxy_metrics url, with [env] standing in for the environment.
-  private fun proxyMetricsUrl(env: Map<String, String>): String =
+  // Each docker run command in [file], with its \ continuations joined.
+  private fun runCommands(file: File): List<String> =
+    file
+      .readText()
+      .replace(CONTINUATION, " ")
+      .lines()
+      .filter { DOCKER_RUN.containsMatchIn(it) }
+      .map { it.trim().replace(WHITESPACE, " ") }
+
+  // [config]'s proxy_metrics url, with [env] standing in for the environment.
+  private fun proxyMetricsUrl(
+    config: String,
+    env: Map<String, String>,
+  ): String =
     ConfigFactory
       .parseMap(env)
-      .withFallback(ConfigFactory.parseFile(File(SIMPLE_CONF)))
+      .withFallback(ConfigFactory.parseFile(File(config)))
       .resolve(ConfigResolveOptions.noSystem())
       .getConfigList("agent.pathConfigs")
       .single { it.getString("path") == "proxy_metrics" }
@@ -167,9 +203,26 @@ class DocsExamplesTest : StringSpec() {
 
   private fun String.hasFlag(flag: String) = split(WHITESPACE).any { it == flag || it.startsWith("$flag=") }
 
+  // The value of each -p or --publish in a docker run command, "[address:][host:]container[/protocol]", unquoted.
+  private fun String.publishedPorts(): List<String> =
+    split(WHITESPACE)
+      .zipWithNext()
+      .mapNotNull { (flag, value) ->
+        when {
+          flag == "-p" || flag == "--publish" -> value
+          flag.startsWith("--publish=") -> flag.removePrefix("--publish=")
+          else -> null
+        }
+      }.map { it.removeSurrounding("\"").removeSurrounding("'") }
+
+  private fun String.containerPort() = substringAfterLast(":").substringBefore("/").toInt()
+
   companion object {
     private const val EXAMPLES_DIR = "examples"
-    private const val SIMPLE_CONF = "$EXAMPLES_DIR/simple.conf"
+    private val PROXY_METRICS_CONFIGS = listOf("$EXAMPLES_DIR/simple.conf", "$EXAMPLES_DIR/prom-agent.conf")
+    private val DOCKER_SCRIPTS = listOf("bin/docker-agent.sh", "bin/docker-proxy.sh")
+    private val HOST_ONLY_PORTS =
+      listOf(PROXY_METRICS_PORT, PROXY_ADMIN_PORT, AGENT_METRICS_PORT, AGENT_ADMIN_PORT)
     private const val DISCOVERY_PATHS_KEY = "paths"
     private const val README = "README.md"
     private const val LLMS_TXT = "llms.txt"
