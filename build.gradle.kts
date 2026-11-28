@@ -236,7 +236,7 @@ configurations.configureEach {
         "${requested.module} is on the runtime classpath but not in the netty bundle in libs.versions.toml"
       }
       useVersion(nettyVersion)
-      because("grpc-netty 1.85.1's Netty 4.2.17.Final has CVE-2026-93492")
+      because("grpc-netty 1.86.0's Netty 4.2.17.Final has CVE-2026-93492")
     }
     if (isRuntimeClasspath && requested.group.startsWith("com.fasterxml.jackson") && requested.name != "jackson-bom") {
       check(requested.name in pinnedJacksonModules) {

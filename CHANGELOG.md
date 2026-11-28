@@ -324,20 +324,23 @@ All notable changes to this project are documented in this file.
   started, their Docker network, and their HTTP client running for the rest of `make container-tests`
 - `DocsExamplesTest` fails on a `docker run` in the docs that publishes an admin or metrics port beyond `127.0.0.1`,
   and on a port `bin/docker-agent.sh` or `bin/docker-proxy.sh` publishes beyond it
+- `DemoTourTablesTest` fails on a step of a demo's `bin/screenshots.sh` that names a tour part, `Part <n>: <name>`,
+  other than as the demo's `TOUR_PARTS` does, where a part renamed in the tour left the script's copy behind
 
 ### Documentation
 
 - The docs site's third critique's P2s. The Quick Start, Configuration Overview, and Kubernetes pages' Next Steps take
-  the home page's rows, where they kept the theme's cards. The header's search button and icons draw the site's focus
-  ring, not the browser's blue. Architecture's request-flow diagram puts Prometheus and the proxy outside the firewall
-  and the agent and its app inside, as the flowcharts' zones do, and on a touch screen a line under each diagram says
-  a tap enlarges it. The Embedded Agent page is split in three: the Embedded Agent API page holds its API Reference,
-  and Debugging an Embedded Agent its Logging and Debugging sections, with pointers where they were. Version history
-  and internals on the Embedded Agent and Security pages fold into callouts that open. Running in Production's
+  the home page's rows, where they kept the theme's cards. The header's search button and icons, the theme toggle
+  included, draw the site's focus ring, not the browser's own. Architecture's request-flow diagram puts Prometheus and
+  the proxy outside the firewall and the agent and its app inside, as the flowcharts' zones do, and the Ktor, Spring
+  Boot, and plain Kotlin demos' diagrams name each zone's side of the firewall. On a touch screen, a line under each
+  diagram says a tap enlarges it. The Embedded Agent page is split in three: the Embedded Agent API page holds its API
+  Reference, and Debugging an Embedded Agent its Logging and Debugging sections, with pointers where they were. Version
+  history and internals on the Embedded Agent and Security pages fold into callouts that open. Running in Production's
   checklist comes first, grouped by the page's sections. Advanced Topics is consolidated mode's one home, which the
-  Architecture, Agent Configuration, and Glossary pages name and link to. The network, nginx, and Kubernetes demos'
-  long tour part titles are shorter, on their pages, in their READMEs, and in `demo.sh`, and their pages keep the
-  sections' old anchors. Prose and link text spell nginx as nginx does
+  Architecture, Agent Configuration, and Glossary pages name and link to. The network, nginx, and Kubernetes demos' long
+  tour part titles are shorter, on their pages, in their READMEs, and in `demo.sh`, and their pages keep the sections'
+  old anchors. Prose and link text spell nginx as nginx does
 - `docs/DESIGN.md` says only Safari draws the dashboards' monospace stack as SF Mono: Chrome and Firefox on a Mac draw
   Menlo, so the title's 640 weight draws as bold there
 - Add the November 26, 2026 code review (`docs/CODE_REVIEW_NOVEMBER_26_2026.md`): 70 findings (4 high, 35 medium,
@@ -417,6 +420,18 @@ All notable changes to this project are documented in this file.
   its application's logging, `EmbeddedAgentInfo.shutdown()` names the agent's dashboard among the servers it releases,
   and `startIfConfigured()` names a `setting()` of `proxy.endpoints` or `proxy.hostname` among the ways its settings
   name a proxy
+
+### Dependencies
+
+- Update grpc 1.85.1 → 1.86.0 and common-utils 5.3.0 → 5.4.0, which is built against it, so embedders get every
+  grpc-java module at one version transitively. grpc 1.86.0 still brings Netty 4.2.17.Final, protobuf-java 3.25.9, and
+  is tested with netty-tcnative 2.0.81.Final, so the Netty, protobuf, and tcnative pins are unchanged
+- Update Ktor 3.6.1 → 3.6.2, the version common-utils 5.4.0 is built against
+- Update Gradle 9.9.2 → 9.9.3
+- Update Lincheck 3.7 → 4.0, for the `*LincheckTest` specs only
+- Update the docs site's Python lock (`website/uv.lock`): Zensical 0.1.2 → 0.1.3 with its theme, zensical-ui 0.0.42 →
+  0.0.43, pymdown-extensions 13.1 → 13.1.2, backrefs 8.3 → 8.3.1, PyYAML 6.0.3 → 6.0.4, watchdog 7.1.0 → 7.1.1,
+  platformdirs 4.14.7 → 4.14.8, and certifi 2026.10.23 → 2026.11.20
 
 ## [4.7.0] - 2026-11-24
 

@@ -324,9 +324,11 @@ body {
 }
 
 /* The header's search button and icons take the site's focus ring, the accent, where the browser drew its own blue, the
-   one blue on the page. */
+   one blue on the page. The theme toggle's icon is the label of a radio button the theme hides, which has the focus,
+   and the theme rings the label only through its focus-visible polyfill's class, in the browser's style. */
 .md-search__button:focus-visible,
-.md-header__button:focus-visible {
+.md-header__button:focus-visible,
+.md-option:focus-visible + label {
   outline: 2px solid var(--md-accent-fg-color);
   outline-offset: 2px;
 }
