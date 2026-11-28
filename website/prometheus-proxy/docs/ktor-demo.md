@@ -14,10 +14,10 @@ Azure Container Apps and the proxy on another host, run on one machine.
 graph TB
   accTitle: The Ktor Demo's containers
   accDescr {
-    On the proxy host, Grafana on port 3300 reads Prometheus on 9390, which scrapes /coffee_shop_metrics through the
-    proxy, dashboard 8394. On the app's platform, a load balancer on 8390 sends traffic to the coffee shop, a Ktor
-    app, whose embedded agent, dashboard 8395, reads its registry and connects to the proxy over gRPC with TLS and a
-    token.
+    Outside the firewall, on the proxy host, Grafana on port 3300 reads Prometheus on 9390, which scrapes
+    /coffee_shop_metrics through the proxy, dashboard 8394. Inside the firewall, on the app's platform, a load balancer
+    on 8390 sends traffic to the coffee shop, a Ktor app, whose embedded agent, dashboard 8395, reads its registry and
+    connects out to the proxy over gRPC with TLS and a token.
   }
   G[Grafana :3300] --> P[Prometheus :9390]
   P -->|scrapes /coffee_shop_metrics| Proxy[Proxy, dashboard :8394]
@@ -25,20 +25,20 @@ graph TB
   %% Agent --> Proxy edge pinned under the proxy by an invisible link drew a second edge beside it, which bent this
   %% one. A two-headed edge keeps the proxy above the agent on one straight line, and the linkStyle below (this is
   %% edge 2, counting from 0) drops its arrowhead at the agent's end.
-  Proxy <-->|gRPC over TLS, with a token| Agent[embedded agent, dashboard :8395]
+  Proxy <-->|gRPC over TLS, with a token, outbound only| Agent[embedded agent, dashboard :8395]
   Agent -->|reads its registry| App[coffee shop: Ktor]
   LB[load balancer :8390] --> App
 
   %% Each zone's title starts with a line break, which grows the zone to fit it, so the title stands clear of the
   %% zone's top edge. Mermaid's subGraphTitleMargin moved the titles down without growing the zones, and moved the
   %% edges' labels onto their arrowheads.
-  subgraph host ["<br>Proxy host"]
+  subgraph host ["<br>Outside Firewall<br>Proxy host"]
     G
     P
     Proxy
   end
 
-  subgraph platform ["<br>The app's platform"]
+  subgraph platform ["<br>Inside Firewall<br>The app's platform"]
     LB
     Agent
     App
