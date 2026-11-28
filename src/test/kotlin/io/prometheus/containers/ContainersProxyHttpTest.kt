@@ -36,6 +36,9 @@ import io.prometheus.containers.support.ContainerTestSupport.metricsStub
 import io.prometheus.containers.support.ContainerTestSupport.proxyContainer
 import io.prometheus.containers.support.baseUrl
 import io.prometheus.containers.support.bodyOf
+import io.prometheus.containers.support.closeQuietly
+import io.prometheus.containers.support.startOrTearDown
+import io.prometheus.containers.support.stopQuietly
 import io.prometheus.containers.support.statusOf
 import org.testcontainers.containers.Network
 import kotlin.time.Duration.Companion.seconds
@@ -87,26 +90,19 @@ class ContainersProxyHttpTest : StringSpec() {
 
       fun agentMetrics(path: String) = agent.baseUrl(AGENT_METRICS_PORT) + path
 
+      // Run by afterSpec, and by beforeSpec when a container doesn't start, as Kotest then skips afterSpec
+      fun teardown() {
+        httpClient.close()
+        stopQuietly(agent, proxy, metricsStub)
+        closeQuietly(network)
+      }
+
       beforeSpec {
-        metricsStub.start()
-        proxy.start()
-        agent.start()
+        startOrTearDown(metricsStub, proxy, agent, teardown = ::teardown)
       }
 
       afterSpec {
-        httpClient.close()
-        [agent, proxy, metricsStub].forEach { container ->
-          try {
-            container.stop()
-          } catch (_: Exception) {
-            // best-effort teardown
-          }
-        }
-        try {
-          network.close()
-        } catch (_: Exception) {
-          // best-effort teardown
-        }
+        teardown()
       }
 
       "proxy serves a registered path and preserves the exposition format" {

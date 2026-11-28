@@ -245,8 +245,10 @@ version (the agent runs Ktor itself) and the Ktor Plugin page's examples compile
   `agent_dashboard_scrapes_total` counts instead; and a call the proxy refuses with `UNAUTHENTICATED` after a connect
   logged at ERROR, naming where the token is set, and another status at INFO, as before; a connection task's JVM
   `Error` failing the connection's scope, which stops the agent, rather than ending the connection quietly, and,
-  rethrown by the run loop, stopping it without waiting out the reconnect pause; and a connection's results it can't
-  send counted as dropped
+  rethrown by the run loop, stopping it without waiting out the reconnect pause; a connection's results it can't send
+  counted as dropped; and `processScrapeRequests` itself, fed through a connection's channel, running at most
+  `maxConcurrentHttpClients` scrapes and taking no more requests meanwhile, and giving back a failed scrape's permit
+  and its place in the backlog
 - **AgentStartupTest** — a start that fails or takes too long releases what the agent opened: a dashboard that fails
   to start, on a port the spec holds, stops the admin, metrics, and Zipkin services and removes the JVM shutdown hook,
   through `startSync()` and through `startAsyncAgent(Config)`, and a release step that throws (a MockK constructor
@@ -590,13 +592,15 @@ Three support helpers also live here (not test classes themselves):
   limit of 0, and without overflow near `Int.MAX_VALUE`
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, reclaims,
   unregistration, and agent removal race on the real code the TLA+ `ProxyRegistry` spec models, among agents of
-  several launches, one of them reconnected and one predating path notices; no reclaim takes a path from a live agent
-  of another launch (`ReclaimNeverDisplaces`), or is refused as held without one, no path is left on a removed agent,
-  `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, a consolidated
-  path never takes an agent of another identity, and an invalidated agent holds no unread notices
-  (`InvalidatedHasNoNotices`); each agent waiting on a path reads notices, waits once, is of another launch than the
-  path's agent, is still connected, and, while valid, has a notice about the path, and no agent has a notice about a
-  path it serves
+  several launches, one of them reconnected and one predating path notices, twice: once with every path-map change
+  under a lock of the spec's own, so no reclaim takes a path from a live agent of another launch
+  (`ReclaimNeverDisplaces`), or is refused as held without one, and once without it, so the path manager's calls race
+  one another on its own lock; in both, no path is left on a removed agent, `pathCountFor` and `identityPathCountFor`
+  match the path map and the limits (`maxPathsPerAgent`, `maxPathsPerIdentity`), exclusive paths have one agent, modes
+  never mix, a consolidated path never takes an agent of another identity, and an invalidated agent holds no unread
+  notices (`InvalidatedHasNoNotices`); each agent waiting on a path reads notices, waits once, is of another launch
+  than the path's agent, is still connected, and, while valid, has a notice about the path, and no agent has a notice
+  about a path it serves
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
   queue; and a scrape request, or a path notice, queued just as its wait times out returned by that wait, not lost
   (`lateArrival`); a context invalidated before it was announced is never announced, and one announced before stays so
@@ -1072,7 +1076,8 @@ These support helpers also live here (not test classes themselves):
   subprojects, the demos' apps, the docs site's pages, the READMEs, `docs`, and `llms.txt`, but for the wrong-case keys
   `EmbeddedAgentConfigTest` gives on purpose; and every setting in a fenced HOCON block of those docs, with the
   snippet-file sections the docs site includes in it, checked as a proxy or agent config, a discovery targets file, or a
-  lone list entry such as an `agent.filters` entry; a block that doesn't parse fails too
+  lone entry of any list of objects the schema declares, found in it, such as an `agent.filters` or
+  `proxy.dashboard.screens` entry; a block that doesn't parse fails too
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
   `proxy.dashboard.links`); a config that still sets the retired `proxy.dashboard.recentScrapesQueueSize` loads
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
@@ -1098,8 +1103,9 @@ These support helpers also live here (not test classes themselves):
   screen's `url` reads a `${?…}` variable that compose gives the page's proxy, set from the port compose publishes the
   screen on, so a moved port moves its tab; a demo whose page lists Grafana lets Grafana be framed, on a line of its
   compose file that isn't a comment (`GF_SECURITY_ALLOW_EMBEDDING`); its `./demo.sh help` says `open` opens the page,
-  and its README and docs page, and the repository's README, say `make up` prints the screens page's URL; and while
-  the page's proxy is stopped, a demo that stops it points at a screen's own URL, not the page
+  and its README and docs page, and the repository's README, say `make up` prints the screens page's URL; while the
+  page's proxy is stopped, a demo that stops it points at a screen's own URL, not the page; and every config under
+  `demos/*/config` that lists screens is one of its `DEMOS`, so a demo moved onto a screens page isn't left unchecked
 - **DemoTourTablesTest** — each demo's README and its page on the docs site have a What This Demo Shows table that
   names the demo's tour parts, its `TOUR_PARTS` in `demo.sh`, in order; a README's rows link to their parts' sections
   of its Guided Tour, each headed with its part's name; a page's rows, where they link, link only to sections below the
@@ -1365,7 +1371,9 @@ naming nothing else, as `make container-tests`, `make scaling-tests`, and contai
 `build.gradle.kts` selects with `kotest.framework.config.fqn`: it runs three specs at a time. Each spec starts its own
 containers on a network of its own, with random host ports, and shares only the two images, which build once, so the
 specs spend most of their time waiting on containers to start, side by side. A run with any other spec stays one spec
-at a time.
+at a time. A spec whose tests share one stack starts it in `beforeSpec` with `startOrTearDown`, which runs the spec's
+teardown, as its `afterSpec` does, when a container doesn't start: Kotest skips `afterSpec` once `beforeSpec` throws,
+so the containers already started, the network, and the HTTP client would otherwise outlive the spec.
 
 `containers/support/LoopbackPortBindings.kt` publishes every container port on `127.0.0.1` instead of
 Docker's `0.0.0.0` default. It has no call sites: it is registered through
@@ -1485,7 +1493,8 @@ in this document.
   the exception, a checked one wrapped, and a start that returns none, as `startIfConfigured()` does for a failure,
   leaves it off; `ApplicationStopPreparing` begins the stop without waiting for it, and `ApplicationStopping` waits for
   that stop, its agent's `shutdown()` held until the disposal is in its join, stops an agent the engine didn't, and
-  gives up waiting at its timeout, once whichever come, waits through an interrupt, which the thread keeps, and waits
+  gives up waiting once the stop timeout and the second it adds are up, warning that the agent is still stopping, once
+  whichever come, waits through an interrupt, which the thread keeps, with a stop timeout and without one, and waits
   for a stop the engine's stop is still beginning; an agent whose start ends after the app's stop began is stopped,
   and waited for when the disposal comes after; a second start event, or one after the stop began, starts nothing; an
   agent that fails to stop doesn't fail the app's; and the handlers are gone once the app stops.

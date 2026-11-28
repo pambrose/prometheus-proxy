@@ -75,20 +75,26 @@ import io.prometheus.common.TestPorts.AGENT_FAILED_START_METRICS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.ServerSocket
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
+import kotlin.concurrent.atomics.update
 import kotlin.io.path.createTempFile
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -996,59 +1002,92 @@ class AgentTest : StringSpec() {
 
     // ==================== Bug #1: Bounded Coroutine Creation Tests ====================
 
-    "Bug #1: semaphore.acquire() before launch should limit waiting coroutines" {
-      run {
-        val maxConcurrency = 2
-        val semaphore = kotlinx.coroutines.sync.Semaphore(maxConcurrency)
-        val activeCoroutines = AtomicInt(0)
-        val waitingActions = Channel<suspend () -> Unit>(Channel.UNLIMITED)
-        val processedCount = AtomicInt(0)
-        // Each action blocks on this gate so the active count is deterministic
-        // until we explicitly release it — no reliance on delay() timing windows.
-        val gate = CompletableDeferred<Unit>()
+    // Agent.processScrapeRequests itself, fed through a connection's channel: it takes a permit before it launches a
+    // scrape, so the channel fills, and the proxy's stream waits, while maxConcurrentHttpClients scrapes run. Taking
+    // the permit inside the launch (Bug #1) ran no more scrapes at once, but the loop drained the channel at once,
+    // launching a coroutine for every request the proxy sent.
+    "Bug #1: processScrapeRequests should run at most maxConcurrentHttpClients scrapes, and take no more meanwhile" {
+      val maxConcurrency = 2
+      val capacity = 2
+      val agent = createTestAgent("--max_concurrent_clients", "$maxConcurrency")
+      val context = AgentConnectionContext(backlogCapacity = capacity)
+      val floodSize = 20
+      // As readRequestsFromProxy counts each request it queues
+      agent.scrapeRequestBacklogSize.store(floodSize)
+      // Each scrape waits on the gate, so how many run is fixed until it opens
+      val gate = CompletableDeferred<Unit>()
+      val running = AtomicInt(0)
+      val mostRunning = AtomicInt(0)
+      val sent = AtomicInt(0)
 
-        // Mirrors the loop in Agent.processScrapeRequests: acquire the semaphore BEFORE
-        // launching the child coroutine to provide backpressure to the channel.
-        val job = launch(Dispatchers.Default) {
-          for (action in waitingActions) {
-            semaphore.acquire() // This is the fix for Bug #1
-            launch {
-              activeCoroutines += 1
-              try {
-                action()
-              } finally {
-                activeCoroutines -= 1
-                processedCount += 1
-                semaphore.release()
+      withTimeout(10.seconds) {
+        coroutineScope {
+          val scrapes = launch(Dispatchers.Default) { with(agent) { processScrapeRequests(context) } }
+          val sender =
+            launch(Dispatchers.Default) {
+              repeat(floodSize) { i ->
+                context.sendScrapeRequestAction {
+                  val now = running.incrementAndFetch()
+                  mostRunning.update { maxOf(it, now) }
+                  try {
+                    gate.await()
+                  } finally {
+                    running.decrementAndFetch()
+                  }
+                  ScrapeResults(srAgentId = "agent", srScrapeId = i.toLong())
+                }
+                sent.incrementAndFetch()
               }
             }
+
+          // The scrapes running, the request the loop took waiting for a permit, and the channel full behind it
+          val held = maxConcurrency + 1 + capacity
+          eventually(5.seconds) {
+            running.load() shouldBe maxConcurrency
+            sent.load() shouldBe held
+          }
+          // Still so a moment later: nothing takes another request until a scrape ends
+          delay(200.milliseconds)
+          running.load() shouldBe maxConcurrency
+          sent.load() shouldBe held
+
+          gate.complete(Unit)
+          sender.join()
+          // Closed, not drained as AgentConnectionContext.close() drains it, so the loop runs what's left, then ends
+          context.scrapeRequestActions().close()
+          scrapes.join()
+        }
+      }
+
+      mostRunning.load() shouldBe maxConcurrency
+      generateSequence { context.scrapeResults().tryReceive().getOrNull() }.count() shouldBe floodSize
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    // A scrape that throws still gives back its permit and its place in the backlog: with one permit, the next scrape
+    // runs only once the failed one has released it. The scope is a supervisor's here, so the failure doesn't cancel
+    // the loop, as it ends the connection in Agent.
+    "processScrapeRequests should release a failed scrape's permit and its place in the backlog" {
+      val agent = createTestAgent("--max_concurrent_clients", "1")
+      val context = AgentConnectionContext(backlogCapacity = 4)
+      agent.scrapeRequestBacklogSize.store(2)
+      val failures = mutableListOf<Throwable>()
+      val handler = CoroutineExceptionHandler { _, e -> synchronized(failures) { failures += e } }
+      context.sendScrapeRequestAction { throw IOException("scrape failed") }
+      context.sendScrapeRequestAction { ScrapeResults(srAgentId = "agent", srScrapeId = 2) }
+      context.scrapeRequestActions().close()
+
+      val finished =
+        withTimeoutOrNull(5.seconds) {
+          withContext(handler) {
+            supervisorScope { with(agent) { processScrapeRequests(context) } }
           }
         }
 
-        // Flood the channel with many actions, each suspended on the gate.
-        // Without the fix, all `floodSize` coroutines would launch immediately
-        // and activeCoroutines would reach `floodSize`; with the fix, only
-        // `maxConcurrency` coroutines may proceed past the increment.
-        val floodSize = 100
-        repeat(floodSize) {
-          waitingActions.send { gate.await() }
-        }
-
-        // Wait until the active count settles at the expected ceiling, with a
-        // generous timeout to absorb scheduler jitter under CI load.
-        eventually(2.seconds) {
-          activeCoroutines.load() shouldBe maxConcurrency
-        }
-
-        // Sanity: still bounded after settling.
-        activeCoroutines.load() shouldBeGreaterThanOrEqual 0
-
-        // Release the gate, drain the channel, and verify every action ran.
-        gate.complete(Unit)
-        waitingActions.close()
-        job.join()
-        processedCount.load() shouldBe floodSize
-      }
+      finished.shouldNotBeNull()
+      failures.map { it.message } shouldBe listOf("scrape failed")
+      context.scrapeResults().tryReceive().getOrNull()?.srScrapeId shouldBe 2L
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
     }
   }
 }

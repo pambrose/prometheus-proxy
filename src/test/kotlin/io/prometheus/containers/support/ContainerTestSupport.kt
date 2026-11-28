@@ -316,3 +316,21 @@ fun closeQuietly(network: Network) {
     // best-effort teardown
   }
 }
+
+/**
+ * Starts [containers], in order, from the `beforeSpec` of a spec whose tests share them, and runs [teardown], which the
+ * spec's `afterSpec` runs too, before passing on the failure of one that doesn't start. Kotest skips `afterSpec` once
+ * `beforeSpec` throws, so the containers already started, the spec's network, and its HTTP client outlived the spec,
+ * and, with three container specs running at once in one JVM, the rest of the run.
+ */
+fun startOrTearDown(
+  vararg containers: GenericContainer<*>,
+  teardown: () -> Unit,
+) {
+  try {
+    containers.forEach { it.start() }
+  } catch (e: Throwable) {
+    teardown()
+    throw e
+  }
+}

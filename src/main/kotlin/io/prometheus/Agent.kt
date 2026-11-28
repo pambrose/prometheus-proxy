@@ -570,8 +570,8 @@ class Agent(
   }
 
   // Runs the scrape requests the proxy sends for the connection's lifetime, at most maxConcurrentHttpClients at once.
-  // A CoroutineScope extension so each scrape is a child of the task's scope.
-  private suspend fun CoroutineScope.processScrapeRequests(connectionContext: AgentConnectionContext) {
+  // A CoroutineScope extension so each scrape is a child of the task's scope. Internal for its tests.
+  internal suspend fun CoroutineScope.processScrapeRequests(connectionContext: AgentConnectionContext) {
     val max = options.maxConcurrentHttpClients
     logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
     // Limits the number of concurrent scrapes below

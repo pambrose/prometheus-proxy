@@ -96,17 +96,26 @@ class EmbeddedAgentInfoTest : StringSpec() {
       thrown.cause.shouldBeInstanceOf<TimeoutException>()
     }
 
-    // So an app's shutdown fits its platform's window: the agent goes on stopping on a thread of its own
+    // So an app's shutdown fits its platform's window: the agent goes on stopping on a thread of its own. The stop is
+    // released however the spec ends, so its thread isn't left parked.
     "shutdown with a stop timeout returns once it's up, while the agent still stops" {
       val agent = runningAgent()
+      val stopping = CountDownLatch(1)
       val release = CountDownLatch(1)
-      every { agent.awaitTerminated() } answers { release.await() }
+      every { agent.awaitTerminated() } answers {
+        stopping.countDown()
+        release.await()
+      }
 
-      EmbeddedAgentInfo(agent, stopTimeout = 50.milliseconds).shutdown()
+      try {
+        EmbeddedAgentInfo(agent, stopTimeout = 50.milliseconds).shutdown()
 
-      // Returned while the agent's stop still blocks
-      release.count shouldBe 1
-      release.countDown()
+        // Returned while the agent's stop, which it began, still blocks
+        stopping.await(5, TimeUnit.SECONDS) shouldBe true
+        release.count shouldBe 1
+      } finally {
+        release.countDown()
+      }
     }
 
     "shutdown with a stop timeout waits for a stop that ends within it" {

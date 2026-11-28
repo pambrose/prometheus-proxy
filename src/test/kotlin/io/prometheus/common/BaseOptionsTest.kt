@@ -18,6 +18,8 @@
 
 package io.prometheus.common
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -34,6 +36,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.prometheus.common.BaseOptions.Companion.resolveBoolean
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.net.URI
 import java.util.concurrent.TimeUnit
@@ -207,12 +210,23 @@ class BaseOptionsTest : StringSpec() {
       options.debugEnabled.shouldBeFalse()
     }
 
+    // An embedded agent's logLevel sets Logback's io.prometheus logger, which is JVM-wide, so the levels are put back
+    // afterwards: left at DEBUG, the logger changed what every later spec in the JVM captured from its loggers.
     "agent logLevel should be settable via --log_level" {
-      val options = agentOptions(
-        ["--name", "test", "--proxy", "host", "--log_level", "DEBUG"],
-        false,
-      )
-      options.logLevel shouldBe "DEBUG"
+      val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+      val project = LoggerFactory.getLogger(Utils.PROJECT_LOGGER_NAME) as Logger
+      val (rootLevel, projectLevel) = root.level to project.level
+      try {
+        val options = agentOptions(
+          ["--name", "test", "--proxy", "host", "--log_level", "DEBUG"],
+          false,
+        )
+        options.logLevel shouldBe "DEBUG"
+        project.level shouldBe Level.DEBUG
+      } finally {
+        root.level = rootLevel
+        project.level = projectLevel
+      }
     }
 
     // ==================== Config File Loading Tests ====================

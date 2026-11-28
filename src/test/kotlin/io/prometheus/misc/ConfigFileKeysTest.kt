@@ -194,12 +194,31 @@ class ConfigFileKeysTest : StringSpec() {
     }
   }
 
-  // Each list of objects the schema declares, by its path, with the object its entries take.
-  private val listEntrySchemas by lazy {
-    listOf("proxy.auth", "agent.pathConfigs", "agent.filters").associateWith { path ->
-      (schema.toConfig().getList(path).first() as ConfigObject)
+  // Each list of objects the schema declares, by its path, with the object its entries take: found in the schema, so
+  // a list it gains is checked too, as proxy.dashboard.links and proxy.dashboard.screens, once left out, weren't.
+  private val listEntrySchemas: Map<String, ConfigObject> by lazy { objectLists("", schema) }
+
+  // The lists of objects under [path], whose value is [value], by their paths.
+  private fun objectLists(
+    path: String,
+    value: ConfigValue,
+  ): Map<String, ConfigObject> =
+    when (value) {
+      is ConfigObject -> {
+        value.entries
+          .sortedBy { it.key }
+          .flatMap { (key, child) -> objectLists(if (path.isEmpty()) key else "$path.$key", child).toList() }
+          .toMap()
+      }
+
+      is ConfigList -> {
+        (value.firstOrNull() as? ConfigObject)?.let { mapOf(path to it) }.orEmpty()
+      }
+
+      else -> {
+        emptyMap()
+      }
     }
-  }
 
   init {
     "every setting in a config the repo ships or its tests load should be declared in config/config.conf" {
@@ -318,6 +337,11 @@ class ConfigFileKeysTest : StringSpec() {
         listOf("paths[0].label")
       undeclaredInBlock("""{ path: a, metricNameAllow: [], metricNameDenied: [] }""") shouldBe
         listOf("agent.filters.metricNameDenied")
+      listEntrySchemas.keys shouldContainAll
+        listOf("proxy.auth", "agent.pathConfigs", "agent.filters", "proxy.dashboard.links", "proxy.dashboard.screens")
+      undeclaredInBlock("""{ name: Alerts, url: "http://localhost:9090", start: /alerts }""") shouldBe emptyList()
+      undeclaredInBlock("""{ name: Alerts, url: "http://localhost:9090", start: /alerts, icn: x }""") shouldBe
+        listOf("proxy.dashboard.screens.icn")
       undeclaredInBlock("proxyMetricsHost = localhost\nproxy.http.port = 8080") shouldBe emptyList()
 
       val included = hoconBlocks("```hocon\n--8<-- \"ConfigExamples.txt:proxy-grpc-config\"\n```").single()

@@ -30,6 +30,9 @@ import io.prometheus.containers.support.ContainerTestSupport.prometheusContainer
 import io.prometheus.containers.support.ContainerTestSupport.proxyContainer
 import io.prometheus.containers.support.baseUrl
 import io.prometheus.containers.support.bodyOf
+import io.prometheus.containers.support.closeQuietly
+import io.prometheus.containers.support.startOrTearDown
+import io.prometheus.containers.support.stopQuietly
 import org.testcontainers.containers.Network
 import kotlin.time.Duration.Companion.seconds
 
@@ -50,27 +53,19 @@ class ContainersSmokeTest : StringSpec() {
       val prometheus = prometheusContainer(network)
       val httpClient = httpClient()
 
+      // Run by afterSpec, and by beforeSpec when a container doesn't start, as Kotest then skips afterSpec
+      fun teardown() {
+        httpClient.close()
+        stopQuietly(prometheus, agent, proxy, metricsStub)
+        closeQuietly(network)
+      }
+
       beforeSpec {
-        metricsStub.start()
-        proxy.start()
-        agent.start()
-        prometheus.start()
+        startOrTearDown(metricsStub, proxy, agent, prometheus, teardown = ::teardown)
       }
 
       afterSpec {
-        httpClient.close()
-        [prometheus, agent, proxy, metricsStub].forEach { container ->
-          try {
-            container.stop()
-          } catch (_: Exception) {
-            // best-effort teardown
-          }
-        }
-        try {
-          network.close()
-        } catch (_: Exception) {
-          // best-effort teardown
-        }
+        teardown()
       }
 
       "Prometheus scrapes metric_under_test through the proxy and agent" {

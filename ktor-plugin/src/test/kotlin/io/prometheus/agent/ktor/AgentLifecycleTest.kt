@@ -16,10 +16,15 @@
 
 package io.prometheus.agent.ktor
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -40,6 +45,7 @@ import io.mockk.verify
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.common.ConfigLoadException
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -47,6 +53,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 // The lifecycle's events raised by hand on an app's monitor, with the agent's start replaced: whether the agent starts,
@@ -283,18 +290,32 @@ class AgentLifecycleTest : StringSpec() {
       verify(exactly = 1) { app.agent.shutdown() }
     }
 
-    "an agent still stopping when the wait runs out doesn't hold up the app's disposal" {
+    // The disposal waits out the stop timeout and the second it adds for the handle to return, then warns and goes on.
+    // The stop is released however the spec ends, so its thread isn't left parked.
+    "an agent still stopping when the wait runs out doesn't hold up the app's disposal, which says so" {
       val app = TestApp()
+      val stopping = CountDownLatch(1)
       val release = CountDownLatch(1)
-      every { app.agent.shutdown() } answers { release.await() }
+      every { app.agent.shutdown() } answers {
+        stopping.countDown()
+        release.await()
+      }
       app.lifecycle(proxy = "localhost:50051", stopTimeout = 50.milliseconds)
       app.started()
 
-      app.events.raise(ApplicationStopping, app.application)
+      try {
+        val started = System.nanoTime()
+        val logged = lifecycleLogs { app.events.raise(ApplicationStopping, app.application) }
+        val waited = (System.nanoTime() - started).nanoseconds
 
-      // Returned while the agent's stop still blocks
-      release.count shouldBe 1
-      release.countDown()
+        // Returned while the agent's stop, which it began, still blocks
+        stopping.await(5, TimeUnit.SECONDS) shouldBe true
+        release.count shouldBe 1
+        waited shouldBeGreaterThanOrEqualTo 50.milliseconds + 1.seconds
+        logged shouldBe listOf("The Prometheus agent was still stopping after 50ms; the app stops anyway")
+      } finally {
+        release.countDown()
+      }
     }
 
     // Duration.INFINITE waits for as long as the stop takes, as the handle's shutdown does: the second the disposal
@@ -468,6 +489,19 @@ class AgentLifecycleTest : StringSpec() {
 
       launches.size shouldBe 1
     }
+  }
+
+  // Runs [block] and returns the lines the lifecycle logged at WARN meanwhile.
+  private fun lifecycleLogs(block: () -> Unit): List<String> {
+    val logger = LoggerFactory.getLogger(AgentLifecycle::class.java) as Logger
+    val events = ListAppender<ILoggingEvent>().apply { start() }
+    logger.addAppender(events)
+    try {
+      block()
+    } finally {
+      logger.detachAppender(events)
+    }
+    return events.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
   }
 
   // Opens [release] once [waiter] waits in Thread.join, the wait under test, or after 5 seconds without it, so the

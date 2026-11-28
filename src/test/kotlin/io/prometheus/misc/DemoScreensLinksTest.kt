@@ -70,7 +70,7 @@ class DemoScreensLinksTest : StringSpec() {
         .parseFile(File(dir, config))
         .withFallback(ConfigFactory.parseMap(values))
         .resolve(ConfigResolveOptions.defaults().setUseSystemEnvironment(false))
-    return config.getConfigList("proxy.dashboard.screens").map {
+    return config.getConfigList(SCREENS_KEY).map {
       Screen.Entry(
         name = it.getString("name"),
         url = if (it.hasPath("url")) it.getString("url") else "",
@@ -196,9 +196,31 @@ class DemoScreensLinksTest : StringSpec() {
     }
   }
 
+  // The configs under demos/*/config that list screens, read as entries reads them, without the environment.
+  private val configsListingScreens: List<String> by lazy {
+    File("demos")
+      .listFiles()
+      .orEmpty()
+      .flatMap { demo -> File(demo, "config").listFiles { file -> file.extension == "conf" }.orEmpty().toList() }
+      .filter { file ->
+        ConfigFactory
+          .parseFile(file)
+          .resolve(ConfigResolveOptions.defaults().setUseSystemEnvironment(false))
+          .hasPath(SCREENS_KEY)
+      }.map { it.invariantSeparatorsPath }
+      .sorted()
+  }
+
   init {
     "each demo's proxy config should list its screens" {
       DEMOS.forEach { demo -> withClue(demo.dir) { screenIds.getValue(demo).shouldNotBeEmpty() } }
+    }
+
+    // A config that lists screens but isn't one of DEMOS' would go unchecked, its links, its screens' ports, and the
+    // stretches its proxy is down included, as a demo moved onto the screens page and left out of DEMOS would.
+    "every demo config that lists screens should be one this spec checks" {
+      configsListingScreens.shouldNotBeEmpty()
+      configsListingScreens shouldBe DEMOS.map { "${it.dir}/${it.config}" }.sorted()
     }
 
     // As the page splits a link, so a + in a pane's query, as a search for "agent rogue" writes it, isn't a second
@@ -370,6 +392,7 @@ class DemoScreensLinksTest : StringSpec() {
 
   private companion object {
     const val COMPOSE = "docker/compose.yml"
+    const val SCREENS_KEY = "proxy.dashboard.screens"
 
     // What each ${?NAME} is set to while checking which variable a screen's url reads.
     const val MARKER = "marker:"
