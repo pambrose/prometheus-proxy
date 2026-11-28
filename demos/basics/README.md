@@ -395,6 +395,7 @@ and frees its resources.
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the services' modes, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the proxy's screens page, which holds every screen, in the browser |  |
 
 The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, plus `search`, `recommendations`, and
 `notifications` once discovered. Freezing `agent-east` also stops the proxy's own metrics, which travel through it.

@@ -8,6 +8,50 @@ What each release since 4.0 changed for code that [embeds the agent](embedded-ag
 A release that changed nothing an embedding app sees isn't listed; the
 [changelog](https://github.com/pambrose/prometheus-proxy/blob/master/CHANGELOG.md) lists every change.
 
+## Upgrading from 4.7.0
+
+- The agent's [dashboard](agent-dashboard.md), when it's on, allows framing by default, so any page can show it in a
+  frame, such as a portal's. 4.7.0 refused framing on every dashboard response. To keep refusing it, call
+  `setting("dashboard.framingEnabled", false)`, or set the Ktor plugin's or the Spring Boot starter's
+  `settings.dashboard.framingEnabled` to `false` (see [Exposure](web-dashboard.md#exposure)).
+- `shutdown()` and `close()`, and `Agent.stop()`, throw an `IllegalStateException`, with the
+  `java.util.concurrent.TimeoutException` as its cause, for an agent without a `stopTimeout` that doesn't stop within
+  30 seconds. Through 4.7.0 they threw the `TimeoutException` itself, which they didn't declare, so Java code couldn't
+  catch it, and a catch of `RuntimeException` missed it. Kotlin code that caught `TimeoutException` there should catch
+  `IllegalStateException` (see [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo)).
+- The Spring Boot starter's stop waits for the agent at most its new `prometheus-proxy.agent.stop-timeout`, 30 seconds
+  by default, then returns, with a warning, and the agent goes on stopping on a daemon thread of its own. Through 4.7.0
+  it waited the agent's own 30 seconds, then threw out of `stop()`. Set `stop-timeout` inside the window your platform
+  gives the app to stop (see [Properties](spring-boot-starter.md#properties)).
+- `startIfConfigured(onFailure)` logs an exception its `onFailure` throws, and still returns `null`, as it does for the
+  handlers the builder's new `onFailure` adds. Through 4.7.0 the exception escaped the call. An app that can't run
+  without its agent should call `start()`, which throws, instead.
+- An agent refuses a path of more than one segment, such as `app/metrics` or `//metrics`, which no scrape could reach:
+  through 4.7.0 the agent started with it and served nothing there. A `pathConfigs` entry in the config
+  `startAsyncAgent()` is given now fails its start with `ConfigLoadException`, naming the path. The builder's `path()`,
+  `scrapeSelf()`, `source()`, and `agentMetricsAt()` throw it as they're called, before `startIfConfigured()` can catch
+  it. A Ktor plugin or Spring Boot starter path, its `path`, `metrics-proxy-path`, or a `paths` entry's, keeps the agent
+  off, telling the `onFailure` handlers, or fails a `required` agent's app. Give each path one segment, such as
+  `app_metrics`.
+- The builder's `path()` throws `ConfigLoadException` for a blank URL, and `path()` and `scrapeSelf()` for `/` alone as
+  a path, as they're called. Through 4.7.0 they took them, and the agent skipped the target at startup with only a
+  warning. A Ktor plugin or Spring Boot starter `paths` entry without a `url`, as an unset environment variable leaves
+  it, or with `/` alone as its `path`, therefore keeps the agent off, telling the `onFailure` handlers, or fails a
+  `required` agent's app, where the agent started without that target. Give the entry its URL, or leave it out. A file
+  `path` or `labels` the Ktor plugin can't read, such as `labels = "team=web"` where a section belongs, fails the
+  agent's start in the same way, where it failed `install(PrometheusProxyAgent)`, the agent enabled or not.
+- An agent refuses to start with a proxy endpoint it can't dial: one with no host, such as `:50051` or `[]`, or with
+  anything but `:port` after a bracketed IPv6 address, such as `[::1]50051`, whether it comes from `proxy()`,
+  `fromEnvironment()`'s `PROMETHEUS_PROXY`, a `setting()`, or `PROXY_HOSTNAME`. `start()` throws
+  `ConfigLoadException`, naming it, and `startIfConfigured()` logs that and returns `null`. Through 4.7.0, as the only
+  or first endpoint, one with no host failed the start with a less clear message; as a later failover entry, it let the
+  agent start and failed each connect that reached it, and `[::1]50051` dialed `[::1]` on the default port. Write the
+  endpoint in full, such as `[::1]:50051`.
+- A TLS certificate, key, or trust collection file that exists but can't be read, such as one the app's user may not
+  open, and TLS material the agent can't build its TLS context from, fail the start with `ConfigLoadException`, naming
+  the setting, as any setting the agent rejects does. Through 4.7.0 they reached the app as a `FileNotFoundException`
+  or an `SSLException`. Code that caught either there should catch `ConfigLoadException`.
+
 ## Upgrading from 4.6.x
 
 - The agent no longer brings Logback. Through 4.6.0, `ch.qos.logback:logback-classic` came with it, at runtime

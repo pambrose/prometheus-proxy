@@ -76,6 +76,13 @@ Settings that fail startup since 4.5.0:
 - Since 4.7.1, an agent proxy endpoint with no host, such as `:50051` or `[]`, or with anything but `:port` after a
   bracketed IPv6 address, such as `[::1]50051`, and a TLS certificate, key, or trust collection file the proxy or
   agent can't read, which ended in a stack trace before.
+- Since 4.7.1, an agent `pathConfigs` path or `agent.metrics.proxyPath` of more than one segment, such as
+  `app/metrics` or `//metrics`, which no scrape can reach ([Path Rules](configuration/agent.md#path-rules)).
+- Since 4.7.1, a `proxy.dashboard.screens` entry the screens page can't use: a name that's blank, has no letter or
+  digit, or is longer than 64 characters, two names with the same id, a name whose id is `proxy` or `all`, a `url`
+  that's empty, as an unset variable leaves it, that isn't an absolute `http` or `https` URL, or that carries a
+  username or password, or a `start` that doesn't begin with `/` or `?`; more than 32 screens; and, with screens
+  listed, a `proxy.dashboard.path` of `/screens` ([The Screens Page](web-dashboard.md#screens)).
 
 ## Agent Can't Connect to the Proxy
 

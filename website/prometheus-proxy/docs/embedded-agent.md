@@ -314,6 +314,7 @@ itself, embedded or not:
 | Its dashboard's framing         | `setting("dashboard.framingEnabled", false)`        | `agent.dashboard.framingEnabled`                                           | `settings.dashboard.framingEnabled`                |                                                        |
 | A target it scrapes             | `path(…)`, `scrapeSelf(…)`                          | `agent.pathConfigs`                                                        | `paths`                                            |                                                        |
 | The app's own registry          | `source(path, registry)`                            | none: it's code                                                            | `path` and `labels`, with the app's registry       |                                                        |
+| Its stop's timeout              | `stopTimeout(timeout)`                              | none: it's the handle's                                                    | `stop-timeout`                                     |                                                        |
 | Anything else                   | `setting(key, value)`                               | the key                                                                    | `settings.<key>`                                   | the key's, if it has one                               |
 
 The starter serves the app's `PrometheusRegistry` bean at `path` unless its `source` is `none`, and the plugin serves
@@ -479,9 +480,10 @@ out. Java sees only the methods.
 
 A username and password are percent-encoded into the URL and sent as Basic Auth; both empty, as unset environment
 variables give, means none. Labels are a map of names to values. A value the builder can tell is wrong, such as a blank
-path, `/` alone, a blank URL, or a port out of range, throws `ConfigLoadException`, as `start()` does for a setting the
-agent rejects; through 4.7.0, `/` alone and a blank URL passed, and the agent dropped the target at startup with a
-warning, as it does a config file's placeholder.
+path, `/` alone, a path of more than one segment (`app/metrics` or `//metrics`), a blank URL, or a port out of range,
+throws `ConfigLoadException` as the method is called, as `start()` does for a setting the agent rejects. Through 4.7.0,
+`/` alone and a blank URL passed, and the agent dropped the target at startup with a warning, as it does a config
+file's placeholder, and a path of more than one segment passed too, and no scrape reached it.
 
 | `EmbeddedAgentConfig` member         | Type                 | Description                                                                                            |
 |:-------------------------------------|:---------------------|:-------------------------------------------------------------------------------------------------------|

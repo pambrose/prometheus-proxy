@@ -165,12 +165,12 @@ name = "GitHub repository"
 # Plugins
 # ----------------------------------------------------------------------------
 
-# Clicking an image opens it full size in a lightbox, GLightbox, which the theme loads from unpkg on a page that has
-# one; the screenshots are taken at three times the pixel density, so the lightbox shows the detail the page's column
-# scales away, and javascripts/screenshots.js keeps it from drawing one larger than its pixels, which blurs its text.
-# The extension wraps each image in its link, so the pages give theirs none. A page's dark and light screenshots
-# are separate galleries, so the arrows step through the ones the reader's theme shows, and each image's alt text is its
-# caption.
+# Clicking an image opens it full size in a lightbox, GLightbox, the pinned copy overrides/main.html serves from the
+# site (vendor/glightbox), which the theme uses in place of fetching the newest 3.x from unpkg; the screenshots are
+# taken at three times the pixel density, so the lightbox shows the detail the page's column scales away, and
+# javascripts/screenshots.js keeps it from drawing one larger than its pixels, which blurs its text. The extension wraps
+# each image in its link, so the pages give theirs none. A page's dark and light screenshots are separate galleries, so
+# the arrows step through the ones the reader's theme shows, and each image's alt text is its caption.
 [project.plugins.glightbox]
 auto_themed = true
 auto_caption = true

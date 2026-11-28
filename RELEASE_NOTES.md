@@ -282,6 +282,11 @@ its own that holds them all, with Prometheus and Grafana.
   metrics ports on `127.0.0.1` only. The Docker page's production example, for agents on other hosts, publishes 50051
   with TLS and a token. For a Prometheus on another host, publish the scrape port on a private address instead, such
   as `-p 10.0.0.5:8080:8080`.
+- **The Agent Configuration page gives the agent's gRPC, admin, and internal settings.** Its new sections give each
+  one's default, option, and variable, as the Proxy Configuration page does, such as `agent.grpc.unaryDeadlineSecs`
+  (`--unary_deadline_secs`, `UNARY_DEADLINE_SECS`), which no configuration page gave.
+- **Upgrading an Embedded Agent covers 4.7.1.** Its new Upgrading from 4.7.0 section lists each change an app that
+  embeds the agent sees, by hand, with the Ktor plugin, or with the Spring Boot starter, and what to do about it.
 
 ## 4.7.0
 

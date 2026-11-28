@@ -64,9 +64,7 @@ make tour    # the guided tour, about 11 minutes
 make down    # stops it and removes its containers and network
 ```
 
-`make up` runs the latest release's proxy image, from Docker Hub, and builds the roastery inside Docker against that
-release's library, from Maven Central, so it needs only Docker. The first build downloads Maven's dependencies, which
-takes a few minutes. `make up-local` builds the library, the proxy, and the roastery from this checkout instead.
+The first build downloads Maven's dependencies, which takes a few minutes.
 
 Then open the proxy's [screens page](https://prometheus-proxy.com/web-dashboard/#screens), one browser tab that holds
 every screen in the demo, each in a tab of its own: the proxy's dashboard, the roastery's status page, its agent's

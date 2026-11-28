@@ -92,16 +92,24 @@ scenarios.
 
 ## ✨ New Features
 
-Version 4.7.1 adds, for apps that embed the agent:
+Version 4.7.1 adds:
 
-- **Failure alerts** - the builder's `onFailure` handler, added in a Ktor `agent { }` block or a Spring Boot
-  customizer too, is told why the agent couldn't start, to send it wherever someone will see it, such as a chat
-  channel; the app still runs on without the agent
-- **A capped stop** - the builder's `stopTimeout`, and the Ktor plugin's and the Spring Boot starter's `stop-timeout`,
-  cap how long the agent's stop holds up the app's shutdown, to fit the window its platform gives it, such as Cloud
-  Run's 10 seconds after `SIGTERM`
+- **Failure alerts** - for apps that embed the agent, the builder's `onFailure` handler, added in a Ktor `agent { }`
+  block or a Spring Boot customizer too, is told why the agent couldn't start, to send it wherever someone will see
+  it, such as a chat channel; the app still runs on without the agent
+- **A capped stop** - for apps that embed the agent, the builder's `stopTimeout`, and the Ktor plugin's and the Spring
+  Boot starter's `stop-timeout`, cap how long the agent's stop holds up the app's shutdown, to fit the window its
+  platform gives it, such as Cloud Run's 10 seconds after `SIGTERM`
+- **Screens page** - list your screens, the agents' dashboards, Prometheus, Grafana, or any page that allows framing,
+  in `proxy.dashboard.screens`, and the proxy serves
+  [one page that holds them all](https://prometheus-proxy.com/web-dashboard/#screens), `/screens` on its dashboard's
+  port, in One, Split, or All layouts
+- **Framing again** - any page, such as a portal, can show the proxy's and the agents' dashboards in a frame;
+  `framingEnabled = false` refuses framing, as every dashboard did in 4.7.0
 
-The [release notes](RELEASE_NOTES.md) and the [changelog](CHANGELOG.md) have the full list.
+The [release notes](RELEASE_NOTES.md) and the [changelog](CHANGELOG.md) have the full list. Read the release notes'
+**Before you upgrade** first: this release lets any site frame the dashboards unless you refuse it, and stops at
+startup on a few settings the last one started with, such as an agent path of more than one segment.
 
 Each earlier release's summary is in the [release notes](RELEASE_NOTES.md), and the [changelog](CHANGELOG.md) has
 every change.
@@ -811,6 +819,11 @@ Then open `http://proxy-host:8094/dashboard`. Four layouts share the page:
 - **Settings**: every setting the proxy resolved, from its listeners, agent authentication, and TLS to its limits and
   gRPC settings, with a token, a password, or a PEM shown only as set or not set.
 
+List your other screens, such as each agent's dashboard, Prometheus, and Grafana, in `proxy.dashboard.screens`, in a
+config file, and the proxy serves one page that holds them all beside its own dashboard, `/screens` on the same port,
+in One, Split, or All layouts; the port's root, `http://proxy-host:8094/`, then leads to it. See
+[The Screens Page](https://prometheus-proxy.com/web-dashboard/#screens).
+
 Every layout names agents the same way, so they can be read against each other, and with agent authentication on,
 the identity each agent connected as. It runs on its own port — not the admin port — so it can be firewalled without
 cutting off Kubernetes health probes, and it loads no CDN assets, so it works in airgapped deployments. It has **no
@@ -828,7 +841,8 @@ rewrites the Host header, list the public origin in `proxy.dashboard.allowedOrig
 host name by default, which leaves it open to DNS rebinding (a page pointing its own DNS name at the
 dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. Any page can
 show it in a frame by default, so a portal can embed it, and so can another site's page, to steer a viewer's clicks;
-set `proxy.dashboard.framingEnabled = false` and every response forbids framing. See
+set `proxy.dashboard.framingEnabled = false` and every response forbids framing, or, with screens listed, allows it
+only from the dashboard's own origin (`frame-ancestors 'self'`), so its `/screens` page can still show it. See
 [Dashboard exposure](https://prometheus-proxy.com/web-dashboard/#exposure).
 
 Accessibility: text clears the WCAG AA contrast threshold of 4.5:1 with a measured floor of 4.59:1,

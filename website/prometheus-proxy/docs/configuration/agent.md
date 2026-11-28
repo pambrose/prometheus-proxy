@@ -222,6 +222,52 @@ agent {
 }
 ```
 
+## gRPC Settings
+
+Configure the agent's gRPC connection to the proxy:
+
+```hocon
+agent {
+  grpc {
+    keepAliveTimeSecs = -1        // -1 leaves gRPC's default: no PINGs
+    keepAliveTimeoutSecs = 20
+    keepAliveWithoutCalls = false
+    unaryDeadlineSecs = 30
+  }
+}
+```
+
+| Setting / CLI Option / Env Var                                                                                                                         | Default | Description                                                                                                 |
+|:-------------------------------------------------------------------------------------------------------------------------------------------------------|:--------|:------------------------------------------------------------------------------------------------------------|
+| [`agent.grpc.keepAliveTimeSecs`](../cli-reference.md#agent.grpc.keepAliveTimeSecs)<br>`--keepalive_time_secs`<br>`KEEPALIVE_TIME_SECS`                 | INT_MAX | Seconds the connection goes quiet before the agent sends a PING                                             |
+| [`agent.grpc.keepAliveTimeoutSecs`](../cli-reference.md#agent.grpc.keepAliveTimeoutSecs)<br>`--keepalive_timeout_secs`<br>`KEEPALIVE_TIMEOUT_SECS`     | 20      | Seconds the agent waits for a PING's acknowledgment before closing the connection                           |
+| [`agent.grpc.keepAliveWithoutCalls`](../cli-reference.md#agent.grpc.keepAliveWithoutCalls)<br>`--keepalive_without_calls`<br>`KEEPALIVE_WITHOUT_CALLS` | false   | Send PINGs while no call is open                                                                            |
+| [`agent.grpc.unaryDeadlineSecs`](../cli-reference.md#agent.grpc.unaryDeadlineSecs)<br>`--unary_deadline_secs`<br>`UNARY_DEADLINE_SECS`                 | 30      | Seconds a single call to the proxy, such as a connect or a path's registration, may take; streams have none |
+
+A keepalive setting of `-1`, which the config file has unless you set it, leaves gRPC's own default, the one the table
+gives. `INT_MAX` means the agent sends no PINGs. The proxy closes a connection whose PINGs come more often than its
+`proxy.grpc.permitKeepAliveTimeSecs`, 300 seconds by default, or that sends one while no call is open, unless its
+`proxy.grpc.permitKeepAliveWithoutCalls` is on, so set the agent's to match (see [gRPC Service](proxy.md#grpc-service)
+and [gRPC Keepalive Tuning](../advanced.md#grpc-keepalive-tuning)).
+
+`unaryDeadlineSecs` is also how long a connect to a proxy whose host is gone, rather than refusing connections, takes to
+fail, before the agent tries again, or tries its next endpoint ([Proxy Failover](#proxy-failover)). A heartbeat's
+deadline is the shorter of it and `agent.internal.heartbeatMaxInactivitySecs` ([Internal Settings](#internal-settings)).
+
+## Transport Filter
+
+Behind a reverse proxy such as nginx, disable the transport filter on each agent and on the proxy, since the proxy
+refuses an agent whose setting doesn't match its own (see [Transport Filter](proxy.md#transport-filter) and
+[nginx Reverse Proxy](../advanced.md#nginx-reverse-proxy)):
+
+```hocon
+agent.transportFilterDisabled = true
+```
+
+| Setting / CLI Option / Env Var                                                                                                                       | Default | Description                                         |
+|:-----------------------------------------------------------------------------------------------------------------------------------------------------|:--------|:----------------------------------------------------|
+| [`agent.transportFilterDisabled`](../cli-reference.md#agent.transportFilterDisabled)<br>`--tf-disabled, --tf_disabled`<br>`TRANSPORT_FILTER_DISABLED` | false   | Disable the transport filter, as the proxy has done |
+
 ## HTTP Client Settings
 
 Configure how the agent makes HTTP requests to scrape endpoints:
@@ -436,6 +482,50 @@ agent.name = "production-agent-01"
 
 If no name is provided, the agent uses `Unnamed-<hostname>`.
 
+## Admin Endpoints
+
+Enable admin endpoints for health checks and debugging:
+
+```hocon
+agent {
+  admin {
+    enabled = true
+    port = 8093
+    pingPath = "ping"
+    versionPath = "version"
+    healthCheckPath = "healthcheck"
+    threadDumpPath = "threaddump"
+    debugEnabled = false
+  }
+}
+```
+
+| Setting / CLI Option / Env Var                                                                                 | Default       | Description                               |
+|:---------------------------------------------------------------------------------------------------------------|:--------------|:------------------------------------------|
+| [`agent.admin.enabled`](../cli-reference.md#agent.admin.enabled)<br>`--admin, -r`<br>`ADMIN_ENABLED`           | false         | Serve the endpoints below                 |
+| [`agent.admin.port`](../cli-reference.md#agent.admin.port)<br>`--admin_port, -i`<br>`ADMIN_PORT`               | 8093          | Their port                                |
+| `agent.admin.pingPath`                                                                                         | "ping"        | The ping endpoint's path                  |
+| `agent.admin.versionPath`                                                                                      | "version"     | The version endpoint's path               |
+| `agent.admin.healthCheckPath`                                                                                  | "healthcheck" | The health check endpoint's path          |
+| `agent.admin.threadDumpPath`                                                                                   | "threaddump"  | The thread dump endpoint's path           |
+| [`agent.admin.debugEnabled`](../cli-reference.md#agent.admin.debugEnabled)<br>`--debug, -b`<br>`DEBUG_ENABLED` | false         | Serve `/debug`, the agent's state as text |
+
+When enabled, the following endpoints are available:
+
+| Endpoint           | Description                                       |
+|:-------------------|:--------------------------------------------------|
+| `GET /ping`        | Returns "pong" (liveness check)                   |
+| `GET /healthcheck` | Returns health status JSON                        |
+| `GET /version`     | Returns version information                       |
+| `GET /threaddump`  | Returns JVM thread dump                           |
+| `GET /debug`       | Agent debug info (requires `debugEnabled = true`) |
+
+`/healthcheck` reports the agent's own state, not its connection: it stays healthy while the agent can't reach a proxy,
+and turns unhealthy once `agent.internal.scrapeRequestBacklogUnhealthySize` scrape requests wait for the agent
+([Internal Settings](#internal-settings)). The admin port answers on every interface without authentication, so keep it
+on an internal network. [Admin and Debug Endpoints](../embedded-agent.md#admin-and-debug-endpoints) says what each
+endpoint shows.
+
 ## Dashboard
 
 The agent can serve a dashboard of its own, on its own port, off unless turned on: its connection to the proxy, each
@@ -502,6 +592,50 @@ proxy. A standalone agent serves the same metrics at either, its JVM metrics inc
 the rest). See [Monitoring](../monitoring.md#port-or-proxy-path) for when each fits. Agents that share a config file
 each need a path of their own (see [Scraping Internal Metrics](../monitoring.md#scraping-internal-metrics)).
 
+## Internal Settings
+
+Configure reconnects, retries, heartbeats, and the health check's threshold. These settings have no command-line
+option or environment variable: set them in the config file, or with `-D`, as
+`-Dagent.internal.reconnectPauseSecs=5`.
+
+```hocon
+agent {
+  internal {
+    reconnectPauseSecs = 3            // Seconds between connect attempts
+    rejectedPathRetrySecs = 10        // First wait before retrying a refused path
+    rejectedPathRetryMaxSecs = 300    // Longest wait between retries
+    heartbeatMaxInactivitySecs = 5    // Quiet seconds before a heartbeat
+  }
+}
+```
+
+| Setting                                            | Default | Description                                                                                                                                                     |
+|:---------------------------------------------------|:--------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `agent.internal.reconnectPauseSecs`                | 3       | Seconds between attempts to connect to the proxy                                                                                                                |
+| `agent.internal.rejectedPathRetrySecs`             | 10      | Seconds before the agent retries a static path the proxy refused for a cause that can clear, or reclaims one another agent took over; doubles with each refusal |
+| `agent.internal.rejectedPathRetryMaxSecs`          | 300     | Longest wait between those retries, and a discovered path's                                                                                                     |
+| `agent.internal.heartbeatEnabled`                  | true    | Send a heartbeat when the connection goes quiet                                                                                                                 |
+| `agent.internal.heartbeatMaxInactivitySecs`        | 5       | Seconds the connection goes quiet before a heartbeat                                                                                                            |
+| `agent.internal.heartbeatCheckPauseMillis`         | 500     | Milliseconds between checks for a quiet connection                                                                                                              |
+| `agent.internal.scrapeRequestBacklogUnhealthySize` | 25      | Scrape requests waiting for the agent that mark it unhealthy; its queue holds twice this                                                                        |
+| `agent.internal.cioTimeoutSecs`                    | 90      | Deprecated for `agent.http.clientTimeoutSecs`; used only when changed while that stays at its default                                                           |
+
+A heartbeat keeps the proxy from evicting a quiet agent as inactive (`proxy.internal.maxAgentInactivitySecs`, 60
+seconds by default), and finds a connection that died: after three failed heartbeats in a row, the agent drops the
+connection and reconnects. `reconnectPauseSecs`, `rejectedPathRetrySecs`, `rejectedPathRetryMaxSecs`,
+`heartbeatCheckPauseMillis`, and `scrapeRequestBacklogUnhealthySize` must be more than zero, or the agent fails at
+startup. `agent.internal.zipkin` sends traces of the agent's scrapes and gRPC calls to Zipkin, off by default; see
+[Zipkin Tracing](../advanced.md#zipkin-tracing).
+
+## Log Level
+
+```hocon
+--8<-- "ConfigExamples.txt:log-level-config"
+```
+
+Unset, a standalone agent logs at `info`; an embedded agent's loggers follow its application's logging (see
+[Logging](../embedded-agent.md#logging)).
+
 ## Full Example
 
 Here is a real-world config from the `examples/` directory:
@@ -515,3 +649,8 @@ See also:
 - [`examples/myapps.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/myapps.conf) — multiple endpoints
 - [`examples/federate.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf) — Prometheus federation
 - [`examples/discovery-targets.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/discovery-targets.conf) — a [dynamic discovery](#dynamic-target-discovery) targets file (watched, not passed to `--config`)
+
+## Full Reference
+
+See the complete configuration schema:
+[`config/config.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/config/config.conf)

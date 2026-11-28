@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("UndocumentedPublicFunction")
 
 package io.prometheus.common
 
@@ -104,6 +104,13 @@ internal fun KLogger.requireDefaultOrPositive(
   info { "$name: ${if (value == -1L) "default ($default)" else value}" }
 }
 
+/**
+ * What [io.prometheus.proxy.ProxyOptions] and [io.prometheus.agent.AgentOptions] share: parsing the command line with
+ * JCommander, loading the HOCON config from a file or URL, or one a host built in memory, with `-D` options set over
+ * it, and the settings both have, for TLS, gRPC keepalive, the admin endpoints, the metrics endpoint, and the log
+ * level. Each setting is resolved from its command-line option, then its environment variable, then the config, then
+ * the built-in default.
+ */
 abstract class BaseOptions protected constructor(
   private val progName: String,
   private val args: Array<String>,
@@ -276,10 +283,12 @@ abstract class BaseOptions protected constructor(
     private set
 
   /**
-   * Logback log level for this process: one of `trace`, `debug`, `info`, `warn`, `error`, `off`.
+   * Log level for this process: one of `trace`, `debug`, `info`, `warn`, `error`, `off`.
    * Empty falls back to the role-specific env var ([io.prometheus.common.EnvVars.PROXY_LOG_LEVEL] or
-   * [io.prometheus.common.EnvVars.AGENT_LOG_LEVEL]) and then `<role>.logLevel` config; if still empty,
-   * the level configured in `logback.xml` is used.
+   * [io.prometheus.common.EnvVars.AGENT_LOG_LEVEL]) and then `<role>.logLevel` config; if still empty, the logging
+   * configuration's level stays: the standalone proxy and agent's `logback.xml` gives `info`, and an embedded agent's
+   * loggers follow its application's logging configuration. An embedded agent sets the level of its `io.prometheus`
+   * loggers only, never the root logger's, which is its application's.
    *
    * Settable by subclasses (e.g. [io.prometheus.proxy.ProxyOptions], [io.prometheus.agent.AgentOptions])
    * during [assignConfigVals].

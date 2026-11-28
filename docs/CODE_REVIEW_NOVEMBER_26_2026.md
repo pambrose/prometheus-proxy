@@ -1,11 +1,11 @@
 # Prometheus-Proxy Code Review — November 26, 2026
 
-**Status:** 70 issues — 52 resolved, 18 open (4 high, 35 medium, 31 low).
+**Status:** 70 issues — 61 resolved, 9 open (4 high, 35 medium, 31 low).
 
 **Progress:** resolved #1, #11, #12, and #44 in #586; #7 and #38 in #593; #2, #3, #4, #6, #8, #9, and #10 in #594; #13
 and #31 in #595; #33, #34, #35, #39, #40, and #41 in #596; #28, #29, #30, #32, and #36 in #597; #43 in #598; #45, #46,
 and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16, #17, #18, #19, and #20 in #602; #21,
-#22, #23, #24, #25, #26, and #27 in #603; #37 and #42 in #604.
+#22, #23, #24, #25, #26, and #27 in #603; #37 and #42 in #604; #60, #61, #64, #65, #66, #67, #68, #69, and #70 in #605.
 
 **Date:** 2026-11-26
 
@@ -78,17 +78,17 @@ and #51 in #599; #47, #48, #49, #50, and #52 in #600; #5 in #601; #14, #15, #16,
 | 57 | Hygiene guard blind spots in `DemoScreensLinksTest` (hardcoded `DEMOS`) and `ConfigFileKeysTest` (`listEntrySchemas` omitting `links`/`screens`) | Tests | low | ⬜ |
 | 58 | Weak timeout assertion and untested `stopTimeout == null` branch in Ktor `AgentLifecycleTest` (plus missing `finally` in `EmbeddedAgentInfoTest`) | Tests | low | ⬜ |
 | 59 | Vacuous JSON assertion in `UtilsTest` for `Utils.getVersionDesc(true)` | Tests | low | ⬜ |
-| 60 | `README.md` omits 4.7.1's `/screens` page and default-open framing behavior change from "New Features", and omits `/screens` (and `SAME_ORIGIN`) from "Operational Dashboard" | Docs | medium | ⬜ |
-| 61 | `website/prometheus-proxy/docs/embedded-upgrading.md` is missing an "Upgrading from 4.7.0" section for 4.7.1's behavior changes affecting embedders | Docs | medium | ⬜ |
+| 60 | `README.md` omits 4.7.1's `/screens` page and default-open framing behavior change from "New Features", and omits `/screens` (and `SAME_ORIGIN`) from "Operational Dashboard" | Docs | medium | ✅ |
+| 61 | `website/prometheus-proxy/docs/embedded-upgrading.md` is missing an "Upgrading from 4.7.0" section for 4.7.1's behavior changes affecting embedders | Docs | medium | ✅ |
 | 62 | `docs/PRODUCT.md` has a factual error on proxy Scrape-now metrics and multiple pre-4.7.1 stale statements | Docs | medium | ⬜ |
 | 63 | `docs/DESIGN.md` contradicts itself and the actual CSS on the Status Bar layout above 720px and on border-radius rules | Docs | medium | ⬜ |
-| 64 | `demos/network/README.md` has a stale `make open` description (and omits `screens` on `proxy-standby.conf`), and `demos/basics/README.md` omits `make open` from Scenario Reference | Docs | medium | ⬜ |
-| 65 | `demos/spring-boot/README.md` duplicates and contradicts its `make up` explanation in Quick Start | Docs | low | ⬜ |
-| 66 | `website/prometheus-proxy/docs/embedded-agent.md` omits `stopTimeout` from the "Every Setting, Every Way" cross-reference table | Docs | low | ⬜ |
-| 67 | `website/prometheus-proxy/docs/configuration/agent.md` omits `agent.grpc.*`, `agent.admin.*`, and `agent.internal.*` (leaving `UNARY_DEADLINE_SECS` off both configuration pages) | Docs | low | ⬜ |
-| 68 | Public API KDoc / Dokka documentation inaccuracies (`docs/KDOC_SUMMARY.md`, `docs/packages.md`, `EmbeddedAgentInfo.kt`, `EmbeddedAgentConfig.kt`, `BaseOptions.kt`) | Docs | low | ⬜ |
-| 69 | `website/prometheus-proxy/docs/javascripts/screenshots.js` can throw on `Tab` if no enabled lightbox button exists, and `zensical.toml` has a stale GLightbox CDN comment | Docs | low | ⬜ |
-| 70 | `website/prometheus-proxy/docs/troubleshooting.md` startup-rejection list omits 4.7.1's `proxy.dashboard.screens` / `proxy.dashboard.path = "/screens"` rejections | Docs | low | ⬜ |
+| 64 | `demos/network/README.md` has a stale `make open` description (and omits `screens` on `proxy-standby.conf`), and `demos/basics/README.md` omits `make open` from Scenario Reference | Docs | medium | ✅ |
+| 65 | `demos/spring-boot/README.md` duplicates and contradicts its `make up` explanation in Quick Start | Docs | low | ✅ |
+| 66 | `website/prometheus-proxy/docs/embedded-agent.md` omits `stopTimeout` from the "Every Setting, Every Way" cross-reference table | Docs | low | ✅ |
+| 67 | `website/prometheus-proxy/docs/configuration/agent.md` omits `agent.grpc.*`, `agent.admin.*`, and `agent.internal.*` (leaving `UNARY_DEADLINE_SECS` off both configuration pages) | Docs | low | ✅ |
+| 68 | Public API KDoc / Dokka documentation inaccuracies (`docs/KDOC_SUMMARY.md`, `docs/packages.md`, `EmbeddedAgentInfo.kt`, `EmbeddedAgentConfig.kt`, `BaseOptions.kt`) | Docs | low | ✅ |
+| 69 | `website/prometheus-proxy/docs/javascripts/screenshots.js` can throw on `Tab` if no enabled lightbox button exists, and `zensical.toml` has a stale GLightbox CDN comment | Docs | low | ✅ |
+| 70 | `website/prometheus-proxy/docs/troubleshooting.md` startup-rejection list omits 4.7.1's `proxy.dashboard.screens` / `proxy.dashboard.path = "/screens"` rejections | Docs | low | ✅ |
 
 ---
 
@@ -1573,7 +1573,7 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 ## 📚 Documentation
 
-### 60. ⬜ `README.md` omits 4.7.1's `/screens` page and default-open framing behavior change from "New Features", and omits `/screens` (and `SAME_ORIGIN`) from "Operational Dashboard"
+### 60. ✅ `README.md` omits 4.7.1's `/screens` page and default-open framing behavior change from "New Features", and omits `/screens` (and `SAME_ORIGIN`) from "Operational Dashboard"
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1589,9 +1589,11 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 **Fix:** Expand `README.md:95-103` to cover `/screens` and `framingEnabled`, and in `README.md:802-838` document `proxy.dashboard.screens` and clarify line 831's same-origin exception when screens are configured.
 
+**Resolution:** Fixed in #605. README's 4.7.1 summary covered only the embedding features, and Operational Dashboard never mentioned `/screens` or the same-origin exception. New Features now lists the screens page and framing, and points to Before you upgrade; Operational Dashboard describes `proxy.dashboard.screens` and says `framingEnabled = false` sends `frame-ancestors 'self'` when screens are listed.
+
 ---
 
-### 61. ⬜ `website/prometheus-proxy/docs/embedded-upgrading.md` is missing an "Upgrading from 4.7.0" section for 4.7.1's behavior changes affecting embedders
+### 61. ✅ `website/prometheus-proxy/docs/embedded-upgrading.md` is missing an "Upgrading from 4.7.0" section for 4.7.1's behavior changes affecting embedders
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1608,6 +1610,8 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 **Impact:** Embedders upgrading from 4.7.0 to 4.7.1 consulting the dedicated upgrade guide miss all three behavior changes.
 
 **Fix:** Add an `## Upgrading from 4.7.0` section at the top of `website/prometheus-proxy/docs/embedded-upgrading.md` documenting those three changes.
+
+**Resolution:** Fixed in #605. `embedded-upgrading.md` has an Upgrading from 4.7.0 section covering every 4.7.1 change an embedding app sees, each with what to do: framing, the `IllegalStateException` from a slow stop, the starter's `stop-timeout`, the guarded `onFailure`, refused paths and URLs, refused endpoints, and TLS files failing as `ConfigLoadException`.
 
 ---
 
@@ -1652,7 +1656,7 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 ---
 
-### 64. ⬜ `demos/network/README.md` has a stale `make open` description (and omits `screens` on `proxy-standby.conf`), and `demos/basics/README.md` omits `make open` from Scenario Reference
+### 64. ✅ `demos/network/README.md` has a stale `make open` description (and omits `screens` on `proxy-standby.conf`), and `demos/basics/README.md` omits `make open` from Scenario Reference
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1669,9 +1673,11 @@ Each of these five specs starts 3–5 Docker containers sequentially inside `bef
 
 **Fix:** Update `demos/network/README.md:371` and `:382` to match `network-demo.md:362` and `proxy-standby.conf`; add the `make open` row to `demos/basics/README.md` matching `basics-demo.md:384`.
 
+**Resolution:** Fixed in #605. The network demo README's `make open` row and `proxy-standby.conf` row now match `demo.sh` and the config (the standby's screens page and its screens), and the basics README's Scenario Reference gains the `make open` row.
+
 ---
 
-### 65. ⬜ `demos/spring-boot/README.md` duplicates and contradicts its `make up` explanation in Quick Start
+### 65. ✅ `demos/spring-boot/README.md` duplicates and contradicts its `make up` explanation in Quick Start
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1686,9 +1692,11 @@ Lines 51–55 explain `make up` and `make up-local`, including *"Until a release
 
 **Fix:** Trim `demos/spring-boot/README.md:67-69` down to just the first-build timing note (*"The first build downloads Maven's dependencies, which takes a few minutes."*) as in `spring-boot-demo.md:80-81`.
 
+**Resolution:** Fixed in #605. The Spring Boot demo README's second, contradicting `make up` paragraph is reduced to the first-build timing note.
+
 ---
 
-### 66. ⬜ `website/prometheus-proxy/docs/embedded-agent.md` omits `stopTimeout` from the "Every Setting, Every Way" cross-reference table
+### 66. ✅ `website/prometheus-proxy/docs/embedded-agent.md` omits `stopTimeout` from the "Every Setting, Every Way" cross-reference table
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1703,9 +1711,11 @@ The "Every Setting, Every Way" table maps settings across Builder, Config key, S
 
 **Fix:** Add a row for `Stop timeout | stopTimeout(timeout) | none: it's the handle's | stop-timeout |` to `website/prometheus-proxy/docs/embedded-agent.md:300-316`.
 
+**Resolution:** Fixed in #605. The Every Setting, Every Way table has a `stopTimeout(timeout)` / `stop-timeout` row, and the builder-validation sentence names paths of more than one segment.
+
 ---
 
-### 67. ⬜ `website/prometheus-proxy/docs/configuration/agent.md` omits `agent.grpc.*`, `agent.admin.*`, and `agent.internal.*` (leaving `UNARY_DEADLINE_SECS` off both configuration pages)
+### 67. ✅ `website/prometheus-proxy/docs/configuration/agent.md` omits `agent.grpc.*`, `agent.admin.*`, and `agent.internal.*` (leaving `UNARY_DEADLINE_SECS` off both configuration pages)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1720,9 +1730,11 @@ The "Every Setting, Every Way" table maps settings across Builder, Config key, S
 
 **Fix:** Add **gRPC Settings**, **Admin Endpoints**, and **Internal Settings** tables plus a **Full Reference** link to `config/config.conf` in `website/prometheus-proxy/docs/configuration/agent.md`, mirroring `configuration/proxy.md`.
 
+**Resolution:** Fixed in #605. The Agent Configuration page has gRPC Settings, Transport Filter, Admin Endpoints, Internal Settings, Log Level, and Full Reference sections, mirroring the proxy's, with each key's default, option, and variable, `UNARY_DEADLINE_SECS` included.
+
 ---
 
-### 68. ⬜ Public API KDoc / Dokka documentation inaccuracies (`docs/KDOC_SUMMARY.md`, `docs/packages.md`, `EmbeddedAgentInfo.kt`, `EmbeddedAgentConfig.kt`, `BaseOptions.kt`)
+### 68. ✅ Public API KDoc / Dokka documentation inaccuracies (`docs/KDOC_SUMMARY.md`, `docs/packages.md`, `EmbeddedAgentInfo.kt`, `EmbeddedAgentConfig.kt`, `BaseOptions.kt`)
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1744,9 +1756,11 @@ The "Every Setting, Every Way" table maps settings across Builder, Config key, S
 
 **Fix:** Add concise class-level KDoc to `AgentOptions`, `ProxyOptions`, and `BaseOptions` (or clarify `KDOC_SUMMARY.md`); update the three member KDocs above; and add `onFailure`, `reportFailure`, and `stopTimeout` links to `docs/packages.md:95-116`.
 
+**Resolution:** Fixed in #605. `AgentOptions`, `ProxyOptions`, and `BaseOptions` have class KDoc, with their no-op `UndocumentedPublicClass` suppressions removed; the `logLevel`, `shutdown()`, `startIfConfigured()`, and `toString()` KDocs are corrected, and `docs/packages.md` links `onFailure`, `reportFailure`, and `stopTimeout`.
+
 ---
 
-### 69. ⬜ `website/prometheus-proxy/docs/javascripts/screenshots.js` can throw on `Tab` if no enabled lightbox button exists, and `zensical.toml` has a stale GLightbox CDN comment
+### 69. ✅ `website/prometheus-proxy/docs/javascripts/screenshots.js` can throw on `Tab` if no enabled lightbox button exists, and `zensical.toml` has a stale GLightbox CDN comment
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1762,9 +1776,11 @@ The "Every Setting, Every Way" table maps settings across Builder, Config key, S
 
 **Fix:** Guard `stepFocus` with `if (!buttons.length) return;` (or `buttons.at(next)?.focus();`) in `screenshots.js:78-81`, and update the comment in `zensical.toml:168-169`.
 
+**Resolution:** Fixed in #605. `stepFocus` returns when the lightbox has no enabled button instead of throwing, and the `zensical.toml` comment says GLightbox is the pinned copy served from `vendor/glightbox`.
+
 ---
 
-### 70. ⬜ `website/prometheus-proxy/docs/troubleshooting.md` startup-rejection list omits 4.7.1's `proxy.dashboard.screens` / `proxy.dashboard.path = "/screens"` rejections
+### 70. ✅ `website/prometheus-proxy/docs/troubleshooting.md` startup-rejection list omits 4.7.1's `proxy.dashboard.screens` / `proxy.dashboard.path = "/screens"` rejections
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1778,6 +1794,8 @@ The `Invalid configuration: …` troubleshooting checklist (`troubleshooting.md:
 **Impact:** Operators hitting a startup rejection from an invalid `proxy.dashboard.screens` entry or a `/screens` base-path clash won't find it in the troubleshooting checklist.
 
 **Fix:** Add a bullet under `troubleshooting.md:68-71` noting invalid `proxy.dashboard.screens` entries and `proxy.dashboard.path = "/screens"` conflicts, linking to `web-dashboard.md#screens`.
+
+**Resolution:** Fixed in #605. Troubleshooting's startup-refusal list includes invalid `proxy.dashboard.screens` entries, a `proxy.dashboard.path` of `/screens` while screens are listed, and agent paths of more than one segment.
 
 ---
 
