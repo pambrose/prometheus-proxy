@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("UndocumentedPublicFunction")
 
 package io.prometheus.agent
 
@@ -58,6 +58,16 @@ import kotlin.time.Duration.Companion.seconds
 
 // The primary constructor is internal so parseOnly and suppliedConfig stay out of the public API, and the public
 // constructor below keeps the (args, exitOnMissingConfig) signature that code compiled against earlier releases calls.
+
+/**
+ * The agent's settings, each resolved from its command-line option, then its environment variable, where it has them,
+ * then the agent's HOCON config (`agent.*`), then the built-in default: the proxy it connects to, its paths, and its
+ * scrape, HTTP-client, TLS, gRPC, admin, metrics, and dashboard settings. The standalone agent builds them from its
+ * command line; an embedded agent's come from the config
+ * [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent] is given, or from an [EmbeddedAgentConfig].
+ *
+ * @see io.prometheus.common.BaseOptions for the settings the proxy's options share
+ */
 class AgentOptions internal constructor(
   args: Array<String>,
   exitOnMissingConfig: Boolean,

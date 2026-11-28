@@ -368,7 +368,7 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, each link's state and toxics, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given (`wan` is Toxiproxy) |  |
-| `make open` | Opens both proxy dashboards, agent-branch's dashboard, Grafana, and Prometheus's alerts in the browser |  |
+| `make open` | Opens the standby's screens page, which holds every dashboard, Prometheus, Grafana, and Zipkin, in the browser |  |
 
 `heal` and `unfilter` undo every scenario. For a clean slate, `make down && make up`.
 
@@ -379,7 +379,7 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 | `docker/compose.yml` | The services, their ports, the WAN's network aliases, and their images |
 | `config/toxiproxy.json` | The WAN's four links: each one's name, the port it listens on, and the proxy it reaches |
 | `config/proxy.conf` | The dashboard, service discovery, a shared agent token, tracing, and a 30-second eviction limit, so part 5 fits a demo |
-| `config/proxy-standby.conf` | The standby: `proxy.conf`, with its own scrape address for service discovery and its own Zipkin service name |
+| `config/proxy-standby.conf` | The standby: `proxy.conf`, with its own scrape address for service discovery, its own Zipkin service name, and the screens its screens page shows: the primary's dashboard, each agent's, Prometheus, Grafana, and Zipkin |
 | `config/agent-hq.conf`, `config/agent-branch.conf` | Each agent's two links in order, its token, its dashboard and the port it listens on, tracing, paths and their labels (the `job` Prometheus uses), and a 3-second scrape timeout |
 | `config/agent-branch-filtered.conf` | `agent-branch.conf`, dashboard included, plus the filter that drops the inventory's price list, for part 3 |
 | `prometheus/prometheus.yml` | One HTTP service discovery job against both proxies, and one job for each proxy's own metrics |

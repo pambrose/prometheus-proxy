@@ -128,8 +128,9 @@ class EmbeddedAgentConfig private constructor(
    * when they don't, or when it can't start, so the app runs without it: its metrics aren't worth an outage.
    *
    * The settings name a proxy with the builder's [proxy][Builder.proxy], which
-   * [fromEnvironment][Builder.fromEnvironment] reads from `PROMETHEUS_PROXY`, or the agent's own `PROXY_HOSTNAME`
-   * environment variable names one. Without one, as on a developer's machine, the agent stays off, with an INFO line
+   * [fromEnvironment][Builder.fromEnvironment] reads from `PROMETHEUS_PROXY`, or with a [setting][Builder.setting] of
+   * `proxy.endpoints` or `proxy.hostname`, or the agent's own `PROXY_HOSTNAME` environment variable names one, as
+   * [namesProxy] tells. Without one, as on a developer's machine, the agent stays off, with an INFO line
    * that says so. A start that fails, for a setting the agent rejects ([ConfigLoadException]) or for anything else,
    * such as its admin port being in use or its start taking over 30 seconds, is logged at ERROR with why, which holds
    * no token, password, or PEM, and is given to each handler the builder's [onFailure][Builder.onFailure] added, in
@@ -194,7 +195,8 @@ class EmbeddedAgentConfig private constructor(
 
   /**
    * The settings, [setting][Builder.setting]'s included, with the token, a password, and each PEM shown only as set or
-   * not, and the credentials in a path's URL masked, so an app can log it. A path served in-process shows as such.
+   * not, and the credentials in a path's URL masked, so an app can log it. A path served in-process shows as such, and
+   * the [stopTimeout] when one is set.
    */
   override fun toString(): String {
     val shownSources =

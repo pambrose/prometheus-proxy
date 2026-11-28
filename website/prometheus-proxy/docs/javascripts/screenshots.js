@@ -73,9 +73,12 @@ const closed = () => {
 };
 
 // The box's next working button after the focused one, or before it going back, wrapping around; the first if the
-// focus is elsewhere
+// focus is elsewhere. With no working button to step to, the focus stays where it is, rather than the handler throwing.
 const stepFocus = (box, back) => {
   const buttons = [...box.querySelectorAll(".gbtn:not(.disabled)")];
+  if (buttons.length === 0) {
+    return;
+  }
   const at = buttons.indexOf(document.activeElement);
   const next = at < 0 ? 0 : (at + (back ? -1 : 1) + buttons.length) % buttons.length;
   buttons.at(next).focus();

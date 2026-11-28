@@ -224,7 +224,7 @@ All notable changes to this project are documented in this file.
   `java.util.concurrent.TimeoutException` for an agent that took over 30 seconds to stop, undeclared, so Java code
   couldn't catch it and a `catch (RuntimeException e)` missed it. They now throw an `IllegalStateException` with the
   `TimeoutException` as its cause, as a start that times out does (see Behavior Changes)
-- The embedded builder's `path()`, `scrapeSelf()`, and `source()` took `/` alone as a path, and `path()` a blank URL,
+- The embedded builder's `path()` and `scrapeSelf()` took `/` alone as a path, and `path()` a blank URL,
   which the agent then dropped at startup with a warning, as a config file's placeholder: `start()` didn't throw, a
   `required` Ktor plugin or Spring Boot starter agent's app started without the target, and no `onFailure` handler was
   told. They now throw `ConfigLoadException`, so a Ktor plugin `paths` entry or a starter `prometheus-proxy.agent.paths`
@@ -291,8 +291,8 @@ All notable changes to this project are documented in this file.
 - `EmbeddedAgentInfo.shutdown()`, `close()`, and `Agent.stop()` throw `IllegalStateException`, with the
   `TimeoutException` as its cause, for an agent without a `stopTimeout` that doesn't stop within 30 seconds: Kotlin code
   that caught `TimeoutException` there catches `IllegalStateException` instead
-- The embedded builder's `path()` throws `ConfigLoadException` for a blank URL, and `path()`, `scrapeSelf()`, and
-  `source()` for `/` alone as a path, where the agent skipped such a target at startup with a warning. A Ktor plugin
+- The embedded builder's `path()` throws `ConfigLoadException` for a blank URL, and `path()` and `scrapeSelf()` for
+  `/` alone as a path, where the agent skipped such a target at startup with a warning. A Ktor plugin
   `paths` entry, or a Spring Boot starter `prometheus-proxy.agent.paths` entry, without a `url` therefore leaves the
   agent off, telling the `onFailure` handlers, or fails a `required` agent's app. A standalone agent's
   `agent.pathConfigs` entry without a path or a URL is still skipped with a warning, as a placeholder
@@ -334,10 +334,13 @@ All notable changes to this project are documented in this file.
   section and checklist, and the Cloud Platforms page, set the stop timeout inside a platform's shutdown window, such as
   Cloud Run's 10 seconds, and point to `onFailure` for reporting a failed start. The example the Embedded Agent and
   Cloud Platforms pages open with, and the Spring Boot Starter page's YAML, set a stop timeout, and its customizer
-  example adds an `onFailure` handler
+  example adds an `onFailure` handler. The Embedded Agent page's Every Setting, Every Way table gives `stopTimeout`'s
+  names, and the Upgrading an Embedded Agent page has an Upgrading from 4.7.0 section, with each 4.7.1 change an
+  embedding app sees and what to do about it
 
 - The web dashboard page has a Screens Page section, and its Exposure, Login, and Behind a Reverse Proxy sections
-  cover `/screens`; the proxy configuration and production pages give the setting
+  cover `/screens`; the proxy configuration and production pages give the setting, Troubleshooting the screens the
+  proxy refuses at startup, and the README's New Features and Operational Dashboard the page and `framingEnabled`
 - The basics demo lists its screens, and its tour, README, and page link into `/screens`, which `make open` opens; its
   Grafana allows embedding, and `make up` builds the proxy and agent from the checkout until 4.7.1 is on Docker Hub
 - The network demo's standby proxy lists its screens, since part 4 stops the primary, and its tour, scenarios, README,
@@ -356,7 +359,8 @@ All notable changes to this project are documented in this file.
 - The Spring Boot demo's proxy lists the roastery's status page, its agent's dashboard, and Prometheus as its screens,
   and its tour, scenarios, README, and page link into `/screens`, which `make open` opens, but while part 4 has the
   proxy stopped, when they give the agent dashboard's own address; a new `make screenshots` takes the page's shot for
-  the website, and `make up` builds from the checkout until 4.7.1 is on Docker Hub
+  the website, and `make up` builds from the checkout until 4.7.1 is on Docker Hub. Its README's Quick Start no longer
+  says twice what `make up` runs, the second time without that
 - The Kubernetes demo's proxy lists the agent's dashboard, at the port `./demo.sh agent-dashboard` forwards, and
   Prometheus's targets as its screens, whose addresses `demo.sh` gives it through the proxy chart's `env`, and its tour,
   scenarios, README, and page link into `/screens`, which `make open` opens; `make screenshots` adds a shot of the
@@ -382,6 +386,16 @@ All notable changes to this project are documented in this file.
 - The network demo's Grafana dashboard drops the proxy color overrides on its Disconnects, by proxy and reason, and
   Agents off their primary panels, which matched no series: the first names each series for its proxy and reason, and
   the second for its agent
+- The Agent Configuration page has gRPC Settings, Transport Filter, Admin Endpoints, Internal Settings, Log Level, and
+  Full Reference sections, as the Proxy Configuration page does, so the agent's `agent.grpc.*`,
+  `agent.transportFilterDisabled`, `agent.admin.*`, `agent.internal.*`, and `agent.logLevel` settings, such as
+  `agent.grpc.unaryDeadlineSecs` (`--unary_deadline_secs`, `UNARY_DEADLINE_SECS`), have their defaults, options, and
+  variables on a configuration page, where the page left them out
+- The API docs describe `AgentOptions`, `ProxyOptions`, and `BaseOptions`, which had no description of their own.
+  `BaseOptions.logLevel` no longer says an unset level leaves `logback.xml`'s, where an embedded agent's loggers follow
+  its application's logging, `EmbeddedAgentInfo.shutdown()` names the agent's dashboard among the servers it releases,
+  and `startIfConfigured()` names a `setting()` of `proxy.endpoints` or `proxy.hostname` among the ways its settings
+  name a proxy
 
 ## [4.7.0] - 2026-11-24
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("UndocumentedPublicFunction")
 
 package io.prometheus.proxy
 
@@ -56,6 +56,15 @@ import io.prometheus.proxy.dashboard.Screen
 
 // The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
 // the (args) signature that code compiled against earlier releases calls.
+
+/**
+ * The proxy's settings, each resolved from its command-line option, then its environment variable, where it has them,
+ * then the proxy's HOCON config (`proxy.*`), then the built-in default: its scrape, agent, admin, metrics, and
+ * dashboard ports, agent authentication, service discovery, TLS, gRPC, and its internal limits. [io.prometheus.Proxy]'s
+ * `main` builds them from its command line.
+ *
+ * @see io.prometheus.common.BaseOptions for the settings the agent's options share
+ */
 class ProxyOptions internal constructor(
   args: Array<String>,
   // Parse the command line and handle -u/-v only, without loading the config (Proxy.main).

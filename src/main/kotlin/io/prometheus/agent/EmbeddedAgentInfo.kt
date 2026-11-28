@@ -104,7 +104,7 @@ data class EmbeddedAgentInfo(
    * Gracefully stops the embedded [Agent].
    *
    * Closes the gRPC channel to the Proxy, shuts down the cached HTTP scrape clients, drains
-   * in-flight scrape requests, and releases the admin/metrics servlets. Idempotent at the
+   * in-flight scrape requests, and releases its admin, metrics, and dashboard servers. Idempotent at the
    * `GenericService` level — calling twice is safe but only the first invocation does work. Also safe on an
    * agent that has failed: a failed agent has already released what it held, so there is nothing to stop.
    *
